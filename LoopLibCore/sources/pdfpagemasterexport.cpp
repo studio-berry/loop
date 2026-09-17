@@ -1436,6 +1436,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PDFActionListExecutionOptions actionListOptions;
             actionListOptions.bindings = job.actionListBindings;
             actionListOptions.operationControl = &actionListOperationControl;
+            actionListOptions.revision = revisionIdentityForDocument(assembledDocument);
             PDFActionListExecutionResult actionListResult;
             PDFDocument candidate;
             const PDFOperationResult actionListExecution = PDFActionListExecutor().execute(

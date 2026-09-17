@@ -24,6 +24,7 @@
 #define PDFACTIONLIST_H
 
 #include "pdfrepairoperation.h"
+#include "pdfobjectselector.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -62,6 +63,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStep
     QString id;
     QString operationId;
     QJsonObject parameters;
+    QJsonObject select;
     QJsonObject condition;
     PDFActionListFailurePolicy failurePolicy = PDFActionListFailurePolicy::Inherit;
 
@@ -92,6 +94,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStepResult
     QJsonObject verdict;
     QJsonArray diagnostics;
     QJsonArray affectedScope;
+    QJsonObject selectionScope;
 
     QJsonObject toJson() const;
 };
@@ -119,6 +122,7 @@ struct PDFActionListExecutionOptions
     QJsonObject bindings;
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
+    PDFRevisionIdentity revision;
 };
 
 /// Shared, deterministic orchestration for registered repair operations.
@@ -128,6 +132,7 @@ class LOOPLIBCORESHARED_EXPORT PDFActionListExecutor
 {
 public:
     static QString schemaVersion();
+    static bool isSupportedSchema(const QString& schema);
 
     explicit PDFActionListExecutor(const PDFRepairRegistry& registry = PDFRepairRegistry::instance());
 
