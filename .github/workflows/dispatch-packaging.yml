@@ -7,6 +7,7 @@ on:
 # Proxy for agents or automation that can send repository_dispatch but not
 # workflow_dispatch. Dispatches exact-SHA packaging and release-draft workflows.
 permissions:
+  actions: write
   contents: read
   actions: write
 
