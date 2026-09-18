@@ -219,9 +219,9 @@ def revalidation_class(impact: dict[str, Any], requires_postflight: bool = True)
         return "full-with-oracle"
     if not impact.get("impact_complete"):
         return "full"
-    if impact.get("domains"):
-        return "targeted"
-    return "full"
+    if impact.get("document_wide") or not impact.get("domains"):
+        return "full"
+    return "targeted"
 
 
 def parse_save_policy(class_body: str) -> dict[str, str | bool]:
@@ -280,8 +280,21 @@ def parse_repair_operation_class(class_body: str, implementation: str) -> dict[s
     }
 
 
+REGISTER_OPERATION_PATTERN = re.compile(
+    r"PDFRepairRegistry::instance\(\)\.registerOperation\(std::make_unique<(\w+)>\(\)\)"
+)
+
+
+def parse_registered_repair_classes() -> list[str]:
+    classes: list[str] = []
+    for path in sorted((ROOT / "LoopLibCore" / "sources").glob("*.cpp")):
+        source = read(path)
+        classes.extend(REGISTER_OPERATION_PATTERN.findall(source))
+    return unique_sorted(classes)
+
+
 def parse_repair_operations() -> list[dict[str, Any]]:
-    operations: list[dict[str, Any]] = []
+    operations_by_class: dict[str, dict[str, Any]] = {}
     pattern = re.compile(
         r"class\s+(\w+)\s+final\s*:\s*public\s+PDFRepairOperation(?P<body>.*?)(?=^class\s+\w+\s+final\s*:\s*public\s+PDFRepairOperation|\Z)",
         re.DOTALL | re.MULTILINE,
@@ -290,10 +303,30 @@ def parse_repair_operations() -> list[dict[str, Any]]:
         source = read(path)
         implementation = path.relative_to(ROOT).as_posix()
         for match in pattern.finditer(source):
-            operations.append(parse_repair_operation_class(match.group("body"), implementation))
-    operations.sort(key=lambda operation: operation["id"])
-    if not operations:
+            class_name = match.group(1)
+            operation = parse_repair_operation_class(match.group("body"), implementation)
+            operation["class_name"] = class_name
+            operations_by_class[class_name] = operation
+
+    registered_classes = parse_registered_repair_classes()
+    if not registered_classes:
         raise ValueError("registered operation catalog is empty")
+
+    missing_impl = sorted(set(registered_classes) - set(operations_by_class))
+    if missing_impl:
+        raise ValueError(
+            "registerOperation targets without parsable PDFRepairOperation class: "
+            + ", ".join(missing_impl)
+        )
+
+    unregistered = sorted(set(operations_by_class) - set(registered_classes))
+    if unregistered:
+        raise ValueError(
+            "PDFRepairOperation classes without registerOperation: " + ", ".join(unregistered)
+        )
+
+    operations = [operations_by_class[class_name] for class_name in registered_classes]
+    operations.sort(key=lambda operation: operation["id"])
     if len({operation["id"] for operation in operations}) != len(operations):
         raise ValueError("registered operation catalog contains duplicate ids")
     return operations

@@ -72,16 +72,44 @@ class CorrectionOperationCatalogTest(unittest.TestCase):
         registry = generator.parse_repair_operations()
         with tempfile.TemporaryDirectory() as temp_dir:
             overlay = json.loads(OVERLAY_PATH.read_text(encoding="utf-8"))
-            overlay["operations"]["add-bleed"]["revalidation"]["class"] = "full"
+            overlay["operations"]["add-bleed"]["revalidation"]["class"] = "targeted"
             path = Path(temp_dir) / "overlay.json"
             path.write_text(json.dumps(overlay), encoding="utf-8")
             original = generator.CORRECTION_OVERLAY_PATH
             generator.CORRECTION_OVERLAY_PATH = path
             try:
-                with self.assertRaisesRegex(ValueError, "revalidation.class 'full'"):
+                with self.assertRaisesRegex(ValueError, "revalidation.class 'targeted'"):
                     generator.build_correction_operation_catalog(registry)
             finally:
                 generator.CORRECTION_OVERLAY_PATH = original
+
+    def test_unregistered_repair_class_fails(self) -> None:
+        original = generator.parse_registered_repair_classes
+        try:
+            generator.parse_registered_repair_classes = lambda: [
+                class_name for class_name in original() if class_name != "PDFAddBleedRepair"
+            ]
+            with self.assertRaisesRegex(ValueError, "without registerOperation: PDFAddBleedRepair"):
+                generator.parse_repair_operations()
+        finally:
+            generator.parse_registered_repair_classes = original
+
+    def test_missing_registration_target_fails(self) -> None:
+        original = generator.parse_registered_repair_classes
+        try:
+            generator.parse_registered_repair_classes = lambda: original() + ["PDFNotARealRepair"]
+            with self.assertRaisesRegex(ValueError, "without parsable PDFRepairOperation class"):
+                generator.parse_repair_operations()
+        finally:
+            generator.parse_registered_repair_classes = original
+
+    def test_document_wide_revalidation_is_full(self) -> None:
+        registry = {operation["id"]: operation for operation in generator.parse_repair_operations()}
+        for operation_id in ("add-bleed", "downsample-images", "rgb-to-cmyk"):
+            with self.subTest(operation_id=operation_id):
+                operation = registry[operation_id]
+                self.assertTrue(operation["impact"]["document_wide"])
+                self.assertEqual(operation["revalidation_class"], "full")
 
     def test_save_policy_modes_match_repairoperationtest_expectations(self) -> None:
         registry = {operation["id"]: operation for operation in generator.parse_repair_operations()}

@@ -5,6 +5,7 @@
   "matrix_id": "loop-correction-operations-v1",
   "operations": {
     "add-bleed": {
+      "class_name": "PDFAddBleedRepair",
       "evidence_impact": {
         "findings": [
           "bleed",
@@ -32,6 +33,7 @@
       "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp",
       "is_preflight_fixup": true,
       "limitations": [
+        "Does not expand TrimBox (expandTrimBox defaults false and is not exposed in parameters).",
         "Does not invent trim boxes from artwork.",
         "Does not replace designer bleed artwork; only expands boxes and generates edge extension per mode.",
         "Requires resolvable page boxes; skipped pages are reported as warnings, not silent success."
@@ -42,13 +44,13 @@
         "mode": "mirror",
         "page_range": "-"
       },
-      "produces": "Expanded Media/Crop/Bleed/Trim boxes, optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
+      "produces": "Expanded Media/Crop/Bleed boxes (TrimBox preserved), optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
       "requires_postflight": true,
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on the images evidence domain with document-wide scope; PreflightEngine may rerun a subset when the enabled profile maps those checks."
+        "class": "full",
+        "description": "Declares complete impact on the images evidence domain with document-wide scope; planRevalidation selects a full profile rerun before considering evidence domains."
       },
-      "revalidation_class": "targeted",
+      "revalidation_class": "full",
       "reversibility": {
         "retention": "Operation-history rollback can discard an uncommitted candidate; after atomic publish the prior artifact remains addressable only through file history outside Loop.",
         "rollback_in_session": true
@@ -76,6 +78,7 @@
       "version": 1
     },
     "downsample-images": {
+      "class_name": "PDFDownsampleImagesRepair",
       "evidence_impact": {
         "findings": [
           "image-resolution"
@@ -110,10 +113,10 @@
       "produces": "Rewritten image XObjects (JPEG or preserved encoding) that meet target_dpi/quality while optionally keeping the original when already smaller.",
       "requires_postflight": true,
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on images and colorants with fullRewrite; targeted reruns cover image-resolution and related color checks when mapped."
+        "class": "full",
+        "description": "Declares complete impact on images and colorants with document-wide scope and fullRewrite; planRevalidation selects a full profile rerun."
       },
-      "revalidation_class": "targeted",
+      "revalidation_class": "full",
       "reversibility": {
         "retention": "Prior image bytes are not retained inside the rewritten file; rollback applies only before publish and only via external file history afterward.",
         "rollback_in_session": false
@@ -140,6 +143,7 @@
       "version": 1
     },
     "production.add-contour-bleed": {
+      "class_name": "PDFPlanContourBleedRepair",
       "evidence_impact": {
         "findings": [
           "bleed",
@@ -203,6 +207,7 @@
       "version": 1
     },
     "production.place-grommets": {
+      "class_name": "PDFPlaceGrommetsRepair",
       "evidence_impact": {
         "findings": [],
         "records": [
@@ -257,6 +262,7 @@
       "version": 1
     },
     "production.validate-wide-format": {
+      "class_name": "PDFValidateWideFormatRepair",
       "evidence_impact": {
         "findings": [],
         "records": [
@@ -310,6 +316,7 @@
       "version": 1
     },
     "rgb-to-cmyk": {
+      "class_name": "PDFRgbToCmykRepair",
       "evidence_impact": {
         "findings": [
           "color-mode",
@@ -350,10 +357,10 @@
       "produces": "ICC-managed CMYK color spaces, converted paints/images/indexed palettes, and optional embedded output intent.",
       "requires_postflight": true,
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on colorants and images domains; color-mode, output-intent, and inventory checks may rerun selectively."
+        "class": "full",
+        "description": "Declares complete impact on colorants and images domains with document-wide scope; planRevalidation selects a full profile rerun."
       },
-      "revalidation_class": "targeted",
+      "revalidation_class": "full",
       "reversibility": {
         "retention": "Session rollback drops the candidate; published artifacts require external history to recover the prior color state.",
         "rollback_in_session": true
@@ -379,6 +386,7 @@
       "version": 1
     },
     "standards-convert": {
+      "class_name": "PDFStandardConversionRepair",
       "evidence_impact": {
         "findings": [
           "color-mode",

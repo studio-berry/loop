@@ -23,7 +23,7 @@
   "operations": {
     "add-bleed": {
       "supports": "Documents whose page boxes can be expanded and that need generated edge-extension content for bleed findings.",
-      "produces": "Expanded Media/Crop/Bleed/Trim boxes, optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
+      "produces": "Expanded Media/Crop/Bleed boxes (TrimBox preserved), optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
       "target_scopes": ["document", "page-range-parameter", "page"],
       "parameter_defaults": {
         "mode": "mirror",
@@ -41,8 +41,8 @@
         "records": ["page-boxes", "page-content", "images", "metadata"]
       },
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on the images evidence domain with document-wide scope; PreflightEngine may rerun a subset when the enabled profile maps those checks."
+        "class": "full",
+        "description": "Declares complete impact on the images evidence domain with document-wide scope; planRevalidation selects a full profile rerun before considering evidence domains."
       },
       "surface_parity": {
         "cli": true,
@@ -52,6 +52,7 @@
         "gaps": "Editor Fix workspace advertises this operation only through preflight fixup filtering, not as a free-form repair palette."
       },
       "limitations": [
+        "Does not expand TrimBox (expandTrimBox defaults false and is not exposed in parameters).",
         "Does not invent trim boxes from artwork.",
         "Does not replace designer bleed artwork; only expands boxes and generates edge extension per mode.",
         "Requires resolvable page boxes; skipped pages are reported as warnings, not silent success."
@@ -75,8 +76,8 @@
         "records": ["images", "color-spaces"]
       },
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on images and colorants with fullRewrite; targeted reruns cover image-resolution and related color checks when mapped."
+        "class": "full",
+        "description": "Declares complete impact on images and colorants with document-wide scope and fullRewrite; planRevalidation selects a full profile rerun."
       },
       "surface_parity": {
         "cli": true,
@@ -111,8 +112,8 @@
         "records": ["page-content", "images", "color-spaces", "output-intent"]
       },
       "revalidation": {
-        "class": "targeted",
-        "description": "Declares complete impact on colorants and images domains; color-mode, output-intent, and inventory checks may rerun selectively."
+        "class": "full",
+        "description": "Declares complete impact on colorants and images domains with document-wide scope; planRevalidation selects a full profile rerun."
       },
       "surface_parity": {
         "cli": true,
