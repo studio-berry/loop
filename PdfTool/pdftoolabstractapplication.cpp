@@ -745,6 +745,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
         parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
         parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("approval-file", "Plan-bound governed approval JSON for committing output.", "file"));
         parser->addOption(QCommandLineOption("list-operations", "List registered repair operation descriptors."));
         parser->addOption(QCommandLineOption("allow-incomplete", "Allow an incomplete diff result to be returned for review; never auto-commit it."));
         parser->addOption(QCommandLineOption("pswd", "Password for an encrypted source PDF.", "password"));
@@ -1952,6 +1953,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.repairOutputDocument = parser->value("output");
         options.repairReportFile = parser->value("report-file");
         options.repairRenderDirectory = parser->value("render-dir");
+        options.repairApprovalFile = parser->value("approval-file");
         options.repairListOperations = parser->isSet("list-operations");
         options.repairAllowIncomplete = parser->isSet("allow-incomplete");
         options.preflightProfilePath = parser->value("profile");

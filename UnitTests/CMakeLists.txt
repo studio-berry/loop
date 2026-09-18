@@ -262,6 +262,21 @@ set_target_properties(UnitTestsRepairOperation PROPERTIES
 
 add_test(UnitTestsRepairOperation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsRepairOperation")
 
+add_executable(UnitTestsGovernedExecution
+    tst_governedexecutiontest.cpp
+)
+
+target_link_libraries(UnitTestsGovernedExecution PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsGovernedExecution PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsGovernedExecution "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsGovernedExecution")
+
 add_executable(UnitTestsActionList
     tst_actionlisttest.cpp
 )
