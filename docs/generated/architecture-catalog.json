@@ -237,6 +237,7 @@
     ],
     "topic_source": "dev"
   },
+  "correction_operation_catalog": "docs/generated/correction-operation-catalog.json",
   "format_version": 1,
   "generated_by": "scripts/generate-architecture-catalogs.py",
   "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
@@ -375,6 +376,7 @@
     "LoopLibCore/sources/preflightengine.cpp",
     "LoopLibCore/sources/preflightengine.h",
     "docs/preflight-check-catalog-overlay.json",
+    "docs/correction-operation-catalog-overlay.json",
     "LoopLibCore/sources/pdfactionlist.cpp",
     "LoopLibCore/sources/pdfrepairoperation.cpp",
     "LoopLibCore/sources/pdfrepairprimitives.cpp",
