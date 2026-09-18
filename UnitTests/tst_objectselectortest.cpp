@@ -928,13 +928,13 @@ void ObjectSelectorTest::annotationCandidatesAreCollected()
 void ObjectSelectorTest::sharedReferenceFenceRejectsUnselectedOccurrences()
 {
     const pdf::PDFDocument document = createDocumentWithImage(600, 2);
+    const QJsonObject predicate{
+        { QStringLiteral("and"), QJsonArray{
+                                     QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                     QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } }
+    };
     pdf::PDFObjectSelectionResult selection;
-    QVERIFY(resolveSelector(document,
-                            selectorJson(QJsonObject{
-                                { QStringLiteral("and"), QJsonArray{
-                                                              QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
-                                                              QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } }),
-                            &selection));
+    QVERIFY(resolveSelector(document, selectorJson(predicate), &selection));
     QVERIFY(selection.ok);
     QCOMPARE(selection.candidates.size(), 1);
     QCOMPARE(selection.candidates.front().objectOccurrencePages.size(), 2);
@@ -950,25 +950,26 @@ void ObjectSelectorTest::sharedReferenceFenceRejectsUnselectedOccurrences()
 
 void ObjectSelectorTest::rejectsNonObjectSelectInActionList()
 {
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), QStringLiteral("bad-select") },
+        { QStringLiteral("name"), QStringLiteral("Bad select") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QStringLiteral("all-images") } } } }
+    };
     pdf::PDFActionList actionList;
-    QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
-                                              { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
-                                              { QStringLiteral("id"), QStringLiteral("bad-select") },
-                                              { QStringLiteral("name"), QStringLiteral("Bad select") },
-                                              { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-                                                                                 { QStringLiteral("id"), QStringLiteral("downsample") },
-                                                                                 { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-                                                                                 { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
-                                                                                 { QStringLiteral("select"), QStringLiteral("all-images") } } } } },
-                                          &actionList));
+    QVERIFY(!pdf::PDFActionList::fromJson(recipeJson, &actionList));
 }
 
 void ObjectSelectorTest::malformedCompositePredicateFailsParse()
 {
     pdf::PDFObjectSelector selector;
     QStringList errors;
-    const QJsonObject json = selectorJson(QJsonObject{
-        { QStringLiteral("and"), QJsonArray{ QJsonObject{ { QStringLiteral("minEffectiveDpi"), QStringLiteral("bad") } } } } });
+    const QJsonObject json = selectorJson(QJsonObject{ { QStringLiteral("and"),
+                                                         QJsonArray{ QJsonObject{ { QStringLiteral("minEffectiveDpi"), QStringLiteral("bad") } } } } });
     QVERIFY(!pdf::PDFObjectSelector::fromJson(json, &selector, &errors));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("minEffectiveDpi")));
 }

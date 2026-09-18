@@ -591,17 +591,18 @@ void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute()
 
 void ActionListTest::rejectsNonObjectSelectValue()
 {
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), QStringLiteral("bad-select") },
+        { QStringLiteral("name"), QStringLiteral("Bad select") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QJsonArray{} } } } }
+    };
     pdf::PDFActionList actionList;
-    QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
-                                              { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
-                                              { QStringLiteral("id"), QStringLiteral("bad-select") },
-                                              { QStringLiteral("name"), QStringLiteral("Bad select") },
-                                              { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-                                                                                 { QStringLiteral("id"), QStringLiteral("downsample") },
-                                                                                 { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-                                                                                 { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
-                                                                                 { QStringLiteral("select"), QJsonArray{} } } } } },
-                                          &actionList));
+    QVERIFY(!pdf::PDFActionList::fromJson(recipeJson, &actionList));
 }
 
 void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision()
