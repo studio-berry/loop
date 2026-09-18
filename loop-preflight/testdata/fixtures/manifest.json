@@ -344,6 +344,46 @@
     "notes": "Non-PDF input for malformed-input operator acceptance; manifest allowlist only."
   },
   {
+    "id": "truncated-xref",
+    "pdf": "truncated-xref.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "PDF header and objects with xref/trailer removed; PdfTool must return input-error without hanging."
+  },
+  {
+    "id": "cyclic-kids",
+    "pdf": "cyclic-kids.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Pages tree with a self-referencing /Kids entry; must fail closed as input-error."
+  },
+  {
+    "id": "wrong-generation",
+    "pdf": "wrong-generation.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Catalog xref generation mismatched against object headers; must fail closed as input-error."
+  },
+  {
+    "id": "bad-object-stream",
+    "pdf": "bad-object-stream.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Object stream declaring an absurd /N; must fail closed as input-error."
+  },
+  {
+    "id": "encrypted-without-password",
+    "pdf": "encrypted-without-password.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Standard encryption dictionary with dummy O/U and no password; first empty attempt must cancel as input-error."
+  },
+  {
     "id": "overprint-cmyk-mode0-off",
     "pdf": "overprint-cmyk-mode0-off.pdf",
     "profile": "profiles/loop-default.json",

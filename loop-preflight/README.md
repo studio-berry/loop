@@ -485,6 +485,26 @@ still pass/fail the way it's supposed to. The snapshot check (`preflightMatchesS
 the regression gate: did anything about the report's *content* (message text, bbox, severity,
 finding order) change, even if pass/fail didn't. Both run for every corpus entry.
 
+### Malformed PDF goldens
+
+Representative malformed inputs live next to the rest of the corpus so
+`UnitTestsPreflightCorpus` and `UnitTestsOperatorAcceptance` share them. Each case
+must resolve to the synthesized `input-error` envelope (`inspection_complete: false`,
+no findings); the snapshots do not assert which parser stage emitted the failure.
+
+| id | What it is | Expected |
+|----|------------|----------|
+| `malformed-not-pdf` | Non-PDF bytes | `input-error` |
+| `truncated-xref` | Header and objects, xref/trailer cut off | `input-error` |
+| `cyclic-kids` | Pages tree with a self-referencing `/Kids` entry | `input-error` |
+| `wrong-generation` | Catalog xref generation mismatched against object headers | `input-error` |
+| `bad-object-stream` | Object stream declaring an absurd `/N` | `input-error` |
+| `encrypted-without-password` | Standard `/Encrypt`, empty password | `input-error` |
+
+These are hand-built and tiny. Operator acceptance kills each run after 15 seconds
+and rejects findings exit code 1. Matching fuzz seeds live under
+`Fuzz/corpus/fuzz_pdf_parser/` where noted in the manifest.
+
 ### Hand-built custom-check fixtures (MIC-145)
 
 Public corpora (veraPDF, Isartor, GWG — MIC-146) cover standards-backed checks but not

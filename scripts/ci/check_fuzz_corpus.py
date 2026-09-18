@@ -79,6 +79,7 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
 
     seen_ids: set[str] = set()
     manifest_paths: set[str] = set()
+    harnesses_with_seeds: set[str] = set()
 
     for index, case in enumerate(cases):
         label = f"cases[{index}]"
@@ -137,8 +138,12 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
             )
 
         basename = parts[-1]
+        if basename in IGNORED_BASENAMES:
+            violations.append((rel_path, "ignored basename cannot be a manifest seed"))
+            continue
         if HASH_NAME.match(basename):
             violations.append((rel_path, "hash-named seed files are not allowed"))
+            continue
 
         absolute = root / rel_path
         if not absolute.is_file():
@@ -155,8 +160,14 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
             violations.append(
                 (rel_path, f"sha256 mismatch (manifest {digest}, actual {actual})")
             )
+            continue
+
+        harnesses_with_seeds.add(harness)
 
     for harness in sorted(HARNESS_TARGETS):
+        if harness not in harnesses_with_seeds:
+            violations.append((f"Fuzz/corpus/{harness}", "harness has no manifested seeds"))
+
         harness_dir = root / "Fuzz" / "corpus" / harness
         if not harness_dir.is_dir():
             violations.append((f"Fuzz/corpus/{harness}", "harness directory is missing"))
