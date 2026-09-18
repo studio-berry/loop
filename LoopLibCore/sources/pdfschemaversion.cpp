@@ -160,6 +160,15 @@ QJsonObject migratePreflightReportV1ToV2(QJsonObject document)
     return document;
 }
 
+QJsonObject migrateActionListV1ToV2(QJsonObject document)
+{
+    // Action List v2 keeps the v1 fields and adds selector-capable steps, so
+    // the legacy recipe can advance without dropping unknown fields.
+    document.insert(QStringLiteral("schema"), QStringLiteral("loop-action-list/2"));
+    document.insert(QStringLiteral("schema_version"), 2);
+    return document;
+}
+
 }   // namespace
 
 QString PDFSchemaVersion::toString() const
@@ -443,6 +452,11 @@ QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJs
             document = migratePreflightReportV2ToV3(std::move(document));
         }
         return document;
+    }
+
+    if (kind == PDFSchemaKind::ActionList && from.major == 1)
+    {
+        return migrateActionListV1ToV2(std::move(document));
     }
 
     Q_UNUSED(from);
