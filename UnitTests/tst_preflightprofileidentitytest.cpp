@@ -23,6 +23,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentsession.h"
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightverdict.h"
 #include "preflightengine.h"
 #include "preflightprofileresolver.h"
 
@@ -39,7 +40,12 @@ class PreflightProfileIdentityTest : public QObject
 private slots:
     void digestIgnoresFormattingAndDefaults();
     void digestChangesWithThresholds();
+    void digestChangesWithSeverity();
+    void digestChangesWithEnabled();
+    void digestChangesWithAmountPt();
     void unknownCheckKeyChangesDigest();
+    void exportImportExportIsByteIdentical();
+    void legacyProvisionalReportBlocksCertification();
     void importRejectsDigestMismatch();
     void legacyProfileIsProvisional();
     void forkRecordsDerivedFrom();
@@ -106,6 +112,76 @@ void PreflightProfileIdentityTest::digestChangesWithThresholds()
     checks.replace(0, check);
     changed.insert(QStringLiteral("checks"), checks);
     QVERIFY(pdf::computeProfileDigest(changed) != baseline);
+}
+
+void PreflightProfileIdentityTest::digestChangesWithSeverity()
+{
+    const QString baseline = pdf::computeProfileDigest(baseProfile());
+    QJsonObject changed = baseProfile();
+    QJsonArray checks = changed.value(QStringLiteral("checks")).toArray();
+    QJsonObject check = checks.at(0).toObject();
+    check.insert(QStringLiteral("severity"), QStringLiteral("error"));
+    checks.replace(0, check);
+    changed.insert(QStringLiteral("checks"), checks);
+    QVERIFY(pdf::computeProfileDigest(changed) != baseline);
+}
+
+void PreflightProfileIdentityTest::digestChangesWithEnabled()
+{
+    const QString baseline = pdf::computeProfileDigest(baseProfile());
+    QJsonObject changed = baseProfile();
+    QJsonArray checks = changed.value(QStringLiteral("checks")).toArray();
+    QJsonObject check = checks.at(0).toObject();
+    check.insert(QStringLiteral("enabled"), false);
+    checks.replace(0, check);
+    changed.insert(QStringLiteral("checks"), checks);
+    QVERIFY(pdf::computeProfileDigest(changed) != baseline);
+}
+
+void PreflightProfileIdentityTest::digestChangesWithAmountPt()
+{
+    QJsonObject profile = baseProfile();
+    QJsonArray checks = profile.value(QStringLiteral("checks")).toArray();
+    checks.append(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("bleed") },
+        { QStringLiteral("amount_pt"), 9 },
+        { QStringLiteral("severity"), QStringLiteral("error") } });
+    profile.insert(QStringLiteral("checks"), checks);
+    const QString baseline = pdf::computeProfileDigest(profile);
+
+    QJsonObject changed = profile;
+    QJsonArray changedChecks = changed.value(QStringLiteral("checks")).toArray();
+    QJsonObject bleed = changedChecks.at(1).toObject();
+    bleed.insert(QStringLiteral("amount_pt"), 12);
+    changedChecks.replace(1, bleed);
+    changed.insert(QStringLiteral("checks"), changedChecks);
+    QVERIFY(pdf::computeProfileDigest(changed) != baseline);
+}
+
+void PreflightProfileIdentityTest::exportImportExportIsByteIdentical()
+{
+    const QByteArray firstBytes = pdf::serializePreflightProfileBytes(baseProfile());
+    const QJsonObject imported = QJsonDocument::fromJson(firstBytes).object();
+    const pdf::PreflightProfileImportResult result = pdf::importPreflightProfile(imported);
+    QVERIFY2(result.ok, qPrintable(result.errorMessage));
+    const QByteArray secondBytes = pdf::serializePreflightProfileBytes(result.profile);
+    QCOMPARE(secondBytes, firstBytes);
+}
+
+void PreflightProfileIdentityTest::legacyProvisionalReportBlocksCertification()
+{
+    QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Legacy") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } }
+    };
+    pdf::PDFDocument document = emptyPageDocument();
+    pdf::PDFDocumentSession session(&document);
+    const pdf::PreflightResult result = pdf::PreflightEngine(&session).run(profile);
+    QVERIFY(result.profileIdentity.value(QStringLiteral("provisional")).toBool());
+    QVERIFY(pdf::reducePreflightVerdict(result).allowsCertificateIssuance());
+    QVERIFY(!pdf::preflightAllowsCertification(result));
 }
 
 void PreflightProfileIdentityTest::unknownCheckKeyChangesDigest()

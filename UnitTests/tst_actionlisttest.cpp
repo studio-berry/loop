@@ -23,8 +23,12 @@
 #include "actionlistrunsubmitter.h"
 #include "actionlistcontroller.h"
 #include "pdfactionlist.h"
+#include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfimage.h"
+#include "pdfimageoptimizer.h"
 #include "pdfjobscheduler.h"
+#include "pdfobjectselector.h"
 #include "pdfrepairdiff.h"
 
 #include <QCryptographicHash>
@@ -48,6 +52,61 @@ public:
 
 namespace
 {
+
+QString revisionDigestForDocument(const pdf::PDFDocument& document)
+{
+    const pdf::PDFRevisionIdentity revision = pdf::revisionIdentityForDocument(document);
+    return QString::fromLatin1(QCryptographicHash::hash(revision.toString().toUtf8(), QCryptographicHash::Sha256).toHex());
+}
+
+pdf::PDFObjectReference addImageObject(pdf::PDFDocumentBuilder& builder, int pixels)
+{
+    QImage image(pixels, pixels, QImage::Format_RGB32);
+    for (int y = 0; y < pixels; ++y)
+    {
+        for (int x = 0; x < pixels; ++x)
+        {
+            image.setPixel(x, y, qRgb((x * 17 + y * 13) % 256, (x * 7 + y * 29) % 256, (x * 31 + y * 3) % 256));
+        }
+    }
+    pdf::PDFImage::ImageEncodeOptions options;
+    options.compression = pdf::PDFImage::ImageCompression::Flate;
+    options.colorMode = pdf::PDFImage::ImageColorMode::Preserve;
+    options.alphaHandling = pdf::PDFImage::AlphaHandling::FlattenToWhite;
+    pdf::PDFStream imageStream = pdf::PDFImage::createStreamFromImage(image, options);
+    return builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(imageStream))));
+}
+
+pdf::PDFDocument createTwoPageDistinctImageDocument(int pixels)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    for (int page = 0; page < 2; ++page)
+    {
+        const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 144, 144));
+        const pdf::PDFObjectReference imageReference = addImageObject(builder, pixels);
+        const QByteArray pageContent("q 144 0 0 144 0 0 cm /Im1 Do Q");
+        pdf::PDFDictionary contentDictionary;
+        contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                                   pdf::PDFObject::createInteger(pageContent.size()));
+        const pdf::PDFObjectReference contentReference = builder.addObject(
+            pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+                pdf::PDFStream(std::move(contentDictionary), QByteArray(pageContent)))));
+
+        pdf::PDFDictionary xObject;
+        xObject.addEntry(pdf::PDFInplaceOrMemoryString("Im1"), pdf::PDFObject::createReference(imageReference));
+        pdf::PDFDictionary resources;
+        resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                           pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObject))));
+        pdf::PDFDictionary pageUpdate;
+        pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                            pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+        pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+        builder.mergeTo(pageReference,
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+    }
+    return builder.build();
+}
 
 pdf::PDFActionList bleedRecipe(const QString& id)
 {
@@ -81,6 +140,11 @@ private slots:
     void cliParityRecipeHashAndOutputSha256();
     void surfacesPerStepValidationErrors();
     void controllerFencesValidationPlanAndStaleCompletion();
+    void selectStepValidatesAndPlansWithScopedSelection();
+    void selectScopedExecuteFailsClosedOnScopeViolation();
+    void selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute();
+    void selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision();
+    void rejectsNonObjectSelectValue();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -396,6 +460,192 @@ void ActionListTest::controllerFencesValidationPlanAndStaleCompletion()
     controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-3"));
     QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Idle);
     QVERIFY(!controller.validationReady());
+}
+
+void ActionListTest::selectStepValidatesAndPlansWithScopedSelection()
+{
+    const pdf::PDFDocument source = createTwoPageDistinctImageDocument(600);
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), QStringLiteral("select-plan") },
+        { QStringLiteral("name"), QStringLiteral("Select plan") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QJsonObject{
+                                                                       { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                       { QStringLiteral("predicate"), QJsonObject{
+                                                                                                          { QStringLiteral("and"), QJsonArray{
+                                                                                                                                       QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                                                                                                       QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } } } }
+    };
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(recipeJson, &actionList));
+    pdf::PDFActionListExecutionOptions options;
+    options.revision = pdf::revisionIdentityForDocument(source);
+    QVERIFY(pdf::PDFActionListExecutor().validate(actionList, options));
+
+    pdf::PDFActionListExecutionResult planResult;
+    QVERIFY(pdf::PDFActionListExecutor().plan(actionList, source, options, &planResult));
+    QCOMPARE(planResult.status, QStringLiteral("planned"));
+    QCOMPARE(planResult.steps.size(), 1);
+    QVERIFY(!planResult.steps.front().selectionScope.value(QStringLiteral("empty")).toBool());
+    QCOMPARE(planResult.steps.front().selectionScope.value(QStringLiteral("count")).toInt(), 1);
+}
+
+void ActionListTest::selectScopedExecuteFailsClosedOnScopeViolation()
+{
+    const pdf::PDFDocument source = createTwoPageDistinctImageDocument(600);
+    const std::vector<pdf::PDFImageOptimizer::ImageInfo> sourceInfos = pdf::PDFImageOptimizer::collectImageInfos(&source);
+    QCOMPARE(sourceInfos.size(), size_t(2));
+
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("select-fence") },
+                                             { QStringLiteral("name"), QStringLiteral("Select fence") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                            { QStringLiteral("select"), QJsonObject{
+                                                                                                            { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                            { QStringLiteral("predicate"), QJsonObject{
+                                                                                                                                               { QStringLiteral("and"), QJsonArray{
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } } } } },
+                                         &actionList));
+
+    pdf::PDFActionListExecutionOptions options;
+    options.revision = pdf::revisionIdentityForDocument(source);
+    pdf::PDFActionListExecutionResult result;
+    pdf::PDFDocument candidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
+    QCOMPARE(result.status, QStringLiteral("failed"));
+    QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Failed);
+    bool sawScopeViolation = false;
+    for (const QJsonValue& value : result.steps.front().diagnostics)
+    {
+        if (value.toObject().value(QStringLiteral("code")).toString() == QStringLiteral("action-list.select-scope-violation"))
+        {
+            sawScopeViolation = true;
+            break;
+        }
+    }
+    QVERIFY(sawScopeViolation);
+    QCOMPARE(pdf::PDFImageOptimizer::collectImageInfos(&source).front().pixelSize.width(), sourceInfos.front().pixelSize.width());
+    QCOMPARE(pdf::PDFImageOptimizer::collectImageInfos(&source).back().pixelSize.width(), sourceInfos.back().pixelSize.width());
+}
+
+void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute()
+{
+    const pdf::PDFDocument source = createTwoPageDistinctImageDocument(600);
+    const QString originalDigest = revisionDigestForDocument(source);
+
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("select-stale") },
+                                             { QStringLiteral("name"), QStringLiteral("Select stale") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                                { QStringLiteral("select"), QJsonObject{
+                                                                                                                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                                { QStringLiteral("revisionDigest"), originalDigest },
+                                                                                                                { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } },
+                                         &actionList));
+
+    pdf::PDFActionListExecutionResult planResult;
+    QVERIFY(pdf::PDFActionListExecutor().plan(actionList, source, {}, &planResult));
+    QCOMPARE(planResult.status, QStringLiteral("planned"));
+    QCOMPARE(planResult.steps.size(), 2);
+
+    pdf::PDFActionListExecutionResult executeResult;
+    pdf::PDFDocument candidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &executeResult));
+    QCOMPARE(executeResult.status, QStringLiteral("failed"));
+    QCOMPARE(executeResult.steps.size(), 2);
+    QCOMPARE(executeResult.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
+    QCOMPARE(executeResult.steps.back().status, pdf::PDFActionListStepStatus::Failed);
+    bool sawExecuteStale = false;
+    for (const QJsonValue& value : executeResult.steps.back().diagnostics)
+    {
+        const QJsonObject diagnostic = value.toObject();
+        if (diagnostic.value(QStringLiteral("code")).toString() == QStringLiteral("action-list.select-stale-at-execute"))
+        {
+            sawExecuteStale = true;
+            break;
+        }
+    }
+    QVERIFY(sawExecuteStale);
+    QCOMPARE(source.getCatalog()->getPageCount(), pdf::PDFInteger(2));
+}
+
+void ActionListTest::rejectsNonObjectSelectValue()
+{
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), QStringLiteral("bad-select") },
+        { QStringLiteral("name"), QStringLiteral("Bad select") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QJsonArray{} } } } }
+    };
+    pdf::PDFActionList actionList;
+    QVERIFY(!pdf::PDFActionList::fromJson(recipeJson, &actionList));
+}
+
+void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision()
+{
+    const pdf::PDFDocument source = createTwoPageDistinctImageDocument(600);
+    const QString originalDigest = revisionDigestForDocument(source);
+
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("select-stale-frozen") },
+                                             { QStringLiteral("name"), QStringLiteral("Select stale frozen") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                                { QStringLiteral("select"), QJsonObject{
+                                                                                                                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                                { QStringLiteral("revisionDigest"), originalDigest },
+                                                                                                                { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } },
+                                         &actionList));
+
+    const pdf::PDFActionListExecutionOptions options = pdf::makeActionListExecutionOptions(source);
+    pdf::PDFActionListExecutionResult executeResult;
+    pdf::PDFDocument candidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &executeResult));
+    QCOMPARE(executeResult.status, QStringLiteral("failed"));
+    QCOMPARE(executeResult.steps.back().status, pdf::PDFActionListStepStatus::Failed);
+    bool sawExecuteStale = false;
+    for (const QJsonValue& value : executeResult.steps.back().diagnostics)
+    {
+        if (value.toObject().value(QStringLiteral("code")).toString() == QStringLiteral("action-list.select-stale-at-execute"))
+        {
+            sawExecuteStale = true;
+            break;
+        }
+    }
+    QVERIFY(sawExecuteStale);
 }
 
 void ActionListTest::cancellationLeavesSourceUntouched()

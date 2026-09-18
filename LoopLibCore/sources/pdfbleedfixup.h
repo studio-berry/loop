@@ -62,10 +62,7 @@ constexpr PDFBleedFixupSideMask bleedFixupSideBit(PDFBleedFixupSide side)
 }
 
 constexpr PDFBleedFixupSideMask PDFBleedFixupAllSides =
-        bleedFixupSideBit(PDFBleedFixupSide::Left)
-        | bleedFixupSideBit(PDFBleedFixupSide::Bottom)
-        | bleedFixupSideBit(PDFBleedFixupSide::Right)
-        | bleedFixupSideBit(PDFBleedFixupSide::Top);
+    bleedFixupSideBit(PDFBleedFixupSide::Left) | bleedFixupSideBit(PDFBleedFixupSide::Bottom) | bleedFixupSideBit(PDFBleedFixupSide::Right) | bleedFixupSideBit(PDFBleedFixupSide::Top);
 
 constexpr bool isBleedFixupSideEnabled(PDFBleedFixupSideMask sides, PDFBleedFixupSide side)
 {
@@ -84,14 +81,14 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedFixupSettings
     PDFBleedFixupMode mode = PDFBleedFixupMode::Mirror;
     QString pageRange = "-";
     ReferenceBox referenceBox = ReferenceBox::TrimBox;
-    QMarginsF bleedMM = QMarginsF(3.0, 3.0, 3.0, 3.0); ///< left, top, right, bottom
+    QMarginsF bleedMM = QMarginsF(3.0, 3.0, 3.0, 3.0);   ///< left, top, right, bottom
     PDFBleedFixupSideMask sides = PDFBleedFixupAllSides;
     bool expandMediaBox = true;
     bool expandCropBox = true;
     bool expandBleedBox = true;
     bool expandTrimBox = false;
     int dpi = 300;
-    int samplePixels = 1; ///< PixelRepeat / Stretch sample depth
+    int samplePixels = 1;   ///< PixelRepeat / Stretch sample depth
     bool skipIfAlreadyBleeding = true;
     bool force = false;
 
@@ -142,50 +139,53 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedRasterPlan
 };
 
 LOOPLIBCORESHARED_EXPORT PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
-                                                        int dpi,
-                                                        qint64 maxRasterPixels,
-                                                        bool analyzeOnly,
-                                                        bool hasEligibleSides);
+                                                       int dpi,
+                                                       qint64 maxRasterPixels,
+                                                       bool analyzeOnly,
+                                                       bool hasEligibleSides);
 
 LOOPLIBCORESHARED_EXPORT QRectF referenceRect(const PDFPage* page, PDFBleedFixupSettings::ReferenceBox referenceBox);
 LOOPLIBCORESHARED_EXPORT QRectF targetBleedRect(const QRectF& reference, const QMarginsF& bleedMM);
 LOOPLIBCORESHARED_EXPORT QRectF expandBoxTo(const QRectF& box, const QRectF& target);
 LOOPLIBCORESHARED_EXPORT bool sideAlreadyBleeding(const QRectF& reference,
-                                                    const QRectF& bleedBox,
-                                                    PDFBleedFixupSide side,
-                                                    PDFReal requiredBleedPt);
+                                                  const QRectF& bleedBox,
+                                                  PDFBleedFixupSide side,
+                                                  PDFReal requiredBleedPt);
 LOOPLIBCORESHARED_EXPORT PDFReal sideBleedMM(const QMarginsF& bleedMM, PDFBleedFixupSide side);
 LOOPLIBCORESHARED_EXPORT int stripWidthPx(PDFBleedFixupMode mode, int bleedDepthPx, int samplePixels);
 LOOPLIBCORESHARED_EXPORT QRectF edgeStripSourceRect(const QRectF& reference,
-                                                      PDFBleedFixupSide side,
-                                                      PDFReal depthPt);
-LOOPLIBCORESHARED_EXPORT QRectF edgeStripDestRect(const QRectF& reference,
                                                     PDFBleedFixupSide side,
                                                     PDFReal depthPt);
+LOOPLIBCORESHARED_EXPORT QRectF edgeStripDestRect(const QRectF& reference,
+                                                  PDFBleedFixupSide side,
+                                                  PDFReal depthPt);
 LOOPLIBCORESHARED_EXPORT QRectF cornerStripSourceRect(const QRectF& reference,
-                                                        PDFBleedFixupSide horizontal,
-                                                        PDFBleedFixupSide vertical,
-                                                        PDFReal horizontalDepthPt,
-                                                        PDFReal verticalDepthPt);
-LOOPLIBCORESHARED_EXPORT QRectF cornerStripDestRect(const QRectF& reference,
                                                       PDFBleedFixupSide horizontal,
                                                       PDFBleedFixupSide vertical,
                                                       PDFReal horizontalDepthPt,
                                                       PDFReal verticalDepthPt);
+LOOPLIBCORESHARED_EXPORT QRectF cornerStripDestRect(const QRectF& reference,
+                                                    PDFBleedFixupSide horizontal,
+                                                    PDFBleedFixupSide vertical,
+                                                    PDFReal horizontalDepthPt,
+                                                    PDFReal verticalDepthPt);
 LOOPLIBCORESHARED_EXPORT QImage buildEdgeFillImage(const QImage& pageImage,
-                                                     const QRect& sourcePx,
-                                                     PDFBleedFixupSide side,
-                                                     PDFBleedFixupMode mode,
-                                                     int bleedDepthPx);
+                                                   const QRect& sourcePx,
+                                                   PDFBleedFixupSide side,
+                                                   PDFBleedFixupMode mode,
+                                                   int bleedDepthPx);
 LOOPLIBCORESHARED_EXPORT QImage buildCornerFillImage(const QImage& pageImage,
-                                                       const QRect& sourcePx,
-                                                       PDFBleedFixupSide horizontal,
-                                                       PDFBleedFixupSide vertical,
-                                                       PDFBleedFixupMode mode,
-                                                       int destWidthPx,
-                                                       int destHeightPx);
+                                                     const QRect& sourcePx,
+                                                     PDFBleedFixupSide horizontal,
+                                                     PDFBleedFixupSide vertical,
+                                                     PDFBleedFixupMode mode,
+                                                     int destWidthPx,
+                                                     int destHeightPx);
 
-} // namespace PDFBleedFixupMath
+/// Flatten premultiplied / alpha edge samples onto white and return RGB888 strips.
+LOOPLIBCORESHARED_EXPORT QImage composeBleedStripRgb888(QImage strip);
+
+}   // namespace PDFBleedFixupMath
 
 class LOOPLIBCORESHARED_EXPORT PDFBleedFixup
 {
@@ -196,6 +196,6 @@ public:
                                     PDFModifiedDocument::ModificationFlags* modificationFlags = nullptr);
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFBLEEDFIXUP_H
+#endif   // PDFBLEEDFIXUP_H

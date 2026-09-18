@@ -357,6 +357,13 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("output-dir"), { QStringLiteral("--output-dir") }, QStringLiteral("directory"), PDFToolValueType::Path);
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
     }
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("out"), { QStringLiteral("--out") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("id"), { QStringLiteral("--id") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("profile-version"), { QStringLiteral("--profile-version") }, QStringLiteral("version"), PDFToolValueType::String);
+    }
     if (optionFlags.testFlag(PreflightProfile))
     {
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
@@ -655,6 +662,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(FlattenTransparency, QStringLiteral("fixup.flatten-transparency"));
     add(RgbToCmyk, QStringLiteral("fixup.rgb-to-cmyk"));
     add(PreflightProfile, QStringLiteral("preflight.run"));
+    add(PreflightProfileManage, QStringLiteral("preflight-profile.manage"));
     add(OcrOptions, QStringLiteral("ocr.client"));
     add(Diagnostics, QStringLiteral("diagnostics.bundle"));
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
@@ -824,6 +832,14 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         {
             addDescribedOption(parser, optionDescriptors, QStringLiteral("force"), QStringLiteral("Overwrite an existing output file without confirmation (legacy alias of --overwrite)."));
         }
+    }
+
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Loop preflight profile JSON input path."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("out"), QStringLiteral("Output profile JSON path."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("id"), QStringLiteral("New profile id for fork."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-version"), QStringLiteral("New profile version for fork."));
     }
 
     if (optionFlags.testFlag(PreflightProfile))
@@ -1357,6 +1373,14 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.rgbToCmykSettings.outputIntentPolicy = outputIntentPolicy == QStringLiteral("preserve-matching")
                                                            ? pdf::PDFRgbToCmykOutputIntentPolicy::PreserveMatching
                                                            : pdf::PDFRgbToCmykOutputIntentPolicy::Replace;
+    }
+
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        options.preflightProfilePath = parser->value("profile");
+        options.preflightProfileOutputPath = parser->value("out");
+        options.preflightProfileForkId = parser->value("id");
+        options.preflightProfileForkVersion = parser->value("profile-version");
     }
 
     if (optionFlags.testFlag(PreflightProfile))
