@@ -53,14 +53,16 @@ bool readJsonFile(const QString& path, QJsonObject* object, QString* error)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
     {
-        if (error) *error = QStringLiteral("Unable to read Action List recipe '%1'.").arg(path);
+        if (error)
+            *error = QStringLiteral("Unable to read Action List recipe '%1'.").arg(path);
         return false;
     }
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject())
     {
-        if (error) *error = QStringLiteral("Action List recipe '%1' is not a JSON object: %2.").arg(path, parseError.errorString());
+        if (error)
+            *error = QStringLiteral("Action List recipe '%1' is not a JSON object: %2.").arg(path, parseError.errorString());
         return false;
     }
     *object = document.object();
@@ -72,19 +74,24 @@ bool parseBinding(const QString& assignment, QString* key, QJsonValue* value, QS
     const int separator = assignment.indexOf(QLatin1Char('='));
     if (separator <= 0)
     {
-        if (error) *error = QStringLiteral("Action List parameter '%1' must use key=value.").arg(assignment);
+        if (error)
+            *error = QStringLiteral("Action List parameter '%1' must use key=value.").arg(assignment);
         return false;
     }
     *key = assignment.left(separator).trimmed();
     const QString text = assignment.mid(separator + 1).trimmed();
-    if (text.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0) *value = true;
-    else if (text.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0) *value = false;
-    else if (text.compare(QStringLiteral("null"), Qt::CaseInsensitive) == 0) *value = QJsonValue(QJsonValue::Null);
+    if (text.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0)
+        *value = true;
+    else if (text.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0)
+        *value = false;
+    else if (text.compare(QStringLiteral("null"), Qt::CaseInsensitive) == 0)
+        *value = QJsonValue(QJsonValue::Null);
     else
     {
         bool integerOk = false;
         const qlonglong integer = text.toLongLong(&integerOk);
-        if (integerOk) *value = integer;
+        if (integerOk)
+            *value = integer;
         else
         {
             bool numberOk = false;
@@ -101,7 +108,8 @@ bool parseBindings(const QStringList& assignments, QJsonObject* bindings, QStrin
     {
         QString key;
         QJsonValue value;
-        if (!parseBinding(assignment, &key, &value, error)) return false;
+        if (!parseBinding(assignment, &key, &value, error))
+            return false;
         bindings->insert(key, value);
     }
     return true;
@@ -109,17 +117,17 @@ bool parseBindings(const QStringList& assignments, QJsonObject* bindings, QStrin
 
 bool readDocumentFromPath(const PDFToolOptions& options, const QString& path, pdf::PDFDocument* document, QByteArray* sourceData, QString* error)
 {
-    pdf::PDFDocumentReader reader(nullptr,
-                                  [&options](bool*) { return options.password; },
-                                  options.permissiveReading,
-                                  false);
+    pdf::PDFDocumentReader reader(nullptr, [&options](bool*)
+                                  { return options.password; }, options.permissiveReading, false);
     *document = reader.readFromFile(path);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        if (error) *error = reader.getErrorMessage();
+        if (error)
+            *error = reader.getErrorMessage();
         return false;
     }
-    if (sourceData) *sourceData = reader.getSource();
+    if (sourceData)
+        *sourceData = reader.getSource();
     return true;
 }
 
@@ -129,16 +137,17 @@ QJsonObject resultWithInput(const pdf::PDFActionListExecutionResult& result,
 {
     QJsonObject object = result.toJson();
     object.insert(QStringLiteral("input"), QJsonObject{
-        { QStringLiteral("path"), input },
-        { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(inputData, QCryptographicHash::Sha256).toHex()) }
-    });
+                                               { QStringLiteral("path"), input },
+                                               { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(inputData, QCryptographicHash::Sha256).toHex()) } });
     return object;
 }
 
 PDFToolExitCode statusExitCode(const pdf::PDFActionListExecutionResult& result)
 {
-    if (result.status == QStringLiteral("cancelled")) return PDFToolExitCode::Cancelled;
-    if (result.status == QStringLiteral("failed")) return PDFToolExitCode::ProcessingFailure;
+    if (result.status == QStringLiteral("cancelled"))
+        return PDFToolExitCode::Cancelled;
+    if (result.status == QStringLiteral("failed"))
+        return PDFToolExitCode::ProcessingFailure;
     return PDFToolExitCode::Success;
 }
 
@@ -156,14 +165,16 @@ bool recordActionListHistory(const QString& outputPath,
     const auto output = artifacts.importBytes(candidateData, { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
     if (!input.success || !output.success)
     {
-        if (error) *error = input.success ? output.errorMessage : input.errorMessage;
+        if (error)
+            *error = input.success ? output.errorMessage : input.errorMessage;
         return false;
     }
     pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
     QString historyError;
     if (!history.open(&historyError) || !history.registerOriginalInput(input.artifact) || !history.registerArtifact(output.artifact))
     {
-        if (error) *error = historyError.isEmpty() ? QStringLiteral("Could not register Action List history artifacts.") : historyError;
+        if (error)
+            *error = historyError.isEmpty() ? QStringLiteral("Could not register Action List history artifacts.") : historyError;
         return false;
     }
     pdf::PDFOperationHistoryExecution execution;
@@ -173,7 +184,8 @@ bool recordActionListHistory(const QString& outputPath,
     QUuid executionId;
     if (!history.beginExecution(execution, &executionId))
     {
-        if (error) *error = QStringLiteral("Could not begin Action List history.");
+        if (error)
+            *error = QStringLiteral("Could not begin Action List history.");
         return false;
     }
     pdf::PDFOperationHistoryEvent running;
@@ -181,7 +193,8 @@ bool recordActionListHistory(const QString& outputPath,
     running.status = pdf::PDFOperationHistoryStatus::Running;
     if (!history.appendEvent(running))
     {
-        if (error) *error = QStringLiteral("Could not append Action List history start.");
+        if (error)
+            *error = QStringLiteral("Could not append Action List history start.");
         return false;
     }
     pdf::PDFOperationHistoryEvent accepted;
@@ -196,21 +209,25 @@ bool recordActionListHistory(const QString& outputPath,
     accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
     if (!history.appendEvent(accepted))
     {
-        if (error) *error = QStringLiteral("Could not append Action List accepted history.");
+        if (error)
+            *error = QStringLiteral("Could not append Action List accepted history.");
         return false;
     }
     return true;
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolActionList::getStandardString(StandardString standardString) const
 {
     switch (standardString)
     {
-        case Command: return QStringLiteral("action-list");
-        case Name: return PDFToolTranslationContext::tr("Action List");
-        case Description: return PDFToolTranslationContext::tr("Validate, plan, and execute reusable declarative Loop operations.");
+        case Command:
+            return QStringLiteral("action-list");
+        case Name:
+            return PDFToolTranslationContext::tr("Action List");
+        case Description:
+            return PDFToolTranslationContext::tr("Validate, plan, and execute reusable declarative Loop operations.");
     }
     return QString();
 }
@@ -282,7 +299,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             { QStringLiteral("valid"), bool(validation) },
             { QStringLiteral("errors"), QJsonArray::fromStringList(validationErrors) }
         };
-        if (options.executionContext) options.executionContext->setData(data);
+        if (options.executionContext)
+            options.executionContext->setData(data);
         if (options.outputStyle != PDFOutputFormatter::Style::Json)
             PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
         return validation ? PDFToolExitCode::Success : PDFToolExitCode::InvalidInvocation;
@@ -310,7 +328,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             QByteArray sourceData;
             if (!readDocumentFromPath(options, input, &source, &sourceData, &error))
             {
-                items.append(QJsonObject{{QStringLiteral("input"), input}, {QStringLiteral("status"), QStringLiteral("failed")}, {QStringLiteral("error"), error}});
+                items.append(QJsonObject{ { QStringLiteral("input"), input }, { QStringLiteral("status"), QStringLiteral("failed") }, { QStringLiteral("error"), error } });
                 aggregateCode = PDFToolExitCode::InputError;
                 continue;
             }
@@ -336,7 +354,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                     QByteArray candidateData;
                     pdf::PDFDocument reopened;
                     const pdf::PDFOperationResult serializeResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-                        candidate, [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); }, output, &reopened, &candidateData);
+                        candidate, [](pdf::PDFDocument*)
+                        { return pdf::PDFOperationResult(true); }, output, &reopened, &candidateData);
                     if (!serializeResult)
                     {
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
@@ -346,7 +365,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                     {
                         QString historyError;
                         if (!recordActionListHistory(output, sourceData, candidateData, actionList.id,
-                                                     QJsonObject{{QStringLiteral("recipe"), options.actionListRecipe}, {QStringLiteral("bindings"), bindings}},
+                                                     QJsonObject{ { QStringLiteral("recipe"), options.actionListRecipe }, { QStringLiteral("bindings"), bindings } },
                                                      item, &historyError))
                         {
                             aggregateCode = PDFToolExitCode::ProcessingFailure;
@@ -357,8 +376,9 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             }
             items.append(std::move(item));
         }
-        const QJsonObject data{{QStringLiteral("schema"), QStringLiteral("loop-action-list-batch")}, {QStringLiteral("recipe"), actionList.id}, {QStringLiteral("items"), items}};
-        if (options.executionContext) options.executionContext->setData(data);
+        const QJsonObject data{ { QStringLiteral("schema"), QStringLiteral("loop-action-list-batch") }, { QStringLiteral("recipe"), actionList.id }, { QStringLiteral("items"), items } };
+        if (options.executionContext)
+            options.executionContext->setData(data);
         if (options.outputStyle != PDFOutputFormatter::Style::Json)
             PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
         return aggregateCode;
@@ -405,26 +425,31 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             return PDFToolExitCode::InvalidInvocation;
         }
         const PDFToolExitCode outputCheck = validateDestructiveOutput(options, options.actionListOutputDocument);
-        if (outputCheck != PDFToolExitCode::Success) return outputCheck;
+        if (outputCheck != PDFToolExitCode::Success)
+            return outputCheck;
         QByteArray candidateData;
         pdf::PDFDocument reopened;
-        if (const pdf::PDFOperationResult serializeResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(candidate, [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); }, options.actionListOutputDocument, &reopened, &candidateData); !serializeResult)
+        if (const pdf::PDFOperationResult serializeResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(candidate, [](pdf::PDFDocument*)
+                                                                                                               { return pdf::PDFOperationResult(true); }, options.actionListOutputDocument, &reopened, &candidateData);
+            !serializeResult)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-serialize-failed"), serializeResult.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
-        data.insert(QStringLiteral("output"), QJsonObject{{QStringLiteral("path"), options.actionListOutputDocument}, {QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex())}});
+        data.insert(QStringLiteral("output"), QJsonObject{ { QStringLiteral("path"), options.actionListOutputDocument }, { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex()) } });
         QString historyError;
         if (!recordActionListHistory(options.actionListOutputDocument, sourceData, candidateData, actionList.id,
-                                     QJsonObject{{QStringLiteral("recipe"), options.actionListRecipe}, {QStringLiteral("bindings"), bindings}},
+                                     QJsonObject{ { QStringLiteral("recipe"), options.actionListRecipe }, { QStringLiteral("bindings"), bindings } },
                                      data, &historyError))
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"), historyError);
             return PDFToolExitCode::ProcessingFailure;
         }
-        if (options.executionContext) options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.actionListOutputDocument, QStringLiteral("written")});
+        if (options.executionContext)
+            options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("primary"), options.actionListOutputDocument, QStringLiteral("written") });
     }
-    if (options.executionContext) options.executionContext->setData(data);
+    if (options.executionContext)
+        options.executionContext->setData(data);
     if (options.outputStyle != PDFOutputFormatter::Style::Json)
         PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
     return execution ? PDFToolExitCode::Success : statusExitCode(executionResult);
@@ -437,4 +462,4 @@ PDFToolAbstractApplication::Options PDFToolActionList::getOptionsFlags() const
 
 static PDFToolActionList s_actionListApplication;
 
-} // namespace pdftool
+}   // namespace pdftool
