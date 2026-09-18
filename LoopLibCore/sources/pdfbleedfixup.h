@@ -185,6 +185,9 @@ LOOPLIBCORESHARED_EXPORT QImage buildCornerFillImage(const QImage& pageImage,
                                                        int destWidthPx,
                                                        int destHeightPx);
 
+/// Flatten premultiplied / alpha edge samples onto white and return RGB888 strips.
+LOOPLIBCORESHARED_EXPORT QImage composeBleedStripRgb888(QImage strip);
+
 } // namespace PDFBleedFixupMath
 
 class LOOPLIBCORESHARED_EXPORT PDFBleedFixup

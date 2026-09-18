@@ -24,6 +24,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "pdfglobal.h"
+#include "pdfstreamfilters.h"
 
 #include <QtTest>
 #include <QColor>
@@ -61,6 +62,87 @@ QByteArray documentDigest(const pdf::PDFDocument& document)
     return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256);
 }
 
+QByteArray loadSyntheticCmykProfile()
+{
+    const QString profilePath = QFINDTESTDATA("testdata/synthetic-cmyk.icc");
+    if (profilePath.isEmpty())
+    {
+        return QByteArray();
+    }
+
+    QFile file(profilePath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return QByteArray();
+    }
+    return file.readAll();
+}
+
+void embedCmykOutputIntent(pdf::PDFDocumentBuilder* builder, const QByteArray& profileData)
+{
+    QByteArray compressedProfile = pdf::PDFFlateDecodeFilter::compress(profileData);
+    pdf::PDFDictionary profileDictionary;
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createInteger(4));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Filter"), pdf::PDFObject::createName("FlateDecode"));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(compressedProfile.size()));
+    const pdf::PDFObjectReference profileReference = builder->addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(qMove(profileDictionary), qMove(compressedProfile))));
+
+    pdf::PDFDictionary intentDictionary;
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("OutputIntent"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("S"), pdf::PDFObject::createName("GTS_PDFX"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("OutputConditionIdentifier"),
+                              pdf::PDFObject::createString(QByteArrayLiteral("Test CMYK")));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("DestOutputProfile"),
+                              pdf::PDFObject::createReference(profileReference));
+    const pdf::PDFObjectReference intentReference = builder->addObject(
+        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(intentDictionary))));
+
+    pdf::PDFArray outputIntents;
+    outputIntents.appendItem(pdf::PDFObject::createReference(intentReference));
+    pdf::PDFDictionary catalogUpdate;
+    catalogUpdate.addEntry(pdf::PDFInplaceOrMemoryString("OutputIntents"),
+                           pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(qMove(outputIntents))));
+    builder->mergeTo(builder->getCatalogReference(),
+                     pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(catalogUpdate))));
+}
+
+bool imageXObjectUsesIccCmykColorSpace(const pdf::PDFDocument& document, const pdf::PDFObject& xObjectObject)
+{
+    if (!xObjectObject.isStream())
+    {
+        return false;
+    }
+
+    const pdf::PDFDictionary* dictionary = xObjectObject.getStream()->getDictionary();
+    if (!dictionary->get("Subtype").isName() || dictionary->get("Subtype").getString() != QByteArrayLiteral("Image"))
+    {
+        return false;
+    }
+
+    const pdf::PDFObject colorSpaceObject = document.getObject(dictionary->get("ColorSpace"));
+    if (!colorSpaceObject.isArray())
+    {
+        return false;
+    }
+
+    const pdf::PDFArray* colorSpaceArray = colorSpaceObject.getArray();
+    if (colorSpaceArray->getCount() < 2 || !colorSpaceArray->getItem(0).isName()
+        || colorSpaceArray->getItem(0).getString() != QByteArrayLiteral("ICCBased"))
+    {
+        return false;
+    }
+
+    const pdf::PDFObject profileObject = document.getObject(colorSpaceArray->getItem(1));
+    if (!profileObject.isStream())
+    {
+        return false;
+    }
+
+    const pdf::PDFDictionary* profileDictionary = profileObject.getStream()->getDictionary();
+    return profileDictionary->get("N").isInt() && profileDictionary->get("N").getInteger() == 4;
+}
+
 }
 
 class BleedFixupTest : public QObject
@@ -78,6 +160,8 @@ private slots:
     void buildCornerFillImage_pixelRepeatTilesCornerPixel();
     void buildEdgeFillImage_pixelRepeatTilesEdge();
     void buildEdgeFillImage_stretchScalesToBleedDepth();
+    void buildEdgeFillImage_outputsRgb888AndFlattensAlpha();
+    void apply_cmykOutputIntent_embedsIccBasedCmykStrips();
     void apply_selectedSidesOnly_reportsAndExpandsSelectedEdges();
     void apply_normalLetterWithinBudget_preservesBleedSemantics();
     void rasterPlan_largeFormatRejectsBeforeAllocation();
@@ -246,6 +330,74 @@ void BleedFixupTest::buildEdgeFillImage_stretchScalesToBleedDepth()
                                                                    5);
     QCOMPARE(fill.width(), 5);
     QCOMPARE(fill.height(), 4);
+}
+
+void BleedFixupTest::buildEdgeFillImage_outputsRgb888AndFlattensAlpha()
+{
+    QImage transparent(1, 1, QImage::Format_ARGB32);
+    transparent.setPixel(0, 0, qRgba(255, 0, 0, 128));
+
+    const QImage flattened = pdf::PDFBleedFixupMath::composeBleedStripRgb888(transparent);
+    QCOMPARE(flattened.format(), QImage::Format_RGB888);
+    const QRgb pixel = flattened.pixel(0, 0);
+    QVERIFY(qRed(pixel) > qGreen(pixel));
+    QVERIFY(qGreen(pixel) > 100);
+
+    QImage page(2, 2, QImage::Format_RGB888);
+    page.fill(Qt::white);
+    page.setPixel(0, 0, qRgb(255, 0, 0));
+    const QImage fill = pdf::PDFBleedFixupMath::buildEdgeFillImage(page,
+                                                                    QRect(0, 0, 1, 2),
+                                                                    pdf::PDFBleedFixupSide::Left,
+                                                                    pdf::PDFBleedFixupMode::PixelRepeat,
+                                                                    2);
+    QCOMPARE(fill.format(), QImage::Format_RGB888);
+}
+
+void BleedFixupTest::apply_cmykOutputIntent_embedsIccBasedCmykStrips()
+{
+    const QByteArray profileData = loadSyntheticCmykProfile();
+    if (profileData.isEmpty())
+    {
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
+    }
+
+    pdf::PDFDocumentBuilder builder;
+    const QRectF media(0.0, 0.0, 100.0, 100.0);
+    const pdf::PDFObjectReference pageReference = builder.appendPage(media);
+    builder.setPageTrimBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    builder.setPageBleedBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    embedCmykOutputIntent(&builder, profileData);
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFBleedFixupSettings settings;
+    settings.force = true;
+    settings.dpi = 72;
+    settings.sides = pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+
+    pdf::PDFBleedFixupReport report;
+    const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(report.pages.size(), 1);
+    QVERIFY(report.pages.front().sidesApplied.contains(pdf::PDFBleedFixupSide::Left));
+
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    const pdf::PDFObject resourcesObject = document.getObject(page->getResources());
+    QVERIFY(resourcesObject.isDictionary());
+    const pdf::PDFObject xObjectsObject = document.getObject(resourcesObject.getDictionary()->get("XObject"));
+    QVERIFY(xObjectsObject.isDictionary());
+
+    bool foundCmykStrip = false;
+    const pdf::PDFDictionary* xObjectsDictionary = xObjectsObject.getDictionary();
+    for (size_t i = 0; i < xObjectsDictionary->getCount(); ++i)
+    {
+        if (imageXObjectUsesIccCmykColorSpace(document, document.getObject(xObjectsDictionary->getValue(i))))
+        {
+            foundCmykStrip = true;
+            break;
+        }
+    }
+    QVERIFY(foundCmykStrip);
 }
 
 void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()
