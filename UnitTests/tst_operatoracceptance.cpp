@@ -408,6 +408,8 @@ bool OperatorAcceptanceTest::runAddBleed(const QString& inputPath,
                           QStringLiteral("--bleed-mm"),
                           bleedMm,
                           QStringLiteral("--force"),
+                          QStringLiteral("--profile"),
+                          m_defaultProfilePath,
                       },
                       nullptr, nullptr, exitCode);
 }
@@ -602,7 +604,8 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
 
     int firstExitCode = -1;
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
-                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
+                         QStringLiteral("--profile"), m_defaultProfilePath },
                        nullptr, nullptr, &firstExitCode));
     QCOMPARE(firstExitCode, 0);
     QVERIFY(QFile::exists(outputPath));
@@ -612,7 +615,8 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     int refusedExitCode = -1;
     QByteArray refusedError;
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
-                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
+                         QStringLiteral("--profile"), m_defaultProfilePath },
                        nullptr, &refusedError, &refusedExitCode));
     QVERIFY2(refusedExitCode != 0, "add-bleed must not overwrite the existing output without --overwrite.");
     QVERIFY(!refusedError.trimmed().isEmpty());
@@ -621,7 +625,7 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     int overwriteExitCode = -1;
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
                          QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
-                         QStringLiteral("--overwrite") },
+                         QStringLiteral("--overwrite"), QStringLiteral("--profile"), m_defaultProfilePath },
                        nullptr, nullptr, &overwriteExitCode));
     QCOMPARE(overwriteExitCode, 0);
     QVERIFY(QFile::exists(outputPath));
