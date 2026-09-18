@@ -2,16 +2,18 @@ name: Dispatch_Packaging
 
 on:
   repository_dispatch:
-    types: [package-release]
+    types: [package-release, create-release-draft]
 
 # Proxy for agents or automation that can send repository_dispatch but not
-# workflow_dispatch. Dispatches the exact-SHA packaging workflows unchanged.
+# workflow_dispatch. Dispatches exact-SHA packaging and release-draft workflows.
 permissions:
   actions: write
   contents: read
+  actions: write
 
 jobs:
-  dispatch:
+  dispatch-package:
+    if: github.event.action == 'package-release'
     runs-on: ubuntu-latest
     steps:
       - name: Validate source SHA
@@ -32,3 +34,26 @@ jobs:
             -f "source_sha=${SOURCE_SHA}"
           gh workflow run WindowsInstall.yml --repo studio-berry/loop --ref stable \
             -f "source_sha=${SOURCE_SHA}"
+
+  dispatch-release-draft:
+    if: github.event.action == 'create-release-draft'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source SHA
+        env:
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+        run: |
+          if ! [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::client_payload.source_sha must be a full 40-character Git SHA"
+            exit 1
+          fi
+
+      - name: Dispatch CreateReleaseDraft workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+          ALLOW_EXISTING: ${{ github.event.client_payload.allow_existing_release || 'false' }}
+        run: |
+          gh workflow run CreateReleaseDraft.yml --repo studio-berry/loop --ref stable \
+            -f "source_sha=${SOURCE_SHA}" \
+            -f "allow_existing_release=${ALLOW_EXISTING}"
