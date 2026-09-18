@@ -39,6 +39,9 @@ private slots:
     void preflightDecisionIsNotOperationApproval();
     void publishRequiresMatchingPlanBoundApproval();
     void publishRejectsPreflightDecisionReference();
+    void publishRejectsNoneApprovalKind();
+    void publishRejectsExplicitRejectDecision();
+    void visualPreviewRequiredForContentChangingRepairs();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -137,6 +140,87 @@ void GovernedExecutionTest::publishRequiresMatchingPlanBoundApproval()
     QFile output(outputPath);
     QVERIFY(output.open(QIODevice::ReadOnly));
     QCOMPARE(output.readAll(), candidateBytes);
+}
+
+void GovernedExecutionTest::publishRejectsNoneApprovalKind()
+{
+    const QByteArray candidateBytes("governed candidate bytes");
+    const QString sourceSha256 = QStringLiteral("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
+    const QString planDigest = QStringLiteral("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = sourceSha256;
+    approval.candidateSha256 = candidateSha256;
+    QVERIFY(approval.isValid());
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval,
+                                          planDigest,
+                                          sourceSha256,
+                                          candidateBytes,
+                                          outputPath,
+                                          pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
+}
+
+void GovernedExecutionTest::publishRejectsExplicitRejectDecision()
+{
+    const QByteArray candidateBytes("governed candidate bytes");
+    const QString sourceSha256 = QStringLiteral("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
+    const QString planDigest = QStringLiteral("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = sourceSha256;
+    approval.candidateSha256 = candidateSha256;
+    approval.approval.kind = pdf::PDFApprovalKind::Human;
+    approval.approval.actorId = QStringLiteral("operator");
+    approval.approval.decision = QStringLiteral("reject");
+    approval.approval.rationale = QStringLiteral("Unexpected visual drift.");
+    approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval,
+                                          planDigest,
+                                          sourceSha256,
+                                          candidateBytes,
+                                          outputPath,
+                                          pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
+}
+
+void GovernedExecutionTest::visualPreviewRequiredForContentChangingRepairs()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    const QString sourceSha256 = QString::fromLatin1(source.getSourceDataHash().toHex());
+
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(registry.find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(pdf::repairPlansMutatePageContent(transaction.plans()));
+    QVERIFY(transaction.apply());
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), sourceSha256, transaction.savePolicy());
+
+    pdf::PDFVisualPreview visualPreview;
+    pdf::PDFRepairDiffOptions options;
+    QVERIFY(pdf::buildVisualPreview(transaction, candidatePath, planDigest, options, &visualPreview));
+    QCOMPARE(visualPreview.planDigest, planDigest);
+    QVERIFY(!visualPreview.pages.isEmpty());
+    QVERIFY(visualPreview.status == pdf::PDFRepairDiffStatus::Complete ||
+            visualPreview.status == pdf::PDFRepairDiffStatus::CompleteWithWarnings);
 }
 
 void GovernedExecutionTest::publishRejectsPreflightDecisionReference()

@@ -53,6 +53,15 @@ bool sha256Matches(const QString& actual, const QString& expected)
     return actual.trimmed().compare(expected.trimmed(), Qt::CaseInsensitive) == 0;
 }
 
+bool approvalAuthorizesPublication(const PDFApprovalRecord& approval)
+{
+    if (approval.kind == PDFApprovalKind::None)
+    {
+        return false;
+    }
+    return approval.decision.trimmed().compare(QStringLiteral("approve"), Qt::CaseInsensitive) == 0;
+}
+
 }   // namespace
 
 QString computeOperationPlanDigest(const QList<PDFRepairPlan>& plans,
@@ -254,6 +263,10 @@ PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& 
     if (approval.approval.decisionReference.startsWith(QStringLiteral("preflight-decision:"), Qt::CaseInsensitive))
     {
         return PDFOperationResult(QStringLiteral("Preflight finding decisions are not operation approval."));
+    }
+    if (!approvalAuthorizesPublication(approval.approval))
+    {
+        return PDFOperationResult(QStringLiteral("Governed approval requires an affirmative non-None approval decision."));
     }
     return PDFOperationResult(true);
 }

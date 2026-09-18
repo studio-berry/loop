@@ -396,7 +396,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
     pdf::PDFVisualPreview visualPreview;
-    if (!pdf::repairPlansMutatePageContent(transaction.plans()))
+    if (pdf::repairPlansMutatePageContent(transaction.plans()))
     {
         if (const pdf::PDFOperationResult visualResult = pdf::buildVisualPreview(transaction, candidatePath, planDigest, diffOptions, &visualPreview); !visualResult)
         {
@@ -515,6 +515,50 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Cancelled;
     }
 
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+    pdf::PDFGovernedExecutionApproval governedApproval;
+    if (!options.repairApprovalFile.isEmpty())
+    {
+        QFile approvalFile(options.repairApprovalFile);
+        if (!approvalFile.open(QIODevice::ReadOnly))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-unreadable"),
+                             PDFToolTranslationContext::tr("Could not read the governed approval file."));
+            return PDFToolExitCode::InvalidInvocation;
+        }
+        const QJsonObject approvalObject = QJsonDocument::fromJson(approvalFile.readAll()).object();
+        QString approvalError;
+        governedApproval = pdf::PDFGovernedExecutionApproval::fromJson(approvalObject, &approvalError);
+        if (!governedApproval.isValid())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"), approvalError);
+            return PDFToolExitCode::InvalidInvocation;
+        }
+        if (const pdf::PDFOperationResult approvalValidation = pdf::validateGovernedApproval(governedApproval,
+                                                                                             planDigest,
+                                                                                             sourceSha256,
+                                                                                             candidateSha256);
+            !approvalValidation)
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"),
+                             approvalValidation.getErrorMessage());
+            return PDFToolExitCode::InvalidInvocation;
+        }
+    }
+    else
+    {
+        governedApproval.planDigest = planDigest;
+        governedApproval.sourceSha256 = sourceSha256;
+        governedApproval.candidateSha256 = candidateSha256;
+        governedApproval.approval.kind = pdf::PDFApprovalKind::Policy;
+        governedApproval.approval.actorId = QStringLiteral("PdfTool");
+        governedApproval.approval.decision = QStringLiteral("approve");
+        governedApproval.approval.policyId = QStringLiteral("preflight-profile");
+        governedApproval.approval.rationale = QStringLiteral("Repair candidate passed governed previews and postflight.");
+        governedApproval.approval.evidenceSha256 = planDigest;
+        governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    }
+
     const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore historyArtifacts(historyDirectory);
     const auto historyInput = historyArtifacts.importBytes(sourceData,
@@ -560,40 +604,6 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
                          QStringLiteral("Could not append the repair history start event."));
         return PDFToolExitCode::ProcessingFailure;
-    }
-
-    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
-    pdf::PDFGovernedExecutionApproval governedApproval;
-    if (!options.repairApprovalFile.isEmpty())
-    {
-        QFile approvalFile(options.repairApprovalFile);
-        if (!approvalFile.open(QIODevice::ReadOnly))
-        {
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-unreadable"),
-                             PDFToolTranslationContext::tr("Could not read the governed approval file."));
-            return PDFToolExitCode::InvalidInvocation;
-        }
-        const QJsonObject approvalObject = QJsonDocument::fromJson(approvalFile.readAll()).object();
-        QString approvalError;
-        governedApproval = pdf::PDFGovernedExecutionApproval::fromJson(approvalObject, &approvalError);
-        if (!governedApproval.isValid())
-        {
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"), approvalError);
-            return PDFToolExitCode::InvalidInvocation;
-        }
-    }
-    else
-    {
-        governedApproval.planDigest = planDigest;
-        governedApproval.sourceSha256 = sourceSha256;
-        governedApproval.candidateSha256 = candidateSha256;
-        governedApproval.approval.kind = pdf::PDFApprovalKind::Policy;
-        governedApproval.approval.actorId = QStringLiteral("PdfTool");
-        governedApproval.approval.decision = QStringLiteral("approve");
-        governedApproval.approval.policyId = QStringLiteral("preflight-profile");
-        governedApproval.approval.rationale = QStringLiteral("Repair candidate passed governed previews and postflight.");
-        governedApproval.approval.evidenceSha256 = planDigest;
-        governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
     }
 
     const pdf::PDFOperationResult writeResult = pdf::publishGovernedArtifact(governedApproval,
