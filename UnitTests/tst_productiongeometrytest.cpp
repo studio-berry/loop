@@ -130,6 +130,23 @@ pdf::PDFDocument buildDeviceNCutContourDocument()
                                        { 1.0, 0.0, 0.0, 0.0 });
 }
 
+pdf::PDFDocument buildDeviceNCutContourStrokeThenCmykFillDocument()
+{
+    return buildDeviceNContentDocument(
+        QByteArrayLiteral("q /CutContourCS CS 1 SCN 10 10 80 80 re S /DeviceCMYK cs 0 1 0 0 scn 100 100 80 80 re f Q\n"),
+        QStringLiteral("CutContourCS"),
+        { QStringLiteral("CutContour") },
+        { 1.0, 0.0, 0.0, 0.0 });
+}
+
+pdf::PDFDocument buildDeviceNCyanOnlyDocument()
+{
+    return buildDeviceNContentDocument(QByteArrayLiteral("q /SpotCS CS 0 1 SCN 10 10 180 180 re S Q\n"),
+                                       QStringLiteral("SpotCS"),
+                                       { QStringLiteral("CutContour"), QStringLiteral("Cyan") },
+                                       { 1.0, 0.0, 0.0, 0.0 });
+}
+
 const pdf::PDFProcessingStep* findLegacyCutContourStep(const QList<pdf::PDFProcessingStep>& steps)
 {
     const auto it = std::find_if(steps.cbegin(), steps.cend(), [](const pdf::PDFProcessingStep& step)
@@ -231,12 +248,7 @@ void ProductionGeometryTest::detectProcessingSteps_findsDeviceNCutContourStroke(
 
 void ProductionGeometryTest::detectProcessingSteps_ignoresFillOnlyPathsUsingStaleStrokeColorSpace()
 {
-    const QByteArray content = QByteArrayLiteral(
-        "q /CutContourCS CS 1 SCN 10 10 80 80 re S /DeviceCMYK cs 0 1 0 0 scn 100 100 80 80 re f Q\n");
-    const pdf::PDFDocument document = buildDeviceNContentDocument(content,
-                                                                QStringLiteral("CutContourCS"),
-                                                                { QStringLiteral("CutContour") },
-                                                                { 1.0, 0.0, 0.0, 0.0 });
+    const pdf::PDFDocument document = buildDeviceNCutContourStrokeThenCmykFillDocument();
     const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
     const pdf::PDFProcessingStep* cutContourStep = findLegacyCutContourStep(steps);
     QVERIFY(cutContourStep != nullptr);
@@ -249,12 +261,7 @@ void ProductionGeometryTest::detectProcessingSteps_ignoresFillOnlyPathsUsingStal
 
 void ProductionGeometryTest::detectProcessingSteps_ignoresDeviceNCutContourWhenTintIsZero()
 {
-    const QByteArray content = QByteArrayLiteral(
-        "q /SpotCS CS 0 1 SCN 10 10 180 180 re S Q\n");
-    const pdf::PDFDocument document = buildDeviceNContentDocument(content,
-                                                                QStringLiteral("SpotCS"),
-                                                                { QStringLiteral("CutContour"), QStringLiteral("Cyan") },
-                                                                { 1.0, 0.0, 0.0, 0.0 });
+    const pdf::PDFDocument document = buildDeviceNCyanOnlyDocument();
     const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
     QVERIFY(findLegacyCutContourStep(steps) == nullptr);
 }
