@@ -83,9 +83,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         }
 
         outcome->phase = phase;
-        pdf::PDFActionListExecutionOptions options;
-        options.bindings = bindings;
-        options.operationControl = context.operationControl();
+        pdf::PDFActionListExecutionOptions options =
+            pdf::makeActionListExecutionOptions(*document, bindings, context.operationControl());
         pdf::PDFActionListExecutor executor;
 
         context.reportProgress(10);

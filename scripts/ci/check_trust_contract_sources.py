@@ -29,7 +29,12 @@ REQUIRED_MARKERS = {
         "PDFOperationHistoryStore",
         "PDFOperationHistoryEvent",
     ),
-    "LoopLibCore/sources/pdfpagemasterexport.cpp": ("reducePreflightVerdict", "preflightGateFailureMessage"),
+    "LoopLibCore/sources/pdfpagemasterexport.cpp": (
+        "reducePreflightVerdict",
+        "preflightGateFailureMessage",
+        "makeActionListExecutionOptions",
+    ),
+    "PdfTool/pdftoolactionlist.cpp": ("makeActionListExecutionOptions",),
     "LoopLibCore/sources/pdfpreflightverdict.h": ("reducePreflightVerdict",),
     "LoopLibCore/sources/pdfactionlist.cpp": ("reducePreflightVerdict", "applyCanonicalPreflightVerdict"),
     "LoopLibCore/sources/pdfstandardconversion.cpp": ("reducePreflightVerdict",),

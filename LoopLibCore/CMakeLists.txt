@@ -64,6 +64,8 @@ add_library(LoopLibCore SHARED
     sources/pdfstandardconversion.h
     sources/pdfactionlist.cpp
     sources/pdfactionlist.h
+    sources/pdfobjectselector.cpp
+    sources/pdfobjectselector.h
     sources/pdffixupregistry.cpp
     sources/pdffixupregistry.h
     sources/pdfimagedownsamplefixup.cpp
