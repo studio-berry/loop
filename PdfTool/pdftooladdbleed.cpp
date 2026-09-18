@@ -27,6 +27,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfoutputformatter.h"
+#include "pdfpreflightverdict.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -326,6 +327,29 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Success;
     }
 
+    if (options.preflightProfilePath.isEmpty())
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
+                         PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
+        return PDFToolExitCode::PartialOutput;
+    }
+
+    pdf::PreflightVerdict postflightVerdict;
+    if (const pdf::PDFOperationResult postflight = pdf::runMandatoryPostflight(&document, options.preflightProfilePath, &postflightVerdict); !postflight)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-failed"),
+                         postflight.getErrorMessage());
+        if (postflightVerdict.state == pdf::PreflightVerdictState::Error)
+        {
+            return PDFToolExitCode::PreflightError;
+        }
+        if (postflightVerdict.state == pdf::PreflightVerdictState::Fail)
+        {
+            return PDFToolExitCode::Findings;
+        }
+        return PDFToolExitCode::PartialOutput;
+    }
+
     if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
@@ -373,7 +397,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite;
+    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite | PreflightProfile;
 }
 
 }   // namespace pdftool

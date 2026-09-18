@@ -377,7 +377,9 @@ void PdfToolContractTest::addBleedRefusesToWriteOverItsOwnInput()
     QVERIFY(directory.isValid());
     const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
     const QString fixture =
-        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/color-rgb.pdf"));
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
     QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
     const QByteArray inputDigest = fileDigest(inputPath);
     QVERIFY(!inputDigest.isEmpty());
@@ -404,7 +406,9 @@ void PdfToolContractTest::addBleedRefusesToWriteOverItsOwnInput()
     const ToolRun legitimate = runPdfTool({ QStringLiteral("add-bleed"),
                                             QStringLiteral("--console-format"), QStringLiteral("json"),
                                             inputPath,
-                                            QStringLiteral("--output"), candidatePath });
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--profile"), profilePath,
+                                            QStringLiteral("--force") });
     QCOMPARE(legitimate.exitCode, 0);
     QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
     QVERIFY(QFile(candidatePath).exists());
