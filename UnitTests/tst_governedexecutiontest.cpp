@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
 #include "pdfrepairoperation.h"
 
@@ -42,6 +43,7 @@ private slots:
     void publishRejectsNoneApprovalKind();
     void publishRejectsExplicitRejectDecision();
     void visualPreviewRequiredForContentChangingRepairs();
+    void publishedBytesAreRevalidatedAndSignedOff();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -192,6 +194,64 @@ void GovernedExecutionTest::publishRejectsExplicitRejectDecision()
                                           candidateBytes,
                                           outputPath,
                                           pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
+}
+
+void GovernedExecutionTest::publishedBytesAreRevalidatedAndSignedOff()
+{
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Governed smoke") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") }, { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(publishedPath, &document, true));
+    QFile publishedFile(publishedPath);
+    QVERIFY(publishedFile.open(QIODevice::ReadOnly));
+    const QByteArray publishedBytes = publishedFile.readAll();
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(publishedBytes, QCryptographicHash::Sha256).toHex());
+
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = QStringLiteral("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+    approval.sourceSha256 = QStringLiteral("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    approval.candidateSha256 = candidateSha256;
+    approval.approval.kind = pdf::PDFApprovalKind::Policy;
+    approval.approval.actorId = QStringLiteral("test-policy");
+    approval.approval.decision = QStringLiteral("approve");
+    approval.approval.policyId = QStringLiteral("test");
+    approval.approval.rationale = QStringLiteral("The governed candidate was reviewed.");
+    approval.approval.evidenceSha256 = approval.planDigest;
+    approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    pdf::PDFGovernedExecutionSignOff signOff;
+    const pdf::PDFOperationResult finalizeResult = pdf::finalizeGovernedPublication(approval,
+                                                                                    approval.planDigest,
+                                                                                    approval.sourceSha256,
+                                                                                    approval.candidateSha256,
+                                                                                    publishedPath,
+                                                                                    profile,
+                                                                                    QStringLiteral("test-certificate"),
+                                                                                    QStringLiteral("test-revalidation"),
+                                                                                    &revalidation,
+                                                                                    &signOff);
+    QVERIFY2(finalizeResult, qPrintable(finalizeResult.getErrorMessage()));
+    QVERIFY(revalidation.bytesVerified);
+    QVERIFY(revalidation.isSignOffEligible());
+    QCOMPARE(revalidation.artifactSha256, candidateSha256);
+    QVERIFY(signOff.isValid());
+    QCOMPARE(signOff.publishedSha256, candidateSha256);
+    QVERIFY(pdf::validateGovernedSignOff(signOff,
+                                         approval,
+                                         revalidation,
+                                         approval.planDigest,
+                                         approval.sourceSha256,
+                                         approval.candidateSha256));
 }
 
 void GovernedExecutionTest::visualPreviewRequiredForContentChangingRepairs()

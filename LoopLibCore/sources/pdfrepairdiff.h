@@ -172,12 +172,15 @@ public:
 
     /// Applies a repair to a copy, writes the copy to an isolated path, and
     /// reopens the serialized candidate. The source document is never mutated.
+    ///
+    /// If requested, serializedCandidateBytes receives the exact bytes written
+    /// to candidatePath, not a parser-normalized representation.
     static PDFOperationResult buildSerializedCandidate(
         const PDFDocument& source,
         const std::function<PDFOperationResult(PDFDocument*)>& applyRepair,
         const QString& candidatePath,
         PDFDocument* reopenedCandidate,
-        QByteArray* candidateSha256 = nullptr);
+        QByteArray* serializedCandidateBytes = nullptr);
 };
 
 LOOPLIBCORESHARED_EXPORT QString pdfRepairDiffStatusName(PDFRepairDiffStatus status);

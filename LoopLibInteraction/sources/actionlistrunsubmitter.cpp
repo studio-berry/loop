@@ -22,6 +22,15 @@
 
 #include "actionlistrunsubmitter.h"
 
+#include "pdfdocumentwriter.h"
+#include "pdfgovernedexecution.h"
+#include "preflightengine.h"
+
+#include <QCryptographicHash>
+#include <QDateTime>
+#include <QFile>
+#include <QTemporaryDir>
+
 #include <stdexcept>
 
 namespace
@@ -86,10 +95,26 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         }
 
         outcome->phase = phase;
+        QJsonObject effectivePreflightProfile = preflightProfile;
+        if (effectivePreflightProfile.isEmpty() && !preflightProfilePath.trimmed().isEmpty())
+        {
+            QString profileError;
+            if (!pdf::PreflightEngine::loadProfile(preflightProfilePath, effectivePreflightProfile, profileError))
+            {
+                outcome->ok = false;
+                outcome->executionResult.status = QStringLiteral("failed");
+                outcome->executionResult.diagnostics.append(QJsonObject{
+                    { QStringLiteral("code"), QStringLiteral("action-list.profile-unreadable") },
+                    { QStringLiteral("severity"), QStringLiteral("error") },
+                    { QStringLiteral("message"), profileError } });
+                return;
+            }
+        }
+
         pdf::PDFActionListExecutionOptions options =
             pdf::makeActionListExecutionOptions(*document, bindings, context.operationControl());
         options.preflightProfilePath = preflightProfilePath;
-        options.preflightProfile = preflightProfile;
+        options.preflightProfile = effectivePreflightProfile;
         options.preflightProfileBindings = preflightProfileBindings;
         options.requirePostflight = phase == ActionListRunPhase::Execute;
         pdf::PDFActionListExecutor executor;
@@ -125,6 +150,81 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         if (context.isCancellationRequested())
         {
             return;
+        }
+        if (outcome->ok && candidate != pdf::PDFDocument())
+        {
+            if (!effectivePreflightProfile.isEmpty())
+            {
+                QTemporaryDir publicationDirectory;
+                const QString publicationPath = publicationDirectory.filePath(QStringLiteral("editor-candidate.pdf"));
+                pdf::PDFDocumentWriter writer(nullptr, context.operationControl());
+                if (!publicationDirectory.isValid() || !writer.write(publicationPath, &candidate, true))
+                {
+                    outcome->ok = false;
+                    outcome->executionResult.status = QStringLiteral("failed");
+                    outcome->executionResult.diagnostics.append(QJsonObject{
+                        { QStringLiteral("code"), QStringLiteral("action-list.publication-serialize-failed") },
+                        { QStringLiteral("severity"), QStringLiteral("error") },
+                        { QStringLiteral("message"), QStringLiteral("The Editor candidate could not be serialized for governed revalidation.") } });
+                }
+                else
+                {
+                    QFile publicationFile(publicationPath);
+                    QByteArray candidateData;
+                    if (!publicationFile.open(QIODevice::ReadOnly))
+                    {
+                        outcome->ok = false;
+                        outcome->executionResult.status = QStringLiteral("failed");
+                        outcome->executionResult.diagnostics.append(QJsonObject{
+                            { QStringLiteral("code"), QStringLiteral("action-list.publication-read-failed") },
+                            { QStringLiteral("severity"), QStringLiteral("error") },
+                            { QStringLiteral("message"), QStringLiteral("The Editor candidate could not be read back for governed revalidation.") } });
+                    }
+                    else
+                    {
+                        candidateData = publicationFile.readAll();
+                        const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+                        pdf::PDFGovernedExecutionApproval approval;
+                        approval.planDigest = outcome->executionResult.planDigest;
+                        approval.sourceSha256 = outcome->executionResult.sourceSha256;
+                        approval.candidateSha256 = candidateSha256;
+                        approval.approval.kind = pdf::PDFApprovalKind::Human;
+                        approval.approval.actorId = QStringLiteral("Editor");
+                        approval.approval.decision = QStringLiteral("approve");
+                        approval.approval.policyId = QStringLiteral("desktop-confirmation");
+                        approval.approval.rationale = QStringLiteral("The operator confirmed the Action List plan in the Editor.");
+                        approval.approval.evidenceSha256 = approval.planDigest;
+                        approval.approval.decisionReference = QStringLiteral("editor-confirmation:%1").arg(approval.planDigest);
+                        approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+                        pdf::PDFGovernedExecutionRevalidation revalidation;
+                        pdf::PDFGovernedExecutionSignOff signOff;
+                        const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(approval,
+                                                                                                        approval.planDigest,
+                                                                                                        approval.sourceSha256,
+                                                                                                        approval.candidateSha256,
+                                                                                                        publicationPath,
+                                                                                                        effectivePreflightProfile,
+                                                                                                        QStringLiteral("Editor"),
+                                                                                                        QStringLiteral("desktop-postflight"),
+                                                                                                        &revalidation,
+                                                                                                        &signOff);
+                        outcome->executionResult.governed = QJsonObject{
+                            { QStringLiteral("approval"), approval.toJson() },
+                            { QStringLiteral("revalidation"), revalidation.toJson() },
+                            { QStringLiteral("sign_off"), signOff.toJson() }
+                        };
+                        if (!governedResult)
+                        {
+                            outcome->ok = false;
+                            outcome->executionResult.status = QStringLiteral("failed");
+                            outcome->executionResult.diagnostics.append(QJsonObject{
+                                { QStringLiteral("code"), QStringLiteral("action-list.publication-revalidation-failed") },
+                                { QStringLiteral("severity"), QStringLiteral("error") },
+                                { QStringLiteral("message"), governedResult.getErrorMessage() } });
+                        }
+                    }
+                }
+            }
         }
         if (outcome->ok && candidate != pdf::PDFDocument())
         {

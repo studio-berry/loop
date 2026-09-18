@@ -249,6 +249,21 @@ Pane {
             Accessible.name: qsTr("Action List recipe hash")
         }
 
+        Label {
+            Layout.fillWidth: true
+            visible: root.host && root.host.actionList.planDigest.length > 0
+            text: qsTr("Plan digest: %1").arg(root.host.actionList.planDigest)
+            wrapMode: Text.WordWrap
+            Accessible.name: qsTr("Action List plan digest")
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.host && root.host.actionList.governedStatus.length > 0
+            text: qsTr("Publication sign-off: %1").arg(root.host.actionList.governedStatus)
+            Accessible.name: qsTr("Action List publication sign-off status")
+        }
+
         ListView {
             id: stepsView
             objectName: "actionListStepsView"

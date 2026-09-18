@@ -25,8 +25,10 @@
 #include "pdftoolcancel.h"
 #include "pdfdocumentreader.h"
 #include "pdfartifactstore.h"
+#include "pdfgovernedexecution.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightverdict.h"
+#include "preflightengine.h"
 #include "pdfsafefilewriter.h"
 #include "pdfobjectselector.h"
 
@@ -67,6 +69,31 @@ bool readJsonFile(const QString& path, QJsonObject* object, QString* error)
         return false;
     }
     *object = document.object();
+    return true;
+}
+
+bool readBytesFile(const QString& path, QByteArray* bytes, QString* error)
+{
+    if (!bytes)
+    {
+        if (error)
+            *error = QStringLiteral("Output bytes destination is null.");
+        return false;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (error)
+            *error = QStringLiteral("Unable to read serialized Action List output '%1'.").arg(path);
+        return false;
+    }
+    *bytes = file.readAll();
+    if (file.error() != QFileDevice::NoError)
+    {
+        if (error)
+            *error = QStringLiteral("Unable to read serialized Action List output '%1'.").arg(path);
+        return false;
+    }
     return true;
 }
 
@@ -157,9 +184,19 @@ bool recordActionListHistory(const QString& outputPath,
                              const QByteArray& candidateData,
                              const QString& operationId,
                              const QJsonObject& parameters,
-                             const QJsonObject& summary,
+                             const QString& planDigest,
+                             const QJsonObject& preflightProfile,
+                             QJsonObject* summary,
                              QString* error)
 {
+    if (!summary)
+    {
+        if (error)
+            *error = QStringLiteral("Action List history summary is null.");
+        return false;
+    }
+    const QString sourceSha256 = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
     const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore artifacts(historyDirectory);
     const auto input = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
@@ -191,23 +228,75 @@ bool recordActionListHistory(const QString& outputPath,
     }
     pdf::PDFOperationHistoryEvent running;
     running.executionId = executionId;
+    running.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.operatorIdentity = QStringLiteral("PdfTool");
+    running.documentRevisionDigest = sourceSha256;
+    running.approval.kind = pdf::PDFApprovalKind::System;
+    running.approval.actorId = QStringLiteral("PdfTool");
+    running.approval.decision = QStringLiteral("approve");
+    running.approval.policyId = QStringLiteral("action-list-plan");
+    running.approval.rationale = QStringLiteral("Action List plan was validated before publication.");
+    running.approval.evidenceSha256 = planDigest;
+    running.approval.decisionReference = QStringLiteral("action-list-plan:%1").arg(planDigest);
+    running.approval.decidedUtc = QDateTime::currentDateTimeUtc();
     if (!history.appendEvent(running))
     {
         if (error)
             *error = QStringLiteral("Could not append Action List history start.");
         return false;
     }
+
+    pdf::PDFGovernedExecutionApproval governedApproval;
+    governedApproval.planDigest = planDigest;
+    governedApproval.sourceSha256 = sourceSha256;
+    governedApproval.candidateSha256 = candidateSha256;
+    governedApproval.approval = running.approval;
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    pdf::PDFGovernedExecutionSignOff signOff;
+    const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(governedApproval,
+                                                                                    planDigest,
+                                                                                    sourceSha256,
+                                                                                    candidateSha256,
+                                                                                    outputPath,
+                                                                                    preflightProfile,
+                                                                                    QStringLiteral("PdfTool"),
+                                                                                    QStringLiteral("action-list-postflight"),
+                                                                                    &revalidation,
+                                                                                    &signOff);
+    QJsonObject governedSummary{
+        { QStringLiteral("approval"), governedApproval.toJson() },
+        { QStringLiteral("revalidation"), revalidation.toJson() },
+        { QStringLiteral("sign_off"), signOff.toJson() }
+    };
+    summary->insert(QStringLiteral("governed"), governedSummary);
+    if (!governedResult)
+    {
+        pdf::PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+        failed.status = pdf::PDFOperationHistoryStatus::Failed;
+        failed.operatorIdentity = QStringLiteral("PdfTool");
+        failed.documentRevisionDigest = sourceSha256;
+        failed.resultSummary = *summary;
+        failed.approval = governedApproval.approval;
+        history.appendEvent(failed);
+        if (error)
+            *error = governedResult.getErrorMessage();
+        return false;
+    }
+
     pdf::PDFOperationHistoryEvent accepted;
     accepted.executionId = executionId;
+    accepted.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
     accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.operatorIdentity = signOff.approval.actorId;
+    accepted.documentRevisionDigest = sourceSha256;
+    accepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
     accepted.output = output.artifact;
-    accepted.resultSummary = summary;
-    accepted.approval.kind = pdf::PDFApprovalKind::System;
-    accepted.approval.actorId = QStringLiteral("PdfTool");
-    accepted.approval.decision = QStringLiteral("approve");
-    accepted.approval.rationale = QStringLiteral("Action List execution completed successfully.");
-    accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    accepted.resultSummary = *summary;
+    accepted.reportArtifactSha256 = signOff.revalidationReportSha256;
+    accepted.approval = signOff.approval;
     if (!history.appendEvent(accepted))
     {
         if (error)
@@ -279,6 +368,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
     const bool requiresPostflight = (subcommand == QStringLiteral("run") || subcommand == QStringLiteral("batch")) &&
                                     !options.destructiveDryRun;
     executionOptions.requirePostflight = requiresPostflight;
+    QJsonObject governedProfile;
     if (requiresPostflight)
     {
         if (options.preflightProfilePath.isEmpty())
@@ -288,6 +378,12 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             return PDFToolExitCode::PartialOutput;
         }
         executionOptions.preflightProfilePath = options.preflightProfilePath;
+        if (!pdf::PreflightEngine::loadProfile(options.preflightProfilePath, governedProfile, error))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.profile-unreadable"), error);
+            return PDFToolExitCode::InputError;
+        }
+        executionOptions.preflightProfile = governedProfile;
     }
 
     if (subcommand == QStringLiteral("validate"))
@@ -336,6 +432,9 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             }
             executionOptions = pdf::makeActionListExecutionOptions(source, bindings, &cancelControl);
             executionOptions.dryRun = options.destructiveDryRun;
+            executionOptions.requirePostflight = requiresPostflight;
+            executionOptions.preflightProfilePath = options.preflightProfilePath;
+            executionOptions.preflightProfile = governedProfile;
             const QString output = QDir(options.actionListOutputDirectory).filePath(QFileInfo(input).completeBaseName() + QStringLiteral(".pdf"));
             pdf::PDFActionListExecutionResult executionResult;
             pdf::PDFDocument candidate;
@@ -365,12 +464,26 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
                         item.insert(QStringLiteral("error"), serializeResult.getErrorMessage());
                     }
+                    else if (!readBytesFile(output, &candidateData, &error))
+                    {
+                        aggregateCode = PDFToolExitCode::ProcessingFailure;
+                        item.insert(QStringLiteral("error"), error);
+                    }
                     else
                     {
                         QString historyError;
-                        if (!recordActionListHistory(output, sourceData, candidateData, actionList.id,
+                        if (!recordActionListHistory(output,
+                                                     sourceData,
+                                                     candidateData,
+                                                     actionList.id,
                                                      QJsonObject{ { QStringLiteral("recipe"), options.actionListRecipe }, { QStringLiteral("bindings"), bindings } },
-                                                     item, &historyError))
+                                                     pdf::computeActionListPlanDigest(actionList,
+                                                                                      bindings,
+                                                                                      QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()),
+                                                                                      governedProfile),
+                                                     governedProfile,
+                                                     &item,
+                                                     &historyError))
                         {
                             aggregateCode = PDFToolExitCode::ProcessingFailure;
                             item.insert(QStringLiteral("error"), historyError);
@@ -403,6 +516,9 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
     }
     executionOptions = pdf::makeActionListExecutionOptions(source, bindings, &cancelControl);
     executionOptions.dryRun = options.destructiveDryRun;
+    executionOptions.requirePostflight = requiresPostflight;
+    executionOptions.preflightProfilePath = options.preflightProfilePath;
+    executionOptions.preflightProfile = governedProfile;
 
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocument candidate;
@@ -442,11 +558,25 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-serialize-failed"), serializeResult.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
+        if (!readBytesFile(options.actionListOutputDocument, &candidateData, &error))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-read-failed"), error);
+            return PDFToolExitCode::ProcessingFailure;
+        }
         data.insert(QStringLiteral("output"), QJsonObject{ { QStringLiteral("path"), options.actionListOutputDocument }, { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex()) } });
         QString historyError;
-        if (!recordActionListHistory(options.actionListOutputDocument, sourceData, candidateData, actionList.id,
+        if (!recordActionListHistory(options.actionListOutputDocument,
+                                     sourceData,
+                                     candidateData,
+                                     actionList.id,
                                      QJsonObject{ { QStringLiteral("recipe"), options.actionListRecipe }, { QStringLiteral("bindings"), bindings } },
-                                     data, &historyError))
+                                     pdf::computeActionListPlanDigest(actionList,
+                                                                      bindings,
+                                                                      QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()),
+                                                                      governedProfile),
+                                     governedProfile,
+                                     &data,
+                                     &historyError))
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"), historyError);
             return PDFToolExitCode::ProcessingFailure;
