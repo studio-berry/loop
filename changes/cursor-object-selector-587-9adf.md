@@ -1,4 +1,4 @@
-Category: added
+Category: fixed
 Audience: developers
 Breaking-Change: no
-Summary: Add Core-owned deterministic object selectors with logical composition, Action List schema v2 `select` support, preview scope digests, and stale-revision fail-closed execution fencing. PageMaster, PdfTool, and Editor Action List runs share `makeActionListExecutionOptions()` so selector resolution uses the same revision-bound Core resolver on every surface. Ada coverage closes per-predicate fixtures, NOT/unknown-set composition, adversarial parse cases, and Action List select validate/plan/execute fencing tests. `spotColor` predicates now match named Separation colorants only (DeviceN is classified separately and never satisfies `spotColor`).
+Summary: Harden object-selector and Action List v2 `select` boundaries per Codex review. Reject non-object `select` values, recursively validate predicate trees and leaf types, refresh revision fences from the working document before each resolution, fence shared indirect objects by occurrence pages, and catalog annotation candidates from page annotation lists.

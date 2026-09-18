@@ -55,6 +55,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFObjectSelectorCandidate
     double effectiveDpi = 0.0;
     bool isVector = false;
     QRectF boundsPt;
+    QVector<int> objectOccurrencePages;
 
     QString stableId() const;
     QJsonObject toJson() const;

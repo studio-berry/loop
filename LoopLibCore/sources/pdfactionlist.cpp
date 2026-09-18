@@ -339,11 +339,13 @@ void markRemaining(QVector<PDFActionListStepResult>* steps, int start, PDFAction
 
 PDFRevisionIdentity effectiveRevision(const PDFDocument& source, const PDFActionListExecutionOptions& options)
 {
+    PDFRevisionIdentity revision = revisionIdentityForDocument(source);
     if (options.revision.isValid())
     {
-        return options.revision;
+        revision.cacheGeneration = options.revision.cacheGeneration;
+        revision.effectiveProfileIdentity = options.revision.effectiveProfileIdentity;
     }
-    return revisionIdentityForDocument(source);
+    return revision;
 }
 
 PDFOperationResult resolveStepSelection(const PDFActionListStep& step,
@@ -522,7 +524,15 @@ PDFOperationResult PDFActionList::fromJson(const QJsonObject& object, PDFActionL
         step.id = stepObject.value(QStringLiteral("id")).toString().trimmed();
         step.operationId = stepObject.value(QStringLiteral("operation")).toString().trimmed();
         step.parameters = stepObject.value(QStringLiteral("params")).toObject();
-        step.select = stepObject.value(QStringLiteral("select")).toObject();
+        const QJsonValue selectValue = stepObject.value(QStringLiteral("select"));
+        if (!selectValue.isUndefined())
+        {
+            if (!selectValue.isObject())
+            {
+                return PDFOperationResult(QStringLiteral("Action List step '%1' select must be an object.").arg(step.id));
+            }
+            step.select = selectValue.toObject();
+        }
         step.condition = stepObject.value(QStringLiteral("when")).toObject();
         if (!stepObject.value(QStringLiteral("onFailure")).isUndefined() &&
             !parseFailurePolicy(stepObject.value(QStringLiteral("onFailure")), &step.failurePolicy))

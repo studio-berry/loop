@@ -22,6 +22,7 @@
 
 #include "pdfobjectselector.h"
 
+#include "pdfannotation.h"
 #include "pdfcatalog.h"
 #include "pdfcms.h"
 #include "pdfconstants.h"
@@ -431,6 +432,21 @@ QVector<PDFObjectSelectorCandidate> collectCandidates(const PDFDocument& documen
                                                     &optionalContentActivity,
                                                     &merged);
         processor.processContents();
+
+        for (const PDFObjectReference& annotationReference : page->getAnnotations())
+        {
+            PDFObjectSelectorCandidate candidate;
+            candidate.pageIndex = static_cast<int>(pageIndex);
+            candidate.objectReference = annotationReference;
+            candidate.objectClass = QStringLiteral("annotation");
+            PDFAnnotationPtr annotation = PDFAnnotation::parse(&document.getStorage(), annotationReference);
+            if (annotation)
+            {
+                candidate.boundsPt = annotation->getRectangle();
+            }
+            const CatalogCandidateKey key{ candidate.pageIndex, candidate.objectReference, candidate.objectClass };
+            merged[key] = candidate;
+        }
     }
 
     QVector<PDFObjectSelectorCandidate> candidates;
@@ -440,6 +456,146 @@ QVector<PDFObjectSelectorCandidate> collectCandidates(const PDFDocument& documen
         candidates.append(entry.second);
     }
     return candidates;
+}
+
+bool validateLeafPredicateValue(const QString& key,
+                                const QJsonValue& value,
+                                QStringList* errors,
+                                const QString& path)
+{
+    if (key == QStringLiteral("pages"))
+    {
+        if (!value.isString() || value.toString().trimmed().isEmpty())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.pages must be a non-empty string.").arg(path));
+            return false;
+        }
+        return true;
+    }
+    if (key == QStringLiteral("objectClass"))
+    {
+        if (!value.isString())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.objectClass must be a string.").arg(path));
+            return false;
+        }
+        static const QStringList allowedClasses = {
+            QStringLiteral("text"), QStringLiteral("image"), QStringLiteral("vector"),
+            QStringLiteral("annotation"), QStringLiteral("shading"), QStringLiteral("form")
+        };
+        if (!allowedClasses.contains(value.toString(), Qt::CaseInsensitive))
+        {
+            appendPredicateError(errors, QStringLiteral("%1.objectClass contains an unsupported value.").arg(path));
+            return false;
+        }
+        return true;
+    }
+    if (key == QStringLiteral("colorSpace") || key == QStringLiteral("layer") ||
+        key == QStringLiteral("font") || key == QStringLiteral("spotColor"))
+    {
+        if (!value.isString() || value.toString().trimmed().isEmpty())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.%2 must be a non-empty string.").arg(path, key));
+            return false;
+        }
+        return true;
+    }
+    if (key == QStringLiteral("minEffectiveDpi") || key == QStringLiteral("maxEffectiveDpi"))
+    {
+        if (!value.isDouble() || !std::isfinite(value.toDouble()))
+        {
+            appendPredicateError(errors, QStringLiteral("%1.%2 must be a finite number.").arg(path, key));
+            return false;
+        }
+        if (value.toDouble() < 0.0)
+        {
+            appendPredicateError(errors, QStringLiteral("%1.%2 must be greater than or equal to zero.").arg(path, key));
+            return false;
+        }
+        return true;
+    }
+    if (key == QStringLiteral("isVector"))
+    {
+        if (!value.isBool())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.isVector must be a boolean.").arg(path));
+            return false;
+        }
+        return true;
+    }
+    if (key == QStringLiteral("objectRef"))
+    {
+        if (!value.isObject())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.objectRef must be an object.").arg(path));
+            return false;
+        }
+        const QJsonObject objectRef = value.toObject();
+        const QJsonValue objectNumber = objectRef.value(QStringLiteral("object"));
+        if (!objectNumber.isDouble() || objectNumber.toDouble() < 1.0 ||
+            std::floor(objectNumber.toDouble()) != objectNumber.toDouble())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.objectRef.object must be a positive integer.").arg(path));
+            return false;
+        }
+        if (objectRef.contains(QStringLiteral("generation")))
+        {
+            const QJsonValue generation = objectRef.value(QStringLiteral("generation"));
+            if (!generation.isDouble() || generation.toDouble() < 0.0 ||
+                std::floor(generation.toDouble()) != generation.toDouble())
+            {
+                appendPredicateError(errors, QStringLiteral("%1.objectRef.generation must be a non-negative integer.").arg(path));
+                return false;
+            }
+        }
+        return true;
+    }
+    if (key == QStringLiteral("region"))
+    {
+        if (!value.isObject())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.region must be an object.").arg(path));
+            return false;
+        }
+        const QJsonObject region = value.toObject();
+        const QJsonArray rectArray = region.value(QStringLiteral("rect_pt")).toArray();
+        if (rectArray.size() != 4)
+        {
+            appendPredicateError(errors, QStringLiteral("%1.region.rect_pt must contain exactly four numbers.").arg(path));
+            return false;
+        }
+        for (const QJsonValue& coordinate : rectArray)
+        {
+            if (!coordinate.isDouble() || !std::isfinite(coordinate.toDouble()))
+            {
+                appendPredicateError(errors, QStringLiteral("%1.region.rect_pt must contain finite numbers.").arg(path));
+                return false;
+            }
+        }
+        if (region.contains(QStringLiteral("anchor")))
+        {
+            static const QStringList anchors = {
+                QStringLiteral("media"), QStringLiteral("crop"), QStringLiteral("trim"), QStringLiteral("bleed")
+            };
+            if (!anchors.contains(region.value(QStringLiteral("anchor")).toString(), Qt::CaseInsensitive))
+            {
+                appendPredicateError(errors, QStringLiteral("%1.region.anchor contains an unsupported value.").arg(path));
+                return false;
+            }
+        }
+        if (region.contains(QStringLiteral("mode")))
+        {
+            const QString mode = region.value(QStringLiteral("mode")).toString();
+            if (mode != QStringLiteral("include") && mode != QStringLiteral("exclude"))
+            {
+                appendPredicateError(errors, QStringLiteral("%1.region.mode must be 'include' or 'exclude'.").arg(path));
+                return false;
+            }
+        }
+        return true;
+    }
+    appendPredicateError(errors, QStringLiteral("%1 contains unsupported predicate '%2'.").arg(path, key));
+    return false;
 }
 
 bool parsePredicateObject(const QJsonObject& object,
@@ -504,19 +660,47 @@ bool parsePredicateObject(const QJsonObject& object,
 
     if (matchedKey == QStringLiteral("and") || matchedKey == QStringLiteral("or"))
     {
-        const QJsonArray children = object.value(matchedKey).toArray();
+        const QJsonValue compositeValue = object.value(matchedKey);
+        if (!compositeValue.isArray())
+        {
+            appendPredicateError(errors, QStringLiteral("%1.%2 must be an array.").arg(path, matchedKey));
+            return false;
+        }
+        const QJsonArray children = compositeValue.toArray();
         if (children.isEmpty())
         {
             appendPredicateError(errors, QStringLiteral("%1.%2 must contain at least one predicate.").arg(path, matchedKey));
             return false;
         }
-        *predicate = object;
+        QJsonArray normalizedChildren;
+        for (int childIndex = 0; childIndex < children.size(); ++childIndex)
+        {
+            const QJsonValue childValue = children.at(childIndex);
+            if (!childValue.isObject())
+            {
+                appendPredicateError(errors, QStringLiteral("%1.%2[%3] must be an object.").arg(path, matchedKey).arg(childIndex));
+                return false;
+            }
+            QJsonObject childPredicate;
+            const QString childPath = QStringLiteral("%1.%2[%3]").arg(path, matchedKey).arg(childIndex);
+            if (!parsePredicateObject(childValue.toObject(), namedSets, &childPredicate, errors, childPath))
+            {
+                return false;
+            }
+            normalizedChildren.append(childPredicate);
+        }
+        *predicate = QJsonObject{ { matchedKey, normalizedChildren } };
         return true;
     }
 
     if (!leafKeys.contains(matchedKey))
     {
         appendPredicateError(errors, QStringLiteral("%1 contains unsupported predicate '%2'.").arg(path, matchedKey));
+        return false;
+    }
+
+    if (!validateLeafPredicateValue(matchedKey, object.value(matchedKey), errors, path))
+    {
         return false;
     }
 
@@ -671,16 +855,46 @@ bool evaluatePredicate(const PDFObjectSelectorCandidate& candidate,
 
 bool candidateMatchesSelection(const PDFObjectSelectorCandidate& candidate, const PDFObjectSelectionResult& selection)
 {
+    if (candidate.objectReference.isValid())
+    {
+        QSet<int> selectedPages;
+        QVector<int> occurrencePages;
+        for (const PDFObjectSelectorCandidate& allowed : selection.candidates)
+        {
+            if (allowed.objectReference != candidate.objectReference)
+            {
+                continue;
+            }
+            selectedPages.insert(allowed.pageIndex);
+            if (!allowed.objectOccurrencePages.isEmpty())
+            {
+                occurrencePages = allowed.objectOccurrencePages;
+            }
+        }
+        if (selectedPages.isEmpty())
+        {
+            return false;
+        }
+        if (candidate.pageIndex >= 0)
+        {
+            return selectedPages.contains(candidate.pageIndex);
+        }
+        if (occurrencePages.isEmpty())
+        {
+            return true;
+        }
+        for (int pageIndex : occurrencePages)
+        {
+            if (!selectedPages.contains(pageIndex))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     for (const PDFObjectSelectorCandidate& allowed : selection.candidates)
     {
-        if (allowed.objectReference.isValid() && candidate.objectReference.isValid())
-        {
-            if (allowed.objectReference == candidate.objectReference)
-            {
-                return true;
-            }
-            continue;
-        }
         if (allowed.pageIndex == candidate.pageIndex &&
             allowed.objectClass == candidate.objectClass &&
             !allowed.objectReference.isValid() &&
@@ -807,6 +1021,7 @@ PDFOperationResult PDFObjectSelector::fromJson(const QJsonObject& object, PDFObj
     }
 
     const QJsonObject setsObject = object.value(QStringLiteral("sets")).toObject();
+    QMap<QString, QJsonObject> rawNamedSets;
     for (auto it = setsObject.begin(); it != setsObject.end(); ++it)
     {
         if (!it.value().isObject())
@@ -814,7 +1029,16 @@ PDFOperationResult PDFObjectSelector::fromJson(const QJsonObject& object, PDFObj
             appendPredicateError(errors, QStringLiteral("Named set '%1' must be an object.").arg(it.key()));
             return PDFOperationResult(QStringLiteral("Invalid named set."));
         }
-        parsed.m_namedSets.insert(it.key(), it.value().toObject());
+        rawNamedSets.insert(it.key(), it.value().toObject());
+    }
+    for (auto it = rawNamedSets.begin(); it != rawNamedSets.end(); ++it)
+    {
+        QJsonObject normalizedSet;
+        if (!parsePredicateObject(it.value(), rawNamedSets, &normalizedSet, errors, QStringLiteral("sets.%1").arg(it.key())))
+        {
+            return PDFOperationResult(QStringLiteral("Invalid named set."));
+        }
+        parsed.m_namedSets.insert(it.key(), normalizedSet);
     }
 
     const QJsonObject predicateObject = object.value(QStringLiteral("predicate")).toObject();
@@ -879,14 +1103,35 @@ PDFOperationResult PDFObjectSelector::resolve(const PDFObjectSelector& selector,
     }
 
     const QVector<PDFObjectSelectorCandidate> catalog = collectCandidates(document);
+    QMap<PDFObjectReference, QSet<int>> referenceOccurrencePages;
+    for (const PDFObjectSelectorCandidate& candidate : catalog)
+    {
+        if (candidate.objectReference.isValid())
+        {
+            referenceOccurrencePages[candidate.objectReference].insert(candidate.pageIndex);
+        }
+    }
+
     QVector<PDFObjectSelectorCandidate> matched;
     matched.reserve(catalog.size());
     for (const PDFObjectSelectorCandidate& candidate : catalog)
     {
-        if (evaluatePredicate(candidate, document, selector.m_predicate, selector.m_namedSets))
+        if (!evaluatePredicate(candidate, document, selector.m_predicate, selector.m_namedSets))
         {
-            matched.append(candidate);
+            continue;
         }
+        PDFObjectSelectorCandidate enriched = candidate;
+        if (enriched.objectReference.isValid())
+        {
+            const QSet<int> pages = referenceOccurrencePages.value(enriched.objectReference);
+            enriched.objectOccurrencePages.reserve(pages.size());
+            for (int pageIndex : pages)
+            {
+                enriched.objectOccurrencePages.append(pageIndex);
+            }
+            std::sort(enriched.objectOccurrencePages.begin(), enriched.objectOccurrencePages.end());
+        }
+        matched.append(enriched);
     }
 
     std::sort(matched.begin(), matched.end(), [](const PDFObjectSelectorCandidate& left, const PDFObjectSelectorCandidate& right)
@@ -946,7 +1191,8 @@ bool filterRepairPlanTargets(PDFRepairPlan* plan, const PDFObjectSelectionResult
         {
             if (target.objectReference.isValid() && candidate.objectReference.isValid())
             {
-                allowed = target.objectReference == candidate.objectReference;
+                allowed = target.objectReference == candidate.objectReference &&
+                          (target.pageIndex < 0 || target.pageIndex == candidate.pageIndex);
             }
             else if (target.pageIndex >= 0 && target.pageIndex == candidate.pageIndex && !target.objectReference.isValid())
             {

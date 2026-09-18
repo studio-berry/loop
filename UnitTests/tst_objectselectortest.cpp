@@ -142,6 +142,34 @@ pdf::PDFDocument createDocumentWithImage(int pixels, int pageCount = 1)
     return builder.build();
 }
 
+pdf::PDFDocument createDocumentWithAnnotation()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 144, 144));
+
+    pdf::PDFDictionary annotation;
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Annot"));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Text"));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Rect"),
+                        pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                            pdf::PDFObject::createReal(24.0),
+                            pdf::PDFObject::createReal(24.0),
+                            pdf::PDFObject::createReal(48.0),
+                            pdf::PDFObject::createReal(48.0) })));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("P"), pdf::PDFObject::createReference(pageReference));
+    const pdf::PDFObjectReference annotationReference = builder.addObject(
+        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(annotation))));
+
+    pdf::PDFDictionary pageAnnotations;
+    pageAnnotations.addEntry(pdf::PDFInplaceOrMemoryString("Annots"),
+                             pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                 pdf::PDFObject::createReference(annotationReference) })));
+    builder.appendTo(pageReference,
+                     pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageAnnotations))));
+    return builder.build();
+}
+
 pdf::PDFDocument createDocumentWithDistinctPageImages(int pixels, int pageCount)
 {
     pdf::PDFDocumentBuilder builder;
@@ -553,6 +581,10 @@ private slots:
     void digestIsDeterministicAcrossRepeatedResolution();
     void actionListV2RoundTripsWithSelect();
     void executorPreviewNeverMutatesOutsideSelection();
+    void annotationCandidatesAreCollected();
+    void sharedReferenceFenceRejectsUnselectedOccurrences();
+    void rejectsNonObjectSelectInActionList();
+    void malformedCompositePredicateFailsParse();
 };
 
 void ObjectSelectorTest::roundTripsSelectorJson()
@@ -877,6 +909,68 @@ void ObjectSelectorTest::actionListV2RoundTripsWithSelect()
     QCOMPARE(actionList.steps.size(), 1);
     QCOMPARE(actionList.steps.front().select.value(QStringLiteral("schema")).toString(), pdf::PDFObjectSelector::schemaVersion());
     QVERIFY(pdf::PDFActionListExecutor().validate(actionList, {}));
+}
+
+void ObjectSelectorTest::annotationCandidatesAreCollected()
+{
+    const pdf::PDFDocument document = createDocumentWithAnnotation();
+    pdf::PDFObjectSelectionResult result;
+    QVERIFY(resolveSelector(document,
+                            selectorJson(QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("annotation") } }),
+                            &result));
+    QVERIFY(result.ok);
+    QVERIFY(!result.empty);
+    QCOMPARE(result.candidates.size(), 1);
+    QCOMPARE(result.candidates.front().objectClass, QStringLiteral("annotation"));
+    QVERIFY(result.candidates.front().objectReference.isValid());
+}
+
+void ObjectSelectorTest::sharedReferenceFenceRejectsUnselectedOccurrences()
+{
+    const pdf::PDFDocument document = createDocumentWithImage(600, 2);
+    pdf::PDFObjectSelectionResult selection;
+    QVERIFY(resolveSelector(document,
+                            selectorJson(QJsonObject{
+                                { QStringLiteral("and"), QJsonArray{
+                                                              QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                              QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } }),
+                            &selection));
+    QVERIFY(selection.ok);
+    QCOMPARE(selection.candidates.size(), 1);
+    QCOMPARE(selection.candidates.front().objectOccurrencePages.size(), 2);
+
+    pdf::PDFRepairChange outsideScope;
+    outsideScope.target.objectReference = selection.candidates.front().objectReference;
+    outsideScope.target.pageIndex = -1;
+    outsideScope.changeKind = QStringLiteral("image-resource");
+    QString scopeError;
+    QVERIFY(!pdf::repairChangesWithinSelection({ outsideScope }, selection, &scopeError));
+    QVERIFY(scopeError.contains(QStringLiteral("outside")));
+}
+
+void ObjectSelectorTest::rejectsNonObjectSelectInActionList()
+{
+    pdf::PDFActionList actionList;
+    QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
+                                              { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                              { QStringLiteral("id"), QStringLiteral("bad-select") },
+                                              { QStringLiteral("name"), QStringLiteral("Bad select") },
+                                              { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                                 { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                 { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                 { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                                                                 { QStringLiteral("select"), QStringLiteral("all-images") } } } } },
+                                          &actionList));
+}
+
+void ObjectSelectorTest::malformedCompositePredicateFailsParse()
+{
+    pdf::PDFObjectSelector selector;
+    QStringList errors;
+    const QJsonObject json = selectorJson(QJsonObject{
+        { QStringLiteral("and"), QJsonArray{ QJsonObject{ { QStringLiteral("minEffectiveDpi"), QStringLiteral("bad") } } } } });
+    QVERIFY(!pdf::PDFObjectSelector::fromJson(json, &selector, &errors));
+    QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("minEffectiveDpi")));
 }
 
 void ObjectSelectorTest::executorPreviewNeverMutatesOutsideSelection()
