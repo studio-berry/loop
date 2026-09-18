@@ -411,6 +411,7 @@
     "UnitTestsFilenameSanitizer",
     "UnitTestsFindingNavigation",
     "UnitTestsFontEncoding",
+    "UnitTestsGovernedExecution",
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",

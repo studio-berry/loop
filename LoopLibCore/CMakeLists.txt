@@ -58,6 +58,8 @@ add_library(LoopLibCore SHARED
     sources/pdfrepairoperation.cpp
     sources/pdfrepairoperation.h
     sources/pdfrepairprimitives.cpp
+    sources/pdfgovernedexecution.cpp
+    sources/pdfgovernedexecution.h
     sources/pdfstandardconversion.cpp
     sources/pdfstandardconversion.h
     sources/pdfactionlist.cpp
