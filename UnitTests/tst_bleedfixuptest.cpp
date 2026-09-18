@@ -78,6 +78,36 @@ QByteArray loadSyntheticCmykProfile()
     return file.readAll();
 }
 
+void embedCmykOutputIntentWithUndecodableProfile(pdf::PDFDocumentBuilder* builder,
+                                                 const QByteArray& identifier = QByteArrayLiteral("Test CMYK"))
+{
+    const QByteArray corruptedProfile = QByteArrayLiteral("not-a-valid-flate-stream");
+    pdf::PDFDictionary profileDictionary;
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createInteger(4));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Filter"), pdf::PDFObject::createName("FlateDecode"));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(corruptedProfile.size()));
+    const pdf::PDFObjectReference profileReference = builder->addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(qMove(profileDictionary), QByteArray(corruptedProfile))));
+
+    pdf::PDFDictionary intentDictionary;
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("OutputIntent"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("S"), pdf::PDFObject::createName("GTS_PDFX"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("OutputConditionIdentifier"),
+                              pdf::PDFObject::createString(identifier));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("DestOutputProfile"),
+                              pdf::PDFObject::createReference(profileReference));
+    const pdf::PDFObjectReference intentReference = builder->addObject(
+        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(intentDictionary))));
+
+    pdf::PDFArray outputIntents;
+    outputIntents.appendItem(pdf::PDFObject::createReference(intentReference));
+    pdf::PDFDictionary catalogUpdate;
+    catalogUpdate.addEntry(pdf::PDFInplaceOrMemoryString("OutputIntents"),
+                           pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(qMove(outputIntents))));
+    builder->mergeTo(builder->getCatalogReference(),
+                     pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(catalogUpdate))));
+}
+
 void embedCmykOutputIntent(pdf::PDFDocumentBuilder* builder, const QByteArray& profileData)
 {
     QByteArray compressedProfile = pdf::PDFFlateDecodeFilter::compress(profileData);
@@ -161,6 +191,7 @@ private slots:
     void buildEdgeFillImage_stretchScalesToBleedDepth();
     void buildEdgeFillImage_outputsRgb888AndFlattensAlpha();
     void apply_cmykOutputIntent_embedsIccBasedCmykStrips();
+    void apply_cmykOutputIntentDecodeFailure_returnsError();
     void apply_selectedSidesOnly_reportsAndExpandsSelectedEdges();
     void apply_normalLetterWithinBudget_preservesBleedSemantics();
     void rasterPlan_largeFormatRejectsBeforeAllocation();
@@ -398,6 +429,29 @@ void BleedFixupTest::apply_cmykOutputIntent_embedsIccBasedCmykStrips()
         }
     }
     QVERIFY(foundCmykStrip);
+}
+
+void BleedFixupTest::apply_cmykOutputIntentDecodeFailure_returnsError()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF media(0.0, 0.0, 100.0, 100.0);
+    const pdf::PDFObjectReference pageReference = builder.appendPage(media);
+    builder.setPageTrimBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    builder.setPageBleedBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    embedCmykOutputIntentWithUndecodableProfile(&builder);
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFBleedFixupSettings settings;
+    settings.force = true;
+    settings.dpi = 72;
+    settings.sides = pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+
+    pdf::PDFBleedFixupReport report;
+    const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
+    QVERIFY(!result);
+    QVERIFY(result.getErrorMessage().contains(QStringLiteral("could not be decoded")));
+    QVERIFY(result.getErrorMessage().contains(QStringLiteral("Test CMYK")));
+    QCOMPARE(documentDigest(document), documentDigest(builder.build()));
 }
 
 void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()

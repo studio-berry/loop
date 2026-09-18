@@ -237,13 +237,21 @@ struct CmykBleedOutputIntent
     QByteArray profileId;
 };
 
-std::optional<CmykBleedOutputIntent> detectCmykBleedOutputIntent(const PDFDocument* document,
-                                                                 PDFDocumentBuilder* builder)
+PDFOperationResult detectCmykBleedOutputIntent(const PDFDocument* document,
+                                               PDFDocumentBuilder* builder,
+                                               std::optional<CmykBleedOutputIntent>* outIntent)
 {
+    if (outIntent)
+    {
+        *outIntent = std::nullopt;
+    }
+
     if (!document || !builder)
     {
-        return std::nullopt;
+        return true;
     }
+
+    QString profileDecodeError;
 
     for (const PDFOutputIntent& outputIntent : document->getCatalog()->getOutputIntents())
     {
@@ -260,6 +268,10 @@ std::optional<CmykBleedOutputIntent> detectCmykBleedOutputIntent(const PDFDocume
         }
         catch (const PDFException&)
         {
+            const QString identifier = outputIntent.getOutputConditionIdentifier();
+            profileDecodeError = PDFTranslationContext::tr(
+                                     "Output intent '%1' has an ICC profile that could not be decoded.")
+                                     .arg(identifier.isEmpty() ? QStringLiteral("unknown") : identifier);
             continue;
         }
 
@@ -301,10 +313,19 @@ std::optional<CmykBleedOutputIntent> detectCmykBleedOutputIntent(const PDFDocume
                 PDFObject::createStream(std::make_shared<PDFStream>(qMove(profileDictionary), qMove(compressedProfile))));
         }
 
-        return result;
+        if (outIntent)
+        {
+            *outIntent = result;
+        }
+        return true;
     }
 
-    return std::nullopt;
+    if (!profileDecodeError.isEmpty())
+    {
+        return profileDecodeError;
+    }
+
+    return true;
 }
 
 PDFObject createCmykImageColorSpace(PDFObjectReference profileReference)
@@ -1137,7 +1158,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
     PDFDocumentBuilder* builder = modifier.getBuilder();
     Q_ASSERT(builder);
 
-    const std::optional<CmykBleedOutputIntent> cmykBleedIntent = detectCmykBleedOutputIntent(document, builder);
+    std::optional<CmykBleedOutputIntent> cmykBleedIntent;
+    const PDFOperationResult outputIntentResult = detectCmykBleedOutputIntent(document, builder, &cmykBleedIntent);
+    if (!outputIntentResult)
+    {
+        return outputIntentResult;
+    }
 
     PDFModifiedDocument::ModificationFlags flags = PDFModifiedDocument::ModificationFlags(PDFModifiedDocument::Reset | PDFModifiedDocument::PreserveUndoRedo);
     bool isPageContentChanged = false;
