@@ -26,6 +26,7 @@
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfoperationimpact.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationcontrol.h"
@@ -52,6 +53,7 @@ bool appendPreflightProvenance(const QString& documentPath,
                                const QByteArray& sourceData,
                                const QString& revisionDigest,
                                const QString& profileDigest,
+                               const QList<pdf::PreflightDecision>& decisions,
                                pdf::PDFOperationHistoryStatus status,
                                const QJsonObject& summary,
                                QString* error)
@@ -135,6 +137,31 @@ bool appendPreflightProvenance(const QString& documentPath,
             *error = appendError;
         }
         return false;
+    }
+    for (const pdf::PreflightDecision& decision : decisions)
+    {
+        const QString decisionId = pdf::preflightDecisionIdentity(decision);
+        pdf::PDFOperationHistoryEvent decisionEvent;
+        decisionEvent.executionId = executionId;
+        decisionEvent.kind = decision.countsForSignoff(revisionDigest, profileDigest)
+                                 ? pdf::PDFOperationHistoryEventKind::DecisionRecorded
+                                 : pdf::PDFOperationHistoryEventKind::DecisionInvalidated;
+        decisionEvent.status = pdf::PDFOperationHistoryStatus::Running;
+        decisionEvent.operatorIdentity = decision.operatorIdentity;
+        decisionEvent.documentRevisionDigest = revisionDigest;
+        decisionEvent.effectiveProfileDigest = profileDigest;
+        decisionEvent.approval.decisionReference = decisionId;
+        decisionEvent.resultSummary = QJsonObject{
+            { QStringLiteral("decision_id"), decisionId },
+            { QStringLiteral("finding_id"), decision.findingId },
+            { QStringLiteral("kind"), pdf::preflightDecisionKindToString(decision.kind) }
+        };
+        if (!history.appendEvent(decisionEvent))
+        {
+            if (error)
+                *error = QStringLiteral("Could not append a preflight decision event.");
+            return false;
+        }
     }
     return true;
 }
@@ -675,6 +702,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                                    sourceData,
                                    result.documentRevisionDigest,
                                    result.effectiveProfileDigest,
+                                   result.decisions,
                                    historyStatus,
                                    result.toJson(options.document),
                                    &historyError))
@@ -684,6 +712,69 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          QStringLiteral("history.write-failed"),
                          historyError);
         return PDFToolExitCode::ProcessingFailure;
+    }
+
+    if (!options.preflightCertificateOutputPath.isEmpty())
+    {
+        const QString historyDirectory = QFileInfo(options.document).absoluteFilePath() + QStringLiteral(".loop-history");
+        pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+        QString historyError;
+        if (!history.open(&historyError))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), historyError);
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+        if (!historyError.isEmpty())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), historyError);
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        pdf::PreflightCertificate certificate;
+        QString certificateError;
+        if (!pdf::issuePreflightCertificate(result,
+                                            result.toJson(options.document),
+                                            sourceData,
+                                            events,
+                                            QStringLiteral("PdfTool"),
+                                            certificate,
+                                            certificateError))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.refused"), certificateError);
+            return PDFToolExitCode::Findings;
+        }
+        QFile certificateFile(options.preflightCertificateOutputPath);
+        if (!certificateFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.output-failed"), certificateFile.errorString());
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        const QByteArray certificateJson = QJsonDocument(certificate.toJson()).toJson(QJsonDocument::Indented);
+        if (certificateFile.write(certificateJson) != certificateJson.size())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.output-failed"), certificateFile.errorString());
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        if (!events.isEmpty())
+        {
+            pdf::PDFOperationHistoryEvent certificateEvent;
+            certificateEvent.executionId = events.back().executionId;
+            certificateEvent.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+            certificateEvent.status = pdf::PDFOperationHistoryStatus::Running;
+            certificateEvent.operatorIdentity = QStringLiteral("PdfTool");
+            certificateEvent.documentRevisionDigest = certificate.documentRevisionDigest;
+            certificateEvent.effectiveProfileDigest = certificate.effectiveProfileDigest;
+            certificateEvent.approval.decisionReference = certificate.certificateId;
+            certificateEvent.resultSummary = QJsonObject{
+                { QStringLiteral("certificate_id"), certificate.certificateId },
+                { QStringLiteral("report_digest"), certificate.reportDigest }
+            };
+            if (!history.appendEvent(certificateEvent))
+            {
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-write-failed"), QStringLiteral("Could not append certificate issuance to the audit history."));
+                return PDFToolExitCode::ProcessingFailure;
+            }
+        }
     }
 
     return resultExitCode;

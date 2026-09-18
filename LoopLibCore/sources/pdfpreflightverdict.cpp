@@ -636,6 +636,18 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
 
 bool preflightAllowsCertification(const PreflightResult& result)
 {
+    if (!result.inspectionComplete)
+    {
+        return false;
+    }
+    for (const PreflightCheckStatus& status : result.checkStatuses)
+    {
+        if (status.status.compare(QStringLiteral("ok"), Qt::CaseInsensitive) != 0 ||
+            !status.budgetKind.isEmpty() || status.budgetAttempted > status.budgetLimit)
+        {
+            return false;
+        }
+    }
     const PreflightVerdict verdict = reducePreflightVerdict(result);
     if (!verdict.allowsCertificateIssuance())
     {

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfrepairoperation.h"
@@ -30,6 +31,7 @@
 #include <QPainter>
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -74,6 +76,7 @@ private slots:
     void mandatoryPostflight_respectsCancellation();
     void mandatoryPostflight_acceptsResolvedProfileJson();
     void provisionalPass_doesNotAllowCertification();
+    void certificate_roundTripsAndDetectsTampering();
 };
 
 namespace
@@ -397,6 +400,65 @@ void PreflightVerdictTest::provisionalPass_doesNotAllowCertification()
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QVERIFY(verdict.allowsCertificateIssuance());
     QVERIFY(!pdf::preflightAllowsCertification(result));
+}
+
+void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
+{
+    const QByteArray document("certified document revision");
+    const QString documentDigest = QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest(64, QLatin1Char('a'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.checkStatuses.append({ QStringLiteral("bleed"), QStringLiteral("ok") });
+
+    pdf::PDFOperationHistoryEvent event;
+    event.sequence = 1;
+    event.entryId = QUuid::createUuid();
+    event.executionId = QUuid::createUuid();
+    event.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    event.status = pdf::PDFOperationHistoryStatus::Accepted;
+    event.documentRevisionDigest = documentDigest;
+    event.effectiveProfileDigest = profileDigest;
+    event.createdUtc = QDateTime::currentDateTimeUtc();
+    event.eventHash = pdf::computeOperationHistoryEventHash(event, {});
+
+    pdf::PreflightCertificate certificate;
+    QString error;
+    QVERIFY(pdf::issuePreflightCertificate(result,
+                                           result.toJson(QStringLiteral("document.pdf")),
+                                           document,
+                                           { event },
+                                           QStringLiteral("operator"),
+                                           certificate,
+                                           error));
+    QVERIFY(error.isEmpty());
+
+    pdf::PDFOperationHistoryEvent issuance;
+    issuance.sequence = 2;
+    issuance.entryId = QUuid::createUuid();
+    issuance.executionId = event.executionId;
+    issuance.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    issuance.status = pdf::PDFOperationHistoryStatus::Running;
+    issuance.approval.decisionReference = certificate.certificateId;
+    issuance.resultSummary.insert(QStringLiteral("report_digest"), certificate.reportDigest);
+    issuance.previousEventHash = event.eventHash;
+    issuance.eventHash = pdf::computeOperationHistoryEventHash(issuance, issuance.previousEventHash);
+    const QList<pdf::PDFOperationHistoryEvent> history{ event, issuance };
+
+    pdf::PreflightCertificate parsed;
+    QVERIFY(pdf::PreflightCertificate::fromJson(certificate.toJson(), parsed, error));
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, document, history).state,
+             pdf::PreflightCertificateState::Valid);
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, QByteArray("changed"), history).state,
+             pdf::PreflightCertificateState::InvalidDocumentChanged);
+
+    issuance.resultSummary.insert(QStringLiteral("tampered"), true);
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, document, { event, issuance }).state,
+             pdf::PreflightCertificateState::InvalidAuditChainBroken);
 }
 
 void PreflightVerdictTest::editorWaivedBlocking_isPass()

@@ -173,7 +173,7 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     // strings, so this maps names to the canonical #194 treatment and does no analysis of its own.
     const QString normalized = stateName.trimmed().toLower();
 
-    if (normalized == QLatin1String("pass"))
+    if (normalized == QLatin1String("pass") || normalized == QLatin1String("certified"))
     {
         return makeVisual(StateKind::Passed, ColorRole::Success, StateIcon::Checkmark);
     }
@@ -185,7 +185,7 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     {
         return makeVisual(StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare);
     }
-    if (normalized == QLatin1String("stale") || normalized == QLatin1String("incomplete"))
+    if (normalized == QLatin1String("stale") || normalized == QLatin1String("incomplete") || normalized == QLatin1String("certificate-invalid"))
     {
         return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
     }
