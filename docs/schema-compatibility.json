@@ -69,9 +69,10 @@
       "previous": "1.0"
     },
     "action-list": {
-      "current": "1.0",
+      "current": "2.0",
       "supported_majors": [
-        1
+        1,
+        2
       ],
       "previous": "1.0"
     },

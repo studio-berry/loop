@@ -46,6 +46,7 @@ qt_add_qml_module(LoopEditor
         qml/DocumentPane.qml
         qml/CanvasPane.qml
         qml/PreflightPane.qml
+        qml/ActionListPane.qml
         qml/InspectorPane.qml
         qml/WorkspacePlaceholderPane.qml
         qml/ShellToolBar.qml

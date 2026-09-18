@@ -142,6 +142,7 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
+        "UnitTestsRedactVerifier",
         "UnitTestsRepairDiff",
         "UnitTestsRepairOperation",
         "UnitTestsRepairOperatorAcceptance",

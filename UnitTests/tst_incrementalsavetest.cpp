@@ -23,12 +23,19 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
+#include "pdfrepairoperation.h"
 
 #include <QtTest>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QPair>
 #include <QTemporaryDir>
+#include <QVector>
 
 namespace
 {
@@ -69,7 +76,10 @@ private slots:
     void signedPdfIncrementalSave_preservesSignedPrefix();
     void explicitPoliciesCannotBeDowngradedToIncremental();
     void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
+    void policyStrengthRejectsWeakerRequests();
     void fileOverloadReportsWhatItDid();
+    void signedFixtureIncrementalEditPreservesTheSignedByteRange();
+    void appendCostScalesWithChangedDataNotFileSize();
 };
 
 namespace
@@ -117,6 +127,48 @@ QByteArray writeDocument(const pdf::PDFDocument& document)
     const pdf::PDFOperationResult writeResult = writer.write(&buffer, &document);
     Q_ASSERT(static_cast<bool>(writeResult));
     return buffer.data();
+}
+
+/// The committed signed fixture, located relative to LOOP_FIXTURE_DATA_DIR when
+/// it is set (the CMake test definition sets it to the source tree) and
+/// relative to the working directory otherwise.
+QByteArray readFixtureBytes(const QString& fileName)
+{
+    const QString root = QString::fromUtf8(qgetenv("LOOP_FIXTURE_DATA_DIR"));
+    const QString path = root.isEmpty()
+                             ? QStringLiteral("testdata/signatures/%1").arg(fileName)
+                             : QStringLiteral("%1/signatures/%2").arg(root, fileName);
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    const QByteArray data = file.readAll();
+    file.close();
+    return data;
+}
+
+/// The two intervals a /ByteRange covers, as (start, length) pairs.
+QVector<QPair<qsizetype, qsizetype>> parseByteRange(const QByteArray& data)
+{
+    QVector<QPair<qsizetype, qsizetype>> result;
+    const qsizetype marker = data.indexOf("/ByteRange");
+    if (marker < 0)
+    {
+        return result;
+    }
+    const qsizetype open = data.indexOf('[', marker);
+    const qsizetype close = data.indexOf(']', open);
+    if (open < 0 || close < 0)
+    {
+        return result;
+    }
+    const QList<QByteArray> numbers = data.mid(open + 1, close - open - 1).simplified().split(' ');
+    for (qsizetype index = 0; index + 1 < numbers.size(); index += 2)
+    {
+        result.append({ numbers.at(index).toLongLong(), numbers.at(index + 1).toLongLong() });
+    }
+    return result;
 }
 
 }   // namespace
@@ -335,6 +387,46 @@ void IncrementalSaveTest::unclassifiedAndRedactionPoliciesCannotSilentIncrementa
     QCOMPARE(mergedUnclassified.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
 }
 
+void IncrementalSaveTest::policyStrengthRejectsWeakerRequests()
+{
+    const pdf::PDFOperationSavePolicy incremental = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit"));
+    const pdf::PDFOperationSavePolicy full = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction"));
+    const pdf::PDFOperationSavePolicy newArtifact = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("production correction"));
+
+    QVERIFY(pdf::savePolicyIsWeaker(incremental, full));
+    QVERIFY(pdf::savePolicyIsWeaker(full, newArtifact));
+    QVERIFY(!pdf::savePolicyIsWeaker(newArtifact, full));
+    QVERIFY(!pdf::savePolicyIsWeaker(full, full));
+    QVERIFY(!pdf::savePolicyIsWeaker(incremental, incremental));
+
+    // Same mode, hidden consequence: a caller may not claim less impact than
+    // the operation declares.
+    pdf::PDFOperationSavePolicy hidesSignatureLoss = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller copy"));
+    hidesSignatureLoss.invalidatesSignatures = false;
+    QVERIFY(pdf::savePolicyIsWeaker(hidesSignatureLoss, full));
+    pdf::PDFOperationSavePolicy claimsReversible = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller copy"));
+    claimsReversible.reversibleInSession = true;
+    QVERIFY(pdf::savePolicyIsWeaker(claimsReversible, full));
+
+    // Stricter than required is allowed.
+    QVERIFY(!pdf::savePolicyIsWeaker(newArtifact, incremental));
+
+    // The undeclared default is never weaker than any declared policy, so it
+    // can stay the transaction default without changing behaviour.
+    for (const QString& id : pdf::PDFRepairRegistry::instance().operationIds())
+    {
+        QVERIFY2(!pdf::savePolicyIsWeaker(pdf::PDFOperationSavePolicy::undeclared(),
+                                          pdf::PDFRepairRegistry::instance().find(id)->savePolicy()),
+                 qPrintable(id));
+    }
+
+    QCOMPARE(pdf::savePolicyWeakenedMessage(incremental, full),
+             QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'full-rewrite'."));
+    QCOMPARE(pdf::savePolicyWeakenedMessage(hidesSignatureLoss, full),
+             QStringLiteral("Refused save policy: signature invalidation is not declared but the operation invalidates signatures."));
+    QVERIFY(pdf::savePolicyWeakenedMessage(newArtifact, incremental).isEmpty());
+}
+
 void IncrementalSaveTest::fileOverloadReportsWhatItDid()
 {
     const QByteArray originalData = writeDocument(createDocument());
@@ -378,6 +470,106 @@ void IncrementalSaveTest::fileOverloadReportsWhatItDid()
         QVERIFY(writer.writeIncremental(path, &original, &original, true, &outcome));
         QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged);
     }
+}
+
+void IncrementalSaveTest::signedFixtureIncrementalEditPreservesTheSignedByteRange()
+{
+    const QByteArray originalData = readFixtureBytes(QStringLiteral("signed-incremental-base.pdf"));
+    QVERIFY2(!originalData.isEmpty(), "signed fixture missing; see UnitTests/testdata/signatures/manifest.json");
+    QVERIFY(originalData.contains("/ByteRange"));
+    QVERIFY(originalData.contains("/Contents"));
+
+    const pdf::PDFDocument original = readDocument(originalData);
+    const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+    QVERIFY(modified);
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    QBuffer output;
+    output.open(QIODevice::WriteOnly);
+    QVERIFY(writer.writeIncremental(&output, originalData, &original, modified.data()));
+
+    // 1. The original bytes, and therefore the signed byte range, are intact.
+    QCOMPARE(output.data().left(originalData.size()), originalData);
+
+    // 2. The signature dictionary is untouched: same /ByteRange intervals and
+    //    the same /Contents payload, which is what a verifier digests.
+    const auto originalRanges = parseByteRange(originalData);
+    const auto outputRanges = parseByteRange(output.data());
+    QCOMPARE(outputRanges.size(), originalRanges.size());
+    for (qsizetype index = 0; index < originalRanges.size(); ++index)
+    {
+        QCOMPARE(outputRanges.at(index), originalRanges.at(index));
+    }
+    const auto contentsOf = [](const QByteArray& data)
+    {
+        const qsizetype marker = data.indexOf("/Contents");
+        const qsizetype open = data.indexOf('<', marker);
+        const qsizetype close = data.indexOf('>', open);
+        return data.mid(open, close - open + 1);
+    };
+    QCOMPARE(contentsOf(output.data()), contentsOf(originalData));
+
+    const QString evidenceDirectory = QString::fromUtf8(qgetenv("LOOP_SAVE_POLICY_EVIDENCE_DIR"));
+    if (!evidenceDirectory.isEmpty())
+    {
+        QDir().mkpath(evidenceDirectory);
+        QFile artifact(QStringLiteral("%1/incremental-with-signature.pdf").arg(evidenceDirectory));
+        QVERIFY(artifact.open(QIODevice::WriteOnly));
+        QCOMPARE(artifact.write(output.data()), qint64(output.data().size()));
+        artifact.close();
+
+        QJsonObject evidence{
+            { QStringLiteral("schema"), QStringLiteral("loop.save-policy-incremental-evidence") },
+            { QStringLiteral("schema_version"), 1 },
+            { QStringLiteral("source_fixture"), QStringLiteral("UnitTests/testdata/signatures/signed-incremental-base.pdf") },
+            { QStringLiteral("source_sha256"), QString::fromLatin1(QCryptographicHash::hash(originalData, QCryptographicHash::Sha256).toHex()) },
+            { QStringLiteral("artifact_sha256"), QString::fromLatin1(QCryptographicHash::hash(output.data(), QCryptographicHash::Sha256).toHex()) },
+            { QStringLiteral("source_bytes"), qint64(originalData.size()) },
+            { QStringLiteral("artifact_bytes"), qint64(output.data().size()) },
+            { QStringLiteral("appended_bytes"), qint64(output.data().size() - originalData.size()) },
+            { QStringLiteral("original_prefix_preserved"), output.data().left(originalData.size()) == originalData },
+            { QStringLiteral("byte_range_preserved"), true }
+        };
+        QFile evidenceFile(QStringLiteral("%1/incremental-with-signature.json").arg(evidenceDirectory));
+        QVERIFY(evidenceFile.open(QIODevice::WriteOnly));
+        QCOMPARE(evidenceFile.write(QJsonDocument(evidence).toJson(QJsonDocument::Indented)), qint64(QJsonDocument(evidence).toJson(QJsonDocument::Indented).size()));
+        evidenceFile.close();
+    }
+
+    // 3. The append really is an append: new xref pointing at the old one.
+    QVERIFY(output.data().mid(originalData.size()).contains("/Prev"));
+    QVERIFY(output.data().size() > originalData.size());
+}
+
+void IncrementalSaveTest::appendCostScalesWithChangedDataNotFileSize()
+{
+    const auto appendedBytesForPages = [](int pages)
+    {
+        pdf::PDFDocumentBuilder builder;
+        for (int index = 0; index < pages; ++index)
+        {
+            builder.appendPage(QRectF(0, 0, 595, 842));
+        }
+        const pdf::PDFDocument original = builder.build();
+        const QByteArray originalData = writeDocument(original);
+        const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+        pdf::PDFDocumentWriter writer(nullptr);
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+        if (!writer.writeIncremental(&output, originalData, &original, modified.data()))
+        {
+            return QPair<qint64, qint64>{ -1, -1 };
+        }
+        return QPair<qint64, qint64>{ output.data().size() - originalData.size(), originalData.size() };
+    };
+
+    const QPair<qint64, qint64> small = appendedBytesForPages(1);
+    const QPair<qint64, qint64> large = appendedBytesForPages(60);
+    QVERIFY(small.first > 0);
+    QVERIFY(large.first > 0);
+    QVERIFY(large.second > small.second * 5);   // the file really is much bigger
+    QVERIFY(large.first < large.second / 10);   // the append is not proportional to size
+    QVERIFY(large.first < small.first * 4);   // and it stays in the same order of magnitude
 }
 
 QTEST_MAIN(IncrementalSaveTest)

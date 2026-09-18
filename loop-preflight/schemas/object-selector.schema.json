@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loop.local/schemas/object-selector.schema.json",
+  "title": "Loop Object Selector",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "predicate"],
+  "properties": {
+    "schema": { "const": "loop-object-selector/1" },
+    "revisionDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Optional document revision digest. Resolution fails closed when it does not match the active revision."
+    },
+    "sets": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/predicate" },
+      "description": "Named predicate fragments referenced by { \"set\": \"name\" }."
+    },
+    "predicate": { "$ref": "#/$defs/predicate" }
+  },
+  "$defs": {
+    "predicate": {
+      "oneOf": [
+        { "$ref": "#/$defs/composite" },
+        { "$ref": "#/$defs/leaf" }
+      ]
+    },
+    "composite": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "and": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/predicate" } },
+        "or": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/predicate" } },
+        "not": { "$ref": "#/$defs/predicate" },
+        "set": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "leaf": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "pages": {
+          "type": "string",
+          "pattern": "^([0-9]+(-[0-9]+)?)(,[0-9]+(-[0-9]+)?)*$",
+          "description": "1-based inclusive page ranges."
+        },
+        "objectClass": {
+          "enum": ["text", "image", "vector", "annotation", "shading", "form"]
+        },
+        "colorSpace": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "layer": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "font": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "spotColor": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "minEffectiveDpi": { "type": "number", "minimum": 0 },
+        "maxEffectiveDpi": { "type": "number", "minimum": 0 },
+        "isVector": { "type": "boolean" },
+        "objectRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object"],
+          "properties": {
+            "object": { "type": "integer", "minimum": 1 },
+            "generation": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        },
+        "region": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rect_pt"],
+          "properties": {
+            "rect_pt": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "anchor": { "enum": ["media", "crop", "trim", "bleed"], "default": "trim" },
+            "mode": { "enum": ["include", "exclude"], "default": "include" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -22,7 +22,9 @@
 
 #include "processoutputcapture.h"
 
+#include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -109,6 +111,9 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void redactRefusesToWriteOverItsOwnInput();
+    void addBleedRefusesToWriteOverItsOwnInput();
+    void rgbToCmykRefusesToWriteOverItsOwnInput();
 };
 
 void PdfToolContractTest::helpIsWrapped()
@@ -241,6 +246,19 @@ QJsonObject findDiagnostic(const ToolRun& run, const QString& code)
     return QJsonObject();
 }
 
+QByteArray fileDigest(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return QByteArray();
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(&file);
+    return hash.result();
+}
+
 }   // namespace
 
 void PdfToolContractTest::fetchImagesOnVectorOnlyDocumentNotesEmptyResult()
@@ -314,6 +332,132 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::redactRefusesToWriteOverItsOwnInput()
+{
+    // Redaction removes prior content, so the command must refuse to persist
+    // its result over the trusted input the caller handed it.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/color-rgb.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const ToolRun run = runPdfTool({ QStringLiteral("redact"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     inputPath, inputPath });
+
+    verifyEnvelope(run, 4, QStringLiteral("redact"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QVERIFY(QFile(inputPath).exists());
+
+    // The refusal must be about writing over the input, not about redaction:
+    // the same document and the same caller still produce the artifact when
+    // the output is a different path.
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("redact"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath, directory.filePath(QStringLiteral("redacted.pdf")) });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+}
+
+void PdfToolContractTest::addBleedRefusesToWriteOverItsOwnInput()
+{
+    // add-bleed declares saveAsNewArtifact("bleed correction must preserve the
+    // trusted source"), so a corrective run may not hand the input back as its
+    // own output.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun run = runPdfTool({ QStringLiteral("add-bleed"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     QStringLiteral("--overwrite"),
+                                     inputPath,
+                                     QStringLiteral("--output"), inputPath });
+
+    verifyEnvelope(run, 4, QStringLiteral("add-bleed"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+
+    // The refusal has to be about the destination, not about add-bleed: the
+    // same document and the same caller still produce a candidate at a distinct
+    // path.
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("add-bleed"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath,
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--profile"), profilePath,
+                                            QStringLiteral("--force") });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+    QVERIFY(QFile(candidatePath).exists());
+}
+
+void PdfToolContractTest::rgbToCmykRefusesToWriteOverItsOwnInput()
+{
+    // rgb-to-cmyk declares saveAsNewArtifact("color conversion creates a
+    // production candidate"), so the candidate may not replace the input even
+    // when the caller asks for --overwrite.
+    const QString profilePath = QFINDTESTDATA("testdata/synthetic-cmyk.icc");
+    QVERIFY2(!profilePath.isEmpty() && QFile::exists(profilePath), qPrintable(profilePath));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/output-intent-rgb.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun run = runPdfTool({ QStringLiteral("rgb-to-cmyk"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     QStringLiteral("--overwrite"),
+                                     inputPath,
+                                     QStringLiteral("--output"), inputPath,
+                                     QStringLiteral("--target-profile"), profilePath });
+
+    verifyEnvelope(run, 4, QStringLiteral("rgb-to-cmyk"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+
+    // The refusal has to be about the destination, not about the conversion:
+    // the same document and the same caller still convert at a distinct path.
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("rgb-to-cmyk"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath,
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--target-profile"), profilePath });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+    QVERIFY(QFile(candidatePath).exists());
 }
 
 }   // namespace

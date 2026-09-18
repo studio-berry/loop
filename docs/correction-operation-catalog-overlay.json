@@ -1,0 +1,261 @@
+{
+  "format_version": 1,
+  "claim": "Loop publishes what each registered correction operation can change, how it saves output, and where it is available. A clean post-operation pass is scoped to the declared revalidation plan, not a certificate of press readiness.",
+  "matrix_id": "loop-correction-operations-v1",
+  "save_modes": {
+    "incremental-append": "When committed, appends a revision to the source PDF. Prior file bytes remain in the revision chain; digital signatures on earlier revisions are not rewritten by the append itself.",
+    "full-rewrite": "When committed, replaces the file body. Prior image streams and object numbering are discarded; signatures on the source are invalidated and the change is not reversible in-session.",
+    "save-as-new-artifact": "Default repair path: analyze/apply operate on an isolated candidate. The trusted source file is not mutated until the operator atomically writes the reviewed candidate through PDFSafeFileWriter."
+  },
+  "target_scope_model": {
+    "selector_issue": 587,
+    "status": "pending",
+    "note": "Operations currently select targets implicitly during analyze() (whole document, page indices, resource references, or production geometry). The shared selector AST from #587 is not yet wired into repair plans or Action Lists.",
+    "scopes": [
+      "document",
+      "page",
+      "page-range-parameter",
+      "resource",
+      "production-geometry",
+      "contour"
+    ]
+  },
+  "operations": {
+    "add-bleed": {
+      "supports": "Documents whose page boxes can be expanded and that need generated edge-extension content for bleed findings.",
+      "produces": "Expanded Media/Crop/Bleed boxes (TrimBox preserved), optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
+      "target_scopes": ["document", "page-range-parameter", "page"],
+      "parameter_defaults": {
+        "mode": "mirror",
+        "bleed_mm": 3.0,
+        "page_range": "-",
+        "force": false
+      },
+      "save_policy_artifact_effect": "Operates on a candidate; committing writes a new artifact and leaves the source revision chain untouched until publish.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "Operation-history rollback can discard an uncommitted candidate; after atomic publish the prior artifact remains addressable only through file history outside Loop."
+      },
+      "evidence_impact": {
+        "findings": ["bleed", "content-bleed", "trim", "page-size"],
+        "records": ["page-boxes", "page-content", "images", "metadata"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Declares complete impact on the images evidence domain with document-wide scope; planRevalidation selects a full profile rerun before considering evidence domains."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": true,
+        "editor": true,
+        "action_list": true,
+        "gaps": "Editor Fix workspace advertises this operation only through preflight fixup filtering, not as a free-form repair palette."
+      },
+      "limitations": [
+        "Does not expand TrimBox (expandTrimBox defaults false and is not exposed in parameters).",
+        "Does not invent trim boxes from artwork.",
+        "Does not replace designer bleed artwork; only expands boxes and generates edge extension per mode.",
+        "Requires resolvable page boxes; skipped pages are reported as warnings, not silent success."
+      ]
+    },
+    "downsample-images": {
+      "supports": "Documents with embedded images whose effective DPI exceeds the requested target.",
+      "produces": "Rewritten image XObjects (JPEG or preserved encoding) that meet target_dpi/quality while optionally keeping the original when already smaller.",
+      "target_scopes": ["document", "resource"],
+      "parameter_defaults": {
+        "target_dpi": 300,
+        "quality": 90
+      },
+      "save_policy_artifact_effect": "Requires a full rewrite of the output body because image streams are replaced wholesale.",
+      "reversibility": {
+        "rollback_in_session": false,
+        "retention": "Prior image bytes are not retained inside the rewritten file; rollback applies only before publish and only via external file history afterward."
+      },
+      "evidence_impact": {
+        "findings": ["image-resolution"],
+        "records": ["images", "color-spaces"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Declares complete impact on images and colorants with document-wide scope and fullRewrite; planRevalidation selects a full profile rerun."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": true,
+        "editor": true,
+        "action_list": true,
+        "gaps": "Mask-only images and patterns may be skipped with warnings."
+      },
+      "limitations": [
+        "Image masks are skipped.",
+        "Does not downsample vector content.",
+        "Keeps the original stream when it is already smaller than the target (keepOriginalIfLarger)."
+      ]
+    },
+    "rgb-to-cmyk": {
+      "supports": "RGB or device-RGB page content when a target ICC profile is supplied.",
+      "produces": "ICC-managed CMYK color spaces, converted paints/images/indexed palettes, and optional embedded output intent.",
+      "target_scopes": ["document"],
+      "parameter_defaults": {
+        "target_icc_id": "loop-cmyk",
+        "intent": 1,
+        "black_point_compensation": true,
+        "embed_output_intent": true
+      },
+      "save_policy_artifact_effect": "Operates on a candidate; committing writes a new production artifact without mutating the trusted source in place.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "Session rollback drops the candidate; published artifacts require external history to recover the prior color state."
+      },
+      "evidence_impact": {
+        "findings": ["color-mode", "output-intent", "color-inventory"],
+        "records": ["page-content", "images", "color-spaces", "output-intent"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Declares complete impact on colorants and images domains with document-wide scope; planRevalidation selects a full profile rerun."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": false,
+        "editor": true,
+        "action_list": true,
+        "gaps": "PageMaster export does not invoke this operation; operators use PdfTool repair or Editor preflight fixups."
+      },
+      "limitations": [
+        "Requires target_icc_base64; analyze fails closed on unsupported constructs reported by preview.",
+        "Does not silently approximate spot or separation color spaces.",
+        "Independent press calibration is out of scope."
+      ]
+    },
+    "standards-convert": {
+      "supports": "Conversion to PDF/X-1a:2001, PDF/X-3:2002, PDF/X-4, or PDF/A-2b with explicit target ICC and optional transparency flattening policy.",
+      "produces": "Standards-targeted candidate, pre-conversion change report, and post-conversion preflight verdict when configured.",
+      "target_scopes": ["document"],
+      "parameter_defaults": {
+        "normalize_color": "target-dependent (true for PDF/X-1a and PDF/X-3 unless overridden)",
+        "black_point_compensation": true,
+        "flatten_transparency": "automatic (defaults to flatten for PDF/X-1a and PDF/X-3)",
+        "validator_timeout_ms": 120000,
+        "dry_run_only": false
+      },
+      "save_policy_artifact_effect": "Requires a full rewrite of the output body because standard conversion replaces structure, color, and metadata streams.",
+      "reversibility": {
+        "rollback_in_session": false,
+        "retention": "Candidate rollback is available before publish; conversion is destructive to transparency and color state once committed."
+      },
+      "evidence_impact": {
+        "findings": ["color-mode", "output-intent", "transparency-risk", "embedded-fonts", "font-integrity"],
+        "records": ["metadata", "output-intent", "page-boxes", "color-spaces", "page-content", "images", "fonts", "structure"]
+      },
+      "revalidation": {
+        "class": "full-with-oracle",
+        "description": "Impact is intentionally incomplete and requires an independent oracle; planRevalidation always selects a full profile rerun plus external validator evidence."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": true,
+        "editor": false,
+        "action_list": true,
+        "gaps": "Not advertised as an Editor preflight fixup; operators reach it through PdfTool, PageMaster export, or Action Lists."
+      },
+      "limitations": [
+        "Font embedding and forbidden-action removal are unsupported and fail closed.",
+        "Commit refuses without a configured independent validator accepting the candidate.",
+        "Transparency flattening is a reported content change, not a silent approximation."
+      ]
+    },
+    "production.validate-wide-format": {
+      "supports": "Explicit production geometry models for wide-format banner workflows.",
+      "produces": "Validation diagnostics only; no printable PDF mutation.",
+      "target_scopes": ["production-geometry"],
+      "parameter_defaults": {},
+      "save_policy_artifact_effect": "Incremental append policy applies to the transaction merge, but apply() does not mutate candidate content.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "No durable artifact change; diagnostics are ephemeral to the plan/result."
+      },
+      "evidence_impact": {
+        "findings": [],
+        "records": ["production-geometry-validation"]
+      },
+      "revalidation": {
+        "class": "none",
+        "description": "Analyze/apply do not mutate page content; requires_postflight is false on the plan."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": false,
+        "editor": false,
+        "action_list": true,
+        "gaps": "Registered for programmatic/PageMaster production pipelines; no Editor Fix palette entry yet."
+      },
+      "limitations": [
+        "Fails when geometry JSON is invalid or contours self-intersect.",
+        "Does not repair geometry; operators must fix the model upstream."
+      ]
+    },
+    "production.add-contour-bleed": {
+      "supports": "Closed, explicit production contours with deterministic raster edge extension.",
+      "produces": "Contour-aligned bleed content outside the cut path on the affected page.",
+      "target_scopes": ["production-geometry", "contour", "page"],
+      "parameter_defaults": {
+        "amount_pt": "contour planner default when omitted"
+      },
+      "save_policy_artifact_effect": "Operates on a corrective candidate; publish writes a new artifact preserving the trusted source until commit.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "Candidate rollback before publish; committed raster extensions require external history to undo."
+      },
+      "evidence_impact": {
+        "findings": ["bleed", "content-bleed"],
+        "records": ["page-content", "images", "paths", "page-geometry"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Does not declare a complete PDFOperationImpact override; conservative planning selects full profile revalidation."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": false,
+        "editor": false,
+        "action_list": true,
+        "gaps": "Requires an explicit production geometry payload; not exposed as a preflight fixup."
+      },
+      "limitations": [
+        "Requires contour_id and valid closed contour geometry.",
+        "Contour bleed is raster extension only; vector cutter paths are not re-authored."
+      ]
+    },
+    "production.place-grommets": {
+      "supports": "Wide-format grommet placement planning from explicit rect/spec parameters.",
+      "produces": "Planning diagnostics and targets only; apply() does not mutate the PDF body today.",
+      "target_scopes": ["page", "production-geometry"],
+      "parameter_defaults": {},
+      "save_policy_artifact_effect": "Incremental append merge applies, but the operation is planning-only and leaves printable content unchanged.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "No durable content mutation; plans are ephemeral."
+      },
+      "evidence_impact": {
+        "findings": [],
+        "records": ["production-grommet-plan"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Conservative default impact is incomplete; if wired into a mutating transaction the engine falls back to full revalidation."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": false,
+        "editor": false,
+        "action_list": true,
+        "gaps": "Planning hook only; grommet marks are not yet written into page content."
+      },
+      "limitations": [
+        "Planning-only: no grommet graphics are emitted into the PDF.",
+        "Requires rect/spec JSON; invalid geometry fails analyze."
+      ]
+    }
+  }
+}

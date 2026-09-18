@@ -39,6 +39,20 @@ namespace pdf
 namespace
 {
 
+bool hasPreflightProfile(const PDFActionListExecutionOptions& options)
+{
+    return !options.preflightProfilePath.trimmed().isEmpty() || !options.preflightProfile.isEmpty();
+}
+
+MandatoryPostflightOptions mandatoryPostflightOptionsFromActionList(const PDFActionListExecutionOptions& options)
+{
+    MandatoryPostflightOptions postflightOptions;
+    postflightOptions.operationControl = options.operationControl;
+    postflightOptions.profileJson = options.preflightProfile;
+    postflightOptions.profileBindings = options.preflightProfileBindings;
+    return postflightOptions;
+}
+
 QString failurePolicyName(PDFActionListFailurePolicy policy)
 {
     switch (policy)
@@ -337,7 +351,100 @@ void markRemaining(QVector<PDFActionListStepResult>* steps, int start, PDFAction
     }
 }
 
+PDFRevisionIdentity effectiveRevision(const PDFDocument& source, const PDFActionListExecutionOptions& options)
+{
+    PDFRevisionIdentity revision = revisionIdentityForDocument(source);
+    if (options.revision.isValid())
+    {
+        revision.cacheGeneration = options.revision.cacheGeneration;
+        revision.effectiveProfileIdentity = options.revision.effectiveProfileIdentity;
+    }
+    return revision;
+}
+
+PDFOperationResult resolveStepSelection(const PDFActionListStep& step,
+                                        const PDFDocument& source,
+                                        const PDFActionListExecutionOptions& options,
+                                        PDFObjectSelectionResult* selection,
+                                        PDFActionListStepResult* stepResult)
+{
+    if (step.select.isEmpty())
+    {
+        return PDFOperationResult(true);
+    }
+    if (stepResult->resolvedParameters.contains(QStringLiteral("_loop_select")))
+    {
+        return PDFOperationResult(QStringLiteral("Step '%1' params must not define reserved key '_loop_select'.").arg(step.id));
+    }
+
+    PDFObjectSelector selector;
+    QStringList selectorErrors;
+    if (const PDFOperationResult parseResult = PDFObjectSelector::fromJson(step.select, &selector, &selectorErrors); !parseResult)
+    {
+        for (const QString& error : selectorErrors)
+        {
+            addDiagnostic(stepResult, QStringLiteral("action-list.select-invalid"), error);
+        }
+        return parseResult;
+    }
+
+    const PDFRevisionIdentity revision = effectiveRevision(source, options);
+    const PDFOperationResult resolveResult = PDFObjectSelector::resolve(selector, source, revision, selection);
+    stepResult->selectionScope = selection->previewScope();
+    if (!resolveResult)
+    {
+        if (selection->staleRevision)
+        {
+            addDiagnostic(stepResult, QStringLiteral("action-list.select-stale-revision"), resolveResult.getErrorMessage());
+        }
+        else
+        {
+            addDiagnostic(stepResult, QStringLiteral("action-list.select-failed"), resolveResult.getErrorMessage());
+        }
+        return resolveResult;
+    }
+    if (selection->empty)
+    {
+        addDiagnostic(stepResult, QStringLiteral("action-list.select-empty"), QStringLiteral("Selector resolved to an empty, non-failing scope."));
+    }
+    return PDFOperationResult(true);
+}
+
+void populateAffectedScope(PDFActionListStepResult* stepResult, const PDFObjectSelectionResult& selection, const PDFRepairPlan& repairPlan)
+{
+    if (selection.ok)
+    {
+        for (const PDFObjectSelectorCandidate& candidate : selection.candidates)
+        {
+            stepResult->affectedScope.append(candidate.toRepairTarget().toJson());
+        }
+        if (selection.empty && repairPlan.targets.isEmpty())
+        {
+            stepResult->affectedScope.append(QJsonObject{
+                { QStringLiteral("path"), QStringLiteral("selection/empty") },
+                { QStringLiteral("page"), -1 } });
+        }
+        return;
+    }
+
+    for (const PDFRepairTarget& target : repairPlan.targets)
+    {
+        stepResult->affectedScope.append(target.toJson());
+    }
+}
+
 }   // namespace
+
+PDFActionListExecutionOptions makeActionListExecutionOptions(const PDFDocument& document,
+                                                             const QJsonObject& bindings,
+                                                             const PDFOperationControl* operationControl)
+{
+    PDFActionListExecutionOptions options;
+    options.bindings = bindings;
+    options.operationControl = operationControl;
+    options.revision = revisionIdentityForDocument(document);
+    return options;
+}
 
 void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const PreflightVerdict& verdict)
 {
@@ -393,6 +500,8 @@ QJsonObject PDFActionListStep::toJson() const
         { QStringLiteral("operation"), operationId },
         { QStringLiteral("params"), parameters }
     };
+    if (!select.isEmpty())
+        result.insert(QStringLiteral("select"), select);
     if (!condition.isEmpty())
         result.insert(QStringLiteral("when"), condition);
     if (failurePolicy != PDFActionListFailurePolicy::Inherit)
@@ -429,6 +538,15 @@ PDFOperationResult PDFActionList::fromJson(const QJsonObject& object, PDFActionL
         step.id = stepObject.value(QStringLiteral("id")).toString().trimmed();
         step.operationId = stepObject.value(QStringLiteral("operation")).toString().trimmed();
         step.parameters = stepObject.value(QStringLiteral("params")).toObject();
+        const QJsonValue selectValue = stepObject.value(QStringLiteral("select"));
+        if (!selectValue.isUndefined())
+        {
+            if (!selectValue.isObject())
+            {
+                return PDFOperationResult(QStringLiteral("Action List step '%1' select must be an object.").arg(step.id));
+            }
+            step.select = selectValue.toObject();
+        }
         step.condition = stepObject.value(QStringLiteral("when")).toObject();
         if (!stepObject.value(QStringLiteral("onFailure")).isUndefined() &&
             !parseFailurePolicy(stepObject.value(QStringLiteral("onFailure")), &step.failurePolicy))
@@ -459,7 +577,7 @@ QJsonObject PDFActionList::toJson() const
 
 QJsonObject PDFActionListStepResult::toJson() const
 {
-    return QJsonObject{
+    QJsonObject result{
         { QStringLiteral("id"), stepId },
         { QStringLiteral("operation"), operationId },
         { QStringLiteral("status"), pdfActionListStepStatusName(status) },
@@ -471,6 +589,11 @@ QJsonObject PDFActionListStepResult::toJson() const
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("affected_scope"), affectedScope }
     };
+    if (!selectionScope.isEmpty())
+    {
+        result.insert(QStringLiteral("selection_scope"), selectionScope);
+    }
+    return result;
 }
 
 QJsonObject PDFActionListExecutionResult::toJson() const
@@ -488,13 +611,19 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("status"), status },
         { QStringLiteral("duration_ms"), durationMs },
         { QStringLiteral("diagnostics"), diagnostics },
+        { QStringLiteral("postflight"), postflight },
         { QStringLiteral("steps"), stepJson }
     };
 }
 
 QString PDFActionListExecutor::schemaVersion()
 {
-    return QStringLiteral("loop-action-list/1");
+    return QStringLiteral("loop-action-list/2");
+}
+
+bool PDFActionListExecutor::isSupportedSchema(const QString& schema)
+{
+    return schema == QStringLiteral("loop-action-list/1") || schema == schemaVersion();
 }
 
 PDFActionListExecutor::PDFActionListExecutor(const PDFRepairRegistry& registry) :
@@ -509,7 +638,7 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
     if (errors)
         errors->clear();
     bool valid = true;
-    if (actionList.schema != schemaVersion())
+    if (!PDFActionListExecutor::isSupportedSchema(actionList.schema))
     {
         appendError(errors, QStringLiteral("Unsupported Action List schema '%1'.").arg(actionList.schema));
         valid = false;
@@ -574,6 +703,18 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
             valid = false;
         }
         valid = validateValue(parameters, operation->parameterSchema(), QStringLiteral("step.%1.params").arg(step.id), errors) && valid;
+
+        if (!step.select.isEmpty())
+        {
+            PDFObjectSelector selector;
+            QStringList selectorErrors;
+            valid = PDFObjectSelector::fromJson(step.select, &selector, &selectorErrors) && valid;
+            for (const QString& error : selectorErrors)
+            {
+                appendError(errors, QStringLiteral("Step '%1' select: %2").arg(step.id, error));
+                valid = false;
+            }
+        }
     }
 
     return valid ? PDFOperationResult(true) : PDFOperationResult(QStringLiteral("Action List validation failed."));
@@ -628,6 +769,30 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
         }
 
         const PDFRepairOperation* operation = m_registry->find(step.operationId);
+        PDFObjectSelectionResult selection;
+        if (const PDFOperationResult selectionResult = resolveStepSelection(step, source, options, &selection, &stepResult); !selectionResult)
+        {
+            stepResult.status = PDFActionListStepStatus::Failed;
+            statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
+            result->steps.append(std::move(stepResult));
+            result->status = QStringLiteral("failed");
+            result->durationMs = totalTimer.elapsed();
+            return selectionResult;
+        }
+
+        if (selection.ok && selection.empty)
+        {
+            stepResult.status = PDFActionListStepStatus::Succeeded;
+            stepResult.plan = QJsonObject{
+                { QStringLiteral("operation"), operation->id() },
+                { QStringLiteral("selection"), selection.toJson() }
+            };
+            populateAffectedScope(&stepResult, selection, PDFRepairPlan());
+            statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
+            result->steps.append(std::move(stepResult));
+            continue;
+        }
+
         PDFRepairPlan repairPlan;
         repairPlan.operationId = operation->id();
         repairPlan.operationVersion = operation->version();
@@ -646,12 +811,19 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
             result->durationMs = totalTimer.elapsed();
             return analyzeResult;
         }
-        stepResult.plan = repairPlan.toJson();
-        stepResult.status = PDFActionListStepStatus::Pending;
-        for (const PDFRepairTarget& target : repairPlan.targets)
+        if (selection.ok)
         {
-            stepResult.affectedScope.append(target.toJson());
+            filterRepairPlanTargets(&repairPlan, selection);
         }
+        stepResult.plan = repairPlan.toJson();
+        if (selection.ok)
+        {
+            QJsonObject planObject = stepResult.plan;
+            planObject.insert(QStringLiteral("selection"), selection.toJson());
+            stepResult.plan = planObject;
+        }
+        stepResult.status = PDFActionListStepStatus::Pending;
+        populateAffectedScope(&stepResult, selection, repairPlan);
         statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
         result->steps.append(std::move(stepResult));
     }
@@ -691,6 +863,11 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
             continue;
         }
+        if (stepResult.status == PDFActionListStepStatus::Succeeded)
+        {
+            statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
+            continue;
+        }
         if (PDFOperationControl::isOperationCancelled(options.operationControl))
         {
             markRemaining(&result->steps, index, PDFActionListStepStatus::Cancelled,
@@ -704,6 +881,38 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         QElapsedTimer stepTimer;
         stepTimer.start();
         const PDFRepairOperation* operation = m_registry->find(step.operationId);
+
+        PDFObjectSelectionResult selection;
+        PDFActionListStepResult selectionProbe;
+        selectionProbe.stepId = step.id;
+        selectionProbe.operationId = step.operationId;
+        selectionProbe.resolvedParameters = stepResult.resolvedParameters;
+        if (const PDFOperationResult selectionResult = resolveStepSelection(step, working, options, &selection, &selectionProbe); !selectionResult)
+        {
+            stepResult.status = PDFActionListStepStatus::Failed;
+            stepResult.diagnostics += selectionProbe.diagnostics;
+            stepResult.selectionScope = selectionProbe.selectionScope;
+            addDiagnostic(&stepResult, QStringLiteral("action-list.select-stale-at-execute"), selectionResult.getErrorMessage());
+            hadFailure = true;
+            stepResult.durationMs = stepTimer.elapsed();
+            statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
+            if (effectivePolicy(actionList, step) == PDFActionListFailurePolicy::Stop)
+            {
+                markRemaining(&result->steps, index + 1, PDFActionListStepStatus::Skipped,
+                              QStringLiteral("action-list.stopped-after-failure"), QStringLiteral("Step was not started because a previous step failed."));
+                break;
+            }
+            continue;
+        }
+        stepResult.selectionScope = selectionProbe.selectionScope;
+        if (selection.ok && selection.empty)
+        {
+            stepResult.status = PDFActionListStepStatus::Succeeded;
+            stepResult.durationMs = stepTimer.elapsed();
+            statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
+            continue;
+        }
+
         PDFRepairPlan currentPlan;
         const PDFOperationResult analyzeResult = operation->analyze(working, stepResult.resolvedParameters, &currentPlan);
         PDFRepairResult repairResult;
@@ -716,6 +925,10 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         }
         else
         {
+            if (selection.ok)
+            {
+                filterRepairPlanTargets(&currentPlan, selection);
+            }
             const PDFOperationResult applyResult = operation->apply(&working, currentPlan, &repairResult);
             if (!applyResult)
             {
@@ -726,11 +939,46 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             }
             else
             {
-                repairResult.status = PDFRepairStatus::Applied;
-                stepResult.status = PDFActionListStepStatus::Succeeded;
+                QString scopeError;
+                if (selection.ok && !repairChangesWithinSelection(repairResult.changes, selection, &scopeError))
+                {
+                    stepResult.status = PDFActionListStepStatus::Failed;
+                    repairResult.status = PDFRepairStatus::Failed;
+                    addDiagnostic(&stepResult, QStringLiteral("action-list.select-scope-violation"), scopeError);
+                    hadFailure = true;
+                }
+                else
+                {
+                    repairResult.status = PDFRepairStatus::Applied;
+                    stepResult.status = PDFActionListStepStatus::Succeeded;
+                }
             }
             stepResult.plan = currentPlan.toJson();
+            if (selection.ok)
+            {
+                QJsonObject planObject = stepResult.plan;
+                planObject.insert(QStringLiteral("selection"), selection.toJson());
+                stepResult.plan = planObject;
+            }
             stepResult.repairResult = repairResult.toJson();
+            if (hasPreflightProfile(options))
+            {
+                MandatoryPostflightOptions stepPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
+                const PDFOperationResult validatorResult = runDeclaredRepairValidators(&working,
+                                                                                       currentPlan,
+                                                                                       options.preflightProfilePath,
+                                                                                       &repairResult,
+                                                                                       stepPostflightOptions,
+                                                                                       operation,
+                                                                                       stepResult.resolvedParameters);
+                stepResult.repairResult = repairResult.toJson();
+                if (!validatorResult)
+                {
+                    stepResult.status = PDFActionListStepStatus::Failed;
+                    addDiagnostic(&stepResult, QStringLiteral("action-list.step-postflight-failed"), validatorResult.getErrorMessage());
+                    hadFailure = true;
+                }
+            }
             if (!repairResult.verdict.isEmpty())
             {
                 applyCanonicalPreflightVerdict(&stepResult, preflightVerdictFromJson(repairResult.verdict));
@@ -757,6 +1005,58 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         result->status = QStringLiteral("failed");
         return PDFOperationResult(QStringLiteral("One or more Action List steps failed; the candidate was discarded."));
     }
+
+    if (options.requirePostflight)
+    {
+        if (!hasPreflightProfile(options))
+        {
+            result->status = QStringLiteral("failed");
+            result->diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.postflight-required") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), QStringLiteral("A preflight profile path is required before an Action List output can be published.") } });
+            return PDFOperationResult(QStringLiteral("A preflight profile path is required before an Action List output can be published."));
+        }
+
+        if (PDFOperationControl::isOperationCancelled(options.operationControl))
+        {
+            result->status = QStringLiteral("cancelled");
+            return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
+        }
+
+        PreflightVerdict terminalVerdict;
+        PreflightResult terminalPreflight;
+        const MandatoryPostflightOptions terminalPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
+        const PDFOperationResult terminalPostflight = runMandatoryPostflight(&working,
+                                                                             options.preflightProfilePath,
+                                                                             &terminalVerdict,
+                                                                             &terminalPreflight,
+                                                                             terminalPostflightOptions);
+        result->postflight = terminalPreflight.toJson(QStringLiteral("candidate"));
+        if (PDFOperationControl::isOperationCancelled(options.operationControl))
+        {
+            result->status = QStringLiteral("cancelled");
+            return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
+        }
+        if (!terminalPostflight || !terminalVerdict.isPass())
+        {
+            result->status = QStringLiteral("failed");
+            result->diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.postflight-verdict") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), preflightVerdictOperatorSummary(terminalVerdict) } });
+            return PDFOperationResult(terminalPostflight.getErrorMessage().isEmpty()
+                                          ? preflightVerdictOperatorSummary(terminalVerdict)
+                                          : terminalPostflight.getErrorMessage());
+        }
+    }
+
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        result->status = QStringLiteral("cancelled");
+        return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
+    }
+
     *candidate = std::move(working);
     result->status = QStringLiteral("succeeded");
     return PDFOperationResult(true);
