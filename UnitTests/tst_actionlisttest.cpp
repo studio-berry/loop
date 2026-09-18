@@ -24,8 +24,11 @@
 #include "actionlistcontroller.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfjobscheduler.h"
 #include "pdfrepairdiff.h"
+
+#include <QPainter>
 
 #include <QCryptographicHash>
 #include <QCoreApplication>
@@ -70,6 +73,21 @@ pdf::PDFActionList bleedRecipe(const QString& id)
     return actionList;
 }
 
+pdf::PDFDocument rgbDocumentMissingBleed()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF mediaBox(0, 0, 200, 200);
+    const pdf::PDFObjectReference page = builder.appendPage(mediaBox);
+    builder.setPageTrimBox(page, mediaBox.adjusted(20, 20, -20, -20));
+    pdf::PDFPageContentStreamBuilder stream(&builder, pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = stream.begin(page))
+    {
+        painter->fillRect(mediaBox.adjusted(20, 20, -20, -20), Qt::red);
+        stream.end(painter);
+    }
+    return builder.build();
+}
+
 }   // namespace
 
 class ActionListTest : public QObject
@@ -88,6 +106,8 @@ private slots:
     void controllerFencesValidationPlanAndStaleCompletion();
     void executeRequiresPostflightProfile();
     void addBleedRepairRejectsUnknownMode();
+    void stepPreflightIsScopedToOperationImpact();
+    void dryRunDoesNotRequirePreflightProfile();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -467,6 +487,69 @@ void ActionListTest::addBleedRepairRejectsUnknownMode()
                                                                &plan);
     QVERIFY(!analyze);
     QVERIFY(!plan.unsupportedReasons.isEmpty());
+}
+
+void ActionListTest::stepPreflightIsScopedToOperationImpact()
+{
+    const pdf::PDFDocument source = rgbDocumentMissingBleed();
+    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("scoped-step-postflight"));
+
+    pdf::PDFActionListExecutionOptions options;
+    options.preflightProfilePath = defaultPreflightProfilePath();
+    options.requirePostflight = true;
+    pdf::PDFActionListExecutionResult result;
+    pdf::PDFDocument candidate;
+    const pdf::PDFOperationResult execution = pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result);
+
+    QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
+    QVERIFY(!execution);
+    QCOMPARE(result.status, QStringLiteral("failed"));
+    QVERIFY(!result.postflight.isEmpty());
+}
+
+void ActionListTest::dryRunDoesNotRequirePreflightProfile()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString inputPath = tempDir.filePath(QStringLiteral("input.pdf"));
+    const QString recipePath = tempDir.filePath(QStringLiteral("recipe.json"));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFDocument reopenedInput;
+    QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
+        source, [](pdf::PDFDocument*)
+        { return pdf::PDFOperationResult(true); }, inputPath, &reopenedInput, nullptr));
+
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+        { QStringLiteral("id"), QStringLiteral("dry-run") },
+        { QStringLiteral("name"), QStringLiteral("Dry run") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("bleed") },
+                                       { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } }
+    };
+    QFile recipeFile(recipePath);
+    QVERIFY(recipeFile.open(QIODevice::WriteOnly));
+    QVERIFY(recipeFile.write(QJsonDocument(recipeJson).toJson(QJsonDocument::Indented)) > 0);
+    recipeFile.close();
+
+    QProcess process;
+    const QString pdfTool = QDir(QCoreApplication::applicationDirPath()).filePath(
+#ifdef Q_OS_WIN
+        QStringLiteral("PdfTool.exe")
+#else
+        QStringLiteral("PdfTool")
+#endif
+    );
+    QVERIFY2(QFileInfo::exists(pdfTool), qPrintable(QStringLiteral("PdfTool was not found at %1").arg(pdfTool)));
+    process.start(pdfTool,
+                  { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, inputPath,
+                    QStringLiteral("--dry-run"), QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY(process.waitForFinished(30000));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(process.exitCode(), 0);
 }
 
 QTEST_GUILESS_MAIN(ActionListTest)

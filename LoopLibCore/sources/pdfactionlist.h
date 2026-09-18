@@ -121,6 +121,8 @@ struct PDFActionListExecutionOptions
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
     QString preflightProfilePath;
+    QJsonObject preflightProfile;
+    QJsonObject preflightProfileBindings;
     bool requirePostflight = true;
 };
 

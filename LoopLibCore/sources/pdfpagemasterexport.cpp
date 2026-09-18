@@ -1440,9 +1440,13 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PDFActionListExecutionOptions actionListOptions;
             actionListOptions.bindings = job.actionListBindings;
             actionListOptions.operationControl = &actionListOperationControl;
-            if (runPreflight && !job.preflightProfilePath.isEmpty())
+            if (runPreflight)
             {
-                actionListOptions.preflightProfilePath = job.preflightProfilePath;
+                actionListOptions.preflightProfile = preflightProfile;
+                if (!job.preflightProfilePath.isEmpty())
+                {
+                    actionListOptions.preflightProfilePath = job.preflightProfilePath;
+                }
             }
             PDFActionListExecutionResult actionListResult;
             PDFDocument candidate;

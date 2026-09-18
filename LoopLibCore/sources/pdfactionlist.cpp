@@ -39,6 +39,20 @@ namespace pdf
 namespace
 {
 
+bool hasPreflightProfile(const PDFActionListExecutionOptions& options)
+{
+    return !options.preflightProfilePath.trimmed().isEmpty() || !options.preflightProfile.isEmpty();
+}
+
+MandatoryPostflightOptions mandatoryPostflightOptionsFromActionList(const PDFActionListExecutionOptions& options)
+{
+    MandatoryPostflightOptions postflightOptions;
+    postflightOptions.operationControl = options.operationControl;
+    postflightOptions.profileJson = options.preflightProfile;
+    postflightOptions.profileBindings = options.preflightProfileBindings;
+    return postflightOptions;
+}
+
 QString failurePolicyName(PDFActionListFailurePolicy policy)
 {
     switch (policy)
@@ -732,12 +746,16 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             }
             stepResult.plan = currentPlan.toJson();
             stepResult.repairResult = repairResult.toJson();
-            if (!options.preflightProfilePath.isEmpty())
+            if (hasPreflightProfile(options))
             {
+                MandatoryPostflightOptions stepPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
                 const PDFOperationResult validatorResult = runDeclaredRepairValidators(&working,
                                                                                        currentPlan,
                                                                                        options.preflightProfilePath,
-                                                                                       &repairResult);
+                                                                                       &repairResult,
+                                                                                       stepPostflightOptions,
+                                                                                       operation,
+                                                                                       stepResult.resolvedParameters);
                 stepResult.repairResult = repairResult.toJson();
                 if (!validatorResult)
                 {
@@ -775,7 +793,7 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
 
     if (options.requirePostflight)
     {
-        if (options.preflightProfilePath.trimmed().isEmpty())
+        if (!hasPreflightProfile(options))
         {
             result->status = QStringLiteral("failed");
             result->diagnostics.append(QJsonObject{
@@ -785,13 +803,26 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             return PDFOperationResult(QStringLiteral("A preflight profile path is required before an Action List output can be published."));
         }
 
+        if (PDFOperationControl::isOperationCancelled(options.operationControl))
+        {
+            result->status = QStringLiteral("cancelled");
+            return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
+        }
+
         PreflightVerdict terminalVerdict;
         PreflightResult terminalPreflight;
+        const MandatoryPostflightOptions terminalPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
         const PDFOperationResult terminalPostflight = runMandatoryPostflight(&working,
                                                                              options.preflightProfilePath,
                                                                              &terminalVerdict,
-                                                                             &terminalPreflight);
+                                                                             &terminalPreflight,
+                                                                             terminalPostflightOptions);
         result->postflight = terminalPreflight.toJson(QStringLiteral("candidate"));
+        if (PDFOperationControl::isOperationCancelled(options.operationControl))
+        {
+            result->status = QStringLiteral("cancelled");
+            return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
+        }
         if (!terminalPostflight || !terminalVerdict.isPass())
         {
             result->status = QStringLiteral("failed");
@@ -803,6 +834,12 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                                           ? preflightVerdictOperatorSummary(terminalVerdict)
                                           : terminalPostflight.getErrorMessage());
         }
+    }
+
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        result->status = QStringLiteral("cancelled");
+        return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
     }
 
     *candidate = std::move(working);

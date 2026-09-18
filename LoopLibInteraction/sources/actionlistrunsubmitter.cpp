@@ -70,9 +70,11 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             pdf::PDFDocumentPointer document,
                                             QJsonObject bindings,
                                             std::shared_ptr<ActionListWorkerOutcome> outcome,
-                                            QString preflightProfilePath)
+                                            QString preflightProfilePath,
+                                            QJsonObject preflightProfile,
+                                            QJsonObject preflightProfileBindings)
 {
-    return [phase, actionList = std::move(actionList), document = std::move(document), bindings = std::move(bindings), outcome = std::move(outcome), preflightProfilePath = std::move(preflightProfilePath)](pdf::PDFJobContext& context)
+    return [phase, actionList = std::move(actionList), document = std::move(document), bindings = std::move(bindings), outcome = std::move(outcome), preflightProfilePath = std::move(preflightProfilePath), preflightProfile = std::move(preflightProfile), preflightProfileBindings = std::move(preflightProfileBindings)](pdf::PDFJobContext& context)
     {
         if (!outcome || !document)
         {
@@ -88,6 +90,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         options.bindings = bindings;
         options.operationControl = context.operationControl();
         options.preflightProfilePath = preflightProfilePath;
+        options.preflightProfile = preflightProfile;
+        options.preflightProfileBindings = preflightProfileBindings;
         options.requirePostflight = phase == ActionListRunPhase::Execute;
         pdf::PDFActionListExecutor executor;
 

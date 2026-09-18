@@ -23,6 +23,7 @@
 #ifndef PDFPREFLIGHTVERDICT_H
 #define PDFPREFLIGHTVERDICT_H
 
+#include "pdfoperationimpact.h"
 #include "pdfutils.h"
 #include "preflightengine.h"
 
@@ -30,6 +31,7 @@ namespace pdf
 {
 
 class PDFDocument;
+class PDFRepairOperation;
 struct PDFRepairPlan;
 struct PDFRepairResult;
 
@@ -77,10 +79,14 @@ LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const Preflight
 struct LOOPLIBCORESHARED_EXPORT MandatoryPostflightOptions
 {
     bool allowIncomplete = false;
+    const PDFOperationControl* operationControl = nullptr;
+    const PDFRevalidationPlan* revalidationPlan = nullptr;
+    QJsonObject profileJson;
+    QJsonObject profileBindings;
 };
 
-/// Runs a full profile inspection on an in-memory candidate. Fails closed unless
-/// \p options.allowIncomplete permits an incomplete verdict.
+/// Runs a full profile inspection on a serialized-and-reopened candidate. Fails
+/// closed unless \p options.allowIncomplete permits an incomplete verdict.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult runMandatoryPostflight(PDFDocument* document,
                                                                    const QString& profilePath,
                                                                    PreflightVerdict* verdictOut,
@@ -88,12 +94,15 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult runMandatoryPostflight(PDFDocument* 
                                                                    MandatoryPostflightOptions options = {});
 
 /// Executes declared repair validators (notably NormalPreflight) against the
-/// candidate and populates \p result verdict / validation records.
+/// candidate and populates \p result verdict / validation records. When
+/// \p operation is supplied, NormalPreflight is scoped to that step's impact.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                                         const PDFRepairPlan& plan,
                                                                         const QString& profilePath,
                                                                         PDFRepairResult* result,
-                                                                        MandatoryPostflightOptions options = {});
+                                                                        MandatoryPostflightOptions options = {},
+                                                                        const PDFRepairOperation* operation = nullptr,
+                                                                        const QJsonObject& operationParameters = {});
 
 }   // namespace pdf
 

@@ -1279,6 +1279,8 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
     const pdf::PDFActionList actionList = recipe->actionList;
     const QJsonObject bindings = m_actionListBindings;
     QString preflightProfilePath;
+    QJsonObject preflightProfile;
+    QJsonObject preflightProfileBindings;
     if (phase == pdfinteraction::ActionListRunPhase::Execute)
     {
         const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
@@ -1287,12 +1289,21 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
         if (profileIt != m_preflightProfiles.cend() && profileIt->valid)
         {
             preflightProfilePath = profileIt->source;
+            preflightProfile = profileIt->profile;
+            preflightProfileBindings = m_preflightBindings;
         }
     }
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        pdfinteraction::makeActionListRunWorker(phase, actionList, document, bindings, outcome, preflightProfilePath));
+        pdfinteraction::makeActionListRunWorker(phase,
+                                                actionList,
+                                                document,
+                                                bindings,
+                                                outcome,
+                                                preflightProfilePath,
+                                                preflightProfile,
+                                                preflightProfileBindings));
     if (submittedId != jobId)
     {
         m_actionListOutcomes.remove(jobId);

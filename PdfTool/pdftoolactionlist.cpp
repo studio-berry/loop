@@ -275,7 +275,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
     executionOptions.dryRun = options.destructiveDryRun;
     ActionListCancelControl cancelControl;
     executionOptions.operationControl = &cancelControl;
-    const bool requiresPostflight = subcommand == QStringLiteral("run") || subcommand == QStringLiteral("batch");
+    const bool requiresPostflight = (subcommand == QStringLiteral("run") || subcommand == QStringLiteral("batch")) &&
+                                    !options.destructiveDryRun;
     executionOptions.requirePostflight = requiresPostflight;
     if (requiresPostflight)
     {
