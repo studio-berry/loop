@@ -133,6 +133,81 @@ bool validReference(const PDFObjectReference& reference)
     return reference.objectNumber > 0;
 }
 
+bool hasActiveColorantTint(const PDFColor& color, size_t colorantIndex)
+{
+    return colorantIndex < color.size() && color[colorantIndex] > 0.0f;
+}
+
+void appendLegacyDielineGeometry(const QPainterPath& pagePath,
+                                 const QString& colorName,
+                                 int pageIndex,
+                                 QMap<QString, QPainterPath>* legacyGeometry,
+                                 QMap<QString, QVector<int>>* legacyPages)
+{
+    legacyGeometry->operator[](colorName).addPath(pagePath);
+    QVector<int>& pages = legacyPages->operator[](colorName);
+    if (!pages.contains(pageIndex))
+    {
+        pages.append(pageIndex);
+    }
+}
+
+void collectLegacyDielineFromColorSpace(const QPainterPath& pagePath,
+                                        const PDFAbstractColorSpace* colorSpace,
+                                        const PDFColor& colorOriginal,
+                                        int pageIndex,
+                                        QMap<QString, QPainterPath>* legacyGeometry,
+                                        QMap<QString, QVector<int>>* legacyPages)
+{
+    if (!colorSpace)
+    {
+        return;
+    }
+
+    if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Separation)
+    {
+        const auto* separation = static_cast<const PDFSeparationColorSpace*>(colorSpace);
+        const QString colorName = QString::fromLatin1(separation->getColorName());
+        if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
+        {
+            return;
+        }
+        if (!hasActiveColorantTint(colorOriginal, 0))
+        {
+            return;
+        }
+        appendLegacyDielineGeometry(pagePath, colorName, pageIndex, legacyGeometry, legacyPages);
+        return;
+    }
+
+    if (colorSpace->getColorSpace() != PDFAbstractColorSpace::ColorSpace::DeviceN)
+    {
+        return;
+    }
+
+    const auto* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(colorSpace);
+    if (deviceNColorSpace->isNone())
+    {
+        return;
+    }
+
+    const PDFDeviceNColorSpace::Colorants& colorants = deviceNColorSpace->getColorants();
+    for (size_t colorantIndex = 0; colorantIndex < colorants.size(); ++colorantIndex)
+    {
+        const PDFDeviceNColorSpace::ColorantInfo& colorantInfo = colorants[colorantIndex];
+        const QString colorName = QString::fromLatin1(colorantInfo.name);
+        if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
+        {
+            continue;
+        }
+        if (!hasActiveColorantTint(colorOriginal, colorantIndex))
+        {
+            continue;
+        }
+        appendLegacyDielineGeometry(pagePath, colorName, pageIndex, legacyGeometry, legacyPages);
+    }
+}
+
 class ProcessingStepCollector final : public PDFPageContentProcessor
 {
 public:
@@ -191,8 +266,6 @@ protected:
                                    bool text,
                                    Qt::FillRule fillRule) override
     {
-        Q_UNUSED(stroke);
-        Q_UNUSED(fill);
         Q_UNUSED(text);
         Q_UNUSED(fillRule);
         const QPainterPath pagePath = getGraphicState()->getCurrentTransformationMatrix().map(path);
@@ -215,59 +288,24 @@ protected:
             return;
         }
 
-        const PDFAbstractColorSpace* colorSpaces[] = {
-            getGraphicState()->getStrokeColorSpace(),
-            getGraphicState()->getFillColorSpace()
-        };
-        for (const PDFAbstractColorSpace* colorSpace : colorSpaces)
+        const PDFPageContentProcessorState* state = getGraphicState();
+        if (stroke)
         {
-            if (!colorSpace)
-            {
-                continue;
-            }
-
-            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Separation)
-            {
-                const auto* separation = static_cast<const PDFSeparationColorSpace*>(colorSpace);
-                const QString colorName = QString::fromLatin1(separation->getColorName());
-                if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
-                {
-                    continue;
-                }
-                m_legacyGeometry->operator[](colorName).addPath(pagePath);
-                QVector<int>& pages = m_legacyPages->operator[](colorName);
-                if (!pages.contains(m_pageIndex))
-                {
-                    pages.append(m_pageIndex);
-                }
-                continue;
-            }
-
-            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::DeviceN)
-            {
-                const auto* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(colorSpace);
-                if (deviceNColorSpace->isNone())
-                {
-                    continue;
-                }
-
-                const PDFDeviceNColorSpace::Colorants& colorants = deviceNColorSpace->getColorants();
-                for (size_t colorantIndex = 0; colorantIndex < colorants.size(); ++colorantIndex)
-                {
-                    const PDFDeviceNColorSpace::ColorantInfo& colorantInfo = colorants[colorantIndex];
-                    const QString colorName = QString::fromLatin1(colorantInfo.name);
-                    if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
-                    {
-                        continue;
-                    }
-                    m_legacyGeometry->operator[](colorName).addPath(pagePath);
-                    QVector<int>& pages = m_legacyPages->operator[](colorName);
-                    if (!pages.contains(m_pageIndex))
-                    {
-                        pages.append(m_pageIndex);
-                    }
-                }
-            }
+            collectLegacyDielineFromColorSpace(pagePath,
+                                               state->getStrokeColorSpace(),
+                                               state->getStrokeColorOriginal(),
+                                               m_pageIndex,
+                                               m_legacyGeometry,
+                                               m_legacyPages);
+        }
+        if (fill)
+        {
+            collectLegacyDielineFromColorSpace(pagePath,
+                                               state->getFillColorSpace(),
+                                               state->getFillColorOriginal(),
+                                               m_pageIndex,
+                                               m_legacyGeometry,
+                                               m_legacyPages);
         }
     }
 

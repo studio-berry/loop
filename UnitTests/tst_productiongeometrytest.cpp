@@ -44,6 +44,8 @@ private slots:
     void plansDeterministicContourBleedAndGrommets();
     void productionOperationsAreRegistered();
     void detectProcessingSteps_findsDeviceNCutContourStroke();
+    void detectProcessingSteps_ignoresFillOnlyPathsUsingStaleStrokeColorSpace();
+    void detectProcessingSteps_ignoresDeviceNCutContourWhenTintIsZero();
 };
 
 namespace
@@ -74,10 +76,13 @@ pdf::PDFObjectReference addType2TintFunction(pdf::PDFDocumentBuilder* builder, s
     return builder->addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(dictionary))));
 }
 
-pdf::PDFObject createCutContourDeviceNColorSpace(pdf::PDFObjectReference tintFunction)
+pdf::PDFObject createDeviceNColorSpace(const QStringList& colorantNames, pdf::PDFObjectReference tintFunction)
 {
     pdf::PDFArray colorants;
-    colorants.appendItem(pdf::PDFObject::createName("CutContour"));
+    for (const QString& colorantName : colorantNames)
+    {
+        colorants.appendItem(pdf::PDFObject::createName(colorantName.toLatin1()));
+    }
 
     pdf::PDFArray array;
     array.appendItem(pdf::PDFObject::createName("DeviceN"));
@@ -87,19 +92,22 @@ pdf::PDFObject createCutContourDeviceNColorSpace(pdf::PDFObjectReference tintFun
     return pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(qMove(array)));
 }
 
-pdf::PDFDocument buildDeviceNCutContourDocument()
+pdf::PDFDocument buildDeviceNContentDocument(const QByteArray& content,
+                                             const QString& colorSpaceName,
+                                             const QStringList& colorantNames,
+                                             std::initializer_list<double> tintFunctionC1)
 {
     pdf::PDFDocumentBuilder builder;
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0.0, 0.0, 200.0, 200.0));
-    const pdf::PDFObjectReference tintFunction = addType2TintFunction(&builder, { 1.0, 0.0, 0.0, 0.0 });
+    const pdf::PDFObjectReference tintFunction = addType2TintFunction(&builder, tintFunctionC1);
 
     pdf::PDFDictionary colorSpaces;
-    colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("CutContourCS"), createCutContourDeviceNColorSpace(tintFunction));
+    colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString(colorSpaceName.toLatin1()),
+                         createDeviceNColorSpace(colorantNames, tintFunction));
     pdf::PDFDictionary resources;
     resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"),
                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(colorSpaces))));
 
-    const QByteArray content = QByteArrayLiteral("q /CutContourCS CS 1 SCN 10 10 180 180 re S Q\n");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
@@ -112,6 +120,21 @@ pdf::PDFDocument buildDeviceNCutContourDocument()
     builder.mergeTo(pageReference,
                     pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(qMove(pageUpdate))));
     return builder.build();
+}
+
+pdf::PDFDocument buildDeviceNCutContourDocument()
+{
+    return buildDeviceNContentDocument(QByteArrayLiteral("q /CutContourCS CS 1 SCN 10 10 180 180 re S Q\n"),
+                                       QStringLiteral("CutContourCS"),
+                                       { QStringLiteral("CutContour") },
+                                       { 1.0, 0.0, 0.0, 0.0 });
+}
+
+const pdf::PDFProcessingStep* findLegacyCutContourStep(const QList<pdf::PDFProcessingStep>& steps)
+{
+    const auto it = std::find_if(steps.cbegin(), steps.cend(), [](const pdf::PDFProcessingStep& step)
+                                 { return step.spotColorName == QStringLiteral("CutContour") && step.detectionMethod == QStringLiteral("legacy-spot-color"); });
+    return it == steps.cend() ? nullptr : &(*it);
 }
 
 }
@@ -199,12 +222,41 @@ void ProductionGeometryTest::detectProcessingSteps_findsDeviceNCutContourStroke(
 {
     const pdf::PDFDocument document = buildDeviceNCutContourDocument();
     const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
-    const auto it = std::find_if(steps.cbegin(), steps.cend(), [](const pdf::PDFProcessingStep& step)
-                                 { return step.spotColorName == QStringLiteral("CutContour") && step.detectionMethod == QStringLiteral("legacy-spot-color"); });
-    QVERIFY(it != steps.cend());
-    QCOMPARE(it->kind, pdf::PDFProcessingStepKind::Cut);
-    QVERIFY(!it->geometry.isEmpty());
-    QCOMPARE(it->pageIndices, QVector<int>({ 0 }));
+    const pdf::PDFProcessingStep* cutContourStep = findLegacyCutContourStep(steps);
+    QVERIFY(cutContourStep != nullptr);
+    QCOMPARE(cutContourStep->kind, pdf::PDFProcessingStepKind::Cut);
+    QVERIFY(!cutContourStep->geometry.isEmpty());
+    QCOMPARE(cutContourStep->pageIndices, QVector<int>({ 0 }));
+}
+
+void ProductionGeometryTest::detectProcessingSteps_ignoresFillOnlyPathsUsingStaleStrokeColorSpace()
+{
+    const QByteArray content = QByteArrayLiteral(
+        "q /CutContourCS CS 1 SCN 10 10 80 80 re S /DeviceCMYK cs 0 1 0 0 scn 100 100 80 80 re f Q\n");
+    const pdf::PDFDocument document = buildDeviceNContentDocument(content,
+                                                                QStringLiteral("CutContourCS"),
+                                                                { QStringLiteral("CutContour") },
+                                                                { 1.0, 0.0, 0.0, 0.0 });
+    const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
+    const pdf::PDFProcessingStep* cutContourStep = findLegacyCutContourStep(steps);
+    QVERIFY(cutContourStep != nullptr);
+    const QRectF bounds = cutContourStep->geometry.boundingRect();
+    QVERIFY(bounds.contains(QPointF(10.0, 10.0)));
+    QVERIFY(bounds.contains(QPointF(90.0, 90.0)));
+    QVERIFY(!bounds.contains(QPointF(100.0, 100.0)));
+    QVERIFY(!bounds.contains(QPointF(180.0, 180.0)));
+}
+
+void ProductionGeometryTest::detectProcessingSteps_ignoresDeviceNCutContourWhenTintIsZero()
+{
+    const QByteArray content = QByteArrayLiteral(
+        "q /SpotCS CS 0 1 SCN 10 10 180 180 re S Q\n");
+    const pdf::PDFDocument document = buildDeviceNContentDocument(content,
+                                                                QStringLiteral("SpotCS"),
+                                                                { QStringLiteral("CutContour"), QStringLiteral("Cyan") },
+                                                                { 1.0, 0.0, 0.0, 0.0 });
+    const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
+    QVERIFY(findLegacyCutContourStep(steps) == nullptr);
 }
 
 QTEST_MAIN(ProductionGeometryTest)
