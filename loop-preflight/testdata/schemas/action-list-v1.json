@@ -1,13 +1,6 @@
 {
-  "schema": "loop-action-list/1",
-  "id": "golden-v1",
-  "name": "Golden v1 recipe",
-  "onFailure": "stop",
-  "steps": [
-    {
-      "id": "bleed",
-      "operation": "add-bleed",
-      "params": { "bleed_mm": 3.0, "force": true }
-    }
-  ]
+  "schema_kind": "action-list",
+  "schema_version": 1,
+  "id": "loop-default",
+  "steps": []
 }

@@ -245,7 +245,8 @@ PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
     descriptor.positionals = describePositionals(getOptionsFlags());
     descriptor.capabilities = describeCapabilities(getOptionsFlags());
 
-    if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
+    if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
+        command == QStringLiteral("capabilities") || command == QStringLiteral("schema"))
     {
         descriptor.outputFormats = { QStringLiteral("json") };
     }
@@ -384,6 +385,10 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
+    }
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        add(QStringLiteral("input"), { QStringLiteral("--input") }, QStringLiteral("file"), PDFToolValueType::Path);
     }
     if (optionFlags.testFlag(OcrOptions))
     {
@@ -666,6 +671,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(OcrOptions, QStringLiteral("ocr.client"));
     add(Diagnostics, QStringLiteral("diagnostics.bundle"));
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
+    add(SchemaDiagnostics, QStringLiteral("schema.diagnostics"));
     add(ActionList, QStringLiteral("action-list.execute"));
     capabilities.sort();
     return capabilities;
@@ -863,6 +869,12 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("command"), QStringLiteral("Limit discovery to one stable command ID."));
+    }
+
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("input"),
+                           QStringLiteral("Persisted JSON artifact to diagnose; omit to print the compatibility matrix."));
     }
 
     if (optionFlags.testFlag(OcrOptions))
@@ -1116,7 +1128,8 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         if (!parser->isSet("console-format"))
         {
             const QString command = getStandardString(Command);
-            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
+            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
+                command == QStringLiteral("capabilities") || command == QStringLiteral("schema"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
             }
@@ -1412,6 +1425,11 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         options.capabilitiesCommand = parser->value("command").trimmed();
+    }
+
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        options.schemaInputPath = parser->value("input");
     }
 
     if (optionFlags.testFlag(OcrOptions))

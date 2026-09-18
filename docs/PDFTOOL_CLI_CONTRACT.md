@@ -38,6 +38,13 @@ option values, local paths, environment variables, sidecar locations, or
 secrets. Fixup metadata is sourced from the Core implementation registry and
 contains only fixups available in the current build.
 
+The four published `schemas[].version` values are read from the compatibility
+matrix through `pdf::currentSchemaVersion()`, so discovery cannot drift from the
+authority Core enforces. The matrix itself is published by `PdfTool schema` with
+no `--input` (under `data.matrix`). The published ids and versions are unchanged:
+`loop-preflight-profile` 1, `loop-preflight-report` 3, `pdftool-discovery` 1,
+`pdftool-envelope` 1.
+
 ## Envelope
 
 ```json
@@ -212,11 +219,11 @@ file. A run where some files succeed and some fail reports `partial-output`.
 
 `--console-format json` and `--console-format=json` are detected from the raw
 command line before parsing, so that malformed command lines still return a
-valid JSON error envelope when JSON was requested. The `preflight`, `ocr`, and
-`capabilities` commands default to JSON because their contracts are
-machine-readable; malformed invocations of those commands therefore also
-return the envelope. Supplying a different console format to those commands is
-an invalid invocation.
+valid JSON error envelope when JSON was requested. The `preflight`, `ocr`,
+`capabilities`, and `schema` commands default to JSON because their contracts
+are machine-readable; malformed invocations of those commands therefore also
+return the envelope. Supplying a different console format to `preflight`,
+`ocr`, `capabilities`, or `schema` is an invalid invocation.
 
 ## Unknown command
 
@@ -233,8 +240,34 @@ process must no longer appear successful.
 | `verify-signatures`, `verify-redaction` | Verification report | `1 findings` |
 | `preflight` | `{ "report": <existing preflight report> }` | `1 findings` |
 | `ocr` | `{ "report": <existing OCR report> }` | `5 partial-output` |
+| `schema` | `{ "matrix": <compatibility matrix> }` or the artifact diagnostic (below) | `1 findings` when the artifact is incompatible |
 | `render`, `separate`, image/attachment extraction | Summary + `outputs[]` | `5 partial-output` |
 | `optimize`, `redact`, encrypt/decrypt, unite, add-bleed | Operation data + final output | Usually `4 processing-failure` on failure |
+
+### `schema`
+
+```json
+{
+  "input": "report.json",
+  "schema_kind": "preflight-report",
+  "schema_version": "99.0",
+  "compatibility": "unsupported-major",
+  "code": "schema.unsupported-major",
+  "message": "Unsupported schema major: kind 'preflight-report' version 99; this build supports major(s) 1, 2, 3.",
+  "migration": { "required": false, "applied": false, "document_ready": false, "from": "", "to": "" }
+}
+```
+
+Exit `0` when `compatibility` is `compatible`, exit `1` (`findings`) otherwise,
+exit `3` (`input-error`) when the file cannot be read or is not a JSON object.
+`migration.required` is true when a supported older major would need a migration,
+`migration.applied` is true when one was produced, and `migration.document_ready`
+is false whenever the artifact could not be prepared (an unreadable or absent
+`schema_version`, an unsupported major, or a supported major with no migrator
+yet). `migration.from` and `migration.to` are the version the document was at and
+the version it is at after preparation — empty strings when preparation aborted
+before it assigned them, which is why `schema_version` above (not
+`migration.from`) is the field that carries the artifact's own version.
 
 ## Schema
 

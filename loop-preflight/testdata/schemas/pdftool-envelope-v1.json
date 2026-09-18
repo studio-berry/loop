@@ -1,0 +1,7 @@
+{
+  "schema_kind": "pdftool-envelope",
+  "schema_version": 1,
+  "command": "info",
+  "status": "success",
+  "exit_code": 0
+}

@@ -24,7 +24,9 @@
 #include "pdfartifactstore.h"
 #include "pdfschemaversion.h"
 
+#include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -130,6 +132,10 @@ class PDFOperationHistoryStore::Impl
 public:
     QString connection;
     QSqlDatabase database;
+    /// open() holds a transaction while it upgrades the schema. Appends made
+    /// inside that window must join it: SQLite rejects a nested BEGIN, and a
+    /// failure has to roll back together with the schema DDL.
+    bool joinOpenTransaction = false;
 };
 
 PDFOperationHistoryStore::PDFOperationHistoryStore(QString databasePath,
@@ -143,6 +149,54 @@ PDFOperationHistoryStore::PDFOperationHistoryStore(QString databasePath,
 PDFOperationHistoryStore::~PDFOperationHistoryStore()
 {
     close();
+}
+
+bool PDFOperationHistoryStore::appendSchemaUpgradeProvenance(bool upgraded,
+                                                             int previousSchemaVersion,
+                                                             const QString& databaseDigest,
+                                                             qint64 databaseSize,
+                                                             QString* error)
+{
+    if (!upgraded)
+    {
+        return true;
+    }
+
+    // The provenance chain is append-only and must never claim an upgrade that
+    // was not recorded, so a missing identity fails the open instead of the write.
+    if (databaseDigest.isEmpty() || databaseSize <= 0)
+    {
+        *error = QStringLiteral("Operation history database upgrade has no recordable artifact identity.");
+        return false;
+    }
+
+    PDFArtifactIdentity database;
+    database.sha256 = databaseDigest;
+    database.size = databaseSize;
+    database.mediaType = QStringLiteral("application/vnd.sqlite3");
+    database.logicalName = QFileInfo(m_databasePath).fileName();
+    if (const PDFOperationResult registered = registerArtifact(database); !registered)
+    {
+        *error = registered.getErrorMessage();
+        return false;
+    }
+
+    // open() already holds the upgrade transaction, so this append has to join
+    // it: SQLite rejects a nested BEGIN, and open()'s ROLLBACK then undoes the
+    // provenance row together with the schema DDL.
+    m_impl->joinOpenTransaction = true;
+    const PDFOperationResult migrated = appendSchemaMigratedEvent(database,
+                                                                  PDFSchemaKind::HistoryDb,
+                                                                  PDFSchemaVersion{ static_cast<quint16>(previousSchemaVersion), 0 },
+                                                                  PDFSchemaVersion{ CurrentSchemaVersion, 0 },
+                                                                  databaseDigest);
+    m_impl->joinOpenTransaction = false;
+    if (!migrated)
+    {
+        *error = migrated.getErrorMessage();
+        return false;
+    }
+    return true;
 }
 
 PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
@@ -168,6 +222,22 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
             if (errorMessage)
                 *errorMessage = error;
             return PDFOperationResult(error);
+        }
+    }
+
+    // The identity of the object being migrated is the database file as it is
+    // before this open: SQLite rewrites the file (WAL header, schema DDL), so
+    // hashing later would record bytes that never existed as an input.
+    QString preMigrationDigest;
+    qint64 preMigrationSize = 0;
+    if (m_databasePath != QStringLiteral(":memory:"))
+    {
+        QFile databaseFile(m_databasePath);
+        if (databaseFile.exists() && databaseFile.open(QIODevice::ReadOnly))
+        {
+            const QByteArray bytes = databaseFile.readAll();
+            preMigrationDigest = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+            preMigrationSize = bytes.size();
         }
     }
 
@@ -219,6 +289,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         return PDFOperationResult(error);
     }
 
+    const bool upgradesExistingDatabase = schemaVersion > 0 && schemaVersion < CurrentSchemaVersion;
+
     if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS artifacts (sha256 TEXT PRIMARY KEY, size_bytes INTEGER NOT NULL, media_type TEXT NOT NULL, logical_name TEXT, storage_token TEXT, created_utc TEXT NOT NULL, is_original_input INTEGER NOT NULL DEFAULT 0, artifact_evicted INTEGER NOT NULL DEFAULT 0)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS executions (execution_id TEXT PRIMARY KEY, parent_execution_id TEXT, operation_id TEXT NOT NULL, operation_version INTEGER NOT NULL, source_sha256 TEXT NOT NULL, source_revision INTEGER NOT NULL, parameters_json TEXT NOT NULL, started_utc TEXT NOT NULL, FOREIGN KEY(source_sha256) REFERENCES artifacts(sha256), FOREIGN KEY(parent_execution_id) REFERENCES executions(execution_id))"), &error) ||
@@ -241,6 +313,7 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_execution_operation ON executions(operation_id, started_utc)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_rollback_digest ON rollback_points(document_revision_digest)"), &error) ||
         !exec(m_impl->database, QStringLiteral("INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', '%1')").arg(CurrentSchemaVersion), &error) ||
+        !appendSchemaUpgradeProvenance(upgradesExistingDatabase, schemaVersion, preMigrationDigest, preMigrationSize, &error) ||
         !exec(m_impl->database, QStringLiteral("COMMIT"), &error))
     {
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
@@ -397,12 +470,20 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     }
 
     QString error;
-    if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error))
+    const bool ownsTransaction = !m_impl->joinOpenTransaction;
+    if (ownsTransaction && !exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error))
         return PDFOperationResult(error);
+    // Only the owner of the transaction may end it: a joined append leaves the
+    // rollback to open(), which rolls the whole upgrade back.
+    const auto rollback = [this, ownsTransaction]()
+    {
+        if (ownsTransaction)
+            exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+    };
     QSqlQuery previousQuery(m_impl->database);
     if (!previousQuery.exec(QStringLiteral("SELECT event_hash FROM history_events ORDER BY sequence DESC LIMIT 1")))
     {
-        exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+        rollback();
         return PDFOperationResult(queryError(previousQuery));
     }
     const QByteArray previousHash = previousQuery.next() ? decodeHash(previousQuery.value(0).toString()) : QByteArray();
@@ -451,7 +532,7 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     query.addBindValue(dateTimeString(event.createdUtc));
     if (!query.exec())
     {
-        exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+        rollback();
         return PDFOperationResult(queryError(query));
     }
     if (event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack)
@@ -461,7 +542,7 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
         executionQuery.addBindValue(event.executionId.toString(QUuid::WithoutBraces));
         if (!executionQuery.exec() || !executionQuery.next())
         {
-            exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+            rollback();
             return PDFOperationResult(queryError(executionQuery));
         }
 
@@ -476,15 +557,15 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
         point.addBindValue(event.output->sha256.toLower());
         if (!point.exec() || point.numRowsAffected() != 1)
         {
-            exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+            rollback();
             return PDFOperationResult(point.numRowsAffected() == 0
                                           ? QStringLiteral("History output artifact is not registered.")
                                           : queryError(point));
         }
     }
-    if (!exec(m_impl->database, QStringLiteral("COMMIT"), &error))
+    if (ownsTransaction && !exec(m_impl->database, QStringLiteral("COMMIT"), &error))
     {
-        exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
+        rollback();
         return PDFOperationResult(error);
     }
     event.sequence = query.lastInsertId().toLongLong();

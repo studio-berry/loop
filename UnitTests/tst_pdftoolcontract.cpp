@@ -30,8 +30,10 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QPair>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVector>
 
 namespace
 {
@@ -111,6 +113,12 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void schemaRejectsNonJsonOutput();
+    void schemaReportsTheMatrixForEveryKind();
+    void schemaReportsUnsupportedMajorIdenticallyToCore();
+    void schemaReportsUnreadyForAnUnusableVersion();
+    void schemaAcceptsCurrentAndPreviousGoldens();
+    void capabilitiesReportMatrixVersions();
     void redactRefusesToWriteOverItsOwnInput();
     void addBleedRefusesToWriteOverItsOwnInput();
     void rgbToCmykRefusesToWriteOverItsOwnInput();
@@ -332,6 +340,140 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::schemaRejectsNonJsonOutput()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--console-format"), QStringLiteral("text") });
+    QCOMPARE(run.exitCode, 2);
+    QVERIFY(run.json.isEmpty());
+    QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
+}
+
+void PdfToolContractTest::schemaReportsTheMatrixForEveryKind()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(run, 0, QStringLiteral("schema"));
+
+    const QJsonObject kinds = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+    QVERIFY2(!kinds.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    for (const QString& expected : { QStringLiteral("preflight-report"), QStringLiteral("preflight-profile"),
+                                     QStringLiteral("evidence-graph"), QStringLiteral("operation-plan"),
+                                     QStringLiteral("operation-result"), QStringLiteral("provenance-event"),
+                                     QStringLiteral("certificate"), QStringLiteral("capability-discovery"),
+                                     QStringLiteral("package-manifest") })
+    {
+        QVERIFY2(kinds.contains(expected), qPrintable(expected));
+    }
+    QCOMPARE(kinds.value(QStringLiteral("preflight-report")).toObject().value(QStringLiteral("current")).toString(),
+             QStringLiteral("3.0"));
+}
+
+void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
+{
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/unsupported-major.json");
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), fixture });
+    verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+    const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+    QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("unsupported-major"));
+    // These two strings are pinned verbatim in UnitTestsSchemaEvolution too. The
+    // duplication is deliberate: a shared constant would let the Core message
+    // change without any test noticing the CLI drifted from it.
+    QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.unsupported-major"));
+    QCOMPARE(data.value(QStringLiteral("message")).toString(),
+             QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
+                            "this build supports major(s) 1, 2, 3."));
+    QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+             false);
+}
+
+void PdfToolContractTest::schemaReportsUnreadyForAnUnusableVersion()
+{
+    // An artifact whose version cannot be read was never prepared: nothing
+    // validated it, so it must not be advertised as a ready document just
+    // because `prepareSchemaDocument` leaves the original bytes in place when
+    // it aborts. The exit code alone does not catch this - the doc is
+    // incompatible and exits 1 either way.
+    QTemporaryDir artifactDirectory;
+    QVERIFY(artifactDirectory.isValid());
+
+    const QVector<QPair<QString, QByteArray>> artifacts{
+        { QStringLiteral("malformed-version.json"),
+          QByteArrayLiteral("{\"schema_kind\":\"preflight-report\",\"schema_version\":\"abc\"}") },
+        { QStringLiteral("missing-version.json"), QByteArrayLiteral("{\"schema_kind\":\"preflight-report\"}") },
+    };
+
+    for (const auto& artifact : artifacts)
+    {
+        const QString path = artifactDirectory.filePath(artifact.first);
+        QFile file(path);
+        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+        QCOMPARE(file.write(artifact.second), qint64(artifact.second.size()));
+        file.close();
+
+        const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), path });
+        verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+        const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+        QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+        QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("invalid"));
+        QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.invalid-version"));
+        QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+                 false);
+    }
+}
+
+void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
+{
+    const QString current = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v3.json");
+    const ToolRun currentRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), current });
+    verifyEnvelope(currentRun, 0, QStringLiteral("schema"));
+    const QJsonObject currentData = currentRun.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(currentData.value(QStringLiteral("compatibility")).toString(), QStringLiteral("compatible"));
+    QCOMPARE(currentData.value(QStringLiteral("migration")).toObject().value(QStringLiteral("applied")).toBool(),
+             false);
+
+    const QString previous = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json");
+    const ToolRun previousRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), previous });
+    verifyEnvelope(previousRun, 0, QStringLiteral("schema"));
+    const QJsonObject migration = previousRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("migration")).toObject();
+    QCOMPARE(migration.value(QStringLiteral("required")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("applied")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("2.0"));
+    QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("3.0"));
+}
+
+void PdfToolContractTest::capabilitiesReportMatrixVersions()
+{
+    const ToolRun capabilities = runPdfTool({ QStringLiteral("capabilities") });
+    verifyEnvelope(capabilities, 0, QStringLiteral("capabilities"));
+    const QJsonArray schemas = capabilities.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("schemas")).toArray();
+    QCOMPARE(schemas.size(), 4);
+
+    const ToolRun matrixRun = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(matrixRun, 0, QStringLiteral("schema"));
+    const QJsonObject kinds = matrixRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+
+    const QHash<QString, QString> publishedToKind{
+        { QStringLiteral("loop-preflight-profile"), QStringLiteral("preflight-profile") },
+        { QStringLiteral("loop-preflight-report"), QStringLiteral("preflight-report") },
+        { QStringLiteral("pdftool-discovery"), QStringLiteral("capability-discovery") },
+        { QStringLiteral("pdftool-envelope"), QStringLiteral("pdftool-envelope") },
+    };
+
+    QCOMPARE(schemas.size(), publishedToKind.size());
+    for (const QJsonValue& schema : schemas)
+    {
+        const QJsonObject entry = schema.toObject();
+        const QString id = entry.value(QStringLiteral("id")).toString();
+        QVERIFY2(publishedToKind.contains(id), qPrintable(id));
+        const QJsonObject matrixEntry = kinds.value(publishedToKind.value(id)).toObject();
+        QVERIFY2(!matrixEntry.isEmpty(), qPrintable(id));
+        const QString current = matrixEntry.value(QStringLiteral("current")).toString();
+        QCOMPARE(entry.value(QStringLiteral("version")).toInt(), current.section(QLatin1Char('.'), 0, 0).toInt());
+    }
 }
 
 void PdfToolContractTest::redactRefusesToWriteOverItsOwnInput()
