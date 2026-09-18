@@ -22,8 +22,9 @@ blocking finding by itself. This prevents a raster budget exhaustion with zero
 findings from being reported as a clean pass.
 
 Certificate issuance (#133) may proceed only when
-`PreflightVerdict::allowsCertificateIssuance()` is true (PASS). Incomplete,
-fail, and error must not produce `CertificateIssued`.
+`preflightAllowsCertification()` is true: the verdict is PASS **and**
+`profile_identity.provisional` is not set. Incomplete, fail, error, and
+provisional-profile runs must not produce `CertificateIssued`.
 
 Editor copy uses `preflightVerdictOperatorSummary()` so operators see "No
 problems found." versus "Could not finish inspecting." The Editor's findings

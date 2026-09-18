@@ -649,6 +649,21 @@ QString EditorHost::selectedPreflightProfileId() const
     return m_selectedPreflightProfileId;
 }
 
+bool EditorHost::preflightProfileEditing() const
+{
+    return m_preflightProfileDraft.isActive();
+}
+
+QVariantList EditorHost::preflightEditableChecks() const
+{
+    return m_preflightProfileDraft.editableChecks();
+}
+
+QString EditorHost::preflightProfileDraftVersion() const
+{
+    return m_preflightProfileDraft.suggestedNextVersion();
+}
+
 QString EditorHost::previewSummary() const
 {
     return m_preview.summary();
@@ -974,6 +989,192 @@ bool EditorHost::exportPreflightReportFileUrl(const QUrl& url)
     announceDocumentState(tr("Preflight report exported."));
     return true;
 }
+
+void EditorHost::requestPreflightProfileImport()
+{
+    Q_EMIT preflightProfileImportRequested();
+}
+
+void EditorHost::requestPreflightProfileExport()
+{
+    Q_EMIT preflightProfileExportRequested();
+}
+
+void EditorHost::requestPreflightProfileSave()
+{
+    if (m_preflightProfileDraft.isActive())
+    {
+        Q_EMIT preflightProfileSaveRequested();
+    }
+}
+
+bool EditorHost::importPreflightProfileFileUrl(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    QFile file(url.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        announceDocumentState(tr("Could not import the preflight profile."));
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument parsed = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
+    {
+        announceDocumentState(tr("The selected profile is not valid JSON."));
+        return false;
+    }
+
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(parsed.object(), url.toLocalFile());
+    if (!imported.ok)
+    {
+        announceDocumentState(imported.errorMessage);
+        return false;
+    }
+
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (configRoot.isEmpty())
+    {
+        announceDocumentState(tr("Could not resolve the local profile directory."));
+        return false;
+    }
+    const QString profilesDirectory = QDir(configRoot).filePath(QStringLiteral("profiles"));
+    if (!QDir().mkpath(profilesDirectory))
+    {
+        announceDocumentState(tr("Could not create the local profile directory."));
+        return false;
+    }
+    const QString baseName = QFileInfo(url.toLocalFile()).completeBaseName();
+    const QString destination = QDir(profilesDirectory).filePath(baseName + QStringLiteral(".json"));
+    const QByteArray bytes = pdf::serializePreflightProfileBytes(imported.profile);
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        destination, bytes, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!writeResult)
+    {
+        announceDocumentState(tr("Could not save the imported profile: %1").arg(writeResult.getErrorMessage()));
+        return false;
+    }
+
+    reloadPreflightProfiles();
+    selectPreflightProfile(destination);
+    announceDocumentState(tr("Preflight profile imported."));
+    return true;
+}
+
+bool EditorHost::beginPreflightProfileEdit()
+{
+    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                 [this](const PreflightProfileChoice& profile)
+                                 { return profile.id == m_selectedPreflightProfileId; });
+    if (it == m_preflightProfiles.cend() || !it->valid)
+    {
+        return false;
+    }
+
+    const pdf::PreflightProfileIdentity identity = pdf::identifyPreflightProfile(it->profile, it->source);
+    if (!m_preflightProfileDraft.load(it->profile, identity))
+    {
+        return false;
+    }
+    Q_EMIT preflightProfileDraftChanged();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setPreflightCheckField(const QString& checkId, const QString& field, const QVariant& value)
+{
+    if (!m_preflightProfileDraft.setCheckField(checkId, field, value))
+    {
+        return false;
+    }
+    Q_EMIT preflightProfileDraftChanged();
+    return true;
+}
+
+bool EditorHost::savePreflightProfileEdit(const QString& newVersion, const QUrl& url)
+{
+    if (!m_preflightProfileDraft.isActive() || newVersion.isEmpty() || !url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    const QJsonObject committed = m_preflightProfileDraft.commit(newVersion);
+    if (committed.isEmpty())
+    {
+        return false;
+    }
+
+    const QByteArray bytes = pdf::serializePreflightProfileBytes(committed);
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        url.toLocalFile(), bytes, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!writeResult)
+    {
+        announceDocumentState(tr("Could not save the profile fork: %1").arg(writeResult.getErrorMessage()));
+        return false;
+    }
+
+    m_preflightProfileDraft.clear();
+    reloadPreflightProfiles();
+    selectPreflightProfile(url.toLocalFile());
+    m_preflight.markCheckSetStale();
+    Q_EMIT preflightProfileDraftChanged();
+    announceDocumentState(tr("Preflight profile saved."));
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::exportPreflightProfileFileUrl(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    QJsonObject profile;
+    if (m_preflightProfileDraft.isActive())
+    {
+        profile = m_preflightProfileDraft.draftProfile();
+    }
+    else
+    {
+        const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                     [this](const PreflightProfileChoice& choice)
+                                     { return choice.id == m_selectedPreflightProfileId; });
+        if (it == m_preflightProfiles.cend() || !it->valid)
+        {
+            return false;
+        }
+        profile = it->profile;
+    }
+
+    const QByteArray bytes = pdf::serializePreflightProfileBytes(profile);
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        url.toLocalFile(), bytes, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!writeResult)
+    {
+        announceDocumentState(tr("Could not export the preflight profile: %1").arg(writeResult.getErrorMessage()));
+        return false;
+    }
+    announceDocumentState(tr("Preflight profile exported."));
+    return true;
+}
+
+void EditorHost::cancelPreflightProfileEdit()
+{
+    if (!m_preflightProfileDraft.isActive())
+    {
+        return;
+    }
+    m_preflightProfileDraft.clear();
+    Q_EMIT preflightProfileDraftChanged();
+    bumpPresentation();
+}
+
 
 QVariantList EditorHost::actionListRecipes() const
 {
@@ -1417,7 +1618,6 @@ void EditorHost::updateActionListRecipeWatch()
         }
     }
 }
-
 void EditorHost::reloadPreflightProfiles()
 {
     const QString priorId = m_selectedPreflightProfileId;
