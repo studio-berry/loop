@@ -67,7 +67,7 @@ void GovernedExecutionTest::technicalAndVisualPreviewsStaySeparate()
     const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
     pdf::PDFRepairTransaction transaction(source);
     QVERIFY(transaction.add(registry.find(QStringLiteral("add-bleed")),
-                          QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
     QVERIFY(transaction.analyze());
     QVERIFY(transaction.apply());
 
@@ -129,11 +129,11 @@ void GovernedExecutionTest::publishRequiresMatchingPlanBoundApproval()
                                           pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
 
     QVERIFY(pdf::publishGovernedArtifact(approval,
-                                       planDigest,
-                                       sourceSha256,
-                                       candidateBytes,
-                                       outputPath,
-                                       pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
+                                         planDigest,
+                                         sourceSha256,
+                                         candidateBytes,
+                                         outputPath,
+                                         pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite));
     QFile output(outputPath);
     QVERIFY(output.open(QIODevice::ReadOnly));
     QCOMPARE(output.readAll(), candidateBytes);

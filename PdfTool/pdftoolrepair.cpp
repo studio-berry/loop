@@ -472,7 +472,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     reportJson.insert(QStringLiteral("technical_preview"), technicalPreview.toJson());
     reportJson.insert(QStringLiteral("visual_preview"), visualPreview.toJson());
     const bool previewIncomplete = technicalPreview.status == pdf::PDFRepairDiffStatus::Incomplete ||
-                                 visualPreview.status == pdf::PDFRepairDiffStatus::Incomplete;
+                                   visualPreview.status == pdf::PDFRepairDiffStatus::Incomplete;
     if (previewIncomplete)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));

@@ -84,9 +84,9 @@ LOOPLIBCORESHARED_EXPORT QString computeOperationPlanDigest(const QList<PDFRepai
 
 /// Builds a structural-only preview. Visual page renders are intentionally omitted.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
-                                                                   const QString& candidatePath,
-                                                                   const QString& planDigest,
-                                                                   PDFTechnicalPreview* preview);
+                                                                  const QString& candidatePath,
+                                                                  const QString& planDigest,
+                                                                  PDFTechnicalPreview* preview);
 
 /// Builds a visual-only preview. Structural metadata comparison is omitted.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
@@ -100,17 +100,17 @@ LOOPLIBCORESHARED_EXPORT bool preflightDecisionQualifiesAsOperationApproval(cons
 
 /// Validates that approval names the exact plan and artifact identities under review.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& approval,
-                                                                      const QString& expectedPlanDigest,
-                                                                      const QString& expectedSourceSha256,
-                                                                      const QString& expectedCandidateSha256);
+                                                                     const QString& expectedPlanDigest,
+                                                                     const QString& expectedSourceSha256,
+                                                                     const QString& expectedCandidateSha256);
 
 /// Publishes reviewed candidate bytes only after governed approval validation succeeds.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult publishGovernedArtifact(const PDFGovernedExecutionApproval& approval,
-                                                                     const QString& expectedPlanDigest,
-                                                                     const QString& expectedSourceSha256,
-                                                                     const QByteArray& candidateBytes,
-                                                                     const QString& outputPath,
-                                                                     PDFSafeFileWriter::OverwritePolicy overwritePolicy);
+                                                                    const QString& expectedPlanDigest,
+                                                                    const QString& expectedSourceSha256,
+                                                                    const QByteArray& candidateBytes,
+                                                                    const QString& outputPath,
+                                                                    PDFSafeFileWriter::OverwritePolicy overwritePolicy);
 
 }   // namespace pdf
 

@@ -79,8 +79,7 @@ QJsonObject PDFTechnicalPreview::toJson() const
             { QStringLiteral("kind"), change.kind },
             { QStringLiteral("before"), change.beforeValue },
             { QStringLiteral("after"), change.afterValue },
-            { QStringLiteral("classification"), pdfRepairChangeClassName(change.classification) }
-        });
+            { QStringLiteral("classification"), pdfRepairChangeClassName(change.classification) } });
     }
 
     return QJsonObject{
@@ -104,17 +103,13 @@ QJsonObject PDFVisualPreview::toJson() const
         pagesJson.append(QJsonObject{
             { QStringLiteral("page_index"), page.pageIndex },
             { QStringLiteral("pixel_size"), QJsonObject{
-                  { QStringLiteral("width"), page.pixelSize.width() },
-                  { QStringLiteral("height"), page.pixelSize.height() } } },
+                                                { QStringLiteral("width"), page.pixelSize.width() },
+                                                { QStringLiteral("height"), page.pixelSize.height() } } },
             { QStringLiteral("changed_pixel_count"), static_cast<qint64>(page.changedPixelCount) },
             { QStringLiteral("unexpected_changed_pixel_count"), static_cast<qint64>(page.unexpectedChangedPixelCount) },
             { QStringLiteral("changed_pixel_ratio"), page.changedPixelRatio },
-            { QStringLiteral("artifacts"), QJsonObject{
-                  { QStringLiteral("before"), page.beforeImagePath },
-                  { QStringLiteral("after"), page.afterImagePath },
-                  { QStringLiteral("diff"), page.diffImagePath } } },
-            { QStringLiteral("warnings"), QJsonArray::fromStringList(page.warnings) }
-        });
+            { QStringLiteral("artifacts"), QJsonObject{ { QStringLiteral("before"), page.beforeImagePath }, { QStringLiteral("after"), page.afterImagePath }, { QStringLiteral("diff"), page.diffImagePath } } },
+            { QStringLiteral("warnings"), QJsonArray::fromStringList(page.warnings) } });
     }
 
     return QJsonObject{
@@ -272,9 +267,9 @@ PDFOperationResult publishGovernedArtifact(const PDFGovernedExecutionApproval& a
 {
     const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
     const PDFOperationResult validation = validateGovernedApproval(approval,
-                                                                     expectedPlanDigest,
-                                                                     expectedSourceSha256,
-                                                                     candidateSha256);
+                                                                   expectedPlanDigest,
+                                                                   expectedSourceSha256,
+                                                                   candidateSha256);
     if (!validation)
     {
         return validation;
