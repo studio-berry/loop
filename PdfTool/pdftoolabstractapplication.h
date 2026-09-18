@@ -296,6 +296,7 @@ struct PDFToolOptions
     QString repairOutputDocument;
     QString repairReportFile;
     QString repairRenderDirectory;
+    QString repairApprovalFile;
     bool repairListOperations = false;
     bool repairAllowIncomplete = false;
 
