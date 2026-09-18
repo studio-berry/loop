@@ -57,6 +57,12 @@ QString normalizedProcessingStepName(const QString& value)
     return result;
 }
 
+bool isLegacyDielineSpotName(const QString& normalizedName)
+{
+    return normalizedName == QStringLiteral("cutcontour") || normalizedName == QStringLiteral("die") ||
+           normalizedName == QStringLiteral("dieline") || normalizedName == QStringLiteral("thrucut");
+}
+
 PDFProcessingStepType processingStepTypeFromMetadata(const QList<QByteArray>& values)
 {
     for (const QByteArray& value : values)
@@ -199,23 +205,52 @@ protected:
         };
         for (const PDFAbstractColorSpace* colorSpace : colorSpaces)
         {
-            if (!colorSpace || colorSpace->getColorSpace() != PDFAbstractColorSpace::ColorSpace::Separation)
+            if (!colorSpace)
             {
                 continue;
             }
-            const auto* separation = static_cast<const PDFSeparationColorSpace*>(colorSpace);
-            const QString colorName = QString::fromLatin1(separation->getColorName());
-            const QString normalized = normalizedProcessingStepName(colorName);
-            if (normalized != QStringLiteral("cutcontour") && normalized != QStringLiteral("die") &&
-                normalized != QStringLiteral("dieline") && normalized != QStringLiteral("thrucut"))
+
+            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Separation)
             {
+                const auto* separation = static_cast<const PDFSeparationColorSpace*>(colorSpace);
+                const QString colorName = QString::fromLatin1(separation->getColorName());
+                if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
+                {
+                    continue;
+                }
+                m_legacyGeometry->operator[](colorName).addPath(pagePath);
+                QVector<int>& pages = m_legacyPages->operator[](colorName);
+                if (!pages.contains(m_pageIndex))
+                {
+                    pages.append(m_pageIndex);
+                }
                 continue;
             }
-            m_legacyGeometry->operator[](colorName).addPath(pagePath);
-            QVector<int>& pages = m_legacyPages->operator[](colorName);
-            if (!pages.contains(m_pageIndex))
+
+            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::DeviceN)
             {
-                pages.append(m_pageIndex);
+                const auto* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(colorSpace);
+                if (deviceNColorSpace->isNone())
+                {
+                    continue;
+                }
+
+                const PDFDeviceNColorSpace::Colorants& colorants = deviceNColorSpace->getColorants();
+                for (size_t colorantIndex = 0; colorantIndex < colorants.size(); ++colorantIndex)
+                {
+                    const PDFDeviceNColorSpace::ColorantInfo& colorantInfo = colorants[colorantIndex];
+                    const QString colorName = QString::fromLatin1(colorantInfo.name);
+                    if (!isLegacyDielineSpotName(normalizedProcessingStepName(colorName)))
+                    {
+                        continue;
+                    }
+                    m_legacyGeometry->operator[](colorName).addPath(pagePath);
+                    QVector<int>& pages = m_legacyPages->operator[](colorName);
+                    if (!pages.contains(m_pageIndex))
+                    {
+                        pages.append(m_pageIndex);
+                    }
+                }
             }
         }
     }
