@@ -1,0 +1,22 @@
+{
+  "schema": "loop-action-list/2",
+  "id": "golden-v2-select",
+  "name": "Golden v2 with selector",
+  "onFailure": "stop",
+  "steps": [
+    {
+      "id": "downsample",
+      "operation": "downsample-images",
+      "params": { "target_dpi": 150 },
+      "select": {
+        "schema": "loop-object-selector/1",
+        "predicate": {
+          "and": [
+            { "objectClass": "image" },
+            { "maxEffectiveDpi": 300 }
+          ]
+        }
+      }
+    }
+  ]
+}

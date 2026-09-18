@@ -90,6 +90,9 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loop-preflight/tools/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loop-shell.json",
@@ -393,6 +396,7 @@
         "UnitTestsFilenameSanitizer",
         "UnitTestsFindingNavigation",
         "UnitTestsFontEncoding",
+        "UnitTestsGovernedExecution",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsIdentitySeparation",
         "UnitTestsImageDownsampleFixup",
@@ -402,12 +406,14 @@
         "UnitTestsJobScheduler",
         "UnitTestsLifecycle",
         "UnitTestsLoopStateVisual",
+        "UnitTestsObjectSelector",
         "UnitTestsOcrPageGate",
         "UnitTestsOperationHistory",
         "UnitTestsOperationImpact",
         "UnitTestsOperatorAcceptance",
         "UnitTestsOverprint",
         "UnitTestsOverprintRender",
+        "UnitTestsPageBoxCorpus",
         "UnitTestsPageMasterExport",
         "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",
@@ -470,6 +476,7 @@
         "LoopEditor",
         "LoopLibQuick",
         "ProductQuickAccessibilitySmoke",
+        "UnitTestsActionList",
         "UnitTestsFindingNavigation",
         "UnitTestsPreflightInteraction",
         "UnitTestsPreflightVerdict"
@@ -758,6 +765,7 @@
       "build_only_in_profile": false,
       "direct_links": [
         "LoopLibCore",
+        "LoopLibInteraction",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -768,7 +776,8 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoopLibCore"
+        "LoopLibCore",
+        "LoopLibInteraction"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1535,6 +1544,46 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsGovernedExecution",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsHugeDocumentEnvelope",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -1896,6 +1945,46 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsObjectSelector",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsOcrCli",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -2152,6 +2241,46 @@
     },
     {
       "id": "UnitTestsOverprintRender",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPageBoxCorpus",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
       "profile_enabled": false,
@@ -3241,7 +3370,7 @@
     }
   ],
   "counts": {
-    "targets": 74,
+    "targets": 77,
     "installed_in_profile": 4,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,

@@ -22,10 +22,19 @@
 
 #include "pdfpreflightverdict.h"
 #include "pdfactionlist.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfrepairoperation.h"
 #include "preflightcontroller.h"
+#include "preflightengine.h"
+
+#include <QPainter>
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QTemporaryDir>
 #include <QTranslator>
 #include <QtTest>
 
@@ -60,6 +69,11 @@ private slots:
     void operatorSummaryIsTranslatable();
     void operatorSummaryIsCurrentWhenTheStateSignalFires();
     void editorWaivedBlockingIsPresentedAsWaived();
+    void mandatoryPostflight_requiresProfilePath();
+    void mandatoryPostflight_failsClosedOnBlockingFindings();
+    void mandatoryPostflight_respectsCancellation();
+    void mandatoryPostflight_acceptsResolvedProfileJson();
+    void provisionalPass_doesNotAllowCertification();
 };
 
 namespace
@@ -375,6 +389,16 @@ void PreflightVerdictTest::editorBudgetExceeded_isIncompleteNeverPass()
     QVERIFY(controller.operatorSummary().startsWith(QStringLiteral("Could not finish inspecting.")));
 }
 
+void PreflightVerdictTest::provisionalPass_doesNotAllowCertification()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.profileIdentity.insert(QStringLiteral("provisional"), true);
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QVERIFY(verdict.allowsCertificateIssuance());
+    QVERIFY(!pdf::preflightAllowsCertification(result));
+}
+
 void PreflightVerdictTest::editorWaivedBlocking_isPass()
 {
     const QString documentDigest(64, QLatin1Char('a'));
@@ -522,6 +546,80 @@ void PreflightVerdictTest::editorWaivedBlockingIsPresentedAsWaived()
     QVERIFY(!blockingView->waived);
     QCOMPARE(blockingController.findingsModel()->severityMap().value(blockingView->id),
              pdfinteraction::OverlaySeverity::Error);
+}
+
+void PreflightVerdictTest::mandatoryPostflight_requiresProfilePath()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, {}, &verdict);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Error);
+}
+
+void PreflightVerdictTest::mandatoryPostflight_failsClosedOnBlockingFindings()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF mediaBox(0, 0, 180, 180);
+    const pdf::PDFObjectReference page = builder.appendPage(mediaBox);
+    builder.setPageTrimBox(page, mediaBox.adjusted(10, 10, -10, -10));
+    pdf::PDFPageContentStreamBuilder pageContentStreamBuilder(&builder,
+                                                              pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = pageContentStreamBuilder.begin(page))
+    {
+        painter->fillRect(mediaBox.adjusted(10, 10, -10, -10), Qt::black);
+        pageContentStreamBuilder.end(painter);
+    }
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, profilePath, &verdict);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Fail);
+}
+
+class AlwaysCancelledPostflightControl final : public pdf::PDFOperationControl
+{
+public:
+    bool isOperationCancelled() const override
+    {
+        return true;
+    }
+};
+
+void PreflightVerdictTest::mandatoryPostflight_respectsCancellation()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    AlwaysCancelledPostflightControl control;
+    pdf::MandatoryPostflightOptions options;
+    options.operationControl = &control;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, profilePath, &verdict, nullptr, options);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("cancelled"));
+}
+
+void PreflightVerdictTest::mandatoryPostflight_acceptsResolvedProfileJson()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    QJsonObject profile;
+    QString profileError;
+    QVERIFY(pdf::PreflightEngine::loadProfile(profilePath, profile, profileError));
+    pdf::MandatoryPostflightOptions options;
+    options.profileJson = profile;
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, {}, &verdict, nullptr, options);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Fail);
 }
 
 QTEST_GUILESS_MAIN(PreflightVerdictTest)

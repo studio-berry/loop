@@ -1,0 +1,113 @@
+[
+  {
+    "id": "inverted-media",
+    "pdf": "pagebox-inverted-media.pdf",
+    "reader": {
+      "result": "ok",
+      "media_box": [
+        0,
+        0,
+        312,
+        312
+      ],
+      "crop_box": [
+        10,
+        10,
+        292,
+        292
+      ],
+      "bleed_box": [
+        0,
+        0,
+        312,
+        312
+      ],
+      "trim_box": [
+        12,
+        12,
+        288,
+        288
+      ]
+    },
+    "preflight": {
+      "profile": "profiles/loop-default.json",
+      "pass": true,
+      "check_ids": [
+        "bleed"
+      ]
+    }
+  },
+  {
+    "id": "zero-area",
+    "pdf": "pagebox-zero-area.pdf",
+    "reader": {
+      "result": "ok",
+      "media_box": [
+        100,
+        100,
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "id": "negative-origin",
+    "pdf": "pagebox-negative-origin.pdf",
+    "reader": {
+      "result": "ok",
+      "media_box": [
+        -50,
+        -50,
+        312,
+        312
+      ],
+      "crop_box": [
+        -40,
+        -40,
+        292,
+        292
+      ]
+    }
+  },
+  {
+    "id": "rotated-90",
+    "pdf": "pagebox-rotated-90.pdf",
+    "reader": {
+      "result": "ok",
+      "media_box": [
+        0,
+        0,
+        312,
+        312
+      ],
+      "rotation": "Rotate90"
+    }
+  },
+  {
+    "id": "art-outside-media",
+    "pdf": "pagebox-art-outside-media.pdf",
+    "reader": {
+      "result": "ok",
+      "media_box": [
+        0,
+        0,
+        200,
+        200
+      ],
+      "art_box": [
+        -20,
+        -20,
+        260,
+        260
+      ]
+    }
+  },
+  {
+    "id": "invalid-rotation",
+    "pdf": "pagebox-invalid-rotation.pdf",
+    "reader": {
+      "result": "failed",
+      "error_contains": "Invalid page rotation"
+    }
+  }
+]

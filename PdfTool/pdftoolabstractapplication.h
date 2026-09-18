@@ -38,6 +38,7 @@
 #include "pdfrgbtocmykfixup.h"
 #include "pdfrepairdiff.h"
 #include "pdfrepairoperation.h"
+#include "pdfsavepolicy.h"
 #include "pdfactionlist.h"
 
 #include <QtGlobal>
@@ -270,6 +271,9 @@ struct PDFToolOptions
     QString preflightFinishingId;
     QStringList preflightParameterAssignments;
     QStringList preflightCheckFilter;
+    QString preflightProfileOutputPath;
+    QString preflightProfileForkId;
+    QString preflightProfileForkVersion;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
@@ -295,6 +299,7 @@ struct PDFToolOptions
     QString repairOutputDocument;
     QString repairReportFile;
     QString repairRenderDirectory;
+    QString repairApprovalFile;
     bool repairListOperations = false;
     bool repairAllowIncomplete = false;
 
@@ -406,6 +411,7 @@ public:
         ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
         RenderPage = 0x4000000000ULL,   ///< Settings for render-page STCH contract
         EmptyResultPolicy = 0x8000000000ULL,   ///< Shared --fail-if-empty for extraction commands
+        PreflightProfileManage = 0x10000000000ULL,   ///< Loop preflight profile import/export/fork
     };
     Q_DECLARE_FLAGS(Options, Option)
 
@@ -489,6 +495,18 @@ protected:
     /// Returns PDFToolExitCode::Success when every write may proceed; otherwise an
     /// error value.
     PDFToolExitCode validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const;
+
+    /// Holds the write to \p outputPath to the operation-declared \p required
+    /// policy. A request that would weaken it, or that would write over the
+    /// trusted input \p sourcePath unless \p appendInPlace is set, is reported as
+    /// a `save-policy.refused` error and answered with
+    /// PDFToolExitCode::ProcessingFailure. Returns PDFToolExitCode::Success when
+    /// the write may proceed.
+    PDFToolExitCode validateOperationSaveRequest(const PDFToolOptions& options,
+                                                 const QString& sourcePath,
+                                                 const QString& outputPath,
+                                                 const pdf::PDFOperationSavePolicy& required,
+                                                 bool appendInPlace = false) const;
 };
 
 /// This class stores information about all applications available. Application

@@ -35,6 +35,7 @@ targets, or branch names. Regenerate and commit:
 |----------|----------|
 | [`generated/architecture-catalog.json`](../generated/architecture-catalog.json) | Branch policy, workflow branches, preflight check IDs, repair operations, schema versions/kinds, architecture invariants, CMake test targets |
 | [`generated/preflight-check-catalog.json`](../generated/preflight-check-catalog.json) | Per-check measures, limitations, and GWG/PDF-X coverage overlay |
+| [`generated/correction-operation-catalog.json`](../generated/correction-operation-catalog.json) | Per-operation save policy, impact, surface parity, and correction limitations |
 
 ```bash
 python3 scripts/generate-architecture-catalogs.py --write

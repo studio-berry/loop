@@ -5,7 +5,10 @@ Color and overprint claims are measured against the Output Preview /
 
 `UnitTestsOverprintRender` renders each committed fixture at 128×128, compares
 pixels to `loop-preflight/testdata/renders/*.png`, and records numeric
-measurements in sibling `*.measurements.json` files:
+measurements in sibling `*.measurements.json` files. The substitute-font case
+(`font-not-embedded.pdf` → `font-not-embedded.png`) pins the fallback paint path
+for non-embedded standard-14 text; preflight `embedded-fonts` detection alone
+cannot catch silent substitute-font rendering regressions.
 
 - image width / height
 - max channel delta

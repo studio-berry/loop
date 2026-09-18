@@ -27,6 +27,7 @@ qt_add_qml_module(ProductQuickAccessibilitySmoke
         qml/Main.qml
         qml/Workspace.qml
         qml/PreflightPane.qml
+        qml/ActionListPane.qml
         qml/InspectorPane.qml
         qml/DocumentPane.qml
         qml/CanvasPane.qml

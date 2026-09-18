@@ -32,6 +32,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QThread>
@@ -48,10 +49,13 @@
 #include "loopstatevisual.h"
 #include "looptokens.h"
 
+#include "pdfapplicationidentity.h"
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
+#include "preflightprofileresolver.h"
 
 #include "hittestsource.h"
 #include "inputintent.h"
@@ -236,6 +240,9 @@ private slots:
     void preflightRunsOffInteractiveThread();
     void preflightStateVisualIsNotCheckedBeforeARun();
     void exportedPreflightReportMatchesPdfToolForTheSameInputs();
+    void importValidProfileAddsDigest();
+    void importDigestMismatchProfileIsRejected();
+    void saveProfileForkRecordsDerivedFrom();
     void openLargeDocument();
 };
 
@@ -266,6 +273,10 @@ void EditorHostTest::startsWithNoDocument()
     QVERIFY(defaultProfile.value(QStringLiteral("valid")).toBool());
     QVERIFY(!defaultProfile.value(QStringLiteral("digest")).toString().isEmpty());
     QVERIFY(defaultProfile.value(QStringLiteral("diagnostic")).toString().isEmpty());
+    QVERIFY(host.actionList());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("idle"));
+    QVERIFY(!host.repairOperations().isEmpty());
+    QVERIFY(!host.planActionList());
 }
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
@@ -521,6 +532,100 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
     }
 
     QCOMPARE(guiText, cliText);
+}
+
+void EditorHostTest::importValidProfileAddsDigest()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    QStandardPaths::setTestModeEnabled(true);
+    pdf::PDFSettings::setSettingsPath(temp.path());
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
+
+    const QString sourcePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    QFile bundled(sourcePath);
+    QVERIFY(bundled.open(QIODevice::ReadOnly));
+    const QJsonObject profile = QJsonDocument::fromJson(bundled.readAll()).object();
+    const QString expectedDigest = profile.value(QStringLiteral("digest")).toString();
+    QVERIFY(!expectedDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
+
+    const QString expectedId = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                                   .filePath(QStringLiteral("profiles/loop-default.json"));
+    bool found = false;
+    for (const QVariant& entry : host.preflightProfiles())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")).toString() == expectedId)
+        {
+            found = true;
+            QCOMPARE(item.value(QStringLiteral("digest")).toString(), expectedDigest);
+            QVERIFY(item.value(QStringLiteral("valid")).toBool());
+            break;
+        }
+    }
+    QVERIFY(found);
+}
+
+void EditorHostTest::importDigestMismatchProfileIsRejected()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+
+    QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("bad-profile") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Bad") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } } });
+    profile.insert(QStringLiteral("digest"), QString(64, QLatin1Char('a')));
+    const QString sourcePath = temp.filePath(QStringLiteral("bad-profile.json"));
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    sourceFile.write(QJsonDocument(profile).toJson(QJsonDocument::Compact));
+
+    EditorHost host;
+    QVERIFY(!host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
+}
+
+void EditorHostTest::saveProfileForkRecordsDerivedFrom()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+
+    EditorHost host;
+    QString parentDigest;
+    for (const QVariant& entry : host.preflightProfiles())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")) == host.selectedPreflightProfileId())
+        {
+            parentDigest = item.value(QStringLiteral("digest")).toString();
+            break;
+        }
+    }
+    QVERIFY(!parentDigest.isEmpty());
+
+    QVERIFY(host.beginPreflightProfileEdit());
+    QVERIFY(host.setPreflightCheckField(QStringLiteral("image-resolution"), QStringLiteral("min_dpi"), 240));
+    const QString destination = temp.filePath(QStringLiteral("forked-profile.json"));
+    QVERIFY(host.savePreflightProfileEdit(host.preflightProfileDraftVersion(), QUrl::fromLocalFile(destination)));
+
+    QFile forkedFile(destination);
+    QVERIFY(forkedFile.open(QIODevice::ReadOnly));
+    const QJsonObject forked = QJsonDocument::fromJson(forkedFile.readAll()).object();
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(forked, destination);
+    QVERIFY2(imported.ok, qPrintable(imported.errorMessage));
+    QCOMPARE(forked.value(QStringLiteral("derived_from")).toObject().value(QStringLiteral("digest")).toString(), parentDigest);
+    QVERIFY(forked.value(QStringLiteral("digest")).toString() != parentDigest);
+
+    const QByteArray roundTrip = pdf::serializePreflightProfileBytes(imported.profile);
+    const pdf::PreflightProfileImportResult reimported = pdf::importPreflightProfile(QJsonDocument::fromJson(roundTrip).object());
+    QVERIFY(reimported.ok);
+    QCOMPARE(roundTrip, pdf::serializePreflightProfileBytes(reimported.profile));
 }
 
 void EditorHostTest::openLargeDocument()

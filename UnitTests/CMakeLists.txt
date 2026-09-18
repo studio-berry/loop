@@ -46,7 +46,11 @@ set_target_properties(UnitTestsIncrementalSave PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
-add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
+add_test(NAME UnitTestsIncrementalSave COMMAND UnitTestsIncrementalSave)
+# The signed fixture lives in the source tree, not the ctest working directory.
+set_tests_properties(UnitTestsIncrementalSave PROPERTIES
+    ENVIRONMENT "LOOP_FIXTURE_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+)
 
 add_executable(UnitTestsProcessingBudget
     tst_processingbudgettest.cpp
@@ -248,6 +252,8 @@ add_executable(UnitTestsRepairOperation
 )
 
 target_link_libraries(UnitTestsRepairOperation PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsRepairOperation PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsRepairOperation PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -258,11 +264,28 @@ set_target_properties(UnitTestsRepairOperation PROPERTIES
 
 add_test(UnitTestsRepairOperation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsRepairOperation")
 
+add_executable(UnitTestsGovernedExecution
+    tst_governedexecutiontest.cpp
+)
+
+target_link_libraries(UnitTestsGovernedExecution PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsGovernedExecution PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsGovernedExecution "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsGovernedExecution")
+
 add_executable(UnitTestsActionList
     tst_actionlisttest.cpp
 )
 
-target_link_libraries(UnitTestsActionList PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_link_libraries(UnitTestsActionList PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsActionList PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsActionList PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -272,6 +295,21 @@ set_target_properties(UnitTestsActionList PROPERTIES
 )
 
 add_test(UnitTestsActionList "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsActionList")
+
+add_executable(UnitTestsObjectSelector
+    tst_objectselectortest.cpp
+)
+
+target_link_libraries(UnitTestsObjectSelector PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsObjectSelector PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsObjectSelector "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsObjectSelector")
 
 add_executable(UnitTestsOperationHistory
     tst_operationhistorytest.cpp
@@ -325,6 +363,8 @@ add_executable(UnitTestsPreflightVerdict
 target_link_libraries(UnitTestsPreflightVerdict PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
 target_include_directories(UnitTestsPreflightVerdict PRIVATE
     ${CMAKE_SOURCE_DIR}/LoopLibInteraction/sources)
+target_compile_definitions(UnitTestsPreflightVerdict PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsPreflightVerdict PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -852,6 +892,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
         LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
     )
+    target_include_directories(UnitTestsBleedStress PRIVATE
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight)
 
     set_target_properties(UnitTestsBleedStress PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -970,6 +1012,22 @@ set_target_properties(UnitTestsBudgetCorpus PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsBudgetCorpus "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsBudgetCorpus")
+
+add_executable(UnitTestsPageBoxCorpus
+    tst_pageboxcorpustest.cpp
+)
+target_link_libraries(UnitTestsPageBoxCorpus PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsPageBoxCorpus PRIVATE
+    PAGE_BOX_CORPUS_DIR="${CMAKE_SOURCE_DIR}/loop-preflight/testdata/page-box-corpus"
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+)
+set_target_properties(UnitTestsPageBoxCorpus PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPageBoxCorpus "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPageBoxCorpus")
 
 add_executable(UnitTestsResourceBudget
     tst_resourcebudgettest.cpp
