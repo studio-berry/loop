@@ -108,6 +108,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
     QString status = QStringLiteral("planned");
     qint64 durationMs = 0;
     QJsonArray diagnostics;
+    QJsonObject postflight;
     QVector<PDFActionListStepResult> steps;
 
     QJsonObject toJson() const;
@@ -119,6 +120,8 @@ struct PDFActionListExecutionOptions
     QJsonObject bindings;
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
+    QString preflightProfilePath;
+    bool requirePostflight = true;
 };
 
 /// Shared, deterministic orchestration for registered repair operations.

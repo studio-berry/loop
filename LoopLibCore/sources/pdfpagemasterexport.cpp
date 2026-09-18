@@ -1237,6 +1237,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     }
 
     const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
+    if (runPreflight && !job.revalidatePreflightAfterFixups)
+    {
+        job.revalidatePreflightAfterFixups = true;
+    }
     PageMasterOperationControl actionListOperationControl(job.cancelFlag);
     QJsonObject preflightProfile;
     QJsonObject preflightResolution;
@@ -1436,6 +1440,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PDFActionListExecutionOptions actionListOptions;
             actionListOptions.bindings = job.actionListBindings;
             actionListOptions.operationControl = &actionListOperationControl;
+            if (runPreflight && !job.preflightProfilePath.isEmpty())
+            {
+                actionListOptions.preflightProfilePath = job.preflightProfilePath;
+            }
             PDFActionListExecutionResult actionListResult;
             PDFDocument candidate;
             const PDFOperationResult actionListExecution = PDFActionListExecutor().execute(

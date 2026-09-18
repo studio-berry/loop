@@ -182,6 +182,7 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 
 bool BleedStressTest::runAddBleed(const QString& inputPath, const QString& outputPath, const QString& mode, int* exitCode) const
 {
+    const QString profilePath = QDir(sourceDir()).filePath(QString::fromLatin1(STRESS_PROFILE));
     return runPdfTool({
                           QStringLiteral("add-bleed"),
                           inputPath,
@@ -192,6 +193,8 @@ bool BleedStressTest::runAddBleed(const QString& inputPath, const QString& outpu
                           QStringLiteral("--bleed-mm"),
                           QString::fromLatin1(BLEED_MM),
                           QStringLiteral("--force"),
+                          QStringLiteral("--profile"),
+                          profilePath,
                       },
                       nullptr, exitCode);
 }

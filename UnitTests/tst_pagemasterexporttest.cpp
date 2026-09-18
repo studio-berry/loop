@@ -97,6 +97,7 @@ private slots:
     void preflight_gate_blocksFailedOutput();
     void preflight_sidecarWriteFailure_failsClosed();
     void preflight_finalSidecarWriteFailure_keepsPriorOutput();
+    void preflightGate_enablesRevalidationByDefault();
     void bleed_confirmationGate_blocksBeforeAssembly();
     void bleed_manifestReportsEligibility();
 };
@@ -1666,6 +1667,33 @@ void PageMasterExportTest::preflight_finalSidecarWriteFailure_keepsPriorOutput()
     QFile kept(outputPath);
     QVERIFY(kept.open(QIODevice::ReadOnly));
     QCOMPARE(kept.readAll(), priorBytes);
+}
+
+void PageMasterExportTest::preflightGate_enablesRevalidationByDefault()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    QVERIFY(QFile::exists(profilePath));
+    const QString outputPath = tempDir.filePath(QStringLiteral("revalidate-default.pdf"));
+    pdf::PDFDocument source = buildFilledPage(QRectF(0, 0, 180, 180));
+
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.hasPreflightGate = true;
+    job.preflightProfilePath = profilePath;
+    job.forcePreflight = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY2(result.success, qPrintable(result.errorMessage));
+    QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight.json")));
+    QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight-final.json")));
+    const QJsonObject outputEntry = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+    QVERIFY(outputEntry.value(QStringLiteral("preflight")).toObject().contains(QStringLiteral("revalidation")));
 }
 
 void PageMasterExportTest::bleed_confirmationGate_blocksBeforeAssembly()

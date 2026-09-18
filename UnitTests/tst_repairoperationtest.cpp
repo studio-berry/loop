@@ -22,15 +22,20 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfpreflightverdict.h"
 #include "pdfrepairoperation.h"
 #include "pdfstandardconversion.h"
+
+#include <QPainter>
 
 #include <algorithm>
 
 #include <QBuffer>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QJsonValue>
@@ -70,6 +75,22 @@ QByteArray writeSerializedBytes(const pdf::PDFDocument& document)
     return result ? buffer.data() : QByteArray();
 }
 
+pdf::PDFDocument buildPreflightCleanDocument()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF mediaBox(0, 0, 180, 180);
+    const pdf::PDFObjectReference page = builder.appendPage(mediaBox);
+    builder.setPageTrimBox(page, mediaBox.adjusted(10, 10, -10, -10));
+    pdf::PDFPageContentStreamBuilder pageContentStreamBuilder(&builder,
+                                                              pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = pageContentStreamBuilder.begin(page))
+    {
+        painter->fillRect(mediaBox.adjusted(10, 10, -10, -10), Qt::black);
+        pageContentStreamBuilder.end(painter);
+    }
+    return builder.build();
+}
+
 }   // namespace
 
 class RepairOperationTest : public QObject
@@ -90,6 +111,8 @@ private slots:
     void failedOperation_discardsCandidate();
     void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
+    void addBleedAnalyze_rejectsUnknownBleedMode();
+    void declaredValidators_populateVerdictWhenProfileSupplied();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -517,6 +540,38 @@ void RepairOperationTest::standardTargets_areExplicitAndStable()
     QVERIFY(pdf::pdfStandardTargetFromString(QStringLiteral("PDF/X-3:2002"), &target));
     QCOMPARE(target, pdf::PDFStandardTarget::PDFX3_2002);
     QCOMPARE(pdf::pdfStandardTargetToString(pdf::PDFStandardTarget::PDFA2b), QStringLiteral("PDF/A-2b"));
+}
+
+void RepairOperationTest::addBleedAnalyze_rejectsUnknownBleedMode()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(operation);
+    pdf::PDFRepairPlan plan;
+    const pdf::PDFOperationResult analyze = operation->analyze(source,
+                                                               QJsonObject{ { QStringLiteral("mode"), QStringLiteral("bogus") } },
+                                                               &plan);
+    QVERIFY(!analyze);
+    QVERIFY(!plan.unsupportedReasons.isEmpty());
+}
+
+void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied()
+{
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { pdf::PDFRepairValidatorKind::NormalPreflight };
+    pdf::PDFRepairResult result;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult validation = pdf::runDeclaredRepairValidators(&document, plan, profilePath, &result);
+    QVERIFY(!result.verdict.isEmpty());
+    QCOMPARE(result.validations.size(), 1);
+    QCOMPARE(result.validations.first().validatorId, QStringLiteral("normal-preflight"));
+    QCOMPARE(result.validations.first().status, pdf::PDFRepairStatus::Failed);
+    QVERIFY(!validation);
+    QCOMPARE(result.verdict.value(QStringLiteral("state")).toString(), QStringLiteral("fail"));
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

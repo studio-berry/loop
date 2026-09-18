@@ -22,6 +22,9 @@
 
 #include "pdfpreflightverdict.h"
 
+#include "pdfdocumentsession.h"
+#include "pdfrepairoperation.h"
+
 #include <QCoreApplication>
 #include <QJsonArray>
 
@@ -338,6 +341,105 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     }
 
     return verdict;
+}
+
+PDFOperationResult runMandatoryPostflight(PDFDocument* document,
+                                          const QString& profilePath,
+                                          PreflightVerdict* verdictOut,
+                                          PreflightResult* resultOut,
+                                          MandatoryPostflightOptions options)
+{
+    if (!document || !verdictOut)
+    {
+        return PDFOperationResult(QStringLiteral("Mandatory postflight requires a document and verdict output."));
+    }
+    if (profilePath.trimmed().isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("A preflight profile path is required before a candidate can be published."));
+    }
+
+    QJsonObject profile;
+    QString profileError;
+    if (!PreflightEngine::loadProfile(profilePath, profile, profileError))
+    {
+        return PDFOperationResult(profileError);
+    }
+
+    PDFDocumentSession* session = PDFDocumentSession::createForInspection(document);
+    const PreflightResult preflight = PreflightEngine(session).run(profile);
+    PDFDocumentSession::destroy(session);
+
+    const PreflightVerdict verdict = reducePreflightVerdict(preflight);
+    *verdictOut = verdict;
+    if (resultOut)
+    {
+        *resultOut = preflight;
+    }
+
+    if (verdict.state == PreflightVerdictState::Incomplete && options.allowIncomplete)
+    {
+        return PDFOperationResult(true);
+    }
+    if (verdict.state == PreflightVerdictState::Pass)
+    {
+        return PDFOperationResult(true);
+    }
+
+    const QString summary = preflightVerdictOperatorSummary(verdict);
+    if (verdict.state == PreflightVerdictState::Incomplete)
+    {
+        return PDFOperationResult(QStringLiteral("Postflight did not inspect the complete candidate: %1").arg(summary));
+    }
+    return PDFOperationResult(summary);
+}
+
+PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
+                                               const PDFRepairPlan& plan,
+                                               const QString& profilePath,
+                                               PDFRepairResult* result,
+                                               MandatoryPostflightOptions options)
+{
+    if (!document || !result)
+    {
+        return PDFOperationResult(QStringLiteral("Declared repair validators require a document and result output."));
+    }
+
+    const bool requiresNormalPreflight = plan.requiresPostflight ||
+                                         plan.validators.contains(PDFRepairValidatorKind::NormalPreflight);
+    if (!requiresNormalPreflight)
+    {
+        return PDFOperationResult(true);
+    }
+
+    PreflightVerdict verdict;
+    PreflightResult preflightResult;
+    const PDFOperationResult postflight = runMandatoryPostflight(document,
+                                                                 profilePath,
+                                                                 &verdict,
+                                                                 &preflightResult,
+                                                                 options);
+    result->verdict = verdict.toJson();
+
+    PDFRepairValidationResult validation;
+    validation.validatorId = QStringLiteral("normal-preflight");
+    validation.summary = preflightVerdictOperatorSummary(verdict);
+    if (postflight && verdict.isPass())
+    {
+        validation.status = PDFRepairStatus::Passed;
+    }
+    else if (verdict.state == PreflightVerdictState::Incomplete)
+    {
+        validation.status = PDFRepairStatus::Incomplete;
+        result->incompleteReasons.append(validation.summary);
+    }
+    else
+    {
+        validation.status = PDFRepairStatus::Failed;
+        result->validationFailures.append(validation.summary);
+    }
+    result->validations.append(std::move(validation));
+
+    return postflight;
 }
 
 }   // namespace pdf

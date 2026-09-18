@@ -22,10 +22,17 @@
 
 #include "pdfpreflightverdict.h"
 #include "pdfactionlist.h"
+#include "pdfdocumentbuilder.h"
 #include "preflightcontroller.h"
+
+#include <QPainter>
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QTemporaryDir>
 #include <QTranslator>
 #include <QtTest>
 
@@ -60,6 +67,8 @@ private slots:
     void operatorSummaryIsTranslatable();
     void operatorSummaryIsCurrentWhenTheStateSignalFires();
     void editorWaivedBlockingIsPresentedAsWaived();
+    void mandatoryPostflight_requiresProfilePath();
+    void mandatoryPostflight_failsClosedOnBlockingFindings();
 };
 
 namespace
@@ -522,6 +531,38 @@ void PreflightVerdictTest::editorWaivedBlockingIsPresentedAsWaived()
     QVERIFY(!blockingView->waived);
     QCOMPARE(blockingController.findingsModel()->severityMap().value(blockingView->id),
              pdfinteraction::OverlaySeverity::Error);
+}
+
+void PreflightVerdictTest::mandatoryPostflight_requiresProfilePath()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, {}, &verdict);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Error);
+}
+
+void PreflightVerdictTest::mandatoryPostflight_failsClosedOnBlockingFindings()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF mediaBox(0, 0, 180, 180);
+    const pdf::PDFObjectReference page = builder.appendPage(mediaBox);
+    builder.setPageTrimBox(page, mediaBox.adjusted(10, 10, -10, -10));
+    pdf::PDFPageContentStreamBuilder pageContentStreamBuilder(&builder,
+                                                              pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = pageContentStreamBuilder.begin(page))
+    {
+        painter->fillRect(mediaBox.adjusted(10, 10, -10, -10), Qt::black);
+        pageContentStreamBuilder.end(painter);
+    }
+    pdf::PDFDocument document = builder.build();
+    pdf::PreflightVerdict verdict;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult result = pdf::runMandatoryPostflight(&document, profilePath, &verdict);
+    QVERIFY(!result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Fail);
 }
 
 QTEST_GUILESS_MAIN(PreflightVerdictTest)

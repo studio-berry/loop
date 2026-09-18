@@ -1278,10 +1278,21 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
     m_actionListOutcomes.insert(jobId, outcome);
     const pdf::PDFActionList actionList = recipe->actionList;
     const QJsonObject bindings = m_actionListBindings;
+    QString preflightProfilePath;
+    if (phase == pdfinteraction::ActionListRunPhase::Execute)
+    {
+        const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                            [this](const PreflightProfileChoice& profile)
+                                            { return profile.id == m_selectedPreflightProfileId; });
+        if (profileIt != m_preflightProfiles.cend() && profileIt->valid)
+        {
+            preflightProfilePath = profileIt->source;
+        }
+    }
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        pdfinteraction::makeActionListRunWorker(phase, actionList, document, bindings, outcome));
+        pdfinteraction::makeActionListRunWorker(phase, actionList, document, bindings, outcome, preflightProfilePath));
     if (submittedId != jobId)
     {
         m_actionListOutcomes.remove(jobId);

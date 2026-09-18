@@ -61,7 +61,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             pdf::PDFActionList actionList,
                                             pdf::PDFDocumentPointer document,
                                             QJsonObject bindings,
-                                            std::shared_ptr<ActionListWorkerOutcome> outcome);
+                                            std::shared_ptr<ActionListWorkerOutcome> outcome,
+                                            QString preflightProfilePath = {});
 
 }   // namespace pdfinteraction
 

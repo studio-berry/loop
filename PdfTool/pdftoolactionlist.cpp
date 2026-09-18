@@ -26,6 +26,7 @@
 #include "pdfdocumentreader.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationhistorystore.h"
+#include "pdfpreflightverdict.h"
 #include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
@@ -257,6 +258,18 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
     executionOptions.dryRun = options.destructiveDryRun;
     ActionListCancelControl cancelControl;
     executionOptions.operationControl = &cancelControl;
+    const bool requiresPostflight = subcommand == QStringLiteral("run") || subcommand == QStringLiteral("batch");
+    executionOptions.requirePostflight = requiresPostflight;
+    if (requiresPostflight)
+    {
+        if (options.preflightProfilePath.isEmpty())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.postflight-required"),
+                             PDFToolTranslationContext::tr("A preflight --profile is required before an Action List output can be committed."));
+            return PDFToolExitCode::PartialOutput;
+        }
+        executionOptions.preflightProfilePath = options.preflightProfilePath;
+    }
 
     if (subcommand == QStringLiteral("validate"))
     {
@@ -419,7 +432,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolActionList::getOptionsFlags() const
 {
-    return ConsoleFormat | ActionList | DestructiveWrite;
+    return ConsoleFormat | ActionList | DestructiveWrite | PreflightProfile;
 }
 
 static PDFToolActionList s_actionListApplication;

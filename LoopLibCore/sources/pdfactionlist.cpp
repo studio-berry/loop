@@ -488,6 +488,7 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("status"), status },
         { QStringLiteral("duration_ms"), durationMs },
         { QStringLiteral("diagnostics"), diagnostics },
+        { QStringLiteral("postflight"), postflight },
         { QStringLiteral("steps"), stepJson }
     };
 }
@@ -731,6 +732,20 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             }
             stepResult.plan = currentPlan.toJson();
             stepResult.repairResult = repairResult.toJson();
+            if (!options.preflightProfilePath.isEmpty())
+            {
+                const PDFOperationResult validatorResult = runDeclaredRepairValidators(&working,
+                                                                                       currentPlan,
+                                                                                       options.preflightProfilePath,
+                                                                                       &repairResult);
+                stepResult.repairResult = repairResult.toJson();
+                if (!validatorResult)
+                {
+                    stepResult.status = PDFActionListStepStatus::Failed;
+                    addDiagnostic(&stepResult, QStringLiteral("action-list.step-postflight-failed"), validatorResult.getErrorMessage());
+                    hadFailure = true;
+                }
+            }
             if (!repairResult.verdict.isEmpty())
             {
                 applyCanonicalPreflightVerdict(&stepResult, preflightVerdictFromJson(repairResult.verdict));
@@ -757,6 +772,39 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         result->status = QStringLiteral("failed");
         return PDFOperationResult(QStringLiteral("One or more Action List steps failed; the candidate was discarded."));
     }
+
+    if (options.requirePostflight)
+    {
+        if (options.preflightProfilePath.trimmed().isEmpty())
+        {
+            result->status = QStringLiteral("failed");
+            result->diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.postflight-required") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), QStringLiteral("A preflight profile path is required before an Action List output can be published.") } });
+            return PDFOperationResult(QStringLiteral("A preflight profile path is required before an Action List output can be published."));
+        }
+
+        PreflightVerdict terminalVerdict;
+        PreflightResult terminalPreflight;
+        const PDFOperationResult terminalPostflight = runMandatoryPostflight(&working,
+                                                                             options.preflightProfilePath,
+                                                                             &terminalVerdict,
+                                                                             &terminalPreflight);
+        result->postflight = terminalPreflight.toJson(QStringLiteral("candidate"));
+        if (!terminalPostflight || !terminalVerdict.isPass())
+        {
+            result->status = QStringLiteral("failed");
+            result->diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.postflight-verdict") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), preflightVerdictOperatorSummary(terminalVerdict) } });
+            return PDFOperationResult(terminalPostflight.getErrorMessage().isEmpty()
+                                          ? preflightVerdictOperatorSummary(terminalVerdict)
+                                          : terminalPostflight.getErrorMessage());
+        }
+    }
+
     *candidate = std::move(working);
     result->status = QStringLiteral("succeeded");
     return PDFOperationResult(true);

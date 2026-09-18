@@ -49,6 +49,11 @@ public:
 namespace
 {
 
+const QString defaultPreflightProfilePath()
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+}
+
 pdf::PDFActionList bleedRecipe(const QString& id)
 {
     pdf::PDFActionList actionList;
@@ -81,6 +86,8 @@ private slots:
     void cliParityRecipeHashAndOutputSha256();
     void surfacesPerStepValidationErrors();
     void controllerFencesValidationPlanAndStaleCompletion();
+    void executeRequiresPostflightProfile();
+    void addBleedRepairRejectsUnknownMode();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -170,7 +177,9 @@ void ActionListTest::executesRegisteredOperationOnCandidate()
                                          &actionList));
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
-    QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &result));
+    pdf::PDFActionListExecutionOptions options;
+    options.requirePostflight = false;
+    QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
     QCOMPARE(result.status, QStringLiteral("succeeded"));
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
     QVERIFY(candidate != pdf::PDFDocument());
@@ -230,7 +239,8 @@ void ActionListTest::adapterContractValidatePlanExecute()
                                                 actionList,
                                                 document,
                                                 QJsonObject(),
-                                                executeOutcome)(local.context);
+                                                executeOutcome,
+                                                defaultPreflightProfilePath())(local.context);
     }
     QVERIFY(executeOutcome->ok);
     QCOMPARE(executeOutcome->executionResult.status, QStringLiteral("succeeded"));
@@ -276,6 +286,7 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     pdf::PDFDocument cliCandidate;
     pdf::PDFActionListExecutionOptions adapterOptions;
     adapterOptions.bindings = bindings;
+    adapterOptions.preflightProfilePath = defaultPreflightProfilePath();
     QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, adapterOptions, &cliCandidate, &cliResult));
 
     auto adapterOutcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
@@ -289,7 +300,8 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
                                                 actionList,
                                                 document,
                                                 bindings,
-                                                adapterOutcome)(local.context);
+                                                adapterOutcome,
+                                                defaultPreflightProfilePath())(local.context);
     }
     QVERIFY(adapterOutcome->ok);
     QCOMPARE(adapterOutcome->executionResult.recipeHash, cliResult.recipeHash);
@@ -306,6 +318,7 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     process.start(pdfTool,
                   { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, inputPath,
                     QStringLiteral("--param"), QStringLiteral("bleed=3"), QStringLiteral("--output"), outputPath,
+                    QStringLiteral("--profile"), defaultPreflightProfilePath(),
                     QStringLiteral("--console-format"), QStringLiteral("json") });
     QVERIFY(process.waitForFinished(30000));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
@@ -417,6 +430,7 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     CancelActionListControl control;
     pdf::PDFActionListExecutionOptions options;
     options.operationControl = &control;
+    options.requirePostflight = false;
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
     QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
@@ -424,6 +438,35 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Cancelled);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
     QVERIFY(candidate == pdf::PDFDocument());
+}
+
+void ActionListTest::executeRequiresPostflightProfile()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("postflight-gate"));
+    pdf::PDFActionListExecutionResult result;
+    pdf::PDFDocument candidate;
+    const pdf::PDFOperationResult execution = pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &result);
+    QVERIFY(!execution);
+    QCOMPARE(result.status, QStringLiteral("failed"));
+    QVERIFY(!result.postflight.isEmpty() || !result.diagnostics.isEmpty());
+}
+
+void ActionListTest::addBleedRepairRejectsUnknownMode()
+{
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(operation);
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFRepairPlan plan;
+    const pdf::PDFOperationResult analyze = operation->analyze(source,
+                                                               QJsonObject{ { QStringLiteral("mode"), QStringLiteral("bogus") } },
+                                                               &plan);
+    QVERIFY(!analyze);
+    QVERIFY(!plan.unsupportedReasons.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(ActionListTest)

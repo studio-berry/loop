@@ -252,6 +252,8 @@ add_executable(UnitTestsRepairOperation
 )
 
 target_link_libraries(UnitTestsRepairOperation PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsRepairOperation PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsRepairOperation PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -267,6 +269,8 @@ add_executable(UnitTestsActionList
 )
 
 target_link_libraries(UnitTestsActionList PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsActionList PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsActionList PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -329,6 +333,8 @@ add_executable(UnitTestsPreflightVerdict
 target_link_libraries(UnitTestsPreflightVerdict PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
 target_include_directories(UnitTestsPreflightVerdict PRIVATE
     ${CMAKE_SOURCE_DIR}/LoopLibInteraction/sources)
+target_compile_definitions(UnitTestsPreflightVerdict PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsPreflightVerdict PROPERTIES
     WIN32_EXECUTABLE OFF

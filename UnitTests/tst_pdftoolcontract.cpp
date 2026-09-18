@@ -404,7 +404,9 @@ void PdfToolContractTest::addBleedRefusesToWriteOverItsOwnInput()
     const ToolRun legitimate = runPdfTool({ QStringLiteral("add-bleed"),
                                             QStringLiteral("--console-format"), QStringLiteral("json"),
                                             inputPath,
-                                            QStringLiteral("--output"), candidatePath });
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--profile"),
+                                            QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json")) });
     QCOMPARE(legitimate.exitCode, 0);
     QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
     QVERIFY(QFile(candidatePath).exists());
