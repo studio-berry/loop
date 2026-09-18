@@ -38,6 +38,7 @@
 #include "actionlistrunsubmitter.h"
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
+#include "preflightprofiledraft.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
 #include "viewportcommandbridge.h"
@@ -106,6 +107,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QString selectedPreflightProfileId READ selectedPreflightProfileId NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(bool preflightProfileEditing READ preflightProfileEditing NOTIFY preflightProfileDraftChanged)
+    Q_PROPERTY(QVariantList preflightEditableChecks READ preflightEditableChecks NOTIFY preflightProfileDraftChanged)
+    Q_PROPERTY(QString preflightProfileDraftVersion READ preflightProfileDraftVersion NOTIFY preflightProfileDraftChanged)
     Q_PROPERTY(QVariantList actionListRecipes READ actionListRecipes NOTIFY actionListRecipesChanged)
     Q_PROPERTY(QString selectedActionListRecipeId READ selectedActionListRecipeId NOTIFY actionListRecipesChanged)
     Q_PROPERTY(QVariantList actionListBindings READ actionListBindings NOTIFY actionListRecipesChanged)
@@ -183,6 +187,9 @@ public:
     QVariantList preflightProfiles() const;
     QVariantList preflightVariables() const;
     QString selectedPreflightProfileId() const;
+    bool preflightProfileEditing() const;
+    QVariantList preflightEditableChecks() const;
+    QString preflightProfileDraftVersion() const;
     QVariantList actionListRecipes() const;
     QString selectedActionListRecipeId() const;
     QVariantList actionListBindings() const;
@@ -227,6 +234,15 @@ public:
     Q_INVOKABLE bool setPreflightVariable(const QString& name, const QVariant& value);
     Q_INVOKABLE void requestPreflightReportExport();
     Q_INVOKABLE bool exportPreflightReportFileUrl(const QUrl& url);
+    Q_INVOKABLE void requestPreflightProfileImport();
+    Q_INVOKABLE void requestPreflightProfileExport();
+    Q_INVOKABLE void requestPreflightProfileSave();
+    Q_INVOKABLE bool importPreflightProfileFileUrl(const QUrl& url);
+    Q_INVOKABLE bool beginPreflightProfileEdit();
+    Q_INVOKABLE bool setPreflightCheckField(const QString& checkId, const QString& field, const QVariant& value);
+    Q_INVOKABLE bool savePreflightProfileEdit(const QString& newVersion, const QUrl& url);
+    Q_INVOKABLE bool exportPreflightProfileFileUrl(const QUrl& url);
+    Q_INVOKABLE void cancelPreflightProfileEdit();
     Q_INVOKABLE bool importActionListRecipe(const QUrl& url);
     Q_INVOKABLE bool exportActionListRecipe(const QUrl& url);
     Q_INVOKABLE bool selectActionListRecipe(const QString& id);
@@ -292,8 +308,12 @@ signals:
     void commandEpochChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
     void preflightProfilesChanged();
+    void preflightProfileDraftChanged();
     void actionListRecipesChanged();
     void preflightReportExportRequested();
+    void preflightProfileImportRequested();
+    void preflightProfileExportRequested();
+    void preflightProfileSaveRequested();
 
 private:
     void connectFacade();
@@ -372,6 +392,7 @@ private:
     QList<PreflightProfileChoice> m_preflightProfiles;
     QJsonObject m_preflightBindings;
     QString m_selectedPreflightProfileId;
+    pdfinteraction::PreflightProfileDraft m_preflightProfileDraft;
     class QFileSystemWatcher* m_preflightProfileWatcher = nullptr;
     class QFileSystemWatcher* m_actionListRecipeWatcher = nullptr;
     bool m_acceptPreflightResults = true;

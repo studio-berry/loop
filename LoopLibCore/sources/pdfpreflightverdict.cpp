@@ -340,4 +340,14 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     return verdict;
 }
 
+bool preflightAllowsCertification(const PreflightResult& result)
+{
+    const PreflightVerdict verdict = reducePreflightVerdict(result);
+    if (!verdict.allowsCertificateIssuance())
+    {
+        return false;
+    }
+    return !result.profileIdentity.value(QStringLiteral("provisional")).toBool(false);
+}
+
 }   // namespace pdf

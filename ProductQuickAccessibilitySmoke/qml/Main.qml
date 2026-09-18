@@ -90,11 +90,68 @@ ApplicationWindow {
         onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
+    FileDialog {
+        id: preflightProfileImportDialog
+        title: qsTr("Import Preflight Profile")
+        nameFilters: [qsTr("JSON files (*.json)")]
+        onAccepted: {
+            if (host) {
+                host.importPreflightProfileFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: preflightProfileExportDialog
+        title: qsTr("Export Preflight Profile")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("JSON files (*.json)")]
+        onAccepted: {
+            if (host) {
+                host.exportPreflightProfileFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: preflightProfileSaveDialog
+        title: qsTr("Save Preflight Profile Fork")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("JSON files (*.json)")]
+        onAccepted: {
+            if (host) {
+                host.savePreflightProfileEdit(profileSaveVersionField.text, selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
     Connections {
         target: host
         function onPreflightReportExportRequested() {
             preflightReportDialog.open()
         }
+        function onPreflightProfileImportRequested() {
+            preflightProfileImportDialog.open()
+        }
+        function onPreflightProfileExportRequested() {
+            preflightProfileExportDialog.open()
+        }
+        function onPreflightProfileSaveRequested() {
+            profileSaveVersionField.text = host ? host.preflightProfileDraftVersion : ""
+            preflightProfileSaveDialog.open()
+        }
+    }
+
+    TextField {
+        id: profileSaveVersionField
+        visible: false
+        Accessible.ignored: true
     }
 
     Shortcut {

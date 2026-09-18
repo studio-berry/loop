@@ -69,6 +69,10 @@ LOOPLIBCORESHARED_EXPORT QString preflightGateFailureMessage(const QString& file
 LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
                                                                  const PreflightProfileData* effectiveProfile = nullptr);
 
+/// Certificate issuance (#133) may proceed only on a PASS verdict against a
+/// non-provisional profile identity.
+LOOPLIBCORESHARED_EXPORT bool preflightAllowsCertification(const PreflightResult& result);
+
 }   // namespace pdf
 
 #endif   // PDFPREFLIGHTVERDICT_H
