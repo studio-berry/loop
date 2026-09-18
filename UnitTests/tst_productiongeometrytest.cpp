@@ -125,9 +125,7 @@ void ProductionGeometryTest::roundTripPreservesProcessingSemantics()
     contour.path.addRect(QRectF(10.0, 20.0, 100.0, 50.0));
     contour.sourceEvidence = QStringLiteral("explicit-selection");
     model.contours.append(contour);
-    model.processingSteps.append({ QStringLiteral("step-cut"), PDFProcessingStepKind::Cut,
-                                   QStringLiteral("Cut contour"), QStringLiteral("CutContour"), false, true,
-                                   { { QStringLiteral("vendor"), QStringLiteral("test") } } });
+    model.processingSteps.append({ QStringLiteral("step-cut"), PDFProcessingStepKind::Cut, QStringLiteral("Cut contour"), QStringLiteral("CutContour"), false, true, { { QStringLiteral("vendor"), QStringLiteral("test") } } });
 
     const PDFProductionGeometryModel reopened = PDFProductionGeometryModel::fromJson(model.toJson());
     QCOMPARE(reopened.schemaVersion, PDFProductionGeometrySchemaVersion);
@@ -168,9 +166,7 @@ void ProductionGeometryTest::rejectsSelfIntersectingContours()
     const PDFProductionValidationReport report = validateProductionGeometry(model);
     QVERIFY(!report.valid);
     QVERIFY(std::any_of(report.diagnostics.cbegin(), report.diagnostics.cend(), [](const PDFProductionDiagnostic& diagnostic)
-    {
-        return diagnostic.id == QStringLiteral("production.contour.self_intersection");
-    }));
+                        { return diagnostic.id == QStringLiteral("production.contour.self_intersection"); }));
 }
 
 void ProductionGeometryTest::plansDeterministicContourBleedAndGrommets()
@@ -204,10 +200,7 @@ void ProductionGeometryTest::detectProcessingSteps_findsDeviceNCutContourStroke(
     const pdf::PDFDocument document = buildDeviceNCutContourDocument();
     const QList<pdf::PDFProcessingStep> steps = detectProcessingSteps(document);
     const auto it = std::find_if(steps.cbegin(), steps.cend(), [](const pdf::PDFProcessingStep& step)
-    {
-        return step.spotColorName == QStringLiteral("CutContour")
-               && step.detectionMethod == QStringLiteral("legacy-spot-color");
-    });
+                                 { return step.spotColorName == QStringLiteral("CutContour") && step.detectionMethod == QStringLiteral("legacy-spot-color"); });
     QVERIFY(it != steps.cend());
     QCOMPARE(it->kind, pdf::PDFProcessingStepKind::Cut);
     QVERIFY(!it->geometry.isEmpty());
