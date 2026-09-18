@@ -32,6 +32,15 @@ timeouts, invocation failures, and absent signatures are `incomplete`; a
 nonzero validator exit is `rejected`. `incomplete` never qualifies as PASS,
 and self-only Loop checks do not satisfy this gate.
 
+The save-policy claim is produced by `UnitTestsIncrementalSave`: when
+`LOOP_SAVE_POLICY_EVIDENCE_DIR` is set it writes
+`incremental-with-signature.pdf` — a genuinely signed document that keeps the
+original signed byte range across an incremental append — plus a JSON record of
+the source and artifact digests. `reusable-linux.yml` runs `--claim structural
+--claim signature` over that artifact and stores the evidence under
+`docs/evidence/session-15-save-policy/`. A host without `qpdf` and `pdfsig`
+records `reason_code: validator-not-installed` and stays `incomplete`.
+
 The conversion fixture triad remains the source-level oracle in
 `loop-preflight/testdata/conversion/manifest.json`. Any real PDF added for a
 platform qualification run must record provenance, license, digest, expected

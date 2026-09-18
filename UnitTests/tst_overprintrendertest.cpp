@@ -57,6 +57,18 @@ const RenderCase RENDER_CASES[] = {
     { "overprint-group-stroke", false },
 };
 
+struct SingleRenderCase
+{
+    const char* fixture;
+    const char* baseline;
+};
+
+// Substitute-font paint regressions are not visible to preflight embedded-fonts
+// detection alone; pin pixels through the same transparency-renderer harness.
+const SingleRenderCase SINGLE_RENDER_CASES[] = {
+    { "font-not-embedded.pdf", "font-not-embedded.png" },
+};
+
 QString fixturesDirectory()
 {
     return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
@@ -205,6 +217,8 @@ class OverprintRenderTest : public QObject
 private slots:
     void render_data();
     void render();
+    void renderSubstituteFont_data();
+    void renderSubstituteFont();
     void rendererDifferentialDoesNotDriftBeyondTolerance();
 };
 
@@ -231,6 +245,29 @@ void OverprintRenderTest::render()
     QFETCH(bool, separationSimulation);
 
     const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + fixture, separationSimulation);
+    const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
+    compareRender(baseline, actual, expected);
+}
+
+void OverprintRenderTest::renderSubstituteFont_data()
+{
+    QTest::addColumn<QString>("fixture");
+    QTest::addColumn<QString>("baseline");
+
+    for (const SingleRenderCase& renderCase : SINGLE_RENDER_CASES)
+    {
+        const QString fixture = QString::fromLatin1(renderCase.fixture);
+        const QString baseline = QString::fromLatin1(renderCase.baseline);
+        QTest::newRow(qPrintable(baseline)) << fixture << baseline;
+    }
+}
+
+void OverprintRenderTest::renderSubstituteFont()
+{
+    QFETCH(QString, fixture);
+    QFETCH(QString, baseline);
+
+    const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + fixture, false);
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
     compareRender(baseline, actual, expected);
 }

@@ -22,7 +22,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-set(LOOP_VERSION 0.2.0)
+set(LOOP_VERSION 0.2.1)
 set(LOOP_VERSION_PRERELEASE alpha)
 set(LOOP_PRODUCT_NAME "Loop")
 set(LOOP_ORGANIZATION_NAME "Loop")

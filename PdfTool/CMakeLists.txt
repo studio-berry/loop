@@ -70,6 +70,8 @@ set(_loop_pdftool_sources
     pdftoolrgbtocmyk.h
     pdftoolpreflight.cpp
     pdftoolpreflight.h
+    pdftoolpreflightprofile.cpp
+    pdftoolpreflightprofile.h
     pdftoolpreflightchecks.h
     pdftoolocr.cpp
     pdftoolocr.h

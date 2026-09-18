@@ -20,6 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// NOT COMPILED: this file specifies the source-identity and policy-clamp
+// behaviour of the Editor recovery service, which does not exist in this tree
+// (deleted with the Widgets libraries in 2a19e2c1) and is registered in no
+// CMake target. Keep it as the specification; restore it together with
+// LoopEditor's recovery manager. See docs/EDITOR_RECOVERY.md.
+
 #include "pdfrecoverymanager.h"
 
 #include <QFile>

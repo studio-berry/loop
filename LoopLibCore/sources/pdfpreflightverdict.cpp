@@ -22,8 +22,14 @@
 
 #include "pdfpreflightverdict.h"
 
+#include "pdfdocumentsession.h"
+#include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
+#include "preflightprofileresolver.h"
+
 #include <QCoreApplication>
 #include <QJsonArray>
+#include <QTemporaryDir>
 
 #include <algorithm>
 
@@ -97,6 +103,135 @@ QString incompleteReason(const PreflightResult& result)
 bool isFailClosedIncompleteErrorCode(const QString& errorCode)
 {
     return errorCode == QLatin1String("unsupported-scope") || errorCode == QLatin1String("unresolved-variable") || errorCode == QLatin1String("budget-exceeded") || errorCode == QLatin1String("evidence-incomplete") || errorCode == QLatin1String("cancelled");
+}
+
+QStringList enabledPreflightCheckIds(const QJsonObject& profileObject)
+{
+    QStringList enabledCheckIds;
+    const QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();
+    for (const QJsonValue& value : checks)
+    {
+        const QJsonObject check = value.toObject();
+        if (check.value(QStringLiteral("enabled")).toBool(true))
+        {
+            enabledCheckIds.append(check.value(QStringLiteral("id")).toString());
+        }
+    }
+    return enabledCheckIds;
+}
+
+PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
+                                            const PDFDocument& document,
+                                            const QJsonObject& parameters,
+                                            const QStringList& enabledCheckIds)
+{
+    PDFRevalidationPlan plan;
+    plan.full = false;
+    plan.reason = QStringLiteral("step-scoped");
+
+    static const QHash<QString, QStringList> operationChecks = {
+        { QStringLiteral("add-bleed"),
+          { QStringLiteral("bleed"), QStringLiteral("content-bleed"), QStringLiteral("trim"), QStringLiteral("page-size") } },
+        { QStringLiteral("rgb-to-cmyk"), { QStringLiteral("color-mode"), QStringLiteral("color-inventory") } },
+        { QStringLiteral("downsample-images"), { QStringLiteral("image-resolution") } },
+    };
+
+    if (operation)
+    {
+        for (const QString& checkId : operationChecks.value(operation->id()))
+        {
+            if (enabledCheckIds.contains(checkId))
+            {
+                plan.checkIds.append(checkId);
+            }
+        }
+
+        PDFOperationImpact impact = operation->impact(&document, parameters);
+        impact.documentWide = false;
+        const PDFRevalidationPlan domainPlan = planRevalidation(impact, enabledCheckIds);
+        if (!domainPlan.full)
+        {
+            for (const QString& checkId : domainPlan.checkIds)
+            {
+                if (!plan.checkIds.contains(checkId))
+                {
+                    plan.checkIds.append(checkId);
+                }
+            }
+            plan.pages.unite(domainPlan.pages);
+        }
+    }
+
+    if (plan.checkIds.isEmpty())
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = QStringLiteral("step-scope-fallback");
+    }
+    return plan;
+}
+
+PDFOperationResult resolveMandatoryPostflightProfile(const QString& profilePath,
+                                                     MandatoryPostflightOptions options,
+                                                     QJsonObject* profileObject,
+                                                     PreflightProfileData* profileData,
+                                                     QString* errorMessage)
+{
+    if (options.profileJson.isEmpty() && profilePath.trimmed().isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("A preflight profile path is required before a candidate can be published."));
+    }
+
+    QJsonObject profile = options.profileJson;
+    if (profile.isEmpty())
+    {
+        QString loadError;
+        if (!PreflightEngine::loadProfile(profilePath, profile, loadError))
+        {
+            return PDFOperationResult(loadError);
+        }
+    }
+
+    const PreflightProfileImportResult imported = importPreflightProfile(profile,
+                                                                         profilePath.trimmed().isEmpty()
+                                                                             ? profile.value(QStringLiteral("id")).toString()
+                                                                             : profilePath);
+    if (!imported.ok)
+    {
+        return PDFOperationResult(imported.errorMessage);
+    }
+
+    const PreflightVariableBindResult bound = bindPreflightProfileVariables(imported.profile, options.profileBindings);
+    if (!bound.ok)
+    {
+        return PDFOperationResult(bound.errorMessage);
+    }
+
+    PreflightProfileData parsedProfile;
+    QString parseError;
+    if (!PreflightEngine::parseProfile(bound.profile, parsedProfile, parseError))
+    {
+        return PDFOperationResult(parseError);
+    }
+    parsedProfile.variableBindings = bound.bindings;
+    parsedProfile.fileDigest = imported.identity.digest;
+    parsedProfile.effectiveDigest = computeProfileDigest(bound.profile);
+    parsedProfile.profileIdentity = imported.identity.toJson();
+    parsedProfile.profileIdentity.insert(QStringLiteral("effective_digest"), parsedProfile.effectiveDigest);
+
+    if (profileObject)
+    {
+        *profileObject = bound.profile;
+    }
+    if (profileData)
+    {
+        *profileData = std::move(parsedProfile);
+    }
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return PDFOperationResult(true);
 }
 
 }   // namespace
@@ -338,6 +473,175 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     }
 
     return verdict;
+}
+
+PDFOperationResult runMandatoryPostflight(PDFDocument* document,
+                                          const QString& profilePath,
+                                          PreflightVerdict* verdictOut,
+                                          PreflightResult* resultOut,
+                                          MandatoryPostflightOptions options)
+{
+    if (!document || !verdictOut)
+    {
+        return PDFOperationResult(QStringLiteral("Mandatory postflight requires a document and verdict output."));
+    }
+
+    QJsonObject profileObject;
+    PreflightProfileData profileData;
+    const PDFOperationResult profileResult = resolveMandatoryPostflightProfile(profilePath, options, &profileObject, &profileData, nullptr);
+    if (!profileResult)
+    {
+        return profileResult;
+    }
+
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid())
+    {
+        return PDFOperationResult(QStringLiteral("Mandatory postflight could not create a temporary candidate file."));
+    }
+    const QString candidatePath = tempDir.filePath(QStringLiteral("candidate.pdf"));
+
+    PDFDocument reopenedCandidate;
+    const PDFOperationResult serialized = PDFRepairDiffEngine::buildSerializedCandidate(
+        *document,
+        [](PDFDocument*)
+        { return PDFOperationResult(true); },
+        candidatePath,
+        &reopenedCandidate,
+        nullptr);
+    if (!serialized)
+    {
+        return serialized;
+    }
+
+    PDFDocumentSession* session = PDFDocumentSession::createForInspection(&reopenedCandidate);
+    PreflightEngine engine(session);
+    engine.setOperationControl(options.operationControl);
+    const PreflightResult preflight = options.revalidationPlan
+                                          ? engine.run(profileData, *options.revalidationPlan)
+                                          : engine.run(profileData);
+    PDFDocumentSession::destroy(session);
+
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        PreflightVerdict cancelledVerdict;
+        cancelledVerdict.state = PreflightVerdictState::Incomplete;
+        cancelledVerdict.reasonCode = QStringLiteral("cancelled");
+        cancelledVerdict.reason = QStringLiteral("Mandatory postflight was cancelled.");
+        *verdictOut = cancelledVerdict;
+        if (resultOut)
+        {
+            *resultOut = preflight;
+            resultOut->inspectionComplete = false;
+            resultOut->errorCode = cancelledVerdict.reasonCode;
+            resultOut->errorMessage = cancelledVerdict.reason;
+        }
+        return PDFOperationResult(cancelledVerdict.reason);
+    }
+
+    const PreflightVerdict verdict = reducePreflightVerdict(preflight, &profileData);
+    *verdictOut = verdict;
+    if (resultOut)
+    {
+        *resultOut = preflight;
+    }
+
+    if (verdict.state == PreflightVerdictState::Incomplete && options.allowIncomplete)
+    {
+        return PDFOperationResult(true);
+    }
+    if (verdict.state == PreflightVerdictState::Pass)
+    {
+        return PDFOperationResult(true);
+    }
+
+    const QString summary = preflightVerdictOperatorSummary(verdict);
+    if (verdict.state == PreflightVerdictState::Incomplete)
+    {
+        return PDFOperationResult(QStringLiteral("Postflight did not inspect the complete candidate: %1").arg(summary));
+    }
+    return PDFOperationResult(summary);
+}
+
+PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
+                                               const PDFRepairPlan& plan,
+                                               const QString& profilePath,
+                                               PDFRepairResult* result,
+                                               MandatoryPostflightOptions options,
+                                               const PDFRepairOperation* operation,
+                                               const QJsonObject& operationParameters)
+{
+    if (!document || !result)
+    {
+        return PDFOperationResult(QStringLiteral("Declared repair validators require a document and result output."));
+    }
+
+    const bool requiresNormalPreflight = plan.requiresPostflight ||
+                                         plan.validators.contains(PDFRepairValidatorKind::NormalPreflight);
+    if (!requiresNormalPreflight)
+    {
+        return PDFOperationResult(true);
+    }
+
+    MandatoryPostflightOptions validatorOptions = options;
+    PDFRevalidationPlan stepPlan;
+    if (operation && !validatorOptions.revalidationPlan)
+    {
+        QJsonObject profileObject = validatorOptions.profileJson;
+        if (profileObject.isEmpty())
+        {
+            QString loadError;
+            if (!PreflightEngine::loadProfile(profilePath, profileObject, loadError))
+            {
+                return PDFOperationResult(loadError);
+            }
+        }
+        stepPlan = planRepairStepPreflight(operation,
+                                           *document,
+                                           operationParameters,
+                                           enabledPreflightCheckIds(profileObject));
+        validatorOptions.revalidationPlan = &stepPlan;
+    }
+
+    PreflightVerdict verdict;
+    PreflightResult preflightResult;
+    const PDFOperationResult postflight = runMandatoryPostflight(document,
+                                                                 profilePath,
+                                                                 &verdict,
+                                                                 &preflightResult,
+                                                                 validatorOptions);
+    result->verdict = verdict.toJson();
+
+    PDFRepairValidationResult validation;
+    validation.validatorId = QStringLiteral("normal-preflight");
+    validation.summary = preflightVerdictOperatorSummary(verdict);
+    if (postflight && verdict.isPass())
+    {
+        validation.status = PDFRepairStatus::Passed;
+    }
+    else if (verdict.state == PreflightVerdictState::Incomplete)
+    {
+        validation.status = PDFRepairStatus::Incomplete;
+        result->incompleteReasons.append(validation.summary);
+    }
+    else
+    {
+        validation.status = PDFRepairStatus::Failed;
+        result->validationFailures.append(validation.summary);
+    }
+    result->validations.append(std::move(validation));
+
+    return postflight;
+}
+
+bool preflightAllowsCertification(const PreflightResult& result)
+{
+    const PreflightVerdict verdict = reducePreflightVerdict(result);
+    if (!verdict.allowsCertificateIssuance())
+    {
+        return false;
+    }
+    return !result.profileIdentity.value(QStringLiteral("provisional")).toBool(false);
 }
 
 }   // namespace pdf

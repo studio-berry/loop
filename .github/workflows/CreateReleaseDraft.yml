@@ -1,10 +1,11 @@
 name: Create_Release_Draft
+run-name: Create_Release_Draft (${{ inputs.source_sha }})
 
 on:
   workflow_dispatch:
     inputs:
       allow_existing_release:
-        description: 'Allow uploading assets to an existing release'
+        description: 'Allow adding assets to an existing draft at the same source SHA'
         required: true
         type: boolean
         default: false
@@ -13,14 +14,19 @@ on:
         required: true
         type: string
 
-# Least privilege for GITHUB_TOKEN: checkout reads the repo; release creation and
-# all gh calls use the MY_GITHUB_TOKEN PAT explicitly.
 permissions:
-  contents: read
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-draft-${{ inputs.source_sha }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout repository
@@ -42,38 +48,54 @@ jobs:
             echo "::error::Checkout SHA $actual_sha does not match source_sha $EXPECTED_SOURCE_SHA"
             exit 1
           fi
+          echo "LOOP_SOURCE_SHA=$actual_sha" >> "$GITHUB_ENV"
 
-      - name: Install tools
-        run: |
-          sudo apt-get install gh
-          sudo apt-get install jq
+      - name: Verify version policy
+        run: python3 scripts/ci/check_version_policy.py
 
       - name: Read version
         id: get_version
         run: |
           version=$(grep -oP 'set\(LOOP_VERSION \K[0-9]+\.[0-9]+\.[0-9]+' "CMakeLists.txt")
           prerelease=$(grep -oP 'set\(LOOP_VERSION_PRERELEASE \K[A-Za-z0-9.-]+' "CMakeLists.txt" || true)
+          echo "loop_prerelease=false" >> "$GITHUB_ENV"
           if [ -n "$prerelease" ]; then
             version="${version}-${prerelease}"
+            echo "loop_prerelease=true" >> "$GITHUB_ENV"
           fi
           echo "Version: $version"
           echo "loop_version=$version" >> $GITHUB_ENV
 
-      - name: Stop if release already exists
+      - name: Check release and tag identity
         env:
           LOOP_VERSION: ${{ env.loop_version }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           ALLOW_EXISTING_RELEASE: ${{ inputs.allow_existing_release }}
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           tag="v${LOOP_VERSION}"
-          if gh release view "$tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            if [ "${ALLOW_EXISTING_RELEASE}" != "true" ]; then
-              echo "::error::Release $tag already exists. Refusing to upload assets because this would modify an existing release."
-              echo "::error::Rerun this workflow with allow_existing_release=true only if updating that release is intentional."
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            tag_sha=$(git rev-parse "refs/tags/$tag^{commit}")
+            if [ "$tag_sha" != "$LOOP_SOURCE_SHA" ]; then
+              echo "::error::Tag $tag points to $tag_sha, not $LOOP_SOURCE_SHA."
               exit 1
             fi
-            echo "Release $tag already exists and allow_existing_release=true, continuing."
+          fi
+          release=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq ".[] | select(.tag_name == \"$tag\")")
+          if [ -n "$release" ]; then
+            if [ "$(jq -r .draft <<< "$release")" != "true" ]; then
+              echo "::error::Release $tag is published. Only drafts may be updated."
+              exit 1
+            fi
+            release_target=$(jq -r .target_commitish <<< "$release")
+            if [ "$release_target" != "$LOOP_SOURCE_SHA" ]; then
+              echo "::error::Draft $tag targets $release_target, not $LOOP_SOURCE_SHA."
+              exit 1
+            fi
+            if [ "$ALLOW_EXISTING_RELEASE" != "true" ]; then
+              echo "::error::Draft $tag exists. Set allow_existing_release=true to add missing assets."
+              exit 1
+            fi
           else
             echo "Release $tag does not exist, continuing."
           fi
@@ -97,8 +119,7 @@ jobs:
           fi
           echo "linux_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV
         env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_SOURCE_SHA: ${{ env.LOOP_SOURCE_SHA }}
 
       - name: Get latest run ID for Windows_MSI
         id: get_windows_run_id
@@ -115,31 +136,28 @@ jobs:
           fi
           echo "windows_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV
         env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_SOURCE_SHA: ${{ env.LOOP_SOURCE_SHA }}
 
       - name: Download Linux_AppImage artifact
         run: |
           mkdir -p artifacts
           echo "Downloading artifacts from run ID: ${{ env.linux_run_id }}..."
-          gh run download ${{ env.linux_run_id }} -D artifacts
+          gh run download "$linux_run_id" --pattern "Loop-pdf-${loop_version}-x86_64.AppImage*" -D artifacts
           echo "Artifacts downloaded to artifacts directory."
-        env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Download Windows_MSI artifact
         run: |
           mkdir -p artifacts
           echo "Downloading artifacts from run ID: ${{ env.windows_run_id }}..."
-          gh run download ${{ env.windows_run_id }} -D artifacts
+          gh run download "$windows_run_id" \
+            --name "Loop-pdf-Windows-${loop_version}.zip" \
+            --name "mberrys.Loop-pdf_${loop_version}.msi" \
+            --name "mberrys.Loop-pdf_${loop_version}.msix" -D artifacts
           echo "Artifacts downloaded to artifacts directory."
-        env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Download and validate package boundary evidence
         env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_SOURCE_SHA: ${{ env.LOOP_SOURCE_SHA }}
         run: |
           set -euo pipefail
           mkdir -p package-evidence/linux package-evidence/windows
@@ -161,12 +179,12 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-      - name: Exclude CI evidence from release assets
+      - name: Stage final-artifact SBOMs and notices
         run: |
-          for evidence_dir in artifacts/loop-package-boundary-linux-evidence artifacts/loop-package-boundary-windows-evidence; do
-            if [ -e "$evidence_dir" ]; then
-              rm -rf "$evidence_dir"
-            fi
+          set -euo pipefail
+          for platform in linux windows; do
+            cp "package-evidence/$platform/components.spdx.json" "artifacts/Loop-${loop_version}-${platform}.spdx.json"
+            cp "package-evidence/$platform/THIRD_PARTY_NOTICES.txt" "artifacts/Loop-${loop_version}-${platform}-THIRD_PARTY_NOTICES.txt"
           done
 
       - name: Rezip zip file
@@ -183,30 +201,32 @@ jobs:
       - name: Correct file paths
         run: |
           set -euo pipefail
-          # Flatten artifact subdirectories. Fail loudly on a name collision:
-          # silently overwriting means a release asset is dropped, and
-          # fail_on_unmatched_files cannot detect that because the glob still matches.
+          # Artifact directories can share the payload filename.
+          mkdir -p release-assets
           while IFS= read -r -d '' src; do
-            dest="artifacts/$(basename "$src")"
+            dest="release-assets/$(basename "$src")"
             if [ -e "$dest" ]; then
               echo "::error::Artifact file name collision while flattening: $src -> $dest"
               exit 1
             fi
             mv "$src" "$dest"
-          done < <(find artifacts -mindepth 2 -type f -print0)
+          done < <(find artifacts -type f -print0)
           find artifacts -type d -empty -delete
 
-      - name: List all files recursively
+      - name: Verify release assets against inspected packages
         run: |
-          echo "Listing all files in artifacts:"
-          find artifacts -type f -print
+          python3 scripts/ci/verify_release_assets.py \
+            --artifacts release-assets \
+            --pair package-evidence/pair.json \
+            --version "$loop_version" \
+            --source-sha "$LOOP_SOURCE_SHA"
 
       - name: Generate SHA-256 checksums
         run: |
           # docs/PACKAGING_LICENSING.md: "Sign artifacts and publish checksums."
           # Checksums are published here; Authenticode signing of the MSI is gated on
           # vars.SIGN_MSI in WindowsInstall.yml and requires the code-signing cert.
-          cd artifacts
+          cd release-assets
           # Exclude the output file: the redirection creates it before find runs, so an
           # unfiltered glob hashes an empty SHA256SUMS.txt into its own listing.
           find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' \
@@ -219,12 +239,13 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           tag_name: 'v${{ env.loop_version }}'
-          name: "Release of Loop-pdf ${{ env.loop_version }} (Draft)"
+          name: "Loop ${{ env.loop_version }}"
+          target_commitish: ${{ env.LOOP_SOURCE_SHA }}
           draft: true
-          prerelease: false
+          prerelease: ${{ env.loop_prerelease == 'true' }}
           generate_release_notes: true
-          token: ${{ secrets.MY_GITHUB_TOKEN }}
+          token: ${{ github.token }}
           fail_on_unmatched_files: true
           overwrite_files: false
           files: |
-            artifacts/*
+            release-assets/*

@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
+CORRECTION_CATALOG_PATH = ROOT / "docs" / "generated" / "correction-operation-catalog.json"
+CORRECTION_OVERLAY_PATH = ROOT / "docs" / "correction-operation-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
 VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
 INVARIANTS_PATH = ROOT / "docs" / "architecture-invariants.json"
@@ -155,25 +157,245 @@ def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
     }
 
 
-def parse_repair_operations() -> list[dict[str, str]]:
-    operations: list[dict[str, str]] = []
-    pattern = re.compile(
-        r"class\s+(\w+)\s+final\s*:\s*public\s+PDFRepairOperation.*?"
-        r"QString\s+id\(\)\s+const\s+override\s*\{\s*"
-        r'return\s+QStringLiteral\("([^"]+)"\)',
+SAVE_POLICY_MODES = {
+    "incrementalAppend": "incremental-append",
+    "fullRewrite": "full-rewrite",
+    "saveAsNewArtifact": "save-as-new-artifact",
+}
+
+
+def parse_bool_assignment(body: str, name: str, default: bool) -> bool:
+    match = re.search(rf"\b{name}\s*=\s*(true|false)\b", body)
+    if not match:
+        return default
+    return match.group(1) == "true"
+
+
+def parse_evidence_domains(body: str) -> list[str]:
+    domains: list[str] = []
+    for domain in ("Images", "Colorants", "Strokes", "OverprintTransparency", "Fonts"):
+        if re.search(rf"PDFEvidenceDomain::\s*{domain}\b", body):
+            domains.append(domain[0].lower() + domain[1:])
+    combined = re.search(r"declared\.domains\s*=\s*PDFEvidenceDomains\(([^)]+)\)", body)
+    if combined:
+        for domain in ("Images", "Colorants", "Strokes", "OverprintTransparency", "Fonts"):
+            if domain in combined.group(1):
+                value = domain[0].lower() + domain[1:]
+                if value not in domains:
+                    domains.append(value)
+    return unique_sorted(domains)
+
+
+def parse_operation_impact(class_body: str) -> dict[str, Any]:
+    match = re.search(
+        r"PDFOperationImpact\s+impact\s*\([^)]*\)\s*const\s+override\s*\{(?P<body>.*?)\n\s*\}",
+        class_body,
         re.DOTALL,
     )
+    if not match:
+        return {
+            "domains": [],
+            "document_wide": True,
+            "full_rewrite": True,
+            "impact_complete": False,
+            "requires_independent_oracle": False,
+        }
+    body = match.group("body")
+    return {
+        "domains": parse_evidence_domains(body),
+        "document_wide": parse_bool_assignment(body, "documentWide", False),
+        "full_rewrite": parse_bool_assignment(body, "full_rewrite", False)
+        if "full_rewrite" in body
+        else parse_bool_assignment(body, "fullRewrite", False),
+        "impact_complete": parse_bool_assignment(body, "impactComplete", False),
+        "requires_independent_oracle": parse_bool_assignment(body, "requiresIndependentOracle", False),
+    }
+
+
+def revalidation_class(impact: dict[str, Any], requires_postflight: bool = True) -> str:
+    if not requires_postflight:
+        return "none"
+    if impact.get("requires_independent_oracle"):
+        return "full-with-oracle"
+    if not impact.get("impact_complete"):
+        return "full"
+    if impact.get("document_wide") or not impact.get("domains"):
+        return "full"
+    return "targeted"
+
+
+def parse_save_policy(class_body: str) -> dict[str, str | bool]:
+    match = re.search(
+        r"PDFOperationSavePolicy\s+savePolicy\(\)\s*const\s+override\s*\{(?P<body>.*?)\n\s*\}",
+        class_body,
+        re.DOTALL,
+    )
+    if match:
+        body = match.group("body")
+        save_match = re.search(
+            r"PDFOperationSavePolicy::(incrementalAppend|fullRewrite|saveAsNewArtifact)\(",
+            body,
+        )
+        if save_match:
+            save_mode = SAVE_POLICY_MODES[save_match.group(1)]
+        else:
+            save_mode = "save-as-new-artifact"
+    else:
+        save_mode = "save-as-new-artifact"
+    invalidates_signatures = save_mode in {"full-rewrite", "save-as-new-artifact"}
+    reversible_in_session = save_mode != "full-rewrite"
+    if save_mode == "incremental-append":
+        invalidates_signatures = False
+    return {
+        "mode": save_mode,
+        "invalidates_signatures": invalidates_signatures,
+        "reversible_in_session": reversible_in_session,
+    }
+
+
+def parse_repair_operation_class(class_body: str, implementation: str) -> dict[str, Any]:
+    id_match = re.search(
+        r'QString\s+id\(\)\s+const\s+override\s*\{\s*return\s+QStringLiteral\("([^"]+)"\)',
+        class_body,
+    )
+    if not id_match:
+        raise ValueError(f"repair operation in {implementation} is missing id()")
+    version_match = re.search(r"int\s+version\(\)\s+const\s+override\s*\{\s*return\s+(\d+)", class_body)
+    save_policy = parse_save_policy(class_body)
+    fixup_match = re.search(
+        r"bool\s+isPreflightFixup\(\)\s+const\s+override\s*\{\s*return\s+(true|false)",
+        class_body,
+    )
+    requires_postflight = not re.search(r"plan->requiresPostflight\s*=\s*false", class_body)
+    impact = parse_operation_impact(class_body)
+    return {
+        "id": id_match.group(1),
+        "version": int(version_match.group(1)) if version_match else 1,
+        "implementation": implementation,
+        "is_preflight_fixup": fixup_match.group(1) == "true" if fixup_match else False,
+        "requires_postflight": requires_postflight,
+        "save_policy": save_policy,
+        "impact": impact,
+        "revalidation_class": revalidation_class(impact, requires_postflight),
+    }
+
+
+REGISTER_OPERATION_PATTERN = re.compile(
+    r"PDFRepairRegistry::instance\(\)\.registerOperation\(std::make_unique<(\w+)>\(\)\)"
+)
+
+
+def parse_registered_repair_classes() -> list[str]:
+    classes: list[str] = []
     for path in sorted((ROOT / "LoopLibCore" / "sources").glob("*.cpp")):
-        for class_name, operation_id in pattern.findall(read(path)):
-            operations.append(
-                {"id": operation_id, "implementation": path.relative_to(ROOT).as_posix()}
-            )
-    operations.sort(key=lambda operation: operation["id"])
-    if not operations:
+        source = read(path)
+        classes.extend(REGISTER_OPERATION_PATTERN.findall(source))
+    return unique_sorted(classes)
+
+
+def parse_repair_operations() -> list[dict[str, Any]]:
+    operations_by_class: dict[str, dict[str, Any]] = {}
+    pattern = re.compile(
+        r"class\s+(\w+)\s+final\s*:\s*public\s+PDFRepairOperation(?P<body>.*?)(?=^class\s+\w+\s+final\s*:\s*public\s+PDFRepairOperation|\Z)",
+        re.DOTALL | re.MULTILINE,
+    )
+    for path in sorted((ROOT / "LoopLibCore" / "sources").glob("*.cpp")):
+        source = read(path)
+        implementation = path.relative_to(ROOT).as_posix()
+        for match in pattern.finditer(source):
+            class_name = match.group(1)
+            operation = parse_repair_operation_class(match.group("body"), implementation)
+            operation["class_name"] = class_name
+            operations_by_class[class_name] = operation
+
+    registered_classes = parse_registered_repair_classes()
+    if not registered_classes:
         raise ValueError("registered operation catalog is empty")
+
+    missing_impl = sorted(set(registered_classes) - set(operations_by_class))
+    if missing_impl:
+        raise ValueError(
+            "registerOperation targets without parsable PDFRepairOperation class: "
+            + ", ".join(missing_impl)
+        )
+
+    unregistered = sorted(set(operations_by_class) - set(registered_classes))
+    if unregistered:
+        raise ValueError(
+            "PDFRepairOperation classes without registerOperation: " + ", ".join(unregistered)
+        )
+
+    operations = [operations_by_class[class_name] for class_name in registered_classes]
+    operations.sort(key=lambda operation: operation["id"])
     if len({operation["id"] for operation in operations}) != len(operations):
         raise ValueError("registered operation catalog contains duplicate ids")
     return operations
+
+
+def build_correction_operation_catalog(registry: list[dict[str, Any]]) -> dict[str, Any]:
+    overlay = json.loads(read(CORRECTION_OVERLAY_PATH))
+    overlay_ids = unique_sorted(overlay.get("operations", {}).keys())
+    registry_ids = unique_sorted(operation["id"] for operation in registry)
+    missing = sorted(set(registry_ids) - set(overlay_ids))
+    extra = sorted(set(overlay_ids) - set(registry_ids))
+    if missing or extra:
+        problems = []
+        if missing:
+            problems.append("registered without catalog: " + ", ".join(missing))
+        if extra:
+            problems.append("catalog without registry: " + ", ".join(extra))
+        raise ValueError("; ".join(problems))
+
+    required = {
+        "supports",
+        "produces",
+        "target_scopes",
+        "parameter_defaults",
+        "save_policy_artifact_effect",
+        "reversibility",
+        "evidence_impact",
+        "revalidation",
+        "surface_parity",
+        "limitations",
+    }
+    parity_surfaces = {"cli", "pagemaster", "editor", "action_list"}
+    merged: dict[str, Any] = {}
+    registry_by_id = {operation["id"]: operation for operation in registry}
+    for operation_id, entry in overlay["operations"].items():
+        absent = sorted(required - set(entry))
+        if absent:
+            raise ValueError(f"catalog entry '{operation_id}' missing {', '.join(absent)}")
+        parity = entry["surface_parity"]
+        if not isinstance(parity, dict) or parity_surfaces - set(parity):
+            raise ValueError(f"catalog entry '{operation_id}' has incomplete surface_parity")
+        revalidation = entry["revalidation"]
+        if not isinstance(revalidation, dict) or "class" not in revalidation or "description" not in revalidation:
+            raise ValueError(f"catalog entry '{operation_id}' has invalid revalidation block")
+        declared_class = registry_by_id[operation_id]["revalidation_class"]
+        if revalidation["class"] != declared_class:
+            raise ValueError(
+                f"catalog entry '{operation_id}' revalidation.class {revalidation['class']!r} "
+                f"does not match registry impact ({declared_class!r})"
+            )
+        merged[operation_id] = {
+            **registry_by_id[operation_id],
+            **entry,
+            "save_policy": {
+                **registry_by_id[operation_id]["save_policy"],
+                "artifact_effect": entry["save_policy_artifact_effect"],
+            },
+        }
+
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "save_modes": overlay["save_modes"],
+        "target_scope_model": overlay["target_scope_model"],
+        "operations": merged,
+        "registry": registry_ids,
+    }
 
 
 def schema_version_values(value: Any) -> list[int]:
@@ -382,6 +604,7 @@ def validate_adrs() -> list[str]:
 
 def build_catalog() -> dict[str, Any]:
     registry = parse_preflight_checks()
+    repair_registry = parse_repair_operations()
     test_targets = parse_test_targets()
     return {
         "format_version": 1,
@@ -391,7 +614,11 @@ def build_catalog() -> dict[str, Any]:
         "version_policy": parse_version_policy(),
         "preflight_checks": registry,
         "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
-        "registered_operations": parse_repair_operations(),
+        "registered_operations": [
+            {"id": operation["id"], "implementation": operation["implementation"]}
+            for operation in repair_registry
+        ],
+        "correction_operation_catalog": "docs/generated/correction-operation-catalog.json",
         "schema_versions": parse_schema_versions(),
         "schema_kinds": parse_schema_kinds(),
         "preflight_coverage": parse_coverage_matrix(),
@@ -404,6 +631,7 @@ def build_catalog() -> dict[str, Any]:
             "LoopLibCore/sources/preflightengine.cpp",
             "LoopLibCore/sources/preflightengine.h",
             "docs/preflight-check-catalog-overlay.json",
+            "docs/correction-operation-catalog-overlay.json",
             "LoopLibCore/sources/pdfactionlist.cpp",
             "LoopLibCore/sources/pdfrepairoperation.cpp",
             "LoopLibCore/sources/pdfrepairprimitives.cpp",
@@ -424,6 +652,11 @@ def serialized_catalog() -> str:
 def serialized_preflight_catalog() -> str:
     registry = parse_preflight_checks()
     return json.dumps(build_preflight_check_catalog(registry), indent=2, sort_keys=True) + "\n"
+
+
+def serialized_correction_catalog() -> str:
+    registry = parse_repair_operations()
+    return json.dumps(build_correction_operation_catalog(registry), indent=2, sort_keys=True) + "\n"
 
 
 def check_generated(path: Path, expected: str, label: str) -> int:
@@ -461,6 +694,7 @@ def main() -> int:
     try:
         expected = serialized_catalog()
         expected_preflight = serialized_preflight_catalog()
+        expected_correction = serialized_correction_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
         return 1
@@ -469,9 +703,12 @@ def main() -> int:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
         PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
+        CORRECTION_CATALOG_PATH.write_text(expected_correction, encoding="utf-8", newline="\n")
         return 0
-    return check_generated(CATALOG_PATH, expected, "architecture catalog") or check_generated(
-        PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog"
+    return (
+        check_generated(CATALOG_PATH, expected, "architecture catalog")
+        or check_generated(PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog")
+        or check_generated(CORRECTION_CATALOG_PATH, expected_correction, "correction operation catalog")
     )
 
 

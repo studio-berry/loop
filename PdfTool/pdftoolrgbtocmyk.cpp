@@ -65,14 +65,22 @@ QString objectKindName(pdf::PDFRgbToCmykObjectKind kind)
 {
     switch (kind)
     {
-        case pdf::PDFRgbToCmykObjectKind::VectorPaint: return QStringLiteral("vector-paint");
-        case pdf::PDFRgbToCmykObjectKind::Image: return QStringLiteral("image");
-        case pdf::PDFRgbToCmykObjectKind::InlineImage: return QStringLiteral("inline-image");
-        case pdf::PDFRgbToCmykObjectKind::Form: return QStringLiteral("form");
-        case pdf::PDFRgbToCmykObjectKind::AnnotationAppearance: return QStringLiteral("annotation-appearance");
-        case pdf::PDFRgbToCmykObjectKind::IndexedPalette: return QStringLiteral("indexed-palette");
-        case pdf::PDFRgbToCmykObjectKind::Shading: return QStringLiteral("shading");
-        case pdf::PDFRgbToCmykObjectKind::Pattern: return QStringLiteral("pattern");
+        case pdf::PDFRgbToCmykObjectKind::VectorPaint:
+            return QStringLiteral("vector-paint");
+        case pdf::PDFRgbToCmykObjectKind::Image:
+            return QStringLiteral("image");
+        case pdf::PDFRgbToCmykObjectKind::InlineImage:
+            return QStringLiteral("inline-image");
+        case pdf::PDFRgbToCmykObjectKind::Form:
+            return QStringLiteral("form");
+        case pdf::PDFRgbToCmykObjectKind::AnnotationAppearance:
+            return QStringLiteral("annotation-appearance");
+        case pdf::PDFRgbToCmykObjectKind::IndexedPalette:
+            return QStringLiteral("indexed-palette");
+        case pdf::PDFRgbToCmykObjectKind::Shading:
+            return QStringLiteral("shading");
+        case pdf::PDFRgbToCmykObjectKind::Pattern:
+            return QStringLiteral("pattern");
     }
     return QStringLiteral("unknown");
 }
@@ -83,20 +91,18 @@ QJsonObject reportObject(const pdf::PDFRgbToCmykSettings& settings,
     QJsonObject result;
     result.insert(QStringLiteral("command"), QStringLiteral("rgb-to-cmyk"));
     result.insert(QStringLiteral("target_profile"), QJsonObject{
-        { QStringLiteral("name"), settings.targetProfileName },
-        { QStringLiteral("bytes"), settings.targetIccData.size() }
-    });
+                                                        { QStringLiteral("name"), settings.targetProfileName },
+                                                        { QStringLiteral("bytes"), settings.targetIccData.size() } });
     result.insert(QStringLiteral("intent"), int(settings.intent));
     result.insert(QStringLiteral("black_point_compensation"), settings.blackPointCompensation);
     result.insert(QStringLiteral("converted"), QJsonObject{
-        { QStringLiteral("vector_paints"), report.vectorPaintsConverted },
-        { QStringLiteral("images"), report.imagesConverted },
-        { QStringLiteral("indexed_palettes"), report.indexedPalettesConverted },
-        { QStringLiteral("forms"), report.formsVisited },
-        { QStringLiteral("annotation_appearances"), report.annotationAppearancesVisited }
-    });
+                                                   { QStringLiteral("vector_paints"), report.vectorPaintsConverted },
+                                                   { QStringLiteral("images"), report.imagesConverted },
+                                                   { QStringLiteral("indexed_palettes"), report.indexedPalettesConverted },
+                                                   { QStringLiteral("forms"), report.formsVisited },
+                                                   { QStringLiteral("annotation_appearances"), report.annotationAppearancesVisited } });
     result.insert(QStringLiteral("unsupported"), [&report]
-    {
+                  {
         QJsonArray values;
         for (const pdf::PDFRgbToCmykUnsupportedItem& item : report.unsupported)
         {
@@ -106,23 +112,26 @@ QJsonObject reportObject(const pdf::PDFRgbToCmykSettings& settings,
                 { QStringLiteral("reason"), item.reason }
             });
         }
-        return values;
-    }());
+        return values; }());
     result.insert(QStringLiteral("output_intent_changed"), report.outputIntentChanged);
     result.insert(QStringLiteral("postflight_passed"), report.postflightPassed);
     return result;
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolRgbToCmyk::getStandardString(StandardString standardString) const
 {
     switch (standardString)
     {
-        case Command: return QStringLiteral("rgb-to-cmyk");
-        case Name: return PDFToolTranslationContext::tr("RGB to CMYK");
-        case Description: return PDFToolTranslationContext::tr("Convert RGB PDF content through LittleCMS to a selected CMYK output condition.");
-        default: break;
+        case Command:
+            return QStringLiteral("rgb-to-cmyk");
+        case Name:
+            return PDFToolTranslationContext::tr("RGB to CMYK");
+        case Description:
+            return PDFToolTranslationContext::tr("Convert RGB PDF content through LittleCMS to a selected CMYK output condition.");
+        default:
+            break;
     }
     return QString();
 }
@@ -152,7 +161,8 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
     settings.targetProfileName = QFileInfo(settings.targetProfileName).completeBaseName();
 
     const QString sourceProfilePath = options.rgbToCmykSettings.fallbackRgbIccId.isEmpty()
-        ? QString() : QString::fromUtf8(options.rgbToCmykSettings.fallbackRgbIccId);
+                                          ? QString()
+                                          : QString::fromUtf8(options.rgbToCmykSettings.fallbackRgbIccId);
     if (!sourceProfilePath.isEmpty())
     {
         if (!readProfile(sourceProfilePath, &settings.fallbackRgbIccData, &profileError))
@@ -160,6 +170,20 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("profile.read-failed"), profileError);
             return PDFToolExitCode::InputError;
         }
+    }
+
+    // The operation, not the command, declares what may happen to the trusted
+    // input. A missing declaration must not delete the command, so the
+    // explicitly-undeclared policy still protects the input path.
+    const pdf::PDFRepairOperation* const declaredOperation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk"));
+    const pdf::PDFOperationSavePolicy declaredPolicy = declaredOperation ? declaredOperation->savePolicy() : pdf::PDFOperationSavePolicy::undeclared();
+    if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                     options.document,
+                                                                     options.rgbToCmykOutputDocument,
+                                                                     declaredPolicy);
+        refused != PDFToolExitCode::Success)
+    {
+        return refused;
     }
 
     pdf::PDFDocument document;
@@ -236,4 +260,4 @@ PDFToolAbstractApplication::Options PDFToolRgbToCmyk::getOptionsFlags() const
     return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | RgbToCmyk | DestructiveWrite;
 }
 
-} // namespace pdftool
+}   // namespace pdftool

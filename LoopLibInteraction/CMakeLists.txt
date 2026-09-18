@@ -87,12 +87,24 @@ add_library(LoopLibInteraction STATIC
     sources/interactioncontroller.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
+    sources/preflightprofiledraft.cpp
+    sources/preflightprofiledraft.h
     sources/findingnavigation.cpp
     sources/findingnavigation.h
     sources/preflightfindingsmodel.cpp
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
     sources/preflightoverlaybridge.h
+    sources/actionlistcatalog.cpp
+    sources/actionlistcatalog.h
+    sources/actionlistcontroller.cpp
+    sources/actionlistcontroller.h
+    sources/actionliststepsmodel.cpp
+    sources/actionliststepsmodel.h
+    sources/actionlistrunsubmitter.cpp
+    sources/actionlistrunsubmitter.h
+    sources/repairparameterschema.cpp
+    sources/repairparameterschema.h
     sources/inspectormodel.cpp
     sources/inspectormodel.h
     sources/previewstatemodel.cpp

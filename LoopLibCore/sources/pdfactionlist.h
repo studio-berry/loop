@@ -24,6 +24,7 @@
 #define PDFACTIONLIST_H
 
 #include "pdfrepairoperation.h"
+#include "pdfobjectselector.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -62,6 +63,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStep
     QString id;
     QString operationId;
     QJsonObject parameters;
+    QJsonObject select;
     QJsonObject condition;
     PDFActionListFailurePolicy failurePolicy = PDFActionListFailurePolicy::Inherit;
 
@@ -92,6 +94,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStepResult
     QJsonObject verdict;
     QJsonArray diagnostics;
     QJsonArray affectedScope;
+    QJsonObject selectionScope;
 
     QJsonObject toJson() const;
 };
@@ -108,6 +111,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
     QString status = QStringLiteral("planned");
     qint64 durationMs = 0;
     QJsonArray diagnostics;
+    QJsonObject postflight;
     QVector<PDFActionListStepResult> steps;
 
     QJsonObject toJson() const;
@@ -119,7 +123,18 @@ struct PDFActionListExecutionOptions
     QJsonObject bindings;
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
+    QString preflightProfilePath;
+    QJsonObject preflightProfile;
+    QJsonObject preflightProfileBindings;
+    bool requirePostflight = true;
+    PDFRevisionIdentity revision;
 };
+
+/// Surface adapters call this to bind the shared object-selector revision fence.
+LOOPLIBCORESHARED_EXPORT PDFActionListExecutionOptions makeActionListExecutionOptions(
+    const PDFDocument& document,
+    const QJsonObject& bindings = {},
+    const PDFOperationControl* operationControl = nullptr);
 
 /// Shared, deterministic orchestration for registered repair operations.
 /// Surface adapters supply presentation and input collection; they do not
@@ -128,6 +143,7 @@ class LOOPLIBCORESHARED_EXPORT PDFActionListExecutor
 {
 public:
     static QString schemaVersion();
+    static bool isSupportedSchema(const QString& schema);
 
     explicit PDFActionListExecutor(const PDFRepairRegistry& registry = PDFRepairRegistry::instance());
 

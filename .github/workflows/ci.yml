@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test release assets against paired package evidence
+        run: python -m unittest scripts.ci.test_verify_release_assets -v
       - name: Test package lifecycle scripts with fake packages
         run: python -m unittest scripts.ci.test_run_qt_relink_test -v
       - name: Test Linux AppImage Qt relink script with fake AppImage
@@ -71,6 +73,10 @@ jobs:
         run: |
           python3 -m unittest scripts.ci.test_check_independent_validation_gate -q
           python3 scripts/ci/check_independent_validation_gate.py
+      - name: Verify correction-operation catalog (#588)
+        run: |
+          python3 scripts/ci/test_correction_operation_catalog.py
+          python3 scripts/generate-architecture-catalogs.py --check
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
       - name: Verify Phase 5 Widgets evidence is current

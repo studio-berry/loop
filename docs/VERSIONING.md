@@ -10,15 +10,15 @@ The declarations below are intentionally machine-readable by that check:
 - Scheme: SemVer 2.0
 - Canonical version: `LOOP_VERSION` in root `CMakeLists.txt`
 - Format: MAJOR.MINOR.PATCH
-- Current version: 0.2.0
+- Current version: 0.2.1
 - Pre-release: alpha
 - Git tags: `vMAJOR.MINOR.PATCH` with optional pre-release / build metadata
 - Windows Appx version: MAJOR.MINOR.PATCH.0 (`LOOP_WINDOWS_VERSION`)
 - Release workflow: `.github/workflows/CreateReleaseDraft.yml`
 
-The current line is **0.2.0-alpha**. Display strings, PdfTool's envelope
+The current line is **0.2.1-alpha**. Display strings, PdfTool's envelope
 `version`, and git tags use that identifier. CMake's
-`project(VERSION)` stays `0.2.0` because it only accepts numeric components;
+`project(VERSION)` stays `0.2.1` because it only accepts numeric components;
 the `-alpha` label lives in `LOOP_VERSION_PRERELEASE`.
 
 ## Milestone remap
@@ -65,7 +65,7 @@ Given `MAJOR.MINOR.PATCH`:
 | Backward-compatible bug fix | PATCH |
 
 Set `LOOP_VERSION_PRERELEASE` in root `CMakeLists.txt` for `-alpha`,
-`-rc.1`, and similar labels. Clear it for a final `0.2.0`. Build metadata
+`-rc.1`, and similar labels. Clear it for a final `0.2.1`. Build metadata
 (`+githash`) belongs on tags only.
 
 ## Source of truth and packaging
