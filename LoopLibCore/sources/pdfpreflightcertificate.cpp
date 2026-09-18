@@ -191,8 +191,8 @@ bool issuePreflightCertificate(const PreflightResult& result,
 }
 
 PreflightCertificateVerification verifyPreflightCertificate(const PreflightCertificate& certificate,
-                                                             const QByteArray& documentBytes,
-                                                             const QList<PDFOperationHistoryEvent>& history)
+                                                            const QByteArray& documentBytes,
+                                                            const QList<PDFOperationHistoryEvent>& history)
 {
     PreflightCertificateVerification result;
     if (certificate.certificateId.isEmpty() || !certificate.issuedAtUtc.isValid() ||
