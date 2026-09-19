@@ -164,6 +164,7 @@ private slots:
     void controllerRejectsDuplicateTerminalResults();
     void overlayAdapterMapsStableIdsAndSeverities();
     void dockSelectionSetsFocusedOverlayPrimitive();
+    void stalePresentationRetainsReportButClearsOverlayAndSelection();
     void controllerMarksStaleWhenTheProfileChanges();
     void targetingCapabilitiesAreConservativeAndStable();
 };
@@ -358,6 +359,47 @@ void PreflightInteractionTest::dockSelectionSetsFocusedOverlayPrimitive()
     QVERIFY(primitive->focused);
     QCOMPARE(primitive->severity, pdfinteraction::OverlaySeverity::Error);
     QCOMPARE(controller.state().selected().id, findingId);
+}
+
+void PreflightInteractionTest::stalePresentationRetainsReportButClearsOverlayAndSelection()
+{
+    FakeGeometrySource geometry(2);
+    pdfinteraction::ViewportController viewport;
+    viewport.setGeometrySource(&geometry);
+    viewport.setPixelPerMM(PixelPerMM);
+    viewport.setViewportSizePx(QSize(300, 500));
+    viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
+
+    pdfinteraction::OverlayBuilder overlays(viewport);
+    FakeRevisionSource revisions;
+    pdfinteraction::HitTestDispatcher dispatcher;
+    pdfinteraction::InteractionController interaction(revisions, viewport, dispatcher, overlays);
+
+    PreflightFindingsModel model;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(20, 20, 20, 20));
+    model.replace(QStringLiteral("doc-1"), revisions.revision.toString(), { finding }, {});
+    pdfinteraction::PreflightOverlayBridge bridge;
+    bridge.setFindingsModel(&model);
+    bridge.setOverlayBuilder(&overlays);
+    bridge.setInteractionController(&interaction);
+    bridge.applyFindings();
+    model.setSelectedFinding(finding.stableId());
+    QCOMPARE(overlays.findings().size(), 1);
+    QCOMPARE(interaction.state().selected().id, finding.stableId());
+
+    bridge.setPresentationEnabled(false);
+    QCOMPARE(model.rowCount(), 1);
+    QVERIFY(overlays.findings().isEmpty());
+    QVERIFY(overlays.evidence().isEmpty());
+    QVERIFY(!interaction.state().selected().isValid());
+
+    model.setSelectedFinding({});
+    bridge.applyFindings();
+    QVERIFY(overlays.findings().isEmpty());
+    bridge.setPresentationEnabled(true);
+    QCOMPARE(overlays.findings().size(), 1);
+    QCOMPARE(model.rowCount(), 1);
+    QVERIFY(!interaction.state().selected().isValid());
 }
 
 void PreflightInteractionTest::controllerMarksStaleWhenTheProfileChanges()
