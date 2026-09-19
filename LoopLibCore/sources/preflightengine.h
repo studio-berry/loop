@@ -414,6 +414,11 @@ public:
                         const QJsonObject& jobSpecBindings,
                         const QJsonObject& cliBindings,
                         const PDFRevalidationPlan& plan);
+    PreflightResult run(const QJsonObject& profile,
+                        const QJsonObject& jobSpecBindings,
+                        const QJsonObject& cliBindings,
+                        const PDFRevalidationPlan& plan,
+                        const std::optional<QSet<int>>& cliPages);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
 
