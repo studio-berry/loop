@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "name": "Loop Restriction - object-classes",
+  "restrictions": {
+    "object_classes": [
+      "image"
+    ]
+  },
+  "checks": [
+    {
+      "id": "bleed",
+      "amount_pt": 9
+    }
+  ]
+}
