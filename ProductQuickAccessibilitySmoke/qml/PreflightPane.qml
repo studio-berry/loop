@@ -96,6 +96,14 @@ Pane {
             }
         }
 
+        Label {
+            objectName: "preflightCertificateTrustCopy"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: qsTr("Tamper-evident attribution only — not a digital signature.")
+            Accessible.name: text
+        }
+
         ComboBox {
             id: profileSelector
             objectName: "preflightProfileSelector"
