@@ -157,13 +157,13 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
     {
         return selectFull(QStringLiteral("impact-undeclared"));
     }
-    if (!impact.impactComplete)
-    {
-        return selectFull(QStringLiteral("impact-incomplete"));
-    }
     if (impact.requiresIndependentOracle)
     {
         return selectFull(QStringLiteral("independent-oracle"));
+    }
+    if (!impact.impactComplete)
+    {
+        return selectFull(QStringLiteral("impact-incomplete"));
     }
     if (impact.fullRewrite)
     {

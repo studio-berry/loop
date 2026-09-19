@@ -244,13 +244,15 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
 
 void OperationImpactTest::goldenCorpusTargetedMatchesFullAndReportsReuse()
 {
-    QFile fixture(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf"));
-    QVERIFY2(fixture.open(QIODevice::ReadOnly), qPrintable(fixture.errorString()));
+    // image-dpi-low carries both graph-backed image evidence and a color-mode failure;
+    // color-rgb only surfaces colorants in the evidence graph today.
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    QVERIFY(QFile::exists(fixturePath));
 
     auto noPassword = [](bool*)
     { return QString(); };
-    pdf::PDFDocumentReader reader(nullptr, noPassword, false, false);
-    pdf::PDFDocument document = reader.readFromBuffer(fixture.readAll());
+    pdf::PDFDocumentReader reader(nullptr, noPassword, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
     const QJsonObject profileObject{
