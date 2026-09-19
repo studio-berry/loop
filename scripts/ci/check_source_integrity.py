@@ -51,6 +51,20 @@ FUZZ_MANIFEST_PATH = "Fuzz/corpus/regression/manifest.json"
 FUZZ_MANIFEST_EXEMPT = frozenset({".gitkeep", "LICENSE", "README.md", "manifest.json"})
 PREFLIGHT_FIXTURES_PREFIX = "loop-preflight/testdata/fixtures/"
 PREFLIGHT_MANIFEST_PATH = "loop-preflight/testdata/fixtures/manifest.json"
+
+# Issue #237: runtime provenance has exactly one implementation owner:
+# PDFOperationHistoryEvent/PDFOperationHistoryStore. These patterns guard
+# against the superseded #133 design returning as a second chained ledger.
+RUNTIME_PROVENANCE_ROOT = re.compile(r"^(?:Loop[^/]+|Pdf[^/]+)/")
+RUNTIME_SOURCE_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".qml"})
+LEGACY_PRODUCT_TOKEN = "lo" + "upe"
+LEGACY_AUDIT_EVENT_DECL = re.compile(
+    r"\b(?:class|struct)\s+PreflightAudit(?:Event|Store)\b|"
+    r"\benum\s+class\s+PreflightAuditEventKind\b"
+)
+LEGACY_AUDIT_SIDECAR = re.compile(
+    rf"""["'][^"'\n]*\.(?:loop|{LEGACY_PRODUCT_TOKEN})-audit\.jsonl["']"""
+)
 WHITESPACE_CHECK = re.compile(r"^([^:]+):(\d+):\s+(.+)$")
 
 
@@ -90,7 +104,7 @@ def provenance_chain_reason(path: str, text: str) -> str | None:
     if LEGACY_AUDIT_EVENT_DECL.search(text):
         return "parallel preflight audit event/store duplicates the canonical operation-history chain"
     if LEGACY_AUDIT_SIDECAR.search(text):
-        return "legacy .loop/.loupe audit JSONL sidecar duplicates the canonical history store"
+        return "legacy audit JSONL sidecar duplicates the canonical history store"
     return None
 
 
