@@ -124,6 +124,11 @@ private slots:
     void run_outputIntent_severityWarningRoutesToWarnings();
     void parseProfile_readsIdentityFields();
     void run_emptyRestrictionScopeIsIncomplete();
+    void parseRestrictions_rejectsInvalidGeometryAndOversizedPages();
+    void run_pageRestrictionsNarrowAndCarryFindingScope();
+    void run_emptyCheckIntersectionCannotPass();
+    void run_unhonoredRestrictionIsNotInspected();
+    void run_inkCoverageHonorsPageBoxAndPageRange();
     void run_unresolvedVariableIsIncomplete();
 };
 
@@ -2169,6 +2174,186 @@ void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.errorCode, QStringLiteral("unsupported-scope"));
     QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::parseRestrictions_rejectsInvalidGeometryAndOversizedPages()
+{
+    pdf::PreflightRestrictions restrictions;
+    QString error;
+    const QJsonArray rect{ 1.0, 2.0, 3.0, 4.0 };
+    const QJsonObject region{
+        { QStringLiteral("name"), QStringLiteral("barcode") },
+        { QStringLiteral("rect_pt"), rect },
+        { QStringLiteral("anchor"), QStringLiteral("trim") },
+        { QStringLiteral("mode"), QStringLiteral("exclude") }
+    };
+    QVERIFY(pdf::parsePreflightRestrictions(QJsonObject{
+        { QStringLiteral("pages"), QStringLiteral("1,4-5") },
+        { QStringLiteral("page_box"), QStringLiteral("trim") },
+        { QStringLiteral("regions"), QJsonArray{ region } },
+        { QStringLiteral("layers"), QJsonArray{ QStringLiteral("Marks") } },
+        { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } }
+    }, restrictions, error));
+    const QJsonObject scope = restrictions.toJson();
+    QCOMPARE(scope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 1, 4, 5 }));
+    QCOMPARE(scope.value(QStringLiteral("page_box")).toString(), QStringLiteral("trim"));
+    QCOMPARE(scope.value(QStringLiteral("regions")).toArray().first().toObject().value(QStringLiteral("anchor")).toString(), QStringLiteral("trim"));
+    QCOMPARE(scope.value(QStringLiteral("layers")).toArray(), QJsonArray({ QStringLiteral("Marks") }));
+    QCOMPARE(scope.value(QStringLiteral("object_classes")).toArray(), QJsonArray({ QStringLiteral("image") }));
+
+    QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
+        { QStringLiteral("pages"), QStringLiteral("1-2147483647") }
+    }, restrictions, error));
+    QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
+        { QStringLiteral("pages"), QStringLiteral("1-999999999999") }
+    }, restrictions, error));
+    for (const QJsonObject& invalid : {
+             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 0, 10 } } },
+             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), QJsonArray{ 0, QStringLiteral("bad"), 10, 10 } } },
+             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), rect }, { QStringLiteral("anchor"), QStringLiteral("art") } },
+             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), rect }, { QStringLiteral("mode"), QStringLiteral("unknown") } }
+         })
+    {
+        QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
+            { QStringLiteral("regions"), QJsonArray{ invalid } }
+        }, restrictions, error));
+        QVERIFY(!error.isEmpty());
+    }
+}
+
+void PreflightEngineTest::run_pageRestrictionsNarrowAndCarryFindingScope()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference firstPage = builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFObjectReference secondPage = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder content(&builder, pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    for (const pdf::PDFObjectReference page : { firstPage, secondPage })
+    {
+        QPainter* painter = content.begin(page);
+        QVERIFY(painter != nullptr);
+        QPen pen(Qt::black);
+        pen.setWidthF(0.1);
+        painter->setPen(pen);
+        painter->drawLine(QPointF(20, 20), QPointF(180, 20));
+        content.end(painter);
+    }
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Narrow pages") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1-2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+            { QStringLiteral("severity"), QStringLiteral("warning") },
+            { QStringLiteral("min_effective_width_pt"), 0.25 },
+            { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2-3") } }
+        } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().status, QStringLiteral("warning"));
+    QCOMPARE(result.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().page, 2);
+    QCOMPARE(result.warnings.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    const QJsonObject json = result.toJson();
+    QCOMPARE(json.value(QStringLiteral("checks")).toArray().first().toObject()
+                 .value(QStringLiteral("scope_restrictions")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QCOMPARE(json.value(QStringLiteral("warnings")).toArray().first().toObject()
+                 .value(QStringLiteral("scope_restrictions")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+}
+
+void PreflightEngineTest::run_emptyCheckIntersectionCannotPass()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Disjoint") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+            { QStringLiteral("min_dpi"), 300 },
+            { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } }
+        } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().status, QStringLiteral("not_applicable"));
+    QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("restriction_excluded_all_content"));
+    QVERIFY(result.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray().isEmpty());
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_unhonoredRestrictionIsNotInspected()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QList<QPair<QString, QJsonValue>> scopes{
+        { QStringLiteral("layers"), QJsonArray{ QStringLiteral("Artwork") } },
+        { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } },
+        { QStringLiteral("regions"), QJsonArray{ QJsonObject{
+            { QStringLiteral("name"), QStringLiteral("barcode") },
+            { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 100, 100 } }
+        } } },
+        { QStringLiteral("page_box"), QStringLiteral("trim") }
+    };
+    for (const auto& scope : scopes)
+    {
+        const QJsonObject profile{
+            { QStringLiteral("name"), QStringLiteral("Unsupported dimension") },
+            { QStringLiteral("restrictions"), QJsonObject{ { scope.first, scope.second } } },
+            { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+        };
+        const pdf::PreflightResult result = engine.run(profile);
+        QVERIFY2(!result.pass, qPrintable(scope.first));
+        QVERIFY(!result.inspectionComplete);
+        QCOMPARE(result.checkStatuses.size(), 1);
+        QCOMPARE(result.checkStatuses.first().status, QStringLiteral("not_inspected"));
+        QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("restriction_unsupported:%1").arg(scope.first));
+        QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+    }
+}
+
+void PreflightEngineTest::run_inkCoverageHonorsPageBoxAndPageRange()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 36, 36));
+    builder.appendPage(QRectF(0, 0, 36, 36));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink box") },
+        { QStringLiteral("restrictions"), QJsonObject{
+            { QStringLiteral("page_box"), QStringLiteral("media") },
+            { QStringLiteral("pages"), QStringLiteral("2") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 }
+        } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QVERIFY(result.checkStatuses.first().status != QStringLiteral("not_inspected"));
+    QCOMPARE(result.checkStatuses.first().restrictionScope.value(QStringLiteral("page_box")).toString(), QStringLiteral("media"));
+    QCOMPARE(result.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QVERIFY(finding.page != 1);
+    }
 }
 
 void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
