@@ -1001,6 +1001,7 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             {
                 filterRepairPlanTargets(&currentPlan, selection);
             }
+            const PDFDocument preRepairDocument = working;
             const PDFOperationResult applyResult = operation->apply(&working, currentPlan, &repairResult);
             if (!applyResult)
             {
@@ -1042,7 +1043,8 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                                                                                        &repairResult,
                                                                                        stepPostflightOptions,
                                                                                        operation,
-                                                                                       stepResult.resolvedParameters);
+                                                                                       stepResult.resolvedParameters,
+                                                                                       &preRepairDocument);
                 stepResult.repairResult = repairResult.toJson();
                 if (!validatorResult)
                 {
