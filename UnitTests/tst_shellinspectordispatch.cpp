@@ -8,6 +8,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QUrl>
@@ -19,6 +20,7 @@ class ShellInspectorDispatchTest : public QObject
 private slots:
     void selectionKindsDispatchToInspectorModel();
     void findingSelectionDispatchesThroughInspectorAndNavigation();
+    void staleFindingCannotSelectInspectorOrCanvas();
     void unknownSelectionFallsBackToEmptyCanvas();
 };
 
@@ -130,6 +132,82 @@ void ShellInspectorDispatchTest::findingSelectionDispatchesThroughInspectorAndNa
     interaction->selectTarget(overlayTarget);
     QTRY_COMPARE(inspector->selectionKind(), pdfinteraction::InspectorModel::SelectionKind::Finding);
     QCOMPARE(preflight->findingsModel()->selectedFindingId(), findingId);
+}
+
+void ShellInspectorDispatchTest::staleFindingCannotSelectInspectorOrCanvas()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    const QString path = directory.filePath(QStringLiteral("stale-finding.pdf"));
+    QVERIFY(writer.write(path, &document, true));
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QByteArray originalBytes = file.readAll();
+    file.close();
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY(host.hasDocument());
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+
+    auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+    auto* inspector = qobject_cast<pdfinteraction::InspectorModel*>(host.inspector());
+    auto* overlays = host.sessionForTest()->overlays();
+    QVERIFY(preflight);
+    QVERIFY(inspector);
+    QVERIFY(overlays);
+
+    pdf::PreflightFinding finding;
+    finding.checkId = QStringLiteral("bleed");
+    finding.scope = QStringLiteral("page");
+    finding.page = 2;
+    finding.severity = QStringLiteral("error");
+    finding.type = QStringLiteral("bleed");
+    finding.message = QStringLiteral("Bleed is insufficient");
+    finding.bbox = QRectF(12, 18, 20, 22);
+    const QString findingId = finding.stableId();
+    pdf::PreflightResult report;
+    report.errors = { finding };
+
+    preflight->beginRun(preflight->documentKey(), preflight->documentRevision(),
+                        QStringLiteral("profile-a"), QStringLiteral("job-1"));
+    QVERIFY(preflight->acceptResult(QStringLiteral("job-1"), preflight->documentRevision(), report));
+    host.selectFinding(findingId);
+    QCOMPARE(host.currentPage(), 1);
+    QCOMPARE(inspector->selectionKind(), pdfinteraction::InspectorModel::SelectionKind::Finding);
+    QCOMPARE(preflight->findingsModel()->selectedFindingId(), findingId);
+    QCOMPARE(overlays->findings().size(), 1);
+
+    preflight->markProfileStale();
+    QCOMPARE(preflight->state(), pdfinteraction::PreflightController::State::Stale);
+    QCOMPARE(preflight->findingsModel()->rowCount(), 1);
+    QVERIFY(overlays->findings().isEmpty());
+    QVERIFY(preflight->findingsModel()->selectedFindingId().isEmpty());
+    QVERIFY(inspector->selectionKind() != pdfinteraction::InspectorModel::SelectionKind::Finding);
+
+    host.goToPage(0);
+    host.selectFinding(findingId);
+    QCOMPARE(host.currentPage(), 0);
+    QVERIFY(inspector->selectionKind() != pdfinteraction::InspectorModel::SelectionKind::Finding);
+    QVERIFY(overlays->findings().isEmpty());
+
+    preflight->beginRun(preflight->documentKey(), preflight->documentRevision(),
+                        QStringLiteral("profile-b"), QStringLiteral("job-2"));
+    QVERIFY(preflight->acceptResult(QStringLiteral("job-2"), preflight->documentRevision(), report));
+    host.selectFinding(findingId);
+    QCOMPARE(host.currentPage(), 1);
+    QCOMPARE(inspector->selectionId(), findingId);
+    QCOMPARE(overlays->findings().size(), 1);
+
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(file.readAll(), originalBytes);
 }
 
 void ShellInspectorDispatchTest::unknownSelectionFallsBackToEmptyCanvas()
