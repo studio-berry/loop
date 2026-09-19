@@ -568,6 +568,9 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     inspectionRequest.profile = runProfile;
     inspectionRequest.jobSpec = jobSpec;
     inspectionRequest.cliBindings = cliBindings;
+    inspectionRequest.firstPage = options.pageSelectorFirstPage;
+    inspectionRequest.lastPage = options.pageSelectorLastPage;
+    inspectionRequest.selectedPages = options.pageSelectorSelection;
     inspectionRequest.plan = revalidationPlan;
     inspectionRequest.cancellation = &cancellationControl;
 
@@ -691,7 +694,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PreflightProfile;
+    return ConsoleFormat | OpenDocument | PreflightProfile | PageSelector;
 }
 
 }   // namespace pdftool
