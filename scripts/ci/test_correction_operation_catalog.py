@@ -72,13 +72,13 @@ class CorrectionOperationCatalogTest(unittest.TestCase):
         registry = generator.parse_repair_operations()
         with tempfile.TemporaryDirectory() as temp_dir:
             overlay = json.loads(OVERLAY_PATH.read_text(encoding="utf-8"))
-            overlay["operations"]["add-bleed"]["revalidation"]["class"] = "targeted"
+            overlay["operations"]["add-bleed"]["revalidation"]["class"] = "full"
             path = Path(temp_dir) / "overlay.json"
             path.write_text(json.dumps(overlay), encoding="utf-8")
             original = generator.CORRECTION_OVERLAY_PATH
             generator.CORRECTION_OVERLAY_PATH = path
             try:
-                with self.assertRaisesRegex(ValueError, "revalidation.class 'targeted'"):
+                with self.assertRaisesRegex(ValueError, "revalidation.class 'full'"):
                     generator.build_correction_operation_catalog(registry)
             finally:
                 generator.CORRECTION_OVERLAY_PATH = original
@@ -105,7 +105,7 @@ class CorrectionOperationCatalogTest(unittest.TestCase):
 
     def test_document_wide_revalidation_is_full(self) -> None:
         registry = {operation["id"]: operation for operation in generator.parse_repair_operations()}
-        for operation_id in ("add-bleed", "downsample-images", "rgb-to-cmyk"):
+        for operation_id in ("downsample-images", "rgb-to-cmyk"):
             with self.subTest(operation_id=operation_id):
                 operation = registry[operation_id]
                 self.assertTrue(operation["impact"]["document_wide"])

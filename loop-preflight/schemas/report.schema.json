@@ -15,7 +15,7 @@
     "schema_version": {
       "type": "integer",
       "enum": [1, 2, 3, 4],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 requires stable content-addressed finding ids. Decisions, digests, profile identity, coverage scope, scope restrictions, and variable bindings are additive fields in version 3+."
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 requires stable content-addressed finding ids. Decisions, digests, profile identity, coverage scope, scope restrictions, variable bindings, and revalidation provenance are additive fields."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -100,7 +100,7 @@
     },
     "revalidation": {
       "$ref": "#/$defs/revalidation",
-      "description": "Evidence invalidation and reuse accounting for this run."
+      "description": "Evidence invalidation and reuse accounting for a post-operation run, including which checks and evidence were reused versus recomputed."
     },
     "errors": {
       "type": "array",
@@ -150,17 +150,21 @@
     "revalidation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["full", "mode", "check_ids", "reused_check_ids", "invalidated_evidence_domains", "recomputed_evidence_domains", "reusable_evidence_domains", "pages", "reason", "baseline_reused"],
+      "required": ["mode", "reason"],
       "properties": {
         "full": { "type": "boolean" },
         "mode": { "type": "string", "enum": ["full", "targeted"] },
-        "check_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-        "reused_check_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "reason": { "type": "string", "minLength": 1 },
+        "plan": { "type": "object", "additionalProperties": true },
+        "check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         "invalidated_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
         "recomputed_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
         "reusable_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
         "pages": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "uniqueItems": true },
-        "reason": { "type": "string", "minLength": 1 },
         "baseline_reused": { "type": "boolean" }
       }
     },

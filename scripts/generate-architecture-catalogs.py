@@ -203,6 +203,7 @@ def parse_operation_impact(class_body: str) -> dict[str, Any]:
     body = match.group("body")
     return {
         "domains": parse_evidence_domains(body),
+        "all_pages": parse_bool_assignment(body, "allPages", False),
         "document_wide": parse_bool_assignment(body, "documentWide", False),
         "full_rewrite": parse_bool_assignment(body, "full_rewrite", False)
         if "full_rewrite" in body

@@ -1693,7 +1693,13 @@ void PageMasterExportTest::preflightGate_enablesRevalidationByDefault()
     QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight.json")));
     QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight-final.json")));
     const QJsonObject outputEntry = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
-    QVERIFY(outputEntry.value(QStringLiteral("preflight")).toObject().contains(QStringLiteral("revalidation")));
+    const QJsonObject finalReport =
+        outputEntry.value(QStringLiteral("preflight")).toObject().value(QStringLiteral("revalidation")).toObject();
+    QVERIFY(!finalReport.isEmpty());
+    const QJsonObject provenance = finalReport.value(QStringLiteral("revalidation")).toObject();
+    QCOMPARE(provenance.value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+    QVERIFY(!provenance.value(QStringLiteral("recomputed_check_ids")).toArray().isEmpty());
+    QVERIFY(provenance.value(QStringLiteral("reused_check_ids")).toArray().isEmpty());
 }
 
 void PageMasterExportTest::bleed_confirmationGate_blocksBeforeAssembly()

@@ -455,7 +455,9 @@ PDFRevalidationPlan revalidationPlanAfterFixups(const PreflightProfileData& prof
             enabledCheckIds.append(check.id);
         }
     }
-    return planRevalidation(combineOperationImpacts(fixupImpacts), enabledCheckIds);
+    return planRevalidation(combineOperationImpacts(fixupImpacts),
+                            enabledCheckIds,
+                            profileData.pdfx.has_value());
 }
 
 QString outlineModeName(PDFDocumentManipulator::OutlineMode mode)
@@ -1277,7 +1279,6 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     QJsonObject preflightProfile;
     QJsonObject preflightResolution;
     QString effectiveProfileDigest;
-    std::optional<PreflightResult> initialPreflightResult;
     if (runPreflight)
     {
         PreflightProfileResolver resolver;
@@ -1421,6 +1422,9 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         PDFDocument assembledDocument = manipulator.takeAssembledDocument();
         QList<PDFOperationImpact> fixupImpacts;
+        PreflightResult initialPreflightResult;
+        PDFEvidenceGraph initialPreflightEvidence;
+        bool hasInitialPreflight = false;
 
         if (isCancelRequested(job))
         {
@@ -1436,6 +1440,8 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PreflightResult preflightResult = engine.run(preflightProfile);
             preflightResult.profileResolution = preflightResolution;
             initialPreflightResult = preflightResult;
+            initialPreflightEvidence = engine.lastEvidenceGraph();
+            hasInitialPreflight = true;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("initial"), preflightReport);
@@ -1471,6 +1477,9 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasActionList)
         {
+            // Action Lists can contain heterogeneous operations. Until the
+            // executor returns their combined semantic impact, fail closed.
+            fixupImpacts.append(PDFOperationImpact());
             PDFActionListExecutionOptions actionListOptions =
                 makeActionListExecutionOptions(assembledDocument, job.actionListBindings, &actionListOperationControl);
             if (runPreflight)
@@ -1517,6 +1526,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasPageGeometrySettings)
         {
+            fixupImpacts.append(PDFOperationImpact());
             const PDFOperationResult geometryResult = PDFPageGeometry::apply(&assembledDocument, job.pageGeometrySettings);
             if (!geometryResult)
             {
@@ -1549,6 +1559,9 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             }
             if (job.productionGeometrySettings.contourBleedEnabled)
             {
+                // This path applies the low-level fixup directly rather than a
+                // registered operation, so its impact is intentionally unknown.
+                fixupImpacts.append(PDFOperationImpact());
                 PDFContourBleedFixupSettings contourBleedSettings;
                 contourBleedSettings.amountPt = job.productionGeometrySettings.contourBleed.amountPt;
                 contourBleedSettings.flatteningTolerancePt = job.productionGeometrySettings.contourBleed.flatteningTolerancePt;
@@ -1614,6 +1627,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasTransparencyFlattenSettings)
         {
+            fixupImpacts.append(PDFOperationImpact());
             PDFTransparencyFlattenReport transparencyReport;
             PDFTransparencyFlattenSettings transparencySettings = job.transparencyFlattenSettings;
             transparencySettings.analyzeOnly = false;
@@ -1700,14 +1714,22 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 revalidationPlan.reason = QStringLiteral("profile-unparsed");
             }
             PreflightResult preflightResult;
-            if (profileParsed && initialPreflightResult.has_value())
+            if (profileParsed && hasInitialPreflight)
             {
-                preflightResult = engine.revalidate(profileData, *initialPreflightResult, revalidationPlan);
+                preflightResult = engine.revalidate(profileData,
+                                                    revalidationPlan,
+                                                    initialPreflightResult,
+                                                    initialPreflightEvidence);
             }
             else
             {
-                preflightResult = profileParsed ? engine.run(profileData, revalidationPlan)
-                                                : engine.run(preflightProfile, revalidationPlan);
+                PDFRevalidationPlan fullPlan;
+                fullPlan.full = true;
+                fullPlan.invalidatedDomains = pdfEvidenceAllDomains();
+                fullPlan.reason = profileParsed ? QStringLiteral("prior-run-unavailable")
+                                                : QStringLiteral("profile-unparsed");
+                preflightResult = profileParsed ? engine.run(profileData, fullPlan)
+                                                : engine.run(preflightProfile, fullPlan);
             }
             preflightResult.profileResolution = preflightResolution;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);

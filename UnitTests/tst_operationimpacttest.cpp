@@ -31,6 +31,9 @@
 #include "preflightengine.h"
 
 #include <QtTest>
+#include <QFile>
+
+#include <algorithm>
 
 class OperationImpactTest : public QObject
 {
@@ -38,14 +41,16 @@ class OperationImpactTest : public QObject
 
 private slots:
     void incompleteImpactSelectsFullRevalidation();
+    void fullRewriteSelectsFullRevalidation();
+    void documentPolicySelectsFullRevalidation();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
     void unaffectedChecksAreMarkedReusable();
-    void fullRewriteSelectsFullRevalidation();
     void standardsConvertRequiresOracle();
     void registeredOperationsDeclareImpact();
     void targetedWithoutBaselineIsIncomplete();
     void targetedMatchesFullOnImageProfile();
+    void goldenCorpusTargetedMatchesFullAndReportsReuse();
     void targetedReusesBaselineFindings();
     void goldenFixtureSubsetMatchesFull_data();
     void goldenFixtureSubsetMatchesFull();
@@ -129,15 +134,48 @@ QJsonObject multiCheckImageProfile()
 void OperationImpactTest::incompleteImpactSelectsFullRevalidation()
 {
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.impactComplete = false;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
     QVERIFY(plan.full);
     QCOMPARE(plan.checkIds.size(), 2);
 }
 
+void OperationImpactTest::fullRewriteSelectsFullRevalidation()
+{
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.allPages = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.fullRewrite = true;
+    impact.impactComplete = true;
+
+    const pdf::PDFRevalidationPlan plan =
+        pdf::planRevalidation(impact, { QStringLiteral("image-resolution") });
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
+    QVERIFY(!plan.reusePriorEvidence);
+    QVERIFY(plan.invalidatedEvidenceDomains == pdf::pdfEvidenceAllDomains());
+}
+
+void OperationImpactTest::documentPolicySelectsFullRevalidation()
+{
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.allPages = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+
+    const pdf::PDFRevalidationPlan plan =
+        pdf::planRevalidation(impact, { QStringLiteral("image-resolution") }, true);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("document-policy"));
+}
+
 void OperationImpactTest::imagesOnlyPlanSelectsImageResolution()
 {
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Images;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
@@ -148,6 +186,7 @@ void OperationImpactTest::imagesOnlyPlanSelectsImageResolution()
 void OperationImpactTest::unmappedCheckForcesFullPlan()
 {
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Images;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("bleed") });
@@ -158,6 +197,7 @@ void OperationImpactTest::unmappedCheckForcesFullPlan()
 void OperationImpactTest::unaffectedChecksAreMarkedReusable()
 {
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Images;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("embedded-fonts") });
@@ -166,18 +206,6 @@ void OperationImpactTest::unaffectedChecksAreMarkedReusable()
     QCOMPARE(plan.reusedCheckIds, QStringList{ QStringLiteral("embedded-fonts") });
     QVERIFY(plan.invalidatedEvidenceDomains.testFlag(pdf::PDFEvidenceDomain::Images));
     QVERIFY(plan.reusableEvidenceDomains.testFlag(pdf::PDFEvidenceDomain::Fonts));
-}
-
-void OperationImpactTest::fullRewriteSelectsFullRevalidation()
-{
-    pdf::PDFOperationImpact impact;
-    impact.domains = pdf::PDFEvidenceDomain::Images;
-    impact.impactComplete = true;
-    impact.fullRewrite = true;
-    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution") });
-    QVERIFY(plan.full);
-    QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
-    QVERIFY(plan.invalidatedEvidenceDomains == pdf::pdfEvidenceAllDomains());
 }
 
 void OperationImpactTest::standardsConvertRequiresOracle()
@@ -189,6 +217,8 @@ void OperationImpactTest::standardsConvertRequiresOracle()
     QVERIFY(!impact.impactComplete);
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("color-mode") });
     QVERIFY(plan.full);
+    QVERIFY(plan.requiresIndependentOracle);
+    QCOMPARE(plan.reason, QStringLiteral("independent-oracle"));
 }
 
 void OperationImpactTest::registeredOperationsDeclareImpact()
@@ -200,14 +230,25 @@ void OperationImpactTest::registeredOperationsDeclareImpact()
         const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(id);
         QVERIFY(operation);
         const pdf::PDFOperationImpact impact = operation->impact(nullptr, QJsonObject());
-        QVERIFY2(impact.impactComplete || impact.requiresIndependentOracle,
-                 qPrintable(QStringLiteral("Operation '%1' inherits an undeclared/incomplete impact.").arg(id)));
+        QVERIFY2(impact.declared || impact.impactComplete || impact.requiresIndependentOracle,
+                 qPrintable(QStringLiteral("Operation '%1' has no impact declaration.").arg(id)));
+        if (impact.declared)
+        {
+            const bool hasTargetScope = impact.allPages ||
+                                        impact.documentWide ||
+                                        !impact.pages.isEmpty() ||
+                                        !impact.objectIds.isEmpty() ||
+                                        !impact.mutatesDocument;
+            QVERIFY2(hasTargetScope,
+                     qPrintable(QStringLiteral("Operation '%1' has no declared target scope.").arg(id)));
+        }
         if (impact.impactComplete && impact.mutatesDocument)
         {
             QVERIFY2(impact.documentWide || impact.domains != pdf::PDFEvidenceDomains() ||
                          !impact.pages.isEmpty() || !impact.objectIds.isEmpty(),
                      qPrintable(QStringLiteral("Operation '%1' declares mutation without an impact scope.").arg(id)));
         }
+        QVERIFY(impact.toJson().contains(QStringLiteral("impact_complete")));
         QVERIFY(impact.toJson().contains(QStringLiteral("mutates_document")));
     }
 }
@@ -219,6 +260,7 @@ void OperationImpactTest::targetedWithoutBaselineIsIncomplete()
     pdf::PreflightEngine engine(&session);
 
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Fonts;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
@@ -243,6 +285,7 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
     QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
 
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Images;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution") });
@@ -253,6 +296,86 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
     QVERIFY(targeted.inspectionComplete);
     QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
     QCOMPARE(targeted.errors.size(), full.errors.size());
+}
+
+void OperationImpactTest::goldenCorpusTargetedMatchesFullAndReportsReuse()
+{
+    // image-dpi-low carries both graph-backed image evidence and a color-mode failure;
+    // color-rgb only surfaces colorants in the evidence graph today.
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    auto noPassword = [](bool*)
+    { return QString(); };
+    pdf::PDFDocumentReader reader(nullptr, noPassword, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Impact golden parity") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                            { QStringLiteral("min_dpi"), 300 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } },
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-mode") },
+                                            { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK") } },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+
+    pdf::PreflightProfileData profile;
+    QString profileError;
+    QVERIFY2(pdf::PreflightEngine::parseProfile(profileObject, profile, profileError),
+             qPrintable(profileError));
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const pdf::PreflightResult before = engine.run(profile);
+    const pdf::PDFEvidenceGraph beforeEvidence = engine.lastEvidenceGraph();
+    const pdf::PreflightResult fullAfter = engine.run(profile);
+
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.allPages = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan =
+        pdf::planRevalidation(impact,
+                              { QStringLiteral("image-resolution"),
+                                QStringLiteral("color-mode") });
+
+    QVERIFY(!plan.full);
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
+    QVERIFY(plan.reusePriorEvidence);
+
+    const pdf::PreflightResult targeted =
+        engine.revalidate(profile, plan, before, beforeEvidence);
+
+    QCOMPARE(pdf::reducePreflightVerdict(targeted).state,
+             pdf::reducePreflightVerdict(fullAfter).state);
+
+    const auto findingIds = [](const QList<pdf::PreflightFinding>& findings)
+    {
+        QStringList ids;
+        for (const pdf::PreflightFinding& finding : findings)
+        {
+            ids.append(finding.stableId());
+        }
+        std::sort(ids.begin(), ids.end());
+        return ids;
+    };
+    QCOMPARE(findingIds(targeted.errors), findingIds(fullAfter.errors));
+    QCOMPARE(findingIds(targeted.warnings), findingIds(fullAfter.warnings));
+
+    const QJsonObject provenance = targeted.revalidation;
+    QCOMPARE(provenance.value(QStringLiteral("mode")).toString(), QStringLiteral("targeted"));
+    const QJsonArray reusedChecks = provenance.value(QStringLiteral("reused_check_ids")).toArray();
+    const QJsonArray recomputedChecks = provenance.value(QStringLiteral("recomputed_check_ids")).toArray();
+    QVERIFY(reusedChecks.contains(QStringLiteral("color-mode")));
+    QVERIFY(recomputedChecks.contains(QStringLiteral("image-resolution")));
+    QVERIFY(!provenance.value(QStringLiteral("reused_evidence_ids")).toArray().isEmpty());
+    QVERIFY(!provenance.value(QStringLiteral("recomputed_evidence_ids")).toArray().isEmpty());
 }
 
 void OperationImpactTest::targetedReusesBaselineFindings()
@@ -269,6 +392,7 @@ void OperationImpactTest::targetedReusesBaselineFindings()
     QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
 
     pdf::PDFOperationImpact impact;
+    impact.declared = true;
     impact.domains = pdf::PDFEvidenceDomain::Fonts;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(

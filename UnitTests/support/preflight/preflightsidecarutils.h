@@ -593,7 +593,8 @@ inline const QSet<QString>& normalizedReportAllowedProperties()
         QStringLiteral("error"),
         QStringLiteral("profile_identity"),
         QStringLiteral("coverage_scope"),
-        QStringLiteral("variable_bindings")
+        QStringLiteral("variable_bindings"),
+        QStringLiteral("revalidation")
     };
     return allowedProperties;
 }
