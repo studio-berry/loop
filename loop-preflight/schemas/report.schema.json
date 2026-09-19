@@ -372,6 +372,11 @@
           "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
         },
         "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
+        "diagnostics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Non-blocking diagnostics, including migration warnings for deprecated profile inputs."
+        },
         "reason": {
           "type": "string",
           "description": "Present for skipped/unsupported/failed statuses; omitted for ok/warning."
