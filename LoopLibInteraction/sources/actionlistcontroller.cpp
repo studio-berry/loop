@@ -89,6 +89,7 @@ void ActionListController::markRecipeStale()
     m_plannedDocumentRevision.clear();
     m_plannedRecipeHash.clear();
     m_plannedBindingsHash.clear();
+    m_plannedPlanDigest.clear();
     Q_EMIT resultChanged();
 }
 
@@ -131,7 +132,8 @@ bool ActionListController::planMatches(const QString& documentKey,
                                        const QString& recipeHash,
                                        const QString& bindingsHash) const
 {
-    return m_state == State::Planned && documentKey == m_plannedDocumentKey &&
+    return m_state == State::Planned && !m_plannedPlanDigest.isEmpty() &&
+           documentKey == m_plannedDocumentKey &&
            documentRevision == m_plannedDocumentRevision && recipeHash == m_plannedRecipeHash &&
            bindingsHash == m_plannedBindingsHash;
 }
@@ -170,6 +172,7 @@ bool ActionListController::acceptValidation(const QString& jobId,
         m_plannedDocumentRevision.clear();
         m_plannedRecipeHash.clear();
         m_plannedBindingsHash.clear();
+        m_plannedPlanDigest.clear();
         m_steps.replace(validationSteps);
         m_operatorSummary = errors.join(QLatin1Char('\n'));
         setState(State::Failed);
@@ -200,11 +203,12 @@ bool ActionListController::acceptPlan(const QString& jobId,
     m_plannedDocumentRevision = documentRevision;
     m_plannedRecipeHash = m_runRecipeHash;
     m_plannedBindingsHash = m_runBindingsHash;
+    m_plannedPlanDigest = result.status == QStringLiteral("planned") ? result.planDigest : QString();
     m_steps.replace(result.steps);
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
     Q_EMIT resultChanged();
-    if (result.status == QStringLiteral("planned"))
+    if (result.status == QStringLiteral("planned") && !m_plannedPlanDigest.isEmpty())
     {
         m_operatorSummary = QStringLiteral("Action List plan is ready for confirmation.");
         setState(State::Planned);
@@ -230,6 +234,20 @@ bool ActionListController::acceptExecution(const QString& jobId,
     m_steps.replace(result.steps);
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
+    if (result.status == QStringLiteral("succeeded") &&
+        (m_plannedPlanDigest.isEmpty() || result.planDigest != m_plannedPlanDigest))
+    {
+        m_result.status = QStringLiteral("failed");
+        m_operatorSummary = QStringLiteral("Action List execution does not match the confirmed plan.");
+        m_plannedDocumentKey.clear();
+        m_plannedDocumentRevision.clear();
+        m_plannedRecipeHash.clear();
+        m_plannedBindingsHash.clear();
+        m_plannedPlanDigest.clear();
+        setState(State::Failed);
+        Q_EMIT resultChanged();
+        return false;
+    }
     Q_EMIT resultChanged();
     if (result.status == QStringLiteral("succeeded"))
     {
@@ -250,6 +268,7 @@ bool ActionListController::acceptExecution(const QString& jobId,
     m_plannedDocumentRevision.clear();
     m_plannedRecipeHash.clear();
     m_plannedBindingsHash.clear();
+    m_plannedPlanDigest.clear();
     return true;
 }
 
@@ -289,6 +308,11 @@ void ActionListController::discardPlan()
     m_result = pdf::PDFActionListExecutionResult();
     m_steps.clear();
     m_operatorSummary.clear();
+    m_plannedDocumentKey.clear();
+    m_plannedDocumentRevision.clear();
+    m_plannedRecipeHash.clear();
+    m_plannedBindingsHash.clear();
+    m_plannedPlanDigest.clear();
     setState(State::Idle);
     Q_EMIT resultChanged();
 }
@@ -307,6 +331,7 @@ void ActionListController::clear()
     m_plannedDocumentRevision.clear();
     m_plannedRecipeHash.clear();
     m_plannedBindingsHash.clear();
+    m_plannedPlanDigest.clear();
     m_progress = 0;
     m_cancelRequested = false;
     m_operatorSummary.clear();

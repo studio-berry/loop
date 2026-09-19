@@ -599,8 +599,7 @@ public:
         plan->expectedChanges.images = flattensTransparency(settings);
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::OutputIntent,
-                             PDFRepairValidatorKind::NormalPreflight,
-                             PDFRepairValidatorKind::Custom };
+                             PDFRepairValidatorKind::NormalPreflight };
         plan->warnings.append(QStringLiteral("An independent validator with a {input} argument is required before commit."));
 
         PDFStandardConversionReport report;

@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "pdfactionlist.h"
 #include "pdfschemaversion.h"
 
 #include <QFile>
@@ -51,6 +52,7 @@ private slots:
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
     void everyJsonKindRoundTripsItsCurrentAndPreviousGolden();
+    void actionListV1MigratesToUsableV2WithoutChangingStepSemantics();
     void newerMinorPassesThroughAndReportsTheDocumentVersion();
     void compatibilityDiagnosticsAreStableAndDistinct();
 };
@@ -470,6 +472,35 @@ void SchemaEvolutionTest::everyJsonKindRoundTripsItsCurrentAndPreviousGolden()
                      QJsonDocument(prepared.document).toJson(QJsonDocument::Compact));
         }
     }
+}
+
+void SchemaEvolutionTest::actionListV1MigratesToUsableV2WithoutChangingStepSemantics()
+{
+    bool opened = false;
+    const QJsonObject source = loadSchemaGolden(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/action-list-v1.json"), &opened);
+    QVERIFY(opened);
+    QCOMPARE(source.value(QStringLiteral("schema")).toString(), QStringLiteral("loop-action-list/1"));
+    const pdf::PDFSchemaMigrationResult migrated = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::ActionList, source);
+    QVERIFY(migrated.migrated);
+    QCOMPARE(migrated.toVersion.major, quint16(2));
+    QCOMPARE(migrated.document.value(QStringLiteral("schema")).toString(), QStringLiteral("loop-action-list/2"));
+    QCOMPARE(migrated.document.value(QStringLiteral("steps")), source.value(QStringLiteral("steps")));
+    QCOMPARE(migrated.document.value(QStringLiteral("id")), source.value(QStringLiteral("id")));
+    QCOMPARE(migrated.document.value(QStringLiteral("name")), source.value(QStringLiteral("name")));
+    const pdf::PDFSchemaMigrationResult repeated = pdf::prepareSchemaDocument(
+        pdf::PDFSchemaKind::ActionList, migrated.document);
+    QVERIFY(!repeated.migrated);
+    QCOMPARE(repeated.document, migrated.document);
+
+    pdf::PDFActionList recipe;
+    QVERIFY(pdf::PDFActionList::fromJson(migrated.document, &recipe));
+    QCOMPARE(recipe.steps.size(), 1);
+    QCOMPARE(recipe.steps.first().operationId, QStringLiteral("add-bleed"));
+    QCOMPARE(recipe.steps.first().parameters.value(QStringLiteral("bleed_mm")).toDouble(), 3.0);
+    QVERIFY(!pdf::prepareSchemaDocument(pdf::PDFSchemaKind::ActionList, QJsonObject{
+                                                                            { QStringLiteral("schema_kind"), QStringLiteral("action-list") },
+                                                                            { QStringLiteral("schema_version"), 99 } })
+                 .document.size());
 }
 
 void SchemaEvolutionTest::newerMinorPassesThroughAndReportsTheDocumentVersion()

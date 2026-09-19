@@ -113,6 +113,8 @@ private slots:
     void standardTargets_areExplicitAndStable();
     void addBleedAnalyze_rejectsUnknownBleedMode();
     void declaredValidators_populateVerdictWhenProfileSupplied();
+    void transactionRefusesUnverifiedCandidateWithoutPreflightProfile();
+    void declaredStructuralAndSpecializedValidatorsRequireActualProof();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -572,6 +574,74 @@ void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied(
     QCOMPARE(result.validations.first().status, pdf::PDFRepairStatus::Failed);
     QVERIFY(!validation);
     QCOMPARE(result.verdict.value(QStringLiteral("state")).toString(), QStringLiteral("fail"));
+}
+
+void RepairOperationTest::transactionRefusesUnverifiedCandidateWithoutPreflightProfile()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const QByteArray original = writeSerializedBytes(source);
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(!transaction.validateCandidate({}));
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                         { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Applied);
+    QVERIFY(transaction.candidate() != nullptr);
+    const pdf::PDFOperationResult verified = transaction.validateCandidate({});
+    QVERIFY(!verified);
+    QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(transaction.candidate() == nullptr);
+    QCOMPARE(transaction.results().size(), 1);
+    QVERIFY(!transaction.results().first().validations.isEmpty());
+    QVERIFY(!transaction.results().first().incompleteReasons.isEmpty());
+    QCOMPARE(transaction.results().first().status, pdf::PDFRepairStatus::Incomplete);
+    QCOMPARE(transaction.results().first().verdict.value(QStringLiteral("state")).toString(),
+             QStringLiteral("incomplete"));
+    QVERIFY(!transaction.validateCandidate({}));
+    QCOMPARE(writeSerializedBytes(source), original);
+}
+
+void RepairOperationTest::declaredStructuralAndSpecializedValidatorsRequireActualProof()
+{
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan structural;
+    structural.requiresPostflight = false;
+    structural.validators = { pdf::PDFRepairValidatorKind::StructuralIntegrity };
+    pdf::PDFRepairResult structuralResult;
+    QVERIFY(pdf::runDeclaredRepairValidators(&document, structural, {}, &structuralResult));
+    QCOMPARE(structuralResult.validations.size(), 1);
+    QCOMPARE(structuralResult.validations.first().validatorId, QStringLiteral("structural-integrity"));
+    QCOMPARE(structuralResult.validations.first().status, pdf::PDFRepairStatus::Passed);
+
+    pdf::PDFRepairPlan specialized;
+    specialized.requiresPostflight = true;
+    specialized.validators = { pdf::PDFRepairValidatorKind::NormalPreflight,
+                               pdf::PDFRepairValidatorKind::OutputIntent };
+    pdf::PDFRepairResult result;
+    pdf::PreflightResult inspected;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult verified = pdf::runDeclaredRepairValidators(
+        &document, specialized, profilePath, &result, {}, nullptr, {}, &inspected);
+    QVERIFY(!verified);
+    QVERIFY(!inspected.profileName.isEmpty());
+    QCOMPARE(result.validations.size(), 2);
+    QCOMPARE(result.validations.at(1).validatorId, QStringLiteral("output-intent"));
+    QCOMPARE(result.validations.at(1).status, pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(result.incompleteReasons.join(QStringLiteral(" ")).contains(QStringLiteral("output-intent")));
+    QVERIFY(!result.verdict.isEmpty());
+
+    pdf::PDFRepairPlan custom;
+    custom.requiresPostflight = false;
+    custom.validators = { pdf::PDFRepairValidatorKind::Custom };
+    pdf::PDFRepairResult unsupported;
+    QVERIFY(!pdf::runDeclaredRepairValidators(&document, custom, {}, &unsupported));
+    QCOMPARE(unsupported.validations.first().status, pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(unsupported.incompleteReasons.join(QStringLiteral(" ")).contains(QStringLiteral("no executable verification contract")));
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

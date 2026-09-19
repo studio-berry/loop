@@ -435,45 +435,36 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("preflight.profile-invalid"), profileError);
             return PDFToolExitCode::InvalidInvocation;
         }
-        pdf::PDFDocumentSession session(&candidateDocument);
-        const pdf::PreflightResult preflight = pdf::PreflightEngine(&session).run(governedProfile);
-        const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(preflight);
-        reportJson.insert(QStringLiteral("postflight"), preflight.toJson(candidatePath));
-        if (verdict.state == pdf::PreflightVerdictState::Incomplete)
-        {
-            reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-            reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{ QStringLiteral("postflight-incomplete") });
-            if (!options.repairAllowIncomplete)
-            {
-                writeRepairReportIfRequested(options, reportJson);
-                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
-                                 PDFToolTranslationContext::tr("Postflight did not inspect the complete candidate."));
-                return PDFToolExitCode::PartialOutput;
-            }
-        }
-        if (verdict.state == pdf::PreflightVerdictState::Error)
-        {
-            reportJson.insert(QStringLiteral("status"), QStringLiteral("error"));
-            writeRepairReportIfRequested(options, reportJson);
-            return PDFToolExitCode::PreflightError;
-        }
-        if (verdict.state == pdf::PreflightVerdictState::Fail)
-        {
-            reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
-            writeRepairReportIfRequested(options, reportJson);
-            return PDFToolExitCode::Findings;
-        }
     }
-    else
+
+    pdf::PreflightResult postflight;
+    const pdf::PDFOperationResult verified = transaction.validateCandidate(options.preflightProfilePath,
+                                                                           &postflight,
+                                                                           governedProfile);
+    reportJson.insert(QStringLiteral("results"), resultsJson(transaction.results()));
+    if (options.preflightProfilePath.isEmpty())
     {
         reportJson.insert(QStringLiteral("postflight"), QJsonObject{
                                                             { QStringLiteral("status"), QStringLiteral("not-run") },
                                                             { QStringLiteral("reason"), QStringLiteral("no-profile-supplied") } });
-        reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
+    }
+    else
+    {
+        reportJson.insert(QStringLiteral("postflight"), postflight.toJson(candidatePath));
+    }
+    const pdf::PreflightVerdict canonicalVerdict = pdf::reducePreflightVerdict(postflight);
+    if (!verified || transaction.status() != pdf::PDFRepairStatus::Passed || !canonicalVerdict.isPass())
+    {
+        const pdf::PDFRepairStatus status = transaction.status();
+        const bool incomplete = status == pdf::PDFRepairStatus::Incomplete ||
+                                canonicalVerdict.state == pdf::PreflightVerdictState::Incomplete;
+        reportJson.insert(QStringLiteral("status"), incomplete ? QStringLiteral("incomplete") : QStringLiteral("failed"));
         writeRepairReportIfRequested(options, reportJson);
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
-                         PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
-        return PDFToolExitCode::PartialOutput;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.declared-validation-failed"),
+                         verified.getErrorMessage().isEmpty()
+                             ? PDFToolTranslationContext::tr("A declared repair validator did not complete; no output was committed.")
+                             : verified.getErrorMessage());
+        return incomplete ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Findings;
     }
 
     reportJson.insert(QStringLiteral("technical_preview"), technicalPreview.toJson());
@@ -483,13 +474,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (previewIncomplete)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-        if (!options.repairAllowIncomplete)
-        {
-            writeRepairReportIfRequested(options, reportJson);
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-incomplete"),
-                             PDFToolTranslationContext::tr("The repair preview is incomplete; no output was committed."));
-            return PDFToolExitCode::PartialOutput;
-        }
+        writeRepairReportIfRequested(options, reportJson);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-incomplete"),
+                         PDFToolTranslationContext::tr("The repair preview is incomplete; no output was committed."));
+        return PDFToolExitCode::PartialOutput;
     }
     const int unexpectedStructuralChanges = std::count_if(technicalPreview.structuralChanges.cbegin(),
                                                           technicalPreview.structuralChanges.cend(),
