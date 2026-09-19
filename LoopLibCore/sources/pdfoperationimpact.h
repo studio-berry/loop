@@ -60,6 +60,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan
     QStringList checkIds;
     QStringList reusedCheckIds;
     PDFEvidenceDomains invalidatedEvidenceDomains;
+    PDFEvidenceDomains recomputedEvidenceDomains;
     PDFEvidenceDomains reusableEvidenceDomains;
     QSet<int> pages;
     QString reason;
