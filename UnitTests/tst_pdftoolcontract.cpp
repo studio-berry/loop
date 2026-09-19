@@ -381,6 +381,17 @@ void PdfToolContractTest::preflightPageSelectorsNarrowReportScope()
                  .value(QStringLiteral("scope_restrictions")).toObject()
                  .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
 
+    QStringList bounded = base;
+    bounded << QStringLiteral("--page-first") << QStringLiteral("1")
+            << QStringLiteral("--page-last") << QStringLiteral("1");
+    const ToolRun withinRange = runPdfTool(bounded);
+    QVERIFY(withinRange.exitCode != 2);
+    const QJsonObject boundedReport = withinRange.json.value(QStringLiteral("data")).toObject()
+                                          .value(QStringLiteral("report")).toObject();
+    QCOMPARE(boundedReport.value(QStringLiteral("checks")).toArray().first().toObject()
+                 .value(QStringLiteral("scope_restrictions")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+
     QStringList disjoint = base;
     disjoint << QStringLiteral("--page-first") << QStringLiteral("2")
              << QStringLiteral("--page-select") << QStringLiteral("1");
