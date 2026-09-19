@@ -82,7 +82,7 @@ bool decisionIsActiveAt(const QList<PDFOperationHistoryEvent>& history,
                         int throughIndex)
 {
     bool active = false;
-    const int lastIndex = qMin(throughIndex, history.size() - 1);
+    const int lastIndex = qMin(throughIndex, static_cast<int>(history.size()) - 1);
     for (int index = 0; index <= lastIndex; ++index)
     {
         const PDFOperationHistoryEvent& event = history.at(index);

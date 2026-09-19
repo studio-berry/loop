@@ -44,6 +44,8 @@
 #include <QJsonValue>
 #include <QTemporaryDir>
 
+#include <optional>
+
 namespace
 {
 
