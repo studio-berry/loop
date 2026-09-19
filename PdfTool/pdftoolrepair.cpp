@@ -435,12 +435,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         if (!transaction.postflightRequired())
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-            reportJson.insert(QStringLiteral("finding_delta"), QJsonObject{
-                { QStringLiteral("resolved"), QJsonArray() },
-                { QStringLiteral("unchanged"), QJsonArray() },
-                { QStringLiteral("introduced"), QJsonArray() },
-                { QStringLiteral("incomplete"), QJsonArray{ QStringLiteral("postflight-not-required-by-plan") } }
-            });
+            pdf::PDFRepairFindingDelta missingPostflight;
+            missingPostflight.incompleteFindingIds.append(QStringLiteral("postflight-not-required-by-plan"));
+            reportJson.insert(QStringLiteral("finding_delta"), missingPostflight.toJson());
             writeRepairReportIfRequested(options, reportJson);
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
                              PDFToolTranslationContext::tr("Repair publication requires a plan that declares postflight validation."));
