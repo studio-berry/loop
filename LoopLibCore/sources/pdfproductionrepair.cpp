@@ -75,6 +75,13 @@ public:
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::Layers | PDFRepairDomain::PageGeometry; }
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("validation does not mutate printable content")); }
     QJsonObject parameterSchema() const override { return geometrySchema(); }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.impactComplete = true;
+        declared.mutatesDocument = false;
+        return declared;
+    }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
     {
@@ -121,6 +128,26 @@ public:
         schema.insert(QStringLiteral("properties"), properties);
         schema.insert(QStringLiteral("required"), QJsonArray{ QStringLiteral("geometry"), QStringLiteral("contour_id") });
         return schema;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject& parameters) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains = pdfEvidenceAllDomains();
+        declared.impactComplete = true;
+
+        const PDFProductionGeometryModel model = PDFProductionGeometryModel::fromJson(parameters.value(QStringLiteral("geometry")).toObject());
+        const QString contourId = parameters.value(QStringLiteral("contour_id")).toString();
+        for (const PDFProductionContour& contour : model.contours)
+        {
+            if (contour.id == contourId)
+            {
+                declared.pages.insert(int(contour.pageIndex));
+                return declared;
+            }
+        }
+
+        declared.documentWide = true;
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
@@ -211,6 +238,13 @@ public:
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::PageGeometry; }
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("planning-only operation does not mutate the document")); }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.impactComplete = true;
+        declared.mutatesDocument = false;
+        return declared;
+    }
     QJsonObject parameterSchema() const override
     {
         return QJsonObject{
