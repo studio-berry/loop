@@ -80,6 +80,20 @@ def has_conflict_markers(text: str) -> bool:
     return any(CONFLICT_MARKER.match(line) for line in text.splitlines())
 
 
+def provenance_chain_reason(path: str, text: str) -> str | None:
+    """Reject runtime reintroduction of the superseded parallel audit ledger."""
+    normalized = normalize(path)
+    if not RUNTIME_PROVENANCE_ROOT.match(normalized):
+        return None
+    if Path(normalized).suffix.lower() not in RUNTIME_SOURCE_SUFFIXES:
+        return None
+    if LEGACY_AUDIT_EVENT_DECL.search(text):
+        return "parallel preflight audit event/store duplicates the canonical operation-history chain"
+    if LEGACY_AUDIT_SIDECAR.search(text):
+        return "legacy .loop/.loupe audit JSONL sidecar duplicates the canonical history store"
+    return None
+
+
 def oversized_reason(path: str, size: int) -> str | None:
     """Reason this tracked file is too large, or None if it is acceptable."""
     if size <= MAX_TRACKED_BYTES:
@@ -234,6 +248,10 @@ def validate_repository(root: Path = ROOT) -> list[tuple[str, str]]:
 
         if has_conflict_markers(text):
             violations.append((path, "unresolved merge-conflict marker"))
+
+        reason = provenance_chain_reason(path, text)
+        if reason:
+            violations.append((path, reason))
 
     violations.extend(whitespace_violations(root))
     violations.extend(fuzz_corpus_violations(root))
