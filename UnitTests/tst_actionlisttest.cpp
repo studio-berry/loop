@@ -676,7 +676,8 @@ void ActionListTest::rejectsMalformedStepInput()
         { QStringLiteral("operation"), QStringLiteral("add-bleed") },
         { QStringLiteral("params"), QJsonObject() }
     };
-    const auto rejectStep = [&](const QJsonObject& step, const QString& field) {
+    const auto rejectStep = [&](const QJsonObject& step, const QString& field)
+    {
         const QJsonObject recipe{
             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
             { QStringLiteral("id"), QStringLiteral("invalid-step") },
@@ -706,21 +707,19 @@ void ActionListTest::rejectsMalformedStepInput()
     rejectStep(step, QStringLiteral("when"));
 
     step.insert(QStringLiteral("when"), QJsonObject{
-        { QStringLiteral("previousStepStatus"), QStringLiteral("succeeded") }
-    });
+                                            { QStringLiteral("previousStepStatus"), QStringLiteral("succeeded") } });
     rejectStep(step, QStringLiteral("when.previousStepStatus"));
     step.insert(QStringLiteral("when"), QJsonObject{
-        { QStringLiteral("previousStepStatus"), QJsonValue(QJsonValue::Null) }
-    });
+                                            { QStringLiteral("previousStepStatus"), QJsonValue(QJsonValue::Null) } });
     rejectStep(step, QStringLiteral("when.previousStepStatus"));
 
     pdf::PDFActionList parsed;
     QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("steps"), QStringLiteral("not an array") }
-    }, &parsed));
+                                              { QStringLiteral("steps"), QStringLiteral("not an array") } },
+                                          &parsed));
     QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("steps"), QJsonArray{ QStringLiteral("not a step object") } }
-    }, &parsed));
+                                              { QStringLiteral("steps"), QJsonArray{ QStringLiteral("not a step object") } } },
+                                          &parsed));
 }
 
 void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision()
