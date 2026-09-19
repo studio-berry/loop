@@ -43,6 +43,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFOperationImpact
     PDFEvidenceDomains domains;
     QSet<int> pages;
     QStringList objectIds;
+    bool declared = false;
     bool documentWide = false;
     bool fullRewrite = false;
     bool impactComplete = false;
@@ -58,7 +59,19 @@ struct LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan
     bool full = true;
     QStringList checkIds;
     QSet<int> pages;
+    PDFEvidenceDomains invalidatedDomains;
+    bool reusePriorEvidence = false;
+    bool requiresIndependentOracle = false;
     QString reason;
+
+    QJsonObject toJson() const;
+};
+
+struct LOOPLIBCORESHARED_EXPORT PDFEvidenceRevalidation
+{
+    PDFEvidenceGraph graph;
+    QStringList reusedEvidenceIds;
+    QStringList recomputedEvidenceIds;
 
     QJsonObject toJson() const;
 };
@@ -70,10 +83,18 @@ LOOPLIBCORESHARED_EXPORT std::optional<PDFEvidenceDomain> preflightEvidenceDomai
 /// Plans which enabled checks to rerun. Incomplete, document-wide,
 /// oracle-required, or unmapped-check impact falls back to a full run.
 LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
-                                                               const QStringList& enabledCheckIds);
+                                                               const QStringList& enabledCheckIds,
+                                                               bool hasDocumentPolicy = false);
 
 /// Merges multiple declared impacts into one conservative superset.
 LOOPLIBCORESHARED_EXPORT PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impacts);
+
+/// Reuses only records proven unaffected by the same plan that selected checks.
+/// Invalidated records are dropped unless the targeted run recomputed them.
+LOOPLIBCORESHARED_EXPORT PDFEvidenceRevalidation reconcileEvidenceForRevalidation(
+    const PDFEvidenceGraph& previous,
+    const PDFEvidenceGraph& recomputed,
+    const PDFRevalidationPlan& plan);
 
 }   // namespace pdf
 
