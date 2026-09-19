@@ -22,6 +22,7 @@
 
 #include "pdfrepairoperation.h"
 #include "pdfdocumentwriter.h"
+#include "pdfpreflightverdict.h"
 
 #include <algorithm>
 #include <utility>
@@ -490,6 +491,59 @@ PDFOperationResult PDFRepairTransaction::apply()
         m_results[index] = std::move(result);
     }
     m_status = PDFRepairStatus::Applied;
+    return PDFOperationResult(true);
+}
+
+PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profilePath,
+                                                              PreflightResult* postflightOut,
+                                                              const QJsonObject& profileJson,
+                                                              const QJsonObject& profileBindings)
+{
+    if (!m_hasCandidate || m_status != PDFRepairStatus::Applied ||
+        m_plans.size() != m_results.size())
+    {
+        return PDFOperationResult(QStringLiteral("Repair transaction has no applied candidate to validate."));
+    }
+
+    MandatoryPostflightOptions options;
+    options.operationControl = m_options.operationControl;
+    options.profileJson = profileJson;
+    options.profileBindings = profileBindings;
+    for (int index = 0; index < m_plans.size(); ++index)
+    {
+        if (PDFOperationControl::isOperationCancelled(m_options.operationControl))
+        {
+            m_results[index].status = PDFRepairStatus::Cancelled;
+            m_status = PDFRepairStatus::Cancelled;
+            m_candidate = PDFDocument();
+            m_hasCandidate = false;
+            return PDFOperationResult(QStringLiteral("Repair validation was cancelled."));
+        }
+
+        PDFRepairResult& result = m_results[index];
+        const PDFOperationResult verified = runDeclaredRepairValidators(
+            &m_candidate,
+            m_plans[index],
+            profilePath,
+            &result,
+            options,
+            m_entries[index].operation,
+            m_entries[index].parameters,
+            postflightOut);
+        if (!verified || !result.incompleteReasons.isEmpty() || !result.validationFailures.isEmpty())
+        {
+            result.status = !result.incompleteReasons.isEmpty()
+                                ? PDFRepairStatus::Incomplete
+                                : PDFRepairStatus::Failed;
+            m_status = result.status;
+            m_candidate = PDFDocument();
+            m_hasCandidate = false;
+            return verified ? PDFOperationResult(QStringLiteral("Declared repair validation did not complete."))
+                            : verified;
+        }
+        result.status = PDFRepairStatus::Passed;
+    }
+    m_status = PDFRepairStatus::Passed;
     return PDFOperationResult(true);
 }
 
