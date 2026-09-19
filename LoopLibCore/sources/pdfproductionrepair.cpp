@@ -75,6 +75,14 @@ public:
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::Layers | PDFRepairDomain::PageGeometry; }
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("validation does not mutate printable content")); }
     QJsonObject parameterSchema() const override { return geometrySchema(); }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.declared = true;
+        declared.impactComplete = true;
+        declared.objectIds.append(QStringLiteral("production/geometry"));
+        return declared;
+    }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
     {
@@ -121,6 +129,33 @@ public:
         schema.insert(QStringLiteral("properties"), properties);
         schema.insert(QStringLiteral("required"), QJsonArray{ QStringLiteral("geometry"), QStringLiteral("contour_id") });
         return schema;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject& parameters) const override
+    {
+        PDFOperationImpact declared;
+        declared.declared = true;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Images) |
+                           PDFEvidenceDomain::Colorants |
+                           PDFEvidenceDomain::Strokes |
+                           PDFEvidenceDomain::OverprintTransparency;
+        declared.impactComplete = false;
+
+        const PDFProductionGeometryModel model =
+            PDFProductionGeometryModel::fromJson(parameters.value(QStringLiteral("geometry")).toObject());
+        const QString contourId = parameters.value(QStringLiteral("contour_id")).toString();
+        declared.objectIds.append(contourId.isEmpty()
+                                      ? QStringLiteral("production/contour")
+                                      : QStringLiteral("production/contours/%1").arg(contourId));
+        for (const PDFProductionContour& contour : model.contours)
+        {
+            if (contour.id == contourId && contour.pageIndex >= 0)
+            {
+                declared.pages.insert(int(contour.pageIndex + 1));
+                declared.impactComplete = true;
+                break;
+            }
+        }
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
@@ -221,6 +256,14 @@ public:
                 { QStringLiteral("spec"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } }
             } }
         };
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.declared = true;
+        declared.impactComplete = true;
+        declared.objectIds.append(QStringLiteral("production/grommets"));
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
