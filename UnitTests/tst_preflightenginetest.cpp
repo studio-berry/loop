@@ -40,6 +40,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QPainter>
+#include <QTemporaryDir>
 
 #include <algorithm>
 #include <vector>
@@ -131,6 +132,7 @@ private slots:
     void run_inkCoverageHonorsPageBoxAndPageRange();
     void run_anchoredIncludeRegionFiltersStrokeEvidence();
     void run_objectClassScopeExcludesUnrelatedCheck();
+    void run_ocgRestrictionExcludesOtherLayers();
     void run_cliPageScopeNeverWidensAuthoredProfile();
     void run_legacyAnalysisBoxMigratesAndDiagnoses();
     void run_unresolvedVariableIsIncomplete();
@@ -2425,6 +2427,75 @@ void PreflightEngineTest::run_objectClassScopeExcludesUnrelatedCheck()
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("not_applicable"));
     QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("restriction_excluded_all_content"));
+}
+
+void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("two-layers.pdf"));
+    const QByteArray content =
+        "/OC /Artwork BDC\n0.1 w 10 20 m 180 20 l S\nEMC\n"
+        "/OC /Marks BDC\n0.1 w 10 140 m 180 140 l S\nEMC\n";
+    QByteArray pdfBytes("%PDF-1.4\n");
+    QVector<qint64> offsets{ 0 };
+    const auto appendObject = [&](int index, const QByteArray& bytes)
+    {
+        offsets.append(pdfBytes.size());
+        pdfBytes += QByteArray::number(index) + " 0 obj\n" + bytes + "\nendobj\n";
+    };
+    appendObject(1, "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [5 0 R 6 0 R] /D << /Order [5 0 R 6 0 R] /ON [5 0 R 6 0 R] >> >> >>");
+    appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+    appendObject(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Properties << /Artwork 5 0 R /Marks 6 0 R >> >> /Contents 4 0 R >>");
+    appendObject(4, "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream");
+    appendObject(5, "<< /Type /OCG /Name (Artwork) >>");
+    appendObject(6, "<< /Type /OCG /Name (Marks) >>");
+    const qint64 xref = pdfBytes.size();
+    pdfBytes += "xref\n0 7\n0000000000 65535 f \n";
+    for (int index = 1; index < offsets.size(); ++index)
+    {
+        pdfBytes += QByteArray::number(offsets[index]).rightJustified(10, '0') + " 00000 n \n";
+    }
+    pdfBytes += "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n" +
+                QByteArray::number(xref) + "\n%%EOF\n";
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    QCOMPARE(file.write(pdfBytes), pdfBytes.size());
+    file.close();
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false);
+    pdf::PDFDocument document = reader.readFromFile(path);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const auto run = [&](const QString& layer) -> pdf::PreflightResult
+    {
+        return engine.run(QJsonObject{
+            { QStringLiteral("name"), QStringLiteral("Scoped strokes") },
+            { QStringLiteral("restrictions"), QJsonObject{
+                { QStringLiteral("layers"), QJsonArray{ layer } }
+            } },
+            { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                { QStringLiteral("min_effective_width_pt"), 0.25 },
+                { QStringLiteral("severity"), QStringLiteral("warning") }
+            } } }
+        });
+    };
+
+    const pdf::PreflightResult artwork = run(QStringLiteral("Artwork"));
+    QVERIFY(artwork.inspectionComplete);
+    QCOMPARE(artwork.warnings.size(), 1);
+    QVERIFY(artwork.warnings.first().bbox.intersects(QRectF(0, 10, 200, 30)));
+    const pdf::PreflightResult marks = run(QStringLiteral("Marks"));
+    QVERIFY(marks.inspectionComplete);
+    QCOMPARE(marks.warnings.size(), 1);
+    QVERIFY(marks.warnings.first().bbox.intersects(QRectF(0, 130, 200, 30)));
+    const pdf::PreflightResult excluded = run(QStringLiteral("Nonexistent"));
+    QVERIFY(!excluded.pass);
+    QVERIFY(!excluded.inspectionComplete);
+    QCOMPARE(excluded.checkStatuses.first().status, QStringLiteral("not_applicable"));
 }
 
 void PreflightEngineTest::run_cliPageScopeNeverWidensAuthoredProfile()
