@@ -1455,7 +1455,7 @@ bool baselineSupportsRevalidation(const PreflightResult& baseline,
                                   const PreflightProfileData& profile,
                                   const PDFRevalidationPlan& plan)
 {
-    if (!baseline.inspectionComplete)
+    if (!baseline.inspectionComplete || baseline.profileName != profile.name)
     {
         return false;
     }
@@ -6208,7 +6208,9 @@ PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
     if (result.inspectionComplete)
     {
         mergeReusedBaseline(&result, baseline, plan);
-        result.revalidation = revalidationReport(plan, true);
+        PDFRevalidationPlan reportPlan = plan;
+        reportPlan.recomputedEvidenceDomains = evidenceDomainsForCheckIds(plan.checkIds);
+        result.revalidation = revalidationReport(reportPlan, true);
         result.pass = reducePreflightVerdict(result, &profile).isPass();
     }
     return result;
