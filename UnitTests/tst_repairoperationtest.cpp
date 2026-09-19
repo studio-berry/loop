@@ -112,6 +112,8 @@ private slots:
     void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
     void addBleedAnalyze_rejectsUnknownBleedMode();
+    void findingDelta_tracksResolvedUnchangedIntroducedDeterministically();
+    void findingDelta_incompleteOrSkippedChecksNeverFalseResolve();
     void declaredValidators_populateVerdictWhenProfileSupplied();
 };
 
@@ -555,6 +557,100 @@ void RepairOperationTest::addBleedAnalyze_rejectsUnknownBleedMode()
                                                                &plan);
     QVERIFY(!analyze);
     QVERIFY(!plan.unsupportedReasons.isEmpty());
+}
+
+void RepairOperationTest::findingDelta_tracksResolvedUnchangedIntroducedDeterministically()
+{
+    const auto makeFinding = [](const QString& checkId, const QString& objectId)
+    {
+        pdf::PreflightFinding finding;
+        finding.scope = QStringLiteral("object");
+        finding.page = 1;
+        finding.objectId = objectId;
+        finding.type = checkId;
+        finding.severity = QStringLiteral("error");
+        finding.message = checkId;
+        finding.checkId = checkId;
+        return finding;
+    };
+    const auto makeStatus = [](const QString& checkId, const QString& status)
+    {
+        pdf::PreflightCheckStatus result;
+        result.id = checkId;
+        result.status = status;
+        return result;
+    };
+
+    const pdf::PreflightFinding resolved = makeFinding(QStringLiteral("image-resolution"), QStringLiteral("10 0 R"));
+    const pdf::PreflightFinding unchanged = makeFinding(QStringLiteral("color-mode"), QStringLiteral("11 0 R"));
+    const pdf::PreflightFinding introduced = makeFinding(QStringLiteral("thin-strokes"), QStringLiteral("12 0 R"));
+
+    pdf::PreflightResult before;
+    before.errors = { resolved, unchanged };
+    before.checkStatuses = {
+        makeStatus(QStringLiteral("image-resolution"), QStringLiteral("failed")),
+        makeStatus(QStringLiteral("color-mode"), QStringLiteral("failed"))
+    };
+
+    pdf::PreflightResult after;
+    after.errors = { unchanged, introduced };
+    after.checkStatuses = {
+        makeStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")),
+        makeStatus(QStringLiteral("color-mode"), QStringLiteral("failed")),
+        makeStatus(QStringLiteral("thin-strokes"), QStringLiteral("failed"))
+    };
+
+    const pdf::PDFRepairFindingDelta first = pdf::computeFindingDelta(before, after);
+    const pdf::PDFRepairFindingDelta second = pdf::computeFindingDelta(before, after);
+    QCOMPARE(first.resolvedFindingIds, QStringList{ resolved.stableId() });
+    QCOMPARE(first.unchangedFindingIds, QStringList{ unchanged.stableId() });
+    QCOMPARE(first.introducedFindingIds, QStringList{ introduced.stableId() });
+    QVERIFY(first.incompleteFindingIds.isEmpty());
+    QCOMPARE(QJsonDocument(first.toJson()).toJson(QJsonDocument::Compact),
+             QJsonDocument(second.toJson()).toJson(QJsonDocument::Compact));
+}
+
+void RepairOperationTest::findingDelta_incompleteOrSkippedChecksNeverFalseResolve()
+{
+    pdf::PreflightFinding finding;
+    finding.scope = QStringLiteral("object");
+    finding.page = 1;
+    finding.objectId = QStringLiteral("10 0 R");
+    finding.type = QStringLiteral("image-resolution");
+    finding.severity = QStringLiteral("error");
+    finding.message = QStringLiteral("Low resolution image");
+    finding.checkId = QStringLiteral("image-resolution");
+
+    pdf::PreflightResult before;
+    before.errors = { finding };
+    pdf::PreflightCheckStatus beforeStatus;
+    beforeStatus.id = finding.checkId;
+    beforeStatus.status = QStringLiteral("failed");
+    before.checkStatuses = { beforeStatus };
+
+    pdf::PreflightResult skipped;
+    pdf::PreflightCheckStatus skippedStatus;
+    skippedStatus.id = finding.checkId;
+    skippedStatus.status = QStringLiteral("skipped");
+    skippedStatus.reason = QStringLiteral("revalidation-plan");
+    skipped.checkStatuses = { skippedStatus };
+    const pdf::PDFRepairFindingDelta skippedDelta = pdf::computeFindingDelta(before, skipped);
+    QVERIFY(skippedDelta.resolvedFindingIds.isEmpty());
+    QCOMPARE(skippedDelta.unchangedFindingIds, QStringList{ finding.stableId() });
+    QVERIFY(skippedDelta.incompleteFindingIds.isEmpty());
+
+    pdf::PreflightResult incomplete;
+    incomplete.inspectionComplete = false;
+    incomplete.errorCode = QStringLiteral("budget-exceeded");
+    pdf::PreflightCheckStatus incompleteStatus;
+    incompleteStatus.id = finding.checkId;
+    incompleteStatus.status = QStringLiteral("incomplete");
+    incompleteStatus.reason = QStringLiteral("budget-exceeded");
+    incomplete.checkStatuses = { incompleteStatus };
+    const pdf::PDFRepairFindingDelta incompleteDelta = pdf::computeFindingDelta(before, incomplete);
+    QVERIFY(incompleteDelta.resolvedFindingIds.isEmpty());
+    QVERIFY(incompleteDelta.unchangedFindingIds.isEmpty());
+    QCOMPARE(incompleteDelta.incompleteFindingIds, QStringList{ finding.stableId() });
 }
 
 void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied()
