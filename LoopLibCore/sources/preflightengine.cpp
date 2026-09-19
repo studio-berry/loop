@@ -1410,19 +1410,68 @@ bool isGraphBackedCheckId(const QString& checkId)
     return checkId == QLatin1String("image-resolution") || checkId == QLatin1String("color-mode") || checkId == QLatin1String("color-inventory") || checkId == QLatin1String("thin-strokes") || checkId == QLatin1String("white-overprint") || checkId == QLatin1String("transparency-risk") || checkId == QLatin1String("embedded-fonts");
 }
 
-PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph, const PreflightRestrictions& restrictions)
+bool supportsGeometricScope(const QString& checkId)
 {
-    if (!restrictions.pages.has_value())
+    return checkId == QLatin1String("image-resolution") || checkId == QLatin1String("thin-strokes");
+}
+
+QRectF restrictionPageBox(const PDFPage* page, const QString& name)
+{
+    if (name == QLatin1String("media")) return page->getMediaBox();
+    if (name == QLatin1String("crop")) return page->getCropBox();
+    if (name == QLatin1String("bleed")) return page->getBleedBox();
+    if (name == QLatin1String("art")) return page->getArtBox();
+    return page->getTrimBox();
+}
+
+PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph,
+                                       const PreflightRestrictions& restrictions,
+                                       const QString& checkId,
+                                       PDFDocumentSession* session)
+{
+    if (restrictions.isUnrestricted())
     {
         return graph;
     }
-
     PDFEvidenceGraph scoped = graph;
     QList<PDFEvidenceRecord> kept;
     kept.reserve(graph.records.size());
+    const bool geometric = supportsGeometricScope(checkId) &&
+                           (restrictions.pageBox.has_value() || !restrictions.regions.isEmpty());
+    const PDFEvidenceDomain domain = checkId == QLatin1String("image-resolution")
+                                         ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+    const PDFCatalog* catalog = session && session->getDocument()
+                                    ? session->getDocument()->getCatalog() : nullptr;
     for (const PDFEvidenceRecord& record : graph.records)
     {
-        if (record.page <= 0 || restrictions.allowsPage(record.page - 1))
+        if (record.page > 0 && !restrictions.allowsPage(record.page - 1))
+        {
+            continue;
+        }
+        if (!geometric || record.domain != domain)
+        {
+            kept.append(record);
+            continue;
+        }
+        if (!catalog || record.page <= 0 || record.page > catalog->getPageCount())
+        {
+            continue;
+        }
+        const PDFPage* page = catalog->getPage(record.page - 1);
+        if (!page || !record.geometry.isValid() || record.geometry.isEmpty())
+        {
+            continue;
+        }
+        QRectF overlap = record.geometry;
+        if (restrictions.pageBox.has_value())
+        {
+            overlap = overlap.intersected(restrictionPageBox(page, *restrictions.pageBox));
+        }
+        for (const PreflightRegion& region : restrictions.regions)
+        {
+            overlap = overlap.intersected(region.rectPt.translated(restrictionPageBox(page, region.anchor).topLeft()));
+        }
+        if (!overlap.isEmpty())
         {
             kept.append(record);
         }
@@ -6744,7 +6793,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                     QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateColorModeFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateColorModeFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("transparency-risk")] = [this](PDFDocumentSession* session,
@@ -6753,7 +6802,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                            QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateTransparencyRiskFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateTransparencyRiskFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("thin-strokes")] = [this](PDFDocumentSession* session,
@@ -6762,7 +6811,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                       QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateThinStrokesFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateThinStrokesFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("thin-parts")] = [](PDFDocumentSession* session,
@@ -6779,7 +6828,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                          QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateColorInventoryFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateColorInventoryFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("output-intent")] = [](PDFDocumentSession* session,
@@ -6796,7 +6845,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                         QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateEmbeddedFontsFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateEmbeddedFontsFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("font-integrity")] = [](PDFDocumentSession* session,
@@ -6827,7 +6876,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                           QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateImageResolutionFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateImageResolutionFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 
     m_checks[QStringLiteral("white-overprint")] = [this](PDFDocumentSession* session,
@@ -6836,7 +6885,7 @@ void PreflightEngine::registerBuiltInChecks()
                                                          QList<PreflightFinding>& warnings)
     {
         Q_UNUSED(session);
-        evaluateWhiteOverprintFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
+        evaluateWhiteOverprintFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
     };
 }
 
