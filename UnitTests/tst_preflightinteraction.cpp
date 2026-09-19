@@ -312,14 +312,23 @@ void PreflightInteractionTest::overlayAdapterMapsStableIdsAndSeverities()
 {
     PreflightFindingsModel model;
     const pdf::PreflightFinding error = makeFinding(QStringLiteral("bleed"), 2, QStringLiteral("error"), QRectF(1, 2, 3, 4));
-    const pdf::PreflightFinding warning = makeFinding(QStringLiteral("fonts"), 2, QStringLiteral("warning"), QRectF(5, 6, 7, 8));
-    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { error }, { warning });
+    const pdf::PreflightFinding warning = makeFinding(QStringLiteral("embedded-fonts"), 2, QStringLiteral("warning"), QRectF(5, 6, 7, 8));
+    const pdf::PreflightFinding unknown = makeFinding(QStringLiteral("future-check"), 2, QStringLiteral("warning"), QRectF(9, 10, 11, 12));
+    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { error }, { warning, unknown });
 
     const QList<pdfinteraction::InteractionTarget> targets = model.interactionTargets();
     QCOMPARE(targets.size(), 2);
     QCOMPARE(targets.at(0).id, error.stableId());
     QCOMPARE(targets.at(0).pageIndex, 1);
     QCOMPARE(targets.at(0).kind, pdfinteraction::InteractionTargetKind::Finding);
+    QCOMPARE(targets.at(1).id, warning.stableId());
+    const QVector<pdfinteraction::FindingOverlay> pageOverlays = model.overlays(QStringLiteral("rev-1"), 2);
+    QCOMPARE(pageOverlays.size(), 2);
+    QVERIFY(!std::any_of(targets.cbegin(), targets.cend(),
+                         [&](const pdfinteraction::InteractionTarget& target)
+                         {
+                             return target.id == unknown.stableId();
+                         }));
 
     const QHash<QString, pdfinteraction::OverlaySeverity> severities = model.severityMap();
     QCOMPARE(severities.value(error.stableId()), pdfinteraction::OverlaySeverity::Error);
