@@ -1448,6 +1448,22 @@ PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph,
         {
             continue;
         }
+        if (restrictions.layers.has_value() && record.domain == domain)
+        {
+            if (!record.extra.value(QStringLiteral("ocg_complete")).toBool())
+            {
+                continue;
+            }
+            const QJsonArray names = record.extra.value(QStringLiteral("ocg_names")).toArray();
+            if (names.isEmpty() || std::any_of(names.cbegin(), names.cend(),
+                                                [&](const QJsonValue& value)
+                                                {
+                                                    return !restrictions.layers->contains(value.toString());
+                                                }))
+            {
+                continue;
+            }
+        }
         if (!geometric || record.domain != domain)
         {
             kept.append(record);
@@ -6027,7 +6043,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         QString unsupportedDimension;
         if (!check.restrictions.unsupportedReason.isEmpty())
             unsupportedDimension = QStringLiteral("scope");
-        else if (check.restrictions.layers.has_value())
+        else if (check.restrictions.layers.has_value() && !supportsGeometricScope(check.id))
             unsupportedDimension = QStringLiteral("layers");
         else if (!check.restrictions.regions.isEmpty() &&
                  (!supportsGeometricScope(check.id) ||
@@ -6058,6 +6074,35 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                                           : check.restrictions.unsupportedReason;
             }
             continue;
+        }
+
+        if (check.restrictions.layers.has_value() && supportsGeometricScope(check.id))
+        {
+            const PDFEvidenceDomain domain = check.id == QLatin1String("image-resolution")
+                                                 ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+            const bool unknownMembership = std::any_of(
+                m_activeGraph.records.cbegin(), m_activeGraph.records.cend(),
+                [&](const PDFEvidenceRecord& record)
+                {
+                    return record.domain == domain &&
+                           (check.id != QLatin1String("image-resolution") ||
+                            record.target == QLatin1String("image-effective-dpi")) &&
+                           (record.page <= 0 || check.restrictions.allowsPage(record.page - 1)) &&
+                           !record.extra.value(QStringLiteral("ocg_complete")).toBool();
+                });
+            if (unknownMembership)
+            {
+                status.status = QStringLiteral("not_inspected");
+                status.reason = QStringLiteral("restriction_unsupported:layers");
+                result.checkStatuses.push_back(status);
+                result.inspectionComplete = false;
+                if (result.errorCode.isEmpty())
+                {
+                    result.errorCode = QStringLiteral("unsupported-scope");
+                    result.errorMessage = PDFTranslationContext::tr("Check '%1' has unresolved optional-content membership.").arg(check.id);
+                }
+                continue;
+            }
         }
 
         if (check.restrictions.objectClasses.has_value() && supportsGeometricScope(check.id))
@@ -6114,13 +6159,16 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         }
 
         if (supportsGeometricScope(check.id) &&
-            (check.restrictions.pageBox.has_value() || !check.restrictions.regions.isEmpty()))
+            (check.restrictions.pageBox.has_value() || !check.restrictions.regions.isEmpty() ||
+             check.restrictions.layers.has_value()))
         {
             const PDFCatalog* catalog = m_session && m_session->getDocument()
                                             ? m_session->getDocument()->getCatalog() : nullptr;
             const PDFEvidenceDomain domain = check.id == QStringLiteral("image-resolution")
                                                  ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
-            bool geometryUnavailable = !catalog;
+            const bool geometricScope = check.restrictions.pageBox.has_value() ||
+                                        !check.restrictions.regions.isEmpty();
+            bool geometryUnavailable = geometricScope && !catalog;
             for (const PDFEvidenceRecord& record : m_activeGraph.recordsForDomain(domain))
             {
                 if (record.page > 0 && !check.restrictions.allowsPage(record.page - 1))
@@ -6129,6 +6177,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                 }
                 if ((check.id == QStringLiteral("image-resolution") &&
                      record.target != QStringLiteral("image-effective-dpi")))
+                {
+                    continue;
+                }
+                if (!geometricScope)
                 {
                     continue;
                 }
