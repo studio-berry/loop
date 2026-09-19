@@ -257,7 +257,9 @@ QJsonObject PDFRepairFindingDelta::toJson() const
         { QStringLiteral("resolved"), stringArray(resolvedFindingIds) },
         { QStringLiteral("unchanged"), stringArray(unchangedFindingIds) },
         { QStringLiteral("introduced"), stringArray(introducedFindingIds) },
-        { QStringLiteral("incomplete"), stringArray(incompleteFindingIds) }
+        { QStringLiteral("incomplete"), stringArray(incompleteFindingIds) },
+        { QStringLiteral("compared"), compared },
+        { QStringLiteral("carried_forward"), stringArray(carriedForwardFindingIds) }
     };
 }
 
@@ -339,6 +341,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
     collect(after, &afterById);
 
     PDFRepairFindingDelta delta;
+    delta.compared = true;
     QSet<QString> incomplete;
 
     for (auto it = beforeById.cbegin(); it != beforeById.cend(); ++it)
@@ -375,6 +378,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
                 // Targeted revalidation intentionally omitted this check. The
                 // known finding is carried forward rather than falsely cleared.
                 delta.unchangedFindingIds.append(findingId);
+                delta.carriedForwardFindingIds.append(findingId);
                 break;
             case InspectionState::Incomplete:
                 incomplete.insert(findingId);
@@ -414,6 +418,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
     sortUnique(&delta.unchangedFindingIds);
     sortUnique(&delta.introducedFindingIds);
     sortUnique(&delta.incompleteFindingIds);
+    sortUnique(&delta.carriedForwardFindingIds);
     return delta;
 }
 
