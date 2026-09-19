@@ -288,6 +288,7 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
     result.findingId = request.findingId;
     result.checkId = request.checkId;
 
+    const std::optional<FindingTargetingCapability> capability = m_registry.capabilityFor(request.checkId);
     if (!request.isValid())
     {
         clearPresentationState(true);
@@ -299,7 +300,7 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
         result.outcome = FindingNavigationOutcome::Stale;
         result.reason = QStringLiteral("finding-navigation/stale-revision");
     }
-    else if (!m_registry.capabilityFor(request.checkId).has_value())
+    else if (!capability.has_value())
     {
         clearPresentationState(true);
         result.outcome = FindingNavigationOutcome::UnsupportedCheck;
@@ -307,7 +308,7 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
     }
     else
     {
-        const FindingTargetingCapability declared = *m_registry.capabilityFor(request.checkId);
+        const FindingTargetingCapability& declared = *capability;
         ++m_navigationGeneration;
         result.navigationGeneration = m_navigationGeneration;
         m_currentFindingId = request.findingId;
