@@ -1431,6 +1431,8 @@ PDFRevalidationPlan fullRevalidationPlan(const PreflightProfileData& profile)
 {
     PDFRevalidationPlan plan;
     plan.full = true;
+    plan.invalidatedDomains = pdfEvidenceAllDomains();
+    plan.reusePriorEvidence = false;
     plan.reason = QStringLiteral("full-run");
     for (const PreflightCheckConfig& check : profile.checks)
     {
@@ -5531,6 +5533,11 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     }
     root.insert(QStringLiteral("decisions"), decisionsArray);
 
+    if (!revalidation.isEmpty())
+    {
+        root.insert(QStringLiteral("revalidation"), revalidation);
+    }
+
     if (!profileResolution.isEmpty())
     {
         root.insert(QStringLiteral("profile_resolution"), profileResolution);
@@ -6066,6 +6073,139 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
 
     result.pass = reducePreflightVerdict(result, &profile).isPass();
 
+    return result;
+}
+
+PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
+                                            const PDFRevalidationPlan& plan,
+                                            const PreflightResult& previousResult,
+                                            const PDFEvidenceGraph& previousEvidence)
+{
+    PDFRevalidationPlan effectivePlan = plan;
+    if (!effectivePlan.full && !effectivePlan.reusePriorEvidence)
+    {
+        effectivePlan = fullRevalidationPlan(profile);
+        effectivePlan.reason = QStringLiteral("prior-reuse-not-authorized");
+    }
+    else if (!effectivePlan.full && !previousResult.inspectionComplete)
+    {
+        effectivePlan = fullRevalidationPlan(profile);
+        effectivePlan.reason = QStringLiteral("prior-inspection-incomplete");
+    }
+    else if (!effectivePlan.full && !previousEvidence.isComplete())
+    {
+        effectivePlan = fullRevalidationPlan(profile);
+        effectivePlan.reason = QStringLiteral("prior-evidence-incomplete");
+    }
+
+    PreflightResult result = run(profile, effectivePlan);
+    PDFEvidenceRevalidation evidence =
+        reconcileEvidenceForRevalidation(previousEvidence, m_activeGraph, effectivePlan);
+
+    QJsonObject revalidation = evidence.toJson();
+    revalidation.insert(QStringLiteral("mode"),
+                        effectivePlan.full ? QStringLiteral("full") : QStringLiteral("targeted"));
+    revalidation.insert(QStringLiteral("reason"), effectivePlan.reason);
+    revalidation.insert(QStringLiteral("plan"), effectivePlan.toJson());
+
+    QJsonArray recomputedChecks;
+    QJsonArray reusedChecks;
+    if (effectivePlan.full)
+    {
+        for (const PreflightCheckConfig& check : profile.checks)
+        {
+            if (check.enabled)
+            {
+                recomputedChecks.append(check.id);
+            }
+        }
+        m_activeGraph = std::move(evidence.graph);
+        revalidation.insert(QStringLiteral("reused_check_ids"), reusedChecks);
+        revalidation.insert(QStringLiteral("recomputed_check_ids"), recomputedChecks);
+        result.revalidation = revalidation;
+        return result;
+    }
+
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (!check.enabled)
+        {
+            continue;
+        }
+        if (effectivePlan.checkIds.contains(check.id))
+        {
+            recomputedChecks.append(check.id);
+        }
+        else
+        {
+            reusedChecks.append(check.id);
+        }
+    }
+
+    revalidation.insert(QStringLiteral("reused_check_ids"), reusedChecks);
+    revalidation.insert(QStringLiteral("recomputed_check_ids"), recomputedChecks);
+
+    if (!result.inspectionComplete || !m_activeGraph.isComplete())
+    {
+        result.revalidation = revalidation;
+        return result;
+    }
+
+    const auto appendReusableFindings = [&effectivePlan](const QList<PreflightFinding>& previous,
+                                                        QList<PreflightFinding>* current)
+    {
+        for (const PreflightFinding& finding : previous)
+        {
+            if (!effectivePlan.checkIds.contains(finding.checkId))
+            {
+                current->append(finding);
+            }
+        }
+    };
+    appendReusableFindings(previousResult.errors, &result.errors);
+    appendReusableFindings(previousResult.warnings, &result.warnings);
+
+    QMap<QString, PreflightCheckStatus> previousStatuses;
+    for (const PreflightCheckStatus& status : previousResult.checkStatuses)
+    {
+        previousStatuses.insert(status.id, status);
+    }
+    for (PreflightCheckStatus& status : result.checkStatuses)
+    {
+        if (status.status == QLatin1String("skipped") &&
+            status.reason == QLatin1String("revalidation-plan"))
+        {
+            const auto previous = previousStatuses.constFind(status.id);
+            if (previous != previousStatuses.cend())
+            {
+                status = previous.value();
+            }
+        }
+    }
+
+    result.fixupsAvailable = profile.fixups;
+    qreal addBleedAmountPt = 0.0;
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (check.enabled &&
+            (check.id == QLatin1String("bleed") || check.id == QLatin1String("content-bleed")) &&
+            check.amountPt > 0.0)
+        {
+            addBleedAmountPt = check.amountPt;
+            break;
+        }
+    }
+    const bool needsAddBleed = hasBleedGapFinding(result.errors) || hasBleedGapFinding(result.warnings);
+    adjustFixupsAvailable(m_session,
+                          result.fixupsAvailable,
+                          needsAddBleed,
+                          addBleedAmountPt,
+                          result.errors,
+                          result.warnings);
+
+    m_activeGraph = std::move(evidence.graph);
+    result.revalidation = revalidation;
+    result.pass = reducePreflightVerdict(result, &profile).isPass();
     return result;
 }
 
