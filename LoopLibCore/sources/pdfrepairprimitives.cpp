@@ -141,6 +141,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.domains = PDFEvidenceDomain::Images;
         declared.documentWide = true;
         declared.impactComplete = true;
@@ -277,6 +278,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.domains.setFlag(PDFEvidenceDomain::Images);
         declared.domains.setFlag(PDFEvidenceDomain::Colorants);
         declared.fullRewrite = true;
@@ -408,6 +410,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Colorants) | PDFEvidenceDomain::Images;
         declared.documentWide = true;
         declared.impactComplete = true;
@@ -565,6 +568,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.documentWide = true;
         declared.fullRewrite = true;
         declared.impactComplete = false;
