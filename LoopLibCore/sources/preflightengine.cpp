@@ -1432,6 +1432,7 @@ PDFRevalidationPlan fullRevalidationPlan(const PreflightProfileData& profile)
     PDFRevalidationPlan plan;
     plan.full = true;
     plan.reason = QStringLiteral("full-run");
+    plan.invalidatedEvidenceDomains = pdfEvidenceAllDomains();
     for (const PreflightCheckConfig& check : profile.checks)
     {
         if (check.enabled)
@@ -1440,6 +1441,86 @@ PDFRevalidationPlan fullRevalidationPlan(const PreflightProfileData& profile)
         }
     }
     return plan;
+}
+
+QJsonObject revalidationReport(const PDFRevalidationPlan& plan, bool baselineReused)
+{
+    QJsonObject report = plan.toJson();
+    report.insert(QStringLiteral("mode"), plan.full ? QStringLiteral("full") : QStringLiteral("targeted"));
+    report.insert(QStringLiteral("baseline_reused"), baselineReused);
+    return report;
+}
+
+bool baselineSupportsRevalidation(const PreflightResult& baseline,
+                                  const PreflightProfileData& profile,
+                                  const PDFRevalidationPlan& plan)
+{
+    if (!baseline.inspectionComplete)
+    {
+        return false;
+    }
+    if (!profile.effectiveDigest.isEmpty() &&
+        !baseline.effectiveProfileDigest.isEmpty() &&
+        profile.effectiveDigest != baseline.effectiveProfileDigest)
+    {
+        return false;
+    }
+
+    QSet<QString> baselineChecks;
+    for (const PreflightCheckStatus& status : baseline.checkStatuses)
+    {
+        baselineChecks.insert(status.id);
+    }
+    for (const QString& checkId : plan.reusedCheckIds)
+    {
+        if (!baselineChecks.contains(checkId))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void mergeReusedBaseline(PreflightResult* result,
+                         const PreflightResult& baseline,
+                         const PDFRevalidationPlan& plan)
+{
+    if (!result)
+    {
+        return;
+    }
+
+    for (const PreflightFinding& finding : baseline.errors)
+    {
+        if (plan.reusedCheckIds.contains(finding.checkId))
+        {
+            result->errors.append(finding);
+        }
+    }
+    for (const PreflightFinding& finding : baseline.warnings)
+    {
+        if (plan.reusedCheckIds.contains(finding.checkId))
+        {
+            result->warnings.append(finding);
+        }
+    }
+
+    for (PreflightCheckStatus& status : result->checkStatuses)
+    {
+        if (!plan.reusedCheckIds.contains(status.id))
+        {
+            continue;
+        }
+        const auto baselineStatus = std::find_if(baseline.checkStatuses.cbegin(),
+                                                 baseline.checkStatuses.cend(),
+                                                 [&status](const PreflightCheckStatus& candidate)
+                                                 { return candidate.id == status.id; });
+        if (baselineStatus != baseline.checkStatuses.cend())
+        {
+            status = *baselineStatus;
+            status.reason = QStringLiteral("reused-evidence");
+        }
+    }
 }
 
 PDFEvidenceCollectSettings evidenceSettingsForProfile(const PreflightProfileData& profile)
@@ -5547,6 +5628,10 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     {
         root.insert(QStringLiteral("variable_bindings"), variableBindings);
     }
+    if (!revalidation.isEmpty())
+    {
+        root.insert(QStringLiteral("revalidation"), revalidation);
+    }
 
     QJsonArray checksArray;
     for (const PreflightCheckStatus& status : checkStatuses)
@@ -5715,6 +5800,22 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
 
 PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan)
 {
+    PDFRevalidationPlan effectivePlan = plan;
+    if (effectivePlan.full)
+    {
+        const QString reason = effectivePlan.reason;
+        effectivePlan = fullRevalidationPlan(profile);
+        if (!reason.isEmpty())
+        {
+            effectivePlan.reason = reason;
+        }
+    }
+    if (profile.pdfx.has_value() && !effectivePlan.full)
+    {
+        effectivePlan = fullRevalidationPlan(profile);
+        effectivePlan.reason = QStringLiteral("pdfx-requires-full");
+    }
+
     PreflightResult result;
     result.profileName = profile.name;
     result.inspectionComplete = true;
@@ -5722,6 +5823,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     result.coverageScope = profile.coverageScope.isEmpty() ? preflightCoverageScopeFor(profile) : profile.coverageScope;
     result.variableBindings = profile.variableBindings;
     result.effectiveProfileDigest = profile.effectiveDigest;
+    result.revalidation = revalidationReport(effectivePlan, false);
     m_activeGraph = PDFEvidenceGraph();
     if (m_session)
     {
@@ -5789,7 +5891,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         }
     }
 
-    const PDFEvidenceDomains graphDomains = plan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(plan.checkIds);
+    const PDFEvidenceDomains graphDomains = effectivePlan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(effectivePlan.checkIds);
     if (graphDomains != PDFEvidenceDomains())
     {
         m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
@@ -5871,7 +5973,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             continue;
         }
 
-        if (!plan.full && !plan.checkIds.contains(check.id))
+        if (!effectivePlan.full && !effectivePlan.checkIds.contains(check.id))
         {
             status.status = QStringLiteral("skipped");
             status.reason = QStringLiteral("revalidation-plan");
@@ -6011,7 +6113,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         result.checkStatuses.push_back(status);
     }
 
-    if (profile.pdfx.has_value() && plan.full)
+    if (profile.pdfx.has_value() && effectivePlan.full)
     {
         const PDFXConformanceResult pdfxResult = evaluatePDFXPolicy(m_session, profile.pdfx.value());
         result.pdfx = pdfxResult;
@@ -6064,8 +6166,48 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                           result.errors,
                           result.warnings);
 
+    if (!effectivePlan.full && result.inspectionComplete)
+    {
+        result.inspectionComplete = false;
+        result.errorCode = QStringLiteral("revalidation-baseline-required");
+        result.errorMessage = PDFTranslationContext::tr("Targeted revalidation requires a complete baseline report for unaffected checks.");
+    }
+
     result.pass = reducePreflightVerdict(result, &profile).isPass();
 
+    return result;
+}
+
+PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
+                                            const PreflightResult& baseline,
+                                            const PDFRevalidationPlan& plan)
+{
+    if (plan.full || profile.pdfx.has_value())
+    {
+        return run(profile, plan);
+    }
+
+    if (!baselineSupportsRevalidation(baseline, profile, plan))
+    {
+        PDFRevalidationPlan fallback = fullRevalidationPlan(profile);
+        fallback.reason = QStringLiteral("baseline-unavailable");
+        return run(profile, fallback);
+    }
+
+    PreflightResult result = run(profile, plan);
+    if (result.errorCode == QLatin1String("revalidation-baseline-required"))
+    {
+        result.errorCode.clear();
+        result.errorMessage.clear();
+        result.inspectionComplete = true;
+    }
+
+    if (result.inspectionComplete)
+    {
+        mergeReusedBaseline(&result, baseline, plan);
+        result.revalidation = revalidationReport(plan, true);
+        result.pass = reducePreflightVerdict(result, &profile).isPass();
+    }
     return result;
 }
 
