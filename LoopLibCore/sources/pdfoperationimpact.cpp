@@ -53,7 +53,7 @@ QJsonArray domainNames(PDFEvidenceDomains domains)
 
 bool PDFOperationImpact::isFullRevalidation() const
 {
-    return !impactComplete || documentWide || requiresIndependentOracle || domains == PDFEvidenceDomains();
+    return !declared || !impactComplete || documentWide || fullRewrite || requiresIndependentOracle || domains == PDFEvidenceDomains();
 }
 
 QJsonObject PDFOperationImpact::toJson() const
@@ -70,6 +70,7 @@ QJsonObject PDFOperationImpact::toJson() const
         { QStringLiteral("domains"), domainNames(domains) },
         { QStringLiteral("pages"), pageArray },
         { QStringLiteral("object_ids"), QJsonArray::fromStringList(objectIds) },
+        { QStringLiteral("declared"), declared },
         { QStringLiteral("document_wide"), documentWide },
         { QStringLiteral("full_rewrite"), fullRewrite },
         { QStringLiteral("impact_complete"), impactComplete },
@@ -91,7 +92,18 @@ QJsonObject PDFRevalidationPlan::toJson() const
         { QStringLiteral("full"), full },
         { QStringLiteral("check_ids"), QJsonArray::fromStringList(checkIds) },
         { QStringLiteral("pages"), pageArray },
+        { QStringLiteral("invalidated_domains"), domainNames(invalidatedDomains) },
+        { QStringLiteral("reuse_prior_evidence"), reusePriorEvidence },
+        { QStringLiteral("requires_independent_oracle"), requiresIndependentOracle },
         { QStringLiteral("reason"), reason }
+    };
+}
+
+QJsonObject PDFEvidenceRevalidation::toJson() const
+{
+    return QJsonObject{
+        { QStringLiteral("reused_evidence_ids"), QJsonArray::fromStringList(reusedEvidenceIds) },
+        { QStringLiteral("recomputed_evidence_ids"), QJsonArray::fromStringList(recomputedEvidenceIds) }
     };
 }
 
@@ -121,31 +133,51 @@ std::optional<PDFEvidenceDomain> preflightEvidenceDomainForCheck(const QString& 
 }
 
 PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
-                                     const QStringList& enabledCheckIds)
+                                     const QStringList& enabledCheckIds,
+                                     bool hasDocumentPolicy)
 {
     PDFRevalidationPlan plan;
     plan.pages = impact.pages;
+    plan.invalidatedDomains = impact.domains;
+    plan.requiresIndependentOracle = impact.requiresIndependentOracle;
 
-    if (!impact.impactComplete)
+    const auto selectFull = [&plan, &enabledCheckIds](const QString& reason)
     {
         plan.full = true;
         plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("impact-incomplete");
+        plan.invalidatedDomains = pdfEvidenceAllDomains();
+        plan.reusePriorEvidence = false;
+        plan.reason = reason;
         return plan;
+    };
+
+    if (!impact.declared)
+    {
+        return selectFull(QStringLiteral("impact-undeclared"));
+    }
+    if (!impact.impactComplete)
+    {
+        return selectFull(QStringLiteral("impact-incomplete"));
     }
     if (impact.requiresIndependentOracle)
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("independent-oracle");
-        return plan;
+        return selectFull(QStringLiteral("independent-oracle"));
     }
-    if (impact.documentWide || impact.domains == PDFEvidenceDomains())
+    if (impact.fullRewrite)
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = impact.documentWide ? QStringLiteral("document-wide") : QStringLiteral("unspecified-domains");
-        return plan;
+        return selectFull(QStringLiteral("full-rewrite"));
+    }
+    if (impact.documentWide)
+    {
+        return selectFull(QStringLiteral("document-wide"));
+    }
+    if (hasDocumentPolicy)
+    {
+        return selectFull(QStringLiteral("document-policy"));
+    }
+    if (impact.domains == PDFEvidenceDomains())
+    {
+        return selectFull(QStringLiteral("unspecified-domains"));
     }
 
     for (const QString& checkId : enabledCheckIds)
@@ -173,6 +205,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
     }
 
     plan.full = false;
+    plan.reusePriorEvidence = true;
     plan.reason = QStringLiteral("targeted");
     return plan;
 }
@@ -180,9 +213,14 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
 PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impacts)
 {
     PDFOperationImpact combined;
-    combined.impactComplete = true;
+    combined.declared = !impacts.isEmpty();
+    combined.impactComplete = !impacts.isEmpty();
     for (const PDFOperationImpact& impact : impacts)
     {
+        if (!impact.declared)
+        {
+            combined.declared = false;
+        }
         if (!impact.impactComplete)
         {
             combined.impactComplete = false;
@@ -210,6 +248,66 @@ PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impa
         }
     }
     return combined;
+}
+
+PDFEvidenceRevalidation reconcileEvidenceForRevalidation(const PDFEvidenceGraph& previous,
+                                                         const PDFEvidenceGraph& recomputed,
+                                                         const PDFRevalidationPlan& plan)
+{
+    PDFEvidenceRevalidation result;
+    result.graph = recomputed;
+
+    const auto markRecomputed = [&result]()
+    {
+        for (PDFEvidenceRecord& record : result.graph.records)
+        {
+            record.extra.insert(QStringLiteral("revalidation"), QStringLiteral("recomputed"));
+            result.recomputedEvidenceIds.append(record.id);
+        }
+    };
+
+    if (plan.full || !plan.reusePriorEvidence || !previous.isComplete() || !recomputed.isComplete())
+    {
+        markRecomputed();
+        return result;
+    }
+
+    result.graph.records.clear();
+    const auto isInvalidated = [&plan](const PDFEvidenceRecord& record)
+    {
+        if (!plan.invalidatedDomains.testFlag(record.domain))
+        {
+            return false;
+        }
+        return plan.pages.isEmpty() || plan.pages.contains(record.page);
+    };
+
+    for (PDFEvidenceRecord record : previous.records)
+    {
+        if (isInvalidated(record))
+        {
+            continue;
+        }
+        record.artifact = recomputed.artifact;
+        record.revision = recomputed.revision;
+        record.extra.insert(QStringLiteral("revalidation"), QStringLiteral("reused"));
+        record.extra.insert(QStringLiteral("reused_from_revision"), previous.revision.toString());
+        result.reusedEvidenceIds.append(record.id);
+        result.graph.records.append(std::move(record));
+    }
+
+    for (PDFEvidenceRecord record : recomputed.records)
+    {
+        if (!isInvalidated(record))
+        {
+            continue;
+        }
+        record.extra.insert(QStringLiteral("revalidation"), QStringLiteral("recomputed"));
+        result.recomputedEvidenceIds.append(record.id);
+        result.graph.records.append(std::move(record));
+    }
+
+    return result;
 }
 
 }   // namespace pdf
