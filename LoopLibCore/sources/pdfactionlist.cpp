@@ -555,14 +555,28 @@ PDFOperationResult PDFActionList::fromJson(const QJsonObject& object, PDFActionL
         }
     }
 
-    const QJsonArray steps = object.value(QStringLiteral("steps")).toArray();
+    const QJsonValue stepsValue = object.value(QStringLiteral("steps"));
+    if (!stepsValue.isArray())
+    {
+        return PDFOperationResult(QStringLiteral("Action List steps must be an array."));
+    }
+    const QJsonArray steps = stepsValue.toArray();
     for (const QJsonValue& value : steps)
     {
+        if (!value.isObject())
+        {
+            return PDFOperationResult(QStringLiteral("Action List steps must contain objects."));
+        }
         const QJsonObject stepObject = value.toObject();
         PDFActionListStep step;
         step.id = stepObject.value(QStringLiteral("id")).toString().trimmed();
         step.operationId = stepObject.value(QStringLiteral("operation")).toString().trimmed();
-        step.parameters = stepObject.value(QStringLiteral("params")).toObject();
+        const QJsonValue paramsValue = stepObject.value(QStringLiteral("params"));
+        if (!paramsValue.isObject())
+        {
+            return PDFOperationResult(QStringLiteral("Action List step '%1' params must be an object.").arg(step.id));
+        }
+        step.parameters = paramsValue.toObject();
         const QJsonValue selectValue = stepObject.value(QStringLiteral("select"));
         if (!selectValue.isUndefined())
         {
@@ -572,7 +586,20 @@ PDFOperationResult PDFActionList::fromJson(const QJsonObject& object, PDFActionL
             }
             step.select = selectValue.toObject();
         }
-        step.condition = stepObject.value(QStringLiteral("when")).toObject();
+        const QJsonValue whenValue = stepObject.value(QStringLiteral("when"));
+        if (!whenValue.isUndefined())
+        {
+            if (!whenValue.isObject())
+            {
+                return PDFOperationResult(QStringLiteral("Action List step '%1' when must be an object.").arg(step.id));
+            }
+            step.condition = whenValue.toObject();
+            const QJsonValue previousValue = step.condition.value(QStringLiteral("previousStepStatus"));
+            if (!previousValue.isUndefined() && !previousValue.isObject())
+            {
+                return PDFOperationResult(QStringLiteral("Action List step '%1' when.previousStepStatus must be an object.").arg(step.id));
+            }
+        }
         if (!stepObject.value(QStringLiteral("onFailure")).isUndefined() &&
             !parseFailurePolicy(stepObject.value(QStringLiteral("onFailure")), &step.failurePolicy))
         {
