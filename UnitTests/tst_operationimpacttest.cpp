@@ -42,6 +42,7 @@ class OperationImpactTest : public QObject
 private slots:
     void incompleteImpactSelectsFullRevalidation();
     void fullRewriteSelectsFullRevalidation();
+    void documentPolicySelectsFullRevalidation();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
     void emptyTargetedPlanFallsBackToFull();
@@ -140,6 +141,20 @@ void OperationImpactTest::fullRewriteSelectsFullRevalidation()
     QVERIFY(!plan.reusePriorEvidence);
 }
 
+void OperationImpactTest::documentPolicySelectsFullRevalidation()
+{
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.allPages = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+
+    const pdf::PDFRevalidationPlan plan =
+        pdf::planRevalidation(impact, { QStringLiteral("image-resolution") }, true);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("document-policy"));
+}
+
 void OperationImpactTest::imagesOnlyPlanSelectsImageResolution()
 {
     pdf::PDFOperationImpact impact;
@@ -183,6 +198,8 @@ void OperationImpactTest::standardsConvertRequiresOracle()
     QVERIFY(!impact.impactComplete);
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("color-mode") });
     QVERIFY(plan.full);
+    QVERIFY(plan.requiresIndependentOracle);
+    QCOMPARE(plan.reason, QStringLiteral("independent-oracle"));
 }
 
 void OperationImpactTest::registeredOperationsDeclareImpact()
