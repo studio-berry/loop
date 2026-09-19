@@ -134,6 +134,7 @@ private slots:
     void run_objectClassScopeExcludesUnrelatedCheck();
     void run_ocgRestrictionExcludesOtherLayers();
     void run_cliPageScopeNeverWidensAuthoredProfile();
+    void run_colorInventoryPartialPageSelectionIsIncomplete();
     void run_legacyAnalysisBoxMigratesAndDiagnoses();
     void run_unresolvedVariableIsIncomplete();
 };
@@ -2622,6 +2623,30 @@ void PreflightEngineTest::run_legacyAnalysisBoxMigratesAndDiagnoses()
     conflicting.insert(QStringLiteral("checks"), QJsonArray{ conflictingCheck });
     QVERIFY(!pdf::PreflightEngine::parseProfile(conflicting, parsed, error));
     QVERIFY(error.contains(QStringLiteral("conflicting analysis_box")));
+}
+
+void PreflightEngineTest::run_colorInventoryPartialPageSelectionIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Page-restricted ink inventory") },
+        { QStringLiteral("restrictions"), QJsonObject{
+            { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("color-inventory") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().status, QStringLiteral("not_inspected"));
+    QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("restriction_unsupported:pages"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
 }
 
 void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
