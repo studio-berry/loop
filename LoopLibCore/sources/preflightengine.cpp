@@ -5720,6 +5720,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     result.inspectionComplete = true;
     result.profileIdentity = profile.profileIdentity;
     result.coverageScope = profile.coverageScope.isEmpty() ? preflightCoverageScopeFor(profile) : profile.coverageScope;
+    if (!plan.full)
+    {
+        result.coverageScope.insert(QStringLiteral("revalidation"), plan.toJson());
+    }
     result.variableBindings = profile.variableBindings;
     result.effectiveProfileDigest = profile.effectiveDigest;
     m_activeGraph = PDFEvidenceGraph();
@@ -5793,13 +5797,16 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     if (graphDomains != PDFEvidenceDomains())
     {
         m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
-        if (profile.restrictions.pages.has_value())
+        if (profile.restrictions.pages.has_value() || (!plan.full && !plan.pages.isEmpty()))
         {
             QList<PDFEvidenceRecord> kept;
             kept.reserve(m_activeGraph.records.size());
             for (const PDFEvidenceRecord& record : m_activeGraph.records)
             {
-                if (profile.restrictions.allowsPage(record.page - 1))
+                const int pageIndex = record.page - 1;
+                const bool profileAllows = profile.restrictions.allowsPage(pageIndex);
+                const bool planAllows = plan.full || plan.pages.isEmpty() || plan.pages.contains(pageIndex);
+                if (profileAllows && planAllows)
                 {
                     kept.append(record);
                 }

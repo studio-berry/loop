@@ -45,7 +45,7 @@
     "pass": false,
     "profile": "Loop Test - Trim/Page Size",
     "schema_kind": "preflight-report",
-    "schema_version": 3,
+    "schema_version": 4,
     "verdict": {
         "blocking_finding_ids": [
             "e706f630b3fcb901",

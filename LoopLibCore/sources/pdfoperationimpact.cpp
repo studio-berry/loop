@@ -53,7 +53,8 @@ QJsonArray domainNames(PDFEvidenceDomains domains)
 
 bool PDFOperationImpact::isFullRevalidation() const
 {
-    return !impactComplete || documentWide || requiresIndependentOracle || domains == PDFEvidenceDomains();
+    return !impactComplete || documentWide || fullRewrite || requiresIndependentOracle ||
+           domains == PDFEvidenceDomains();
 }
 
 QJsonObject PDFOperationImpact::toJson() const
@@ -124,28 +125,30 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
                                      const QStringList& enabledCheckIds)
 {
     PDFRevalidationPlan plan;
+    // A full run never advertises a misleading narrowed page scope.
+    const auto full = [&plan, &enabledCheckIds](const QString& reason)
+    {
+        plan.full = true;
+        plan.pages.clear();
+        plan.checkIds = enabledCheckIds;
+        plan.reason = reason;
+        return plan;
+    };
     plan.pages = impact.pages;
 
     if (!impact.impactComplete)
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("impact-incomplete");
-        return plan;
+        return full(QStringLiteral("impact-incomplete"));
     }
     if (impact.requiresIndependentOracle)
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("independent-oracle");
-        return plan;
+        return full(QStringLiteral("independent-oracle"));
     }
-    if (impact.documentWide || impact.domains == PDFEvidenceDomains())
+    if (impact.documentWide || impact.fullRewrite || impact.domains == PDFEvidenceDomains())
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = impact.documentWide ? QStringLiteral("document-wide") : QStringLiteral("unspecified-domains");
-        return plan;
+        return full(impact.documentWide ? QStringLiteral("document-wide")
+                                        : impact.fullRewrite ? QStringLiteral("full-rewrite")
+                                                             : QStringLiteral("unspecified-domains"));
     }
 
     for (const QString& checkId : enabledCheckIds)
@@ -153,10 +156,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
         const std::optional<PDFEvidenceDomain> domain = preflightEvidenceDomainForCheck(checkId);
         if (!domain.has_value())
         {
-            plan.full = true;
-            plan.checkIds = enabledCheckIds;
-            plan.reason = QStringLiteral("unmapped-check");
-            return plan;
+            return full(QStringLiteral("unmapped-check"));
         }
         if (impact.domains.testFlag(*domain))
         {
@@ -166,10 +166,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
 
     if (plan.checkIds.isEmpty())
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("no-targeted-checks");
-        return plan;
+        return full(QStringLiteral("no-targeted-checks"));
     }
 
     plan.full = false;

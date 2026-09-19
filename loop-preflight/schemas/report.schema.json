@@ -14,8 +14,8 @@
     },
     "schema_version": {
       "type": "integer",
-      "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
+      "enum": [1, 2, 3, 4],
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 emits stable content-addressed finding ids and explicit targeted-revalidation coverage."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -128,6 +128,20 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 4 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "errors": { "items": { "$ref": "#/$defs/finding_v4" } },
+          "warnings": { "items": { "$ref": "#/$defs/finding_v4" } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "verdict": {
       "type": "object",
@@ -330,6 +344,12 @@
         { "$ref": "#/$defs/finding_v2" }
       ]
     },
+    "finding_v4": {
+      "allOf": [
+        { "$ref": "#/$defs/finding_v2" },
+        { "required": ["id"] }
+      ]
+    },
     "check_status": {
       "type": "object",
       "additionalProperties": false,
@@ -342,8 +362,8 @@
         },
         "status": {
           "type": "string",
-          "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
+          "enum": ["ok", "warning", "failed", "skipped", "incomplete", "unsupported"],
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding. skipped: intentionally not run, for example because it is disabled or outside a targeted revalidation plan. incomplete: required inspection evidence could not be collected. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
         },
         "reason": {
           "type": "string",

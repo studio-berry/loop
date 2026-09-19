@@ -39,7 +39,7 @@
 #include <QTemporaryFile>
 
 #ifndef LOOP_PREFLIGHT_SCHEMA_VERSION
-#define LOOP_PREFLIGHT_SCHEMA_VERSION 3
+#define LOOP_PREFLIGHT_SCHEMA_VERSION 4
 #endif
 
 namespace pdfplugin::preflight

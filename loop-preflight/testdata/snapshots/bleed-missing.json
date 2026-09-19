@@ -68,7 +68,7 @@
     "pass": false,
     "profile": "Loop Default",
     "schema_kind": "preflight-report",
-    "schema_version": 3,
+    "schema_version": 4,
     "verdict": {
         "blocking_finding_ids": [
             "3a4460522d49cd5b"
