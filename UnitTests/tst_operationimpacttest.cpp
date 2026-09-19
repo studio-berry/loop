@@ -177,7 +177,7 @@ void OperationImpactTest::fullRewriteSelectsFullRevalidation()
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution") });
     QVERIFY(plan.full);
     QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
-    QCOMPARE(plan.invalidatedEvidenceDomains, pdf::pdfEvidenceAllDomains());
+    QVERIFY(plan.invalidatedEvidenceDomains == pdf::pdfEvidenceAllDomains());
 }
 
 void OperationImpactTest::standardsConvertRequiresOracle()
@@ -301,9 +301,9 @@ void OperationImpactTest::goldenFixtureSubsetMatchesFull_data()
     QTest::addColumn<int>("affectedDomain");
 
     QTest::newRow("reuse-font-failure") << QStringLiteral("font-not-embedded.pdf")
-                                        << int(pdf::PDFEvidenceDomain::Images);
+                                        << static_cast<int>(pdf::PDFEvidenceDomain::Images);
     QTest::newRow("reuse-image-failure") << QStringLiteral("image-dpi-low.pdf")
-                                         << int(pdf::PDFEvidenceDomain::Fonts);
+                                         << static_cast<int>(pdf::PDFEvidenceDomain::Fonts);
 }
 
 void OperationImpactTest::goldenFixtureSubsetMatchesFull()
@@ -328,7 +328,7 @@ void OperationImpactTest::goldenFixtureSubsetMatchesFull()
     QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
 
     pdf::PDFOperationImpact impact;
-    impact.domains = pdf::PDFEvidenceDomain(affectedDomain);
+    impact.domains = static_cast<pdf::PDFEvidenceDomain>(affectedDomain);
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
         impact,
