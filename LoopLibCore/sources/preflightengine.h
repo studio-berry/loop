@@ -251,6 +251,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightFinding
     QString checkId;
     QJsonObject evidence;
     QStringList evidenceIds;
+    QJsonObject restrictionScope;
 
     /// Stable identity for this finding. The identity excludes translated
     /// message text and geometry so it survives locale changes and fixups.
@@ -342,6 +343,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QJsonObject restrictionScope;
     QString budgetKind;
     QString budgetPool;
     qint64 budgetLimit = 0;
