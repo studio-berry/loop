@@ -480,13 +480,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
             reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{ QStringLiteral("postflight-incomplete") });
-            if (!options.repairAllowIncomplete)
-            {
-                writeRepairReportIfRequested(options, reportJson);
-                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
-                                 PDFToolTranslationContext::tr("Postflight did not inspect the complete candidate."));
-                return PDFToolExitCode::PartialOutput;
-            }
+            writeRepairReportIfRequested(options, reportJson);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
+                             PDFToolTranslationContext::tr("Postflight did not inspect the complete candidate; no output was committed."));
+            return PDFToolExitCode::PartialOutput;
         }
         if (verdict.state == pdf::PreflightVerdictState::Error)
         {
