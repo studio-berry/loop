@@ -160,6 +160,7 @@ private slots:
     void controllerAcceptsCurrentResultAndBuildsNavigation();
     void controllerRejectsStaleAndCancelledResults();
     void controllerRetainsCompletedResultAcrossCancellationAndStaleness();
+    void staleRetainedReportCannotBeRestoredByFailedOrCancelledRerun();
     void controllerRepresentsIncompleteRun();
     void controllerMarksAnInFlightRunStaleAndCancelsIt();
     void controllerRejectsDuplicateTerminalResults();
@@ -258,6 +259,43 @@ void PreflightInteractionTest::controllerRetainsCompletedResultAcrossCancellatio
     QVERIFY(!controller.navigationFor(finding.stableId(), nullptr));
     const QByteArray report = controller.serializedReport(QStringLiteral("fixture.pdf"));
     QVERIFY(report.contains("preflight-report"));
+}
+
+void PreflightInteractionTest::staleRetainedReportCannotBeRestoredByFailedOrCancelledRerun()
+{
+    PreflightController controller;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-a"), QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+
+    controller.markProfileStale();
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-2"));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.hasResult());
+    QCOMPARE(controller.findingsModel()->rowCount(), 1);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("stale")));
+    PreflightController::EvidenceNavigationRequest request;
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+    QVERIFY(controller.overlaysForPage(1).isEmpty());
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-3"));
+    QVERIFY(controller.failRun(QStringLiteral("job-3"), QStringLiteral("rev-1"),
+                               QStringLiteral("invalid replacement")));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("stale")));
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-4"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-4"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+    QVERIFY(controller.navigationFor(finding.stableId(), &request));
 }
 
 void PreflightInteractionTest::controllerRepresentsIncompleteRun()
