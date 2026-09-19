@@ -126,81 +126,54 @@ PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
                                             const QStringList& enabledCheckIds,
                                             const PDFRepairPlan& repairPlan)
 {
-    PDFRevalidationPlan plan;
-    plan.full = false;
-    plan.reason = QStringLiteral("step-scoped");
-
-    static const QHash<QString, QStringList> operationChecks = {
-        { QStringLiteral("add-bleed"),
-          { QStringLiteral("bleed"), QStringLiteral("content-bleed"), QStringLiteral("trim"), QStringLiteral("page-size") } },
-        { QStringLiteral("rgb-to-cmyk"), { QStringLiteral("color-mode"), QStringLiteral("color-inventory") } },
-        { QStringLiteral("downsample-images"), { QStringLiteral("image-resolution") } },
-    };
-
-    if (operation)
+    PDFRevalidationPlan full;
+    full.full = true;
+    full.checkIds = enabledCheckIds;
+    full.reason = QStringLiteral("operation-impact-unknown");
+    if (!operation)
     {
-        for (const QString& checkId : operationChecks.value(operation->id()))
-        {
-            if (enabledCheckIds.contains(checkId))
-            {
-                plan.checkIds.append(checkId);
-            }
-        }
-
-        PDFOperationImpact impact = operation->impact(&document, parameters);
-        QSet<int> targetPages;
-        bool hasDocumentTarget = false;
-        for (const PDFRepairTarget& target : repairPlan.targets)
-        {
-            if (target.pageIndex < 0)
-            {
-                hasDocumentTarget = true;
-                break;
-            }
-            targetPages.insert(target.pageIndex);
-        }
-        if (!hasDocumentTarget && !targetPages.isEmpty())
-        {
-            impact.documentWide = false;
-            impact.pages = targetPages;
-            plan.pages.unite(targetPages);
-        }
-        const PDFRevalidationPlan domainPlan = planRevalidation(impact, enabledCheckIds);
-        if (!domainPlan.full)
-        {
-            for (const QString& checkId : domainPlan.checkIds)
-            {
-                if (!plan.checkIds.contains(checkId))
-                {
-                    plan.checkIds.append(checkId);
-                }
-            }
-            plan.pages.unite(domainPlan.pages);
-        }
+        return full;
     }
 
-    if (plan.checkIds.isEmpty())
+    const PDFOperationImpact declared = operation->impact(&document, parameters);
+    // The operation-owned impact is authoritative. A page-local target in a
+    // repair plan cannot narrow a declared document-wide/full-rewrite/oracle
+    // impact, and cannot repair an unknown or incomplete impact declaration.
+    PDFRevalidationPlan plan = planRevalidation(declared, enabledCheckIds);
+    if (plan.full)
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("step-scope-fallback");
         return plan;
     }
 
-    // Page scoping is safe only for graph-backed checks today. If an affected
-    // check still relies on a document-level runner, keep the smaller check set
-    // but re-run those checks across the document rather than claiming page
-    // precision the runner cannot honor.
-    if (!plan.pages.isEmpty())
+    QSet<int> targetPages;
+    for (const PDFRepairTarget& target : repairPlan.targets)
     {
-        const bool allChecksPageScoped = std::all_of(plan.checkIds.cbegin(),
-                                                     plan.checkIds.cend(),
-                                                     [](const QString& checkId)
-                                                     { return preflightEvidenceDomainForCheck(checkId).has_value(); });
-        if (!allChecksPageScoped)
+        if (target.pageIndex < 0)
         {
             plan.pages.clear();
-            plan.reason = QStringLiteral("step-check-scoped");
+            plan.reason = QStringLiteral("document-target");
+            return plan;
+        }
+        targetPages.insert(target.pageIndex);
+    }
+    plan.pages.unite(targetPages);
+
+    // Only these object-evidence checks can currently honor a page subset
+    // without deriving document-global evidence from a partial collection.
+    // Others still benefit from selected checks but run on all document pages.
+    if (!plan.pages.isEmpty())
+    {
+        const bool allChecksPageLocal = std::all_of(
+            plan.checkIds.cbegin(), plan.checkIds.cend(),
+            [](const QString& checkId)
+            {
+                return checkId == QLatin1String("image-resolution") ||
+                       checkId == QLatin1String("thin-strokes");
+            });
+        if (!allChecksPageLocal)
+        {
+            plan.pages.clear();
+            plan.reason = QStringLiteral("check-scoped-document-pages");
         }
     }
     return plan;
