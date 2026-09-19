@@ -455,6 +455,8 @@ add_executable(UnitTestsOperationImpact
     tst_operationimpacttest.cpp
 )
 target_link_libraries(UnitTestsOperationImpact PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsOperationImpact PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 set_target_properties(UnitTestsOperationImpact PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
