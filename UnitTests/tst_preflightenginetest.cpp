@@ -2196,12 +2196,12 @@ void PreflightEngineTest::parseRestrictions_rejectsInvalidGeometryAndOversizedPa
         { QStringLiteral("mode"), QStringLiteral("exclude") }
     };
     QVERIFY(pdf::parsePreflightRestrictions(QJsonObject{
-        { QStringLiteral("pages"), QStringLiteral("1,4-5") },
-        { QStringLiteral("page_box"), QStringLiteral("trim") },
-        { QStringLiteral("regions"), QJsonArray{ region } },
-        { QStringLiteral("layers"), QJsonArray{ QStringLiteral("Marks") } },
-        { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } }
-    }, restrictions, error));
+                                                { QStringLiteral("pages"), QStringLiteral("1,4-5") },
+                                                { QStringLiteral("page_box"), QStringLiteral("trim") },
+                                                { QStringLiteral("regions"), QJsonArray{ region } },
+                                                { QStringLiteral("layers"), QJsonArray{ QStringLiteral("Marks") } },
+                                                { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } },
+                                            restrictions, error));
     const QJsonObject scope = restrictions.toJson();
     QCOMPARE(scope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 1, 4, 5 }));
     QCOMPARE(scope.value(QStringLiteral("page_box")).toString(), QStringLiteral("trim"));
@@ -2210,21 +2210,20 @@ void PreflightEngineTest::parseRestrictions_rejectsInvalidGeometryAndOversizedPa
     QCOMPARE(scope.value(QStringLiteral("object_classes")).toArray(), QJsonArray({ QStringLiteral("image") }));
 
     QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
-        { QStringLiteral("pages"), QStringLiteral("1-2147483647") }
-    }, restrictions, error));
+                                                 { QStringLiteral("pages"), QStringLiteral("1-2147483647") } },
+                                             restrictions, error));
     QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
-        { QStringLiteral("pages"), QStringLiteral("1-999999999999") }
-    }, restrictions, error));
+                                                 { QStringLiteral("pages"), QStringLiteral("1-999999999999") } },
+                                             restrictions, error));
     for (const QJsonObject& invalid : {
              QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 0, 10 } } },
              QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), QJsonArray{ 0, QStringLiteral("bad"), 10, 10 } } },
              QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), rect }, { QStringLiteral("anchor"), QStringLiteral("art") } },
-             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), rect }, { QStringLiteral("mode"), QStringLiteral("unknown") } }
-         })
+             QJsonObject{ { QStringLiteral("name"), QStringLiteral("r") }, { QStringLiteral("rect_pt"), rect }, { QStringLiteral("mode"), QStringLiteral("unknown") } } })
     {
         QVERIFY(!pdf::parsePreflightRestrictions(QJsonObject{
-            { QStringLiteral("regions"), QJsonArray{ invalid } }
-        }, restrictions, error));
+                                                     { QStringLiteral("regions"), QJsonArray{ invalid } } },
+                                                 restrictions, error));
         QVERIFY(!error.isEmpty());
     }
 }
@@ -2252,11 +2251,10 @@ void PreflightEngineTest::run_pageRestrictionsNarrowAndCarryFindingScope()
         { QStringLiteral("name"), QStringLiteral("Narrow pages") },
         { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1-2") } } },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-            { QStringLiteral("severity"), QStringLiteral("warning") },
-            { QStringLiteral("min_effective_width_pt"), 0.25 },
-            { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2-3") } }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                        { QStringLiteral("severity"), QStringLiteral("warning") },
+                                        { QStringLiteral("min_effective_width_pt"), 0.25 },
+                                        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2-3") } } } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
@@ -2267,12 +2265,8 @@ void PreflightEngineTest::run_pageRestrictionsNarrowAndCarryFindingScope()
     QCOMPARE(result.warnings.first().page, 2);
     QCOMPARE(result.warnings.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
     const QJsonObject json = result.toJson();
-    QCOMPARE(json.value(QStringLiteral("checks")).toArray().first().toObject()
-                 .value(QStringLiteral("scope_restrictions")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
-    QCOMPARE(json.value(QStringLiteral("warnings")).toArray().first().toObject()
-                 .value(QStringLiteral("scope_restrictions")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QCOMPARE(json.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QCOMPARE(json.value(QStringLiteral("warnings")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
 }
 
 void PreflightEngineTest::run_emptyCheckIntersectionCannotPass()
@@ -2286,10 +2280,9 @@ void PreflightEngineTest::run_emptyCheckIntersectionCannotPass()
         { QStringLiteral("name"), QStringLiteral("Disjoint") },
         { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } } },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("image-resolution") },
-            { QStringLiteral("min_dpi"), 300 },
-            { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 },
+                                        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } } } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
@@ -2312,9 +2305,8 @@ void PreflightEngineTest::run_unhonoredRestrictionIsNotInspected()
         { QStringLiteral("layers"), QJsonArray{ QStringLiteral("Artwork") } },
         { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } },
         { QStringLiteral("regions"), QJsonArray{ QJsonObject{
-            { QStringLiteral("name"), QStringLiteral("barcode") },
-            { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 100, 100 } }
-        } } },
+                                         { QStringLiteral("name"), QStringLiteral("barcode") },
+                                         { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 100, 100 } } } } },
         { QStringLiteral("page_box"), QStringLiteral("trim") }
     };
     for (const auto& scope : scopes)
@@ -2345,13 +2337,9 @@ void PreflightEngineTest::run_inkCoverageHonorsPageBoxAndPageRange()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Ink box") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("page_box"), QStringLiteral("media") },
-            { QStringLiteral("pages"), QStringLiteral("2") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-            { QStringLiteral("max_ink_pct"), 300 }
-        } } }
+                                              { QStringLiteral("page_box"), QStringLiteral("media") },
+                                              { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("ink-coverage") }, { QStringLiteral("max_ink_pct"), 300 } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QCOMPARE(result.checkStatuses.size(), 1);
@@ -2390,14 +2378,9 @@ void PreflightEngineTest::run_anchoredIncludeRegionFiltersStrokeEvidence()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Region") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("regions"), QJsonArray{ region } },
-            { QStringLiteral("page_box"), QStringLiteral("media") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-            { QStringLiteral("severity"), QStringLiteral("warning") },
-            { QStringLiteral("min_effective_width_pt"), 0.25 }
-        } } }
+                                              { QStringLiteral("regions"), QJsonArray{ region } },
+                                              { QStringLiteral("page_box"), QStringLiteral("media") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("thin-strokes") }, { QStringLiteral("severity"), QStringLiteral("warning") }, { QStringLiteral("min_effective_width_pt"), 0.25 } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
@@ -2417,12 +2400,8 @@ void PreflightEngineTest::run_objectClassScopeExcludesUnrelatedCheck()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Object classes") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-            { QStringLiteral("min_effective_width_pt"), 0.25 }
-        } } }
+                                              { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("thin-strokes") }, { QStringLiteral("min_effective_width_pt"), 0.25 } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
@@ -2465,7 +2444,8 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     QCOMPARE(file.write(pdfBytes), pdfBytes.size());
     file.close();
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false);
     pdf::PDFDocument document = reader.readFromFile(path);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
     pdf::PDFDocumentSession session(&document);
@@ -2476,14 +2456,8 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
         return engine.run(QJsonObject{
             { QStringLiteral("name"), QStringLiteral("Scoped strokes") },
             { QStringLiteral("restrictions"), QJsonObject{
-                { QStringLiteral("layers"), QJsonArray{ layer } }
-            } },
-            { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-                { QStringLiteral("min_effective_width_pt"), 0.25 },
-                { QStringLiteral("severity"), QStringLiteral("warning") }
-            } } }
-        });
+                                                  { QStringLiteral("layers"), QJsonArray{ layer } } } },
+            { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("thin-strokes") }, { QStringLiteral("min_effective_width_pt"), 0.25 }, { QStringLiteral("severity"), QStringLiteral("warning") } } } } });
     };
 
     const pdf::PreflightResult artwork = run(QStringLiteral("Artwork"));
@@ -2499,19 +2473,15 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
         return engine.run(QJsonObject{
             { QStringLiteral("name"), QStringLiteral("Anchored trim region") },
             { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-                { QStringLiteral("min_effective_width_pt"), 0.25 },
-                { QStringLiteral("severity"), QStringLiteral("warning") },
-                { QStringLiteral("restrictions"), QJsonObject{
-                    { QStringLiteral("regions"), QJsonArray{ QJsonObject{
-                        { QStringLiteral("name"), QStringLiteral("corner") },
-                        { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 40, 40 } },
-                        { QStringLiteral("anchor"), anchor },
-                        { QStringLiteral("mode"), QStringLiteral("include") }
-                    } } }
-                } }
-            } } }
-        });
+                                            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.25 },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") },
+                                            { QStringLiteral("restrictions"), QJsonObject{
+                                                                                  { QStringLiteral("regions"), QJsonArray{ QJsonObject{
+                                                                                                                   { QStringLiteral("name"), QStringLiteral("corner") },
+                                                                                                                   { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 40, 40 } },
+                                                                                                                   { QStringLiteral("anchor"), anchor },
+                                                                                                                   { QStringLiteral("mode"), QStringLiteral("include") } } } } } } } } } });
     };
     const pdf::PreflightResult trimAnchored = runAnchor(QStringLiteral("trim"));
     QVERIFY(trimAnchored.inspectionComplete);
@@ -2525,19 +2495,12 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     const pdf::PreflightResult excludedRegion = engine.run(QJsonObject{
         { QStringLiteral("name"), QStringLiteral("Excluded region") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("regions"), QJsonArray{ QJsonObject{
-                { QStringLiteral("name"), QStringLiteral("trim-corner") },
-                { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 200, 60 } },
-                { QStringLiteral("anchor"), QStringLiteral("media") },
-                { QStringLiteral("mode"), QStringLiteral("exclude") }
-            } } }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-            { QStringLiteral("min_effective_width_pt"), 0.25 },
-            { QStringLiteral("severity"), QStringLiteral("warning") }
-        } } }
-    });
+                                              { QStringLiteral("regions"), QJsonArray{ QJsonObject{
+                                                                               { QStringLiteral("name"), QStringLiteral("trim-corner") },
+                                                                               { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 200, 60 } },
+                                                                               { QStringLiteral("anchor"), QStringLiteral("media") },
+                                                                               { QStringLiteral("mode"), QStringLiteral("exclude") } } } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("thin-strokes") }, { QStringLiteral("min_effective_width_pt"), 0.25 }, { QStringLiteral("severity"), QStringLiteral("warning") } } } } });
     QVERIFY(excludedRegion.inspectionComplete);
     QCOMPARE(excludedRegion.warnings.size(), 1);
     QVERIFY(excludedRegion.warnings.first().bbox.intersects(QRectF(0, 130, 200, 30)));
@@ -2559,12 +2522,8 @@ void PreflightEngineTest::run_cliPageScopeNeverWidensAuthoredProfile()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("CLI pages") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("pages"), QStringLiteral("1-2") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("image-resolution") },
-            { QStringLiteral("min_dpi"), 300 }
-        } } }
+                                              { QStringLiteral("pages"), QStringLiteral("1-2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } }
     };
     pdf::PDFRevalidationPlan plan;
     plan.full = true;
@@ -2574,8 +2533,7 @@ void PreflightEngineTest::run_cliPageScopeNeverWidensAuthoredProfile()
     QVERIFY(narrowed.inspectionComplete);
     QCOMPARE(narrowed.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(),
              QJsonArray({ 2 }));
-    QCOMPARE(narrowed.coverageScope.value(QStringLiteral("cli_page_scope")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QCOMPARE(narrowed.coverageScope.value(QStringLiteral("cli_page_scope")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
     QVERIFY(narrowed.effectiveProfileDigest != original.effectiveProfileDigest);
 
     const pdf::PreflightResult disjoint = engine.run(profile, QJsonObject(), QJsonObject(), plan,
@@ -2596,10 +2554,9 @@ void PreflightEngineTest::run_legacyAnalysisBoxMigratesAndDiagnoses()
     const QJsonObject legacy{
         { QStringLiteral("name"), QStringLiteral("Legacy TAC") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-            { QStringLiteral("max_ink_pct"), 300 },
-            { QStringLiteral("analysis_box"), QStringLiteral("media") }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                        { QStringLiteral("max_ink_pct"), 300 },
+                                        { QStringLiteral("analysis_box"), QStringLiteral("media") } } } }
     };
     pdf::PreflightProfileData parsed;
     QString error;
@@ -2612,14 +2569,12 @@ void PreflightEngineTest::run_legacyAnalysisBoxMigratesAndDiagnoses()
              QStringLiteral("media"));
     QVERIFY(result.checkStatuses.first().diagnostics.contains(
         QStringLiteral("deprecated:analysis_box; use restrictions.page_box")));
-    QCOMPARE(result.toJson().value(QStringLiteral("checks")).toArray().first().toObject()
-                 .value(QStringLiteral("diagnostics")).toArray().first().toString(),
+    QCOMPARE(result.toJson().value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("diagnostics")).toArray().first().toString(),
              QStringLiteral("deprecated:analysis_box; use restrictions.page_box"));
 
     QJsonObject conflictingCheck = legacy.value(QStringLiteral("checks")).toArray().first().toObject();
     conflictingCheck.insert(QStringLiteral("restrictions"), QJsonObject{
-        { QStringLiteral("page_box"), QStringLiteral("trim") }
-    });
+                                                                { QStringLiteral("page_box"), QStringLiteral("trim") } });
     QJsonObject conflicting = legacy;
     conflicting.insert(QStringLiteral("checks"), QJsonArray{ conflictingCheck });
     QVERIFY(!pdf::PreflightEngine::parseProfile(conflicting, parsed, error));
@@ -2637,9 +2592,8 @@ void PreflightEngineTest::run_colorInventoryPartialPageSelectionIsIncomplete()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Page-restricted ink inventory") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("pages"), QStringLiteral("2") } } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("color-inventory") } } } }
+                                              { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("color-inventory") } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
@@ -2663,8 +2617,8 @@ void PreflightEngineTest::run_restrictedPdfxDoesNotClaimDocumentWideConformance(
         { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } } },
         { QStringLiteral("pdfx"), QJsonObject{ { QStringLiteral("target"), QStringLiteral("PDF/X-4") } } },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("image-resolution") },
-            { QStringLiteral("min_dpi"), 300 } } } }
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);

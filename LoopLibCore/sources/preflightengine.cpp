@@ -666,13 +666,12 @@ QJsonObject PreflightRestrictions::toJson() const
             regionArray.append(QJsonObject{
                 { QStringLiteral("name"), region.name },
                 { QStringLiteral("rect_pt"), QJsonArray{
-                                                   region.rectPt.left(),
-                                                   region.rectPt.top(),
-                                                   region.rectPt.right(),
-                                                   region.rectPt.bottom() } },
+                                                 region.rectPt.left(),
+                                                 region.rectPt.top(),
+                                                 region.rectPt.right(),
+                                                 region.rectPt.bottom() } },
                 { QStringLiteral("anchor"), region.anchor },
-                { QStringLiteral("mode"), region.mode }
-            });
+                { QStringLiteral("mode"), region.mode } });
         }
         object.insert(QStringLiteral("regions"), regionArray);
     }
@@ -1451,9 +1450,11 @@ PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph,
     const bool geometric = supportsGeometricScope(checkId) &&
                            (restrictions.pageBox.has_value() || !restrictions.regions.isEmpty());
     const PDFEvidenceDomain domain = checkId == QLatin1String("image-resolution")
-                                         ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+                                         ? PDFEvidenceDomain::Images
+                                         : PDFEvidenceDomain::Strokes;
     const PDFCatalog* catalog = session && session->getDocument()
-                                    ? session->getDocument()->getCatalog() : nullptr;
+                                    ? session->getDocument()->getCatalog()
+                                    : nullptr;
     for (const PDFEvidenceRecord& record : graph.records)
     {
         if (record.page > 0 && !restrictions.allowsPage(record.page - 1))
@@ -1468,10 +1469,10 @@ PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph,
             }
             const QJsonArray names = record.extra.value(QStringLiteral("ocg_names")).toArray();
             if (names.isEmpty() || std::any_of(names.cbegin(), names.cend(),
-                                                [&](const QJsonValue& value)
-                                                {
-                                                    return !restrictions.layers->contains(value.toString());
-                                                }))
+                                               [&](const QJsonValue& value)
+                                               {
+                                                   return !restrictions.layers->contains(value.toString());
+                                               }))
             {
                 continue;
             }
@@ -6119,7 +6120,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         if (check.restrictions.layers.has_value() && supportsGeometricScope(check.id))
         {
             const PDFEvidenceDomain domain = check.id == QLatin1String("image-resolution")
-                                                 ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+                                                 ? PDFEvidenceDomain::Images
+                                                 : PDFEvidenceDomain::Strokes;
             const bool unknownMembership = std::any_of(
                 m_activeGraph.records.cbegin(), m_activeGraph.records.cend(),
                 [&](const PDFEvidenceRecord& record)
@@ -6148,7 +6150,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         if (check.restrictions.objectClasses.has_value() && supportsGeometricScope(check.id))
         {
             const QString objectClass = check.id == QStringLiteral("image-resolution")
-                                            ? QStringLiteral("image") : QStringLiteral("vector");
+                                            ? QStringLiteral("image")
+                                            : QStringLiteral("vector");
             if (!check.restrictions.objectClasses->contains(objectClass))
             {
                 status.status = QStringLiteral("not_applicable");
@@ -6203,9 +6206,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
              check.restrictions.layers.has_value()))
         {
             const PDFCatalog* catalog = m_session && m_session->getDocument()
-                                            ? m_session->getDocument()->getCatalog() : nullptr;
+                                            ? m_session->getDocument()->getCatalog()
+                                            : nullptr;
             const PDFEvidenceDomain domain = check.id == QStringLiteral("image-resolution")
-                                                 ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+                                                 ? PDFEvidenceDomain::Images
+                                                 : PDFEvidenceDomain::Strokes;
             const bool geometricScope = check.restrictions.pageBox.has_value() ||
                                         !check.restrictions.regions.isEmpty();
             bool geometryUnavailable = geometricScope && !catalog;

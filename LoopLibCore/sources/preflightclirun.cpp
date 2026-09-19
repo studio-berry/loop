@@ -115,7 +115,7 @@ bool parsePreflightCliPages(const PreflightFileInspectionRequest& request,
     return true;
 }
 
-} // namespace
+}   // namespace
 
 PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectionRequest& request)
 {

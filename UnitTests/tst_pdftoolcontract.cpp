@@ -357,9 +357,8 @@ void PdfToolContractTest::preflightPageSelectorsNarrowReportScope()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Scoped image preflight") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("image-resolution") },
-            { QStringLiteral("min_dpi"), 300 }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } }
     };
     const QByteArray profileBytes = QJsonDocument(profile).toJson();
     QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
@@ -374,23 +373,16 @@ void PdfToolContractTest::preflightPageSelectorsNarrowReportScope()
     QVERIFY2(inspected.exitCode >= 0 && inspected.exitCode != 2, inspected.stderrData.constData());
     const QJsonObject inspectedReport = inspected.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
     QVERIFY(!inspectedReport.isEmpty());
-    QCOMPARE(inspectedReport.value(QStringLiteral("coverage_scope")).toObject()
-                 .value(QStringLiteral("cli_page_scope")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
-    QCOMPARE(inspectedReport.value(QStringLiteral("checks")).toArray().first().toObject()
-                 .value(QStringLiteral("scope_restrictions")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    QCOMPARE(inspectedReport.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("cli_page_scope")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    QCOMPARE(inspectedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
 
     QStringList bounded = base;
     bounded << QStringLiteral("--page-first") << QStringLiteral("1")
             << QStringLiteral("--page-last") << QStringLiteral("1");
     const ToolRun withinRange = runPdfTool(bounded);
     QVERIFY(withinRange.exitCode != 2);
-    const QJsonObject boundedReport = withinRange.json.value(QStringLiteral("data")).toObject()
-                                          .value(QStringLiteral("report")).toObject();
-    QCOMPARE(boundedReport.value(QStringLiteral("checks")).toArray().first().toObject()
-                 .value(QStringLiteral("scope_restrictions")).toObject()
-                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    const QJsonObject boundedReport = withinRange.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QCOMPARE(boundedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
 
     QStringList disjoint = base;
     disjoint << QStringLiteral("--page-first") << QStringLiteral("2")

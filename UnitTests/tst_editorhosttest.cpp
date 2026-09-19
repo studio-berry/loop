@@ -544,18 +544,13 @@ void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
     const QString documentPath = QDir(preflightFixturesDir()).filePath(QStringLiteral("image-dpi-low.pdf"));
     QVERIFY(QFile::exists(documentPath));
     const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
-        { QStringLiteral("id"), QStringLiteral("loop.test.restricted-parity") },
+        { QStringLiteral("id"), QStringLiteral("loop-test-restricted-parity") },
         { QStringLiteral("version"), QStringLiteral("1.0.0") },
         { QStringLiteral("name"), QStringLiteral("Restricted parity") },
         { QStringLiteral("restrictions"), QJsonObject{
-            { QStringLiteral("pages"), QStringLiteral("1") },
-            { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } }
-        } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("image-resolution") },
-            { QStringLiteral("min_dpi"), 300 }
-        } } }
-    });
+                                              { QStringLiteral("pages"), QStringLiteral("1") },
+                                              { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } } });
     const QString profilePath = temp.filePath(QStringLiteral("restricted-parity.json"));
     QFile source(profilePath);
     QVERIFY(source.open(QIODevice::WriteOnly));
@@ -567,8 +562,7 @@ void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
     int cliExit = -1;
     runPdfToolPreflight(documentPath, profilePath, cliReport, cliExit);
     QVERIFY(!cliReport.isEmpty());
-    const QJsonObject cliScope = cliReport.value(QStringLiteral("checks")).toArray().first()
-                                     .toObject().value(QStringLiteral("scope_restrictions")).toObject();
+    const QJsonObject cliScope = cliReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject();
     QCOMPARE(cliScope.value(QStringLiteral("pages")).toArray(), QJsonArray{ 1 });
     QCOMPARE(cliScope.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
 
@@ -587,8 +581,7 @@ void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
     QJsonObject guiReport;
     parsePreflightReport(exported.readAll(), QStringLiteral("restricted GUI report"), guiReport);
     QVERIFY(!guiReport.isEmpty());
-    QCOMPARE(guiReport.value(QStringLiteral("checks")).toArray().first()
-                 .toObject().value(QStringLiteral("scope_restrictions")).toObject(), cliScope);
+    QCOMPARE(guiReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject(), cliScope);
     QCOMPARE(QJsonDocument(normalizePreflightReport(guiReport)).toJson(QJsonDocument::Compact),
              QJsonDocument(normalizePreflightReport(cliReport)).toJson(QJsonDocument::Compact));
 }
