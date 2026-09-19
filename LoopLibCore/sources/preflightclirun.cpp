@@ -67,7 +67,7 @@ bool parsePreflightCliPages(const PreflightFileInspectionRequest& request,
     int last = pageCount;
     if (!parsePage(request.firstPage, 1, &first) ||
         !parsePage(request.lastPage, pageCount, &last) ||
-        last < first)
+        (!request.lastPage.isEmpty() && last < first))
     {
         *error = QStringLiteral("Invalid preflight --page-first / --page-last range.");
         return false;
