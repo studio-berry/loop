@@ -1,0 +1,38 @@
+{
+    "checks": [
+        {
+            "id": "bleed",
+            "reason": "restriction_excluded_all_content",
+            "scope_restrictions": {
+                "pages": [
+                    2
+                ]
+            },
+            "status": "not_applicable"
+        }
+    ],
+    "error": {
+        "code": "unsupported-scope",
+        "message": "Check 'bleed' has no pages in its effective restriction scope."
+    },
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "profile": "Loop Restriction - pages",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Check 'bleed' has no pages in its effective restriction scope.",
+        "reason_code": "unsupported-scope",
+        "state": "incomplete",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}
