@@ -47,6 +47,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFOperationImpact
     bool fullRewrite = false;
     bool impactComplete = false;
     bool requiresIndependentOracle = false;
+    bool mutatesDocument = true;
 
     bool isFullRevalidation() const;
     QJsonObject toJson() const;
@@ -57,6 +58,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan
 {
     bool full = true;
     QStringList checkIds;
+    QStringList reusedCheckIds;
+    PDFEvidenceDomains invalidatedEvidenceDomains;
+    PDFEvidenceDomains reusableEvidenceDomains;
     QSet<int> pages;
     QString reason;
 
