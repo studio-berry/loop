@@ -47,6 +47,9 @@ struct LOOPLIBCORESHARED_EXPORT PreflightFileInspectionRequest
     PDFRevalidationPlan plan;
     QJsonObject jobSpec;
     QJsonObject cliBindings;
+    QString firstPage;
+    QString lastPage;
+    QString selectedPages;
     PDFOperationControl* cancellation = nullptr;
 };
 

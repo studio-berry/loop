@@ -49,7 +49,7 @@ namespace pdf
 {
 
 /// Report contract version emitted by PreflightResult::toJson().
-inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 3;
+inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 4;
 
 /// Finding location scope in normalized preflight reports.
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_DOCUMENT("document");
@@ -128,14 +128,14 @@ LOOPLIBCORESHARED_EXPORT QStringList supportedPDFXTargets();
 
 /// Resolves a target name to the audited policy registry entry.
 LOOPLIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
-                                                   PDFXPolicy& policy,
-                                                   QString& errorMessage);
+                                                  PDFXPolicy& policy,
+                                                  QString& errorMessage);
 
 /// Reduces mandatory PDF/X rule states. A definite failure takes precedence
 /// over missing evidence; a mandatory not-applicable rule is incomplete.
 LOOPLIBCORESHARED_EXPORT PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
-                                                                 QStringList* failedRuleIds = nullptr,
-                                                                 QStringList* incompleteRuleIds = nullptr);
+                                                                QStringList* failedRuleIds = nullptr,
+                                                                QStringList* incompleteRuleIds = nullptr);
 
 /// Named rectangle in PDF points, anchored to a page box.
 struct LOOPLIBCORESHARED_EXPORT PreflightRegion
@@ -165,8 +165,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightRestrictions
 };
 
 LOOPLIBCORESHARED_EXPORT bool parsePreflightRestrictions(const QJsonObject& object,
-                                                          PreflightRestrictions& restrictions,
-                                                          QString& errorMessage);
+                                                         PreflightRestrictions& restrictions,
+                                                         QString& errorMessage);
 
 /// Configuration for a single preflight check, parsed from a profile.
 struct LOOPLIBCORESHARED_EXPORT PreflightCheckConfig
@@ -193,6 +193,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckConfig
     int maxRegionsPerPage = 20;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
     QString inkCoverageAnalysisBox = QStringLiteral("bleed");
+    bool deprecatedAnalysisBox = false;
 
     // image-resolution parameters.
     int minDpi = 0;
@@ -251,6 +252,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightFinding
     QString checkId;
     QJsonObject evidence;
     QStringList evidenceIds;
+    QJsonObject restrictionScope;
 
     /// Stable identity for this finding. The identity excludes translated
     /// message text and geometry so it survives locale changes and fixups.
@@ -308,14 +310,14 @@ struct LOOPLIBCORESHARED_EXPORT PreflightDecision
 
 LOOPLIBCORESHARED_EXPORT QString preflightDecisionKindToString(PreflightDecisionKind kind);
 LOOPLIBCORESHARED_EXPORT bool preflightDecisionKindFromString(const QString& value,
-                                                               PreflightDecisionKind& kind);
+                                                              PreflightDecisionKind& kind);
 LOOPLIBCORESHARED_EXPORT QString preflightDecisionStateToString(PreflightDecisionState state);
 
 /// Standalone decision-file contract used by PdfTool import/export.
 LOOPLIBCORESHARED_EXPORT QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions);
 LOOPLIBCORESHARED_EXPORT bool preflightDecisionsFromJson(const QJsonObject& object,
-                                                          QList<PreflightDecision>& decisions,
-                                                          QString& errorMessage);
+                                                         QList<PreflightDecision>& decisions,
+                                                         QString& errorMessage);
 
 /// Parsed preflight profile.
 struct LOOPLIBCORESHARED_EXPORT PreflightProfileData
@@ -342,6 +344,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QJsonObject restrictionScope;
+    QStringList diagnostics;
     QString budgetKind;
     QString budgetPool;
     qint64 budgetLimit = 0;
@@ -412,6 +416,11 @@ public:
                         const QJsonObject& jobSpecBindings,
                         const QJsonObject& cliBindings,
                         const PDFRevalidationPlan& plan);
+    PreflightResult run(const QJsonObject& profile,
+                        const QJsonObject& jobSpecBindings,
+                        const QJsonObject& cliBindings,
+                        const PDFRevalidationPlan& plan,
+                        const std::optional<QSet<int>>& cliPages);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
 

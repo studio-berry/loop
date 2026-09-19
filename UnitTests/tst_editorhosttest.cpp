@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -38,6 +39,7 @@
 #include <QThread>
 #include <QUrl>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -53,6 +55,7 @@
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
 #include "preflightprofileresolver.h"
@@ -240,6 +243,7 @@ private slots:
     void preflightRunsOffInteractiveThread();
     void preflightStateVisualIsNotCheckedBeforeARun();
     void exportedPreflightReportMatchesPdfToolForTheSameInputs();
+    void restrictedPreflightReportMatchesPdfTool();
     void importValidProfileAddsDigest();
     void importDigestMismatchProfileIsRejected();
     void saveProfileForkRecordsDerivedFrom();
@@ -358,6 +362,21 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
     QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
     QVERIFY(host.preflightStateName() != QStringLiteral("error"));
     QCOMPARE(host.preflight()->property("progress").toInt(), 100);
+
+    const QString historyPath =
+        QDir(QFileInfo(path).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::DocumentOpened; }));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                 event.status == pdf::PDFOperationHistoryStatus::Accepted; }));
+    QVERIFY(history.verify().verified);
 }
 
 void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
@@ -384,6 +403,8 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
     QVERIFY2(before.contains(QStringLiteral("kind")) && before.contains(QStringLiteral("colorRole")) && before.contains(QStringLiteral("icon")) && before.contains(QStringLiteral("accessibleName")),
              "the visual must carry the full canonical treatment for QML to render");
     QCOMPARE(before.value(QStringLiteral("accessibleName")).toString(), QStringLiteral("Not checked"));
+    QCOMPARE(host.preflightCertificateStateName(), QStringLiteral("not-certified"));
+    QCOMPARE(host.preflightCertificateStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("NotChecked"));
 
     // The colour is resolved from the visual's own colour role, never chosen by the QML child. It must
     // be a real colour and it must not be the pass colour.
@@ -532,6 +553,77 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
     }
 
     QCOMPARE(guiText, cliText);
+}
+
+void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    pdf::PDFSettings::setSettingsPath(temp.path());
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
+    const QString documentPath = QDir(preflightFixturesDir()).filePath(QStringLiteral("image-dpi-low.pdf"));
+    QVERIFY(QFile::exists(documentPath));
+    const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("loop-test-restricted-parity") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Restricted parity") },
+        { QStringLiteral("restrictions"), QJsonObject{
+                                              { QStringLiteral("pages"), QStringLiteral("1") },
+                                              { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } } });
+    const QString profilePath = temp.filePath(QStringLiteral("restricted-parity.json"));
+    QFile source(profilePath);
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    const QByteArray bytes = QJsonDocument(profile).toJson();
+    QCOMPARE(source.write(bytes), bytes.size());
+    source.close();
+
+    QJsonObject cliReport;
+    int cliExit = -1;
+    runPdfToolPreflight(documentPath, profilePath, cliReport, cliExit);
+    QVERIFY(!cliReport.isEmpty());
+    const QJsonObject cliScope = cliReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject();
+    QCOMPARE(cliScope.value(QStringLiteral("pages")).toArray(), QJsonArray{ 1 });
+    QCOMPARE(cliScope.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
+
+    EditorHost host;
+    QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY(host.hasPreflightReport());
+
+    const QString exportedPath = temp.filePath(QStringLiteral("restricted-gui-report.json"));
+    QVERIFY(host.exportPreflightReportFileUrl(QUrl::fromLocalFile(exportedPath)));
+    QFile exported(exportedPath);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QJsonObject guiReport;
+    parsePreflightReport(exported.readAll(), QStringLiteral("restricted GUI report"), guiReport);
+    QVERIFY(!guiReport.isEmpty());
+    QCOMPARE(guiReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject(), cliScope);
+    QCOMPARE(QJsonDocument(normalizePreflightReport(guiReport)).toJson(QJsonDocument::Compact),
+             QJsonDocument(normalizePreflightReport(cliReport)).toJson(QJsonDocument::Compact));
+
+    const QString historyPath =
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const auto editorAuditIt = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                                            {
+                                                return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                                       event.status == pdf::PDFOperationHistoryStatus::Accepted &&
+                                                       event.operatorIdentity == QStringLiteral("LoopEditor");
+                                            });
+    QVERIFY(editorAuditIt != events.cend());
+    QCOMPARE(editorAuditIt->effectiveProfileDigest, cliReport.value(QStringLiteral("effective_profile_digest")).toString());
+    QCOMPARE(editorAuditIt->resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             cliScope);
+    QVERIFY(history.verify().verified);
 }
 
 void EditorHostTest::importValidProfileAddsDigest()

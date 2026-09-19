@@ -22,6 +22,7 @@
 
 #include "pdfschemaversion.h"
 
+#include <QCryptographicHash>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -82,6 +83,73 @@ QString supportedMajorsText(const QJsonObject& matrix, PDFSchemaKind kind)
         majors.append(QString::number(major.toInt()));
     }
     return majors.join(QStringLiteral(", "));
+}
+
+QString stableFindingIdFromJson(const QJsonObject& finding)
+{
+    const QString objectId = finding.value(QStringLiteral("object_id")).toVariant().toString();
+    const int page = finding.value(QStringLiteral("page")).toInt(0);
+    QString scope = finding.value(QStringLiteral("scope")).toString();
+    if (scope.isEmpty())
+    {
+        scope = !objectId.isEmpty() ? QStringLiteral("object")
+                                    : (page > 0 ? QStringLiteral("page") : QStringLiteral("document"));
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(finding.value(QStringLiteral("check_id")).toString().toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(scope.toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(QByteArray::number(page));
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(objectId.toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(finding.value(QStringLiteral("type")).toString().toUtf8());
+    return QString::fromLatin1(hash.result().toHex().left(16));
+}
+
+QJsonObject migratePreflightReportV3ToV4(QJsonObject document)
+{
+    for (const QString& field : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        const QJsonValue section = document.value(field);
+        if (!section.isArray())
+        {
+            continue;
+        }
+        QJsonArray findings = section.toArray();
+        for (qsizetype index = 0; index < findings.size(); ++index)
+        {
+            QJsonObject finding = findings.at(index).toObject();
+            if (finding.value(QStringLiteral("id")).toString().isEmpty())
+            {
+                finding.insert(QStringLiteral("id"), stableFindingIdFromJson(finding));
+                findings[index] = finding;
+            }
+        }
+        document.insert(field, findings);
+    }
+
+    QJsonObject verdict = document.value(QStringLiteral("verdict")).toObject();
+    if (verdict.value(QStringLiteral("state")).toString() == QStringLiteral("fail") &&
+        verdict.value(QStringLiteral("blocking_finding_ids")).toArray().isEmpty())
+    {
+        QJsonArray blocking;
+        for (const QJsonValue& item : document.value(QStringLiteral("errors")).toArray())
+        {
+            const QString id = item.toObject().value(QStringLiteral("id")).toString();
+            if (!id.isEmpty())
+            {
+                blocking.append(id);
+            }
+        }
+        verdict.insert(QStringLiteral("blocking_finding_ids"), blocking);
+        document.insert(QStringLiteral("verdict"), verdict);
+    }
+
+    document.insert(QStringLiteral("schema_version"), 4);
+    return document;
 }
 
 QJsonObject migratePreflightReportV2ToV3(QJsonObject document)
@@ -450,6 +518,11 @@ QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJs
         if (from.major == 2)
         {
             document = migratePreflightReportV2ToV3(std::move(document));
+            from = { 3, 0 };
+        }
+        if (from.major == 3)
+        {
+            document = migratePreflightReportV3ToV4(std::move(document));
         }
         return document;
     }
