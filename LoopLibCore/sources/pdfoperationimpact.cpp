@@ -97,6 +97,7 @@ QJsonObject PDFRevalidationPlan::toJson() const
         { QStringLiteral("check_ids"), QJsonArray::fromStringList(checkIds) },
         { QStringLiteral("reused_check_ids"), QJsonArray::fromStringList(reusedCheckIds) },
         { QStringLiteral("invalidated_evidence_domains"), domainNames(invalidatedEvidenceDomains) },
+        { QStringLiteral("recomputed_evidence_domains"), domainNames(recomputedEvidenceDomains) },
         { QStringLiteral("reusable_evidence_domains"), domainNames(reusableEvidenceDomains) },
         { QStringLiteral("pages"), pageArray },
         { QStringLiteral("reason"), reason }
