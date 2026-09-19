@@ -399,6 +399,7 @@ inline const QSet<QString>& findingV2AllowedProperties()
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
+        QStringLiteral("scope_restrictions"),
         QStringLiteral("check_id"),
         QStringLiteral("evidence"),
         QStringLiteral("evidence_ids")
