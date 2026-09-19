@@ -657,6 +657,32 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
     finalFile.close();
+
+    if (priorCertificate.has_value() &&
+        priorCertificate->documentRevisionDigest.compare(sourceSha256, Qt::CaseInsensitive) == 0 &&
+        candidateSha256.compare(sourceSha256, Qt::CaseInsensitive) != 0)
+    {
+        pdf::PDFOperationHistoryEvent invalidated;
+        invalidated.executionId = historyExecutionId;
+        invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
+        invalidated.status = pdf::PDFOperationHistoryStatus::Running;
+        invalidated.operatorIdentity = QStringLiteral("PdfTool");
+        invalidated.documentRevisionDigest = candidateSha256;
+        invalidated.effectiveProfileDigest = priorCertificate->effectiveProfileDigest;
+        invalidated.approval.decisionReference = priorCertificate->certificateId;
+        invalidated.resultSummary = QJsonObject{
+            { QStringLiteral("reason"), QStringLiteral("The certified document revision changed after a fix was applied.") },
+            { QStringLiteral("previous_document_revision_digest"), sourceSha256 },
+            { QStringLiteral("current_document_revision_digest"), candidateSha256 }
+        };
+        if (!operationHistory.appendEvent(invalidated))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
+                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+    }
+
     pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
                                        { return QString(); }, false, false);
     finalReader.readFromFile(options.repairOutputDocument);
@@ -727,31 +753,6 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
                          QStringLiteral("The repair output was written, but its accepted history event could not be persisted."));
         return PDFToolExitCode::ProcessingFailure;
-    }
-
-    if (priorCertificate.has_value() &&
-        priorCertificate->documentRevisionDigest.compare(sourceSha256, Qt::CaseInsensitive) == 0 &&
-        candidateSha256.compare(sourceSha256, Qt::CaseInsensitive) != 0)
-    {
-        pdf::PDFOperationHistoryEvent invalidated;
-        invalidated.executionId = historyExecutionId;
-        invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
-        invalidated.status = pdf::PDFOperationHistoryStatus::Running;
-        invalidated.operatorIdentity = QStringLiteral("PdfTool");
-        invalidated.documentRevisionDigest = candidateSha256;
-        invalidated.effectiveProfileDigest = priorCertificate->effectiveProfileDigest;
-        invalidated.approval.decisionReference = priorCertificate->certificateId;
-        invalidated.resultSummary = QJsonObject{
-            { QStringLiteral("reason"), QStringLiteral("The certified document revision changed after a fix was applied.") },
-            { QStringLiteral("previous_document_revision_digest"), sourceSha256 },
-            { QStringLiteral("current_document_revision_digest"), candidateSha256 }
-        };
-        if (!operationHistory.appendEvent(invalidated))
-        {
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
-                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted."));
-            return PDFToolExitCode::ProcessingFailure;
-        }
     }
 
     if (!options.repairReportFile.isEmpty())
