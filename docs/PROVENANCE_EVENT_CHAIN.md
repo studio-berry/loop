@@ -37,6 +37,19 @@ current-chain predecessor. `previousEventHash` and `eventHash` remain the only c
 operation hashes remain verifiable during the version-3 migration; provenance
 kinds hash the new fields as part of their canonical payload.
 
+## Acceptance guard
+
+`scripts/ci/check_source_integrity.py` enforces the runtime convergence rule on
+tracked production sources. It rejects reintroduction of the superseded
+`PreflightAuditEvent` / `PreflightAuditStore` declarations and the legacy
+`.loop-audit.jsonl` / `.loupe-audit.jsonl` sidecar literals. Documentation
+and interchange schemas may describe provenance, but runtime persistence must
+continue to terminate in `PDFOperationHistoryStore`.
+
+The operation-history unit suite separately proves that editing or deleting a
+middle record compromises verification and that rollback appends forward
+without removing prior events.
+
 ## Invariants
 
 - Undo/redo is ephemeral editing convenience. Rollback restores a retained
