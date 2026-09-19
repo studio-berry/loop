@@ -79,6 +79,7 @@ public:
         PDFOperationImpact declared;
         declared.declared = true;
         declared.impactComplete = true;
+        declared.mutatesDocument = false;
         declared.objectIds.append(QStringLiteral("production/geometry"));
         return declared;
     }
@@ -153,6 +154,10 @@ public:
                 declared.impactComplete = true;
                 break;
             }
+        }
+        if (!declared.impactComplete)
+        {
+            declared.documentWide = true;
         }
         return declared;
     }
@@ -245,6 +250,15 @@ public:
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::PageGeometry; }
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("planning-only operation does not mutate the document")); }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.declared = true;
+        declared.impactComplete = true;
+        declared.mutatesDocument = false;
+        declared.objectIds.append(QStringLiteral("production/grommets"));
+        return declared;
+    }
     QJsonObject parameterSchema() const override
     {
         return QJsonObject{
@@ -254,14 +268,6 @@ public:
                                                 { QStringLiteral("rect"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } },
                                                 { QStringLiteral("spec"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } } } }
         };
-    }
-    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
-    {
-        PDFOperationImpact declared;
-        declared.declared = true;
-        declared.impactComplete = true;
-        declared.objectIds.append(QStringLiteral("production/grommets"));
-        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override

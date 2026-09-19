@@ -173,6 +173,7 @@
         ],
         "full_rewrite": false,
         "impact_complete": false,
+        "mutates_document": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -232,6 +233,7 @@
         "domains": [],
         "full_rewrite": false,
         "impact_complete": true,
+        "mutates_document": false,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -288,6 +290,7 @@
         "domains": [],
         "full_rewrite": false,
         "impact_complete": true,
+        "mutates_document": false,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",

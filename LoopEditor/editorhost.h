@@ -104,6 +104,10 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantMap preflightStateVisual READ preflightStateVisual NOTIFY presentationChanged)
     Q_PROPERTY(QColor preflightStateColor READ preflightStateColor NOTIFY presentationChanged)
     Q_PROPERTY(QString preflightOperatorSummary READ preflightOperatorSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QString preflightCertificateStateName READ preflightCertificateStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap preflightCertificateStateVisual READ preflightCertificateStateVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor preflightCertificateStateColor READ preflightCertificateStateColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString preflightCertificateSummary READ preflightCertificateSummary NOTIFY presentationChanged)
     Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QString selectedPreflightProfileId READ selectedPreflightProfileId NOTIFY preflightProfilesChanged)
@@ -184,6 +188,10 @@ public:
     QColor preflightStateColor() const;
 
     QString preflightOperatorSummary() const;
+    QString preflightCertificateStateName() const noexcept { return m_preflightCertificateStateName; }
+    QVariantMap preflightCertificateStateVisual() const;
+    QColor preflightCertificateStateColor() const;
+    QString preflightCertificateSummary() const noexcept { return m_preflightCertificateSummary; }
     QVariantList preflightProfiles() const;
     QVariantList preflightVariables() const;
     QString selectedPreflightProfileId() const;
@@ -347,6 +355,7 @@ private:
     void updateActionListRecipeWatch();
     void syncActionListDraft();
     void refreshCanvasTrace();
+    void refreshPreflightCertificateState();
     void reloadPreflightProfiles();
     void updatePreflightProfileWatch();
     void syncRevisionModels();
@@ -409,6 +418,8 @@ private:
     LoopWorkspace m_workspace = LoopWorkspace::Document;
     int m_searchRow = -1;
     QString m_inspectionMode = QStringLiteral("page");
+    QString m_preflightCertificateStateName = QStringLiteral("not-certified");
+    QString m_preflightCertificateSummary = QStringLiteral("No certified preflight is recorded for this document.");
 };
 
 #endif   // EDITORHOST_H

@@ -304,17 +304,22 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     execution.input = input.artifact;
     QUuid executionId;
     QVERIFY(history.beginExecution(execution, &executionId));
-    pdf::PDFOperationHistoryEvent event;
-    event.executionId = executionId;
-    event.status = pdf::PDFOperationHistoryStatus::Rejected;
-    QVERIFY(history.appendEvent(event));
+    for (int index = 0; index < 3; ++index)
+    {
+        pdf::PDFOperationHistoryEvent event;
+        event.executionId = executionId;
+        event.status = pdf::PDFOperationHistoryStatus::Rejected;
+        event.resultSummary = QJsonObject{ { QStringLiteral("ordinal"), index } };
+        QVERIFY(history.appendEvent(event));
+    }
+    QCOMPARE(history.events().size(), 3);
 
     const QString connectionName = QStringLiteral("history-tamper-test");
     QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
     database.setDatabaseName(databasePath);
     QVERIFY(database.open());
     QSqlQuery query(database);
-    QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE sequence = 1")));
+    QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE sequence = 2")));
     database.close();
     database = QSqlDatabase();
     QSqlDatabase::removeDatabase(connectionName);

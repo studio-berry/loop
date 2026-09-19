@@ -100,7 +100,7 @@
     },
     "revalidation": {
       "$ref": "#/$defs/revalidation",
-      "description": "Optional provenance for a post-operation run, including which checks and evidence were reused versus recomputed."
+      "description": "Evidence invalidation and reuse accounting for a post-operation run, including which checks and evidence were reused versus recomputed."
     },
     "errors": {
       "type": "array",
@@ -136,32 +136,28 @@
     "revalidation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "reason", "plan", "reused_check_ids", "recomputed_check_ids", "reused_evidence_ids", "recomputed_evidence_ids"],
+      "required": ["mode", "reason"],
       "properties": {
+        "full": { "type": "boolean" },
         "mode": { "type": "string", "enum": ["full", "targeted"] },
         "reason": { "type": "string", "minLength": 1 },
         "plan": { "type": "object", "additionalProperties": true },
-        "reused_check_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        },
-        "recomputed_check_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        },
-        "reused_evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        },
-        "recomputed_evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "uniqueItems": true
-        }
+        "check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "invalidated_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "recomputed_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "reusable_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "pages": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "uniqueItems": true },
+        "baseline_reused": { "type": "boolean" }
       }
+    },
+    "evidence_domain_list": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["images", "colorants", "strokes", "overprint-transparency", "fonts"] },
+      "uniqueItems": true
     },
     "verdict": {
       "type": "object",

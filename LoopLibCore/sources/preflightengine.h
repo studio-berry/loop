@@ -415,6 +415,9 @@ public:
                         const PDFRevalidationPlan& plan);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
+    PreflightResult revalidate(const PreflightProfileData& profile,
+                               const PreflightResult& baseline,
+                               const PDFRevalidationPlan& plan);
 
     /// Produces a complete post-operation result. Checks and evidence outside
     /// the plan are carried forward only when the prior run was complete.

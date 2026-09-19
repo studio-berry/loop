@@ -47,6 +47,7 @@
 #include <QJsonObject>
 #include <QUuid>
 
+#include <optional>
 #include <set>
 #include <utility>
 

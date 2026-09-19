@@ -20,6 +20,7 @@ from scripts.ci.check_source_integrity import (  # noqa: E402
     has_conflict_markers,
     oversized_reason,
     preflight_pdf_violations,
+    provenance_chain_reason,
     validate_repository,
     whitespace_violations,
 )
@@ -101,6 +102,39 @@ class ConflictMarkerTests(unittest.TestCase):
         ):
             with self.subTest(text=text[:32]):
                 self.assertFalse(has_conflict_markers(text))
+
+
+class ProvenanceConvergenceTests(unittest.TestCase):
+    def test_rejects_parallel_runtime_ledger_contracts(self):
+        cases = (
+            "struct PreflightAuditEvent { int value = 0; };",
+            "class PreflightAuditStore {};",
+            "enum class PreflightAuditEventKind { PreflightRun };",
+            'const auto path = ".loop-audit.jsonl";',
+            'const auto legacyPath = ".' + ("lo" + "upe") + '-audit.jsonl";',
+        )
+        for source in cases:
+            with self.subTest(source=source):
+                self.assertIsNotNone(
+                    provenance_chain_reason("LoopLibCore/sources/provenance.cpp", source)
+                )
+
+    def test_allows_canonical_chain_and_documentation_mentions(self):
+        canonical = (
+            "struct PDFOperationHistoryEvent {};\n"
+            "class PDFOperationHistoryStore {};\n"
+        )
+        self.assertIsNone(
+            provenance_chain_reason(
+                "LoopLibCore/sources/pdfoperationhistory.h", canonical
+            )
+        )
+        self.assertIsNone(
+            provenance_chain_reason(
+                "docs/PROVENANCE_EVENT_CHAIN.md",
+                "PreflightAuditEvent and .loop-audit.jsonl are forbidden runtime designs.",
+            )
+        )
 
 
 class OversizedFileTests(unittest.TestCase):
