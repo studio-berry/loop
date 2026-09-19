@@ -367,8 +367,7 @@ PreflightCertificateVerification verifyPreflightCertificate(const PreflightCerti
             event.approval.decisionReference == certificate.certificateId)
         {
             result.state = PreflightCertificateState::InvalidCertificate;
-            result.reason = event.resultSummary.value(QStringLiteral("reason")).toString(
-                QStringLiteral("The certificate was invalidated by a later operation."));
+            result.reason = event.resultSummary.value(QStringLiteral("reason")).toString(QStringLiteral("The certificate was invalidated by a later operation."));
             return result;
         }
     }

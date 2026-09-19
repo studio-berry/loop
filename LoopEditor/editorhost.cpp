@@ -47,6 +47,7 @@
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
+#include "pdfpreflightverdict.h"
 #include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"

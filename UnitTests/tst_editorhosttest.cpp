@@ -371,10 +371,10 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
     const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
     QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
-                       { return event.kind == pdf::PDFOperationHistoryEventKind::DocumentOpened; }));
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::DocumentOpened; }));
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
-                       { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
-                                event.status == pdf::PDFOperationHistoryStatus::Accepted; }));
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                 event.status == pdf::PDFOperationHistoryStatus::Accepted; }));
     QVERIFY(history.verify().verified);
 }
 
