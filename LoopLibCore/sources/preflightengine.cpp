@@ -5678,6 +5678,10 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         {
             checkObject.insert(QStringLiteral("scope_restrictions"), status.restrictionScope);
         }
+        if (!status.diagnostics.isEmpty())
+        {
+            checkObject.insert(QStringLiteral("diagnostics"), QJsonArray::fromStringList(status.diagnostics));
+        }
         if (!status.reason.isEmpty())
         {
             checkObject.insert(QStringLiteral("reason"), status.reason);
@@ -5970,6 +5974,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         PreflightCheckStatus status;
         status.id = check.id;
         status.restrictionScope = check.restrictions.toJson();
+        if (check.deprecatedAnalysisBox)
+        {
+            status.diagnostics.append(QStringLiteral("deprecated:analysis_box; use restrictions.page_box"));
+        }
 
         if (!check.enabled)
         {
@@ -6544,6 +6552,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             else
             {
                 check.inkCoverageAnalysisBox = analysisBoxValue.toString();
+                check.deprecatedAnalysisBox = true;
             }
 
             if (check.inkCoverageAnalysisBox != QStringLiteral("bleed") && check.inkCoverageAnalysisBox != QStringLiteral("trim") && check.inkCoverageAnalysisBox != QStringLiteral("crop") && check.inkCoverageAnalysisBox != QStringLiteral("media"))
@@ -6794,6 +6803,19 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         else
         {
             check.restrictions = profile.restrictions;
+        }
+
+        if (check.id == QStringLiteral("ink-coverage") && check.deprecatedAnalysisBox)
+        {
+            if (check.restrictions.pageBox.has_value() &&
+                *check.restrictions.pageBox != check.inkCoverageAnalysisBox)
+            {
+                errorMessage = PDFTranslationContext::tr(
+                                   "Check '%1' has conflicting analysis_box and restrictions.page_box.")
+                                   .arg(check.id);
+                return false;
+            }
+            check.restrictions.pageBox = check.inkCoverageAnalysisBox;
         }
 
         profile.checks.push_back(check);
