@@ -6084,7 +6084,17 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             unsupportedDimension = QStringLiteral("page_box");
         else if (check.restrictions.pages.has_value() &&
                  check.id == QStringLiteral("color-inventory") &&
-                 int(check.restrictions.pages->size()) != pageCount)
+                 [&]()
+                 {
+                     for (int page = 0; page < pageCount; ++page)
+                     {
+                         if (!check.restrictions.allowsPage(page))
+                         {
+                             return true;
+                         }
+                     }
+                     return false;
+                 }())
             unsupportedDimension = QStringLiteral("pages");
         else if (check.restrictions.pages.has_value() &&
                  !isGraphBackedCheckId(check.id) && check.id != QStringLiteral("ink-coverage"))
