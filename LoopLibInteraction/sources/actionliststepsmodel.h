@@ -48,7 +48,8 @@ public:
         DurationMsRole,
         ResolvedParametersRole,
         AffectedScopeRole,
-        DiagnosticsRole
+        DiagnosticsRole,
+        FindingDeltaRole
     };
     Q_ENUM(Role)
 
