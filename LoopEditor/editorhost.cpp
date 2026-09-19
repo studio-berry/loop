@@ -1736,6 +1736,7 @@ void EditorHost::reloadPreflightProfiles()
     if (!priorId.isEmpty() && (priorId != m_selectedPreflightProfileId || current == m_preflightProfiles.cend()))
     {
         m_preflight.markProfileStale();
+        m_actionListController.markRecipeStale();
     }
     else if (!priorId.isEmpty() && current != m_preflightProfiles.cend() && current->digest != priorDigest)
     {
@@ -1747,6 +1748,7 @@ void EditorHost::reloadPreflightProfiles()
         {
             m_preflight.markProfileStale();
         }
+        m_actionListController.markRecipeStale();
     }
     updatePreflightProfileWatch();
     Q_EMIT preflightProfilesChanged();
