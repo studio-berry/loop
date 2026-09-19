@@ -44,6 +44,7 @@
 #include <QPainterPathStroker>
 #include <QBuffer>
 #include <QSet>
+#include <QVector>
 #include <QCryptographicHash>
 
 #include <cmath>
