@@ -37,6 +37,7 @@ class OperationImpactTest : public QObject
 
 private slots:
     void incompleteImpactSelectsFullRevalidation();
+    void fullRewriteAndDocumentWideImpactsDoNotAdvertiseNarrowedPages();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
     void emptyTargetedPlanFallsBackToFull();
@@ -115,6 +116,44 @@ void OperationImpactTest::incompleteImpactSelectsFullRevalidation()
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
     QVERIFY(plan.full);
     QCOMPARE(plan.checkIds.size(), 2);
+}
+
+void OperationImpactTest::fullRewriteAndDocumentWideImpactsDoNotAdvertiseNarrowedPages()
+{
+    pdf::PDFOperationImpact impact;
+    impact.impactComplete = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.pages = { 0 };
+    impact.fullRewrite = true;
+    QVERIFY(impact.isFullRevalidation());
+    const QStringList checks{ QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") };
+    pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
+    QCOMPARE(plan.checkIds, checks);
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.fullRewrite = false;
+    impact.documentWide = true;
+    QVERIFY(impact.isFullRevalidation());
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("document-wide"));
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.documentWide = false;
+    impact.impactComplete = false;
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("impact-incomplete"));
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.impactComplete = true;
+    impact.requiresIndependentOracle = true;
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("independent-oracle"));
+    QVERIFY(plan.pages.isEmpty());
 }
 
 void OperationImpactTest::imagesOnlyPlanSelectsImageResolution()
