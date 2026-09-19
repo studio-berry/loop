@@ -6021,11 +6021,15 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             unsupportedDimension = QStringLiteral("scope");
         else if (check.restrictions.layers.has_value())
             unsupportedDimension = QStringLiteral("layers");
-        else if (!check.restrictions.regions.isEmpty())
+        else if (!check.restrictions.regions.isEmpty() &&
+                 (!supportsGeometricScope(check.id) ||
+                  std::any_of(check.restrictions.regions.cbegin(), check.restrictions.regions.cend(),
+                              [](const PreflightRegion& region) { return region.mode == QLatin1String("exclude"); })))
             unsupportedDimension = QStringLiteral("regions");
-        else if (check.restrictions.objectClasses.has_value())
+        else if (check.restrictions.objectClasses.has_value() && !supportsGeometricScope(check.id))
             unsupportedDimension = QStringLiteral("object_classes");
         else if (check.restrictions.pageBox.has_value() &&
+                 !supportsGeometricScope(check.id) &&
                  (check.id != QStringLiteral("ink-coverage") || *check.restrictions.pageBox == QStringLiteral("art")))
             unsupportedDimension = QStringLiteral("page_box");
         else if (check.restrictions.pages.has_value() &&
@@ -6046,6 +6050,25 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                                           : check.restrictions.unsupportedReason;
             }
             continue;
+        }
+
+        if (check.restrictions.objectClasses.has_value() && supportsGeometricScope(check.id))
+        {
+            const QString objectClass = check.id == QStringLiteral("image-resolution")
+                                            ? QStringLiteral("image") : QStringLiteral("vector");
+            if (!check.restrictions.objectClasses->contains(objectClass))
+            {
+                status.status = QStringLiteral("not_applicable");
+                status.reason = QStringLiteral("restriction_excluded_all_content");
+                result.checkStatuses.push_back(status);
+                result.inspectionComplete = false;
+                if (result.errorCode.isEmpty())
+                {
+                    result.errorCode = QStringLiteral("unsupported-scope");
+                    result.errorMessage = PDFTranslationContext::tr("Check '%1' excludes its object class.").arg(check.id);
+                }
+                continue;
+            }
         }
 
         auto it = m_checks.find(check.id);
@@ -6080,6 +6103,88 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             result.checkStatuses.push_back(status);
             result.inspectionComplete = false;
             continue;
+        }
+
+        if (supportsGeometricScope(check.id) &&
+            (check.restrictions.pageBox.has_value() || !check.restrictions.regions.isEmpty()))
+        {
+            const PDFCatalog* catalog = m_session && m_session->getDocument()
+                                            ? m_session->getDocument()->getCatalog() : nullptr;
+            const PDFEvidenceDomain domain = check.id == QStringLiteral("image-resolution")
+                                                 ? PDFEvidenceDomain::Images : PDFEvidenceDomain::Strokes;
+            bool geometryUnavailable = !catalog;
+            for (const PDFEvidenceRecord& record : m_activeGraph.recordsForDomain(domain))
+            {
+                if (record.page > 0 && !check.restrictions.allowsPage(record.page - 1))
+                {
+                    continue;
+                }
+                if ((check.id == QStringLiteral("image-resolution") &&
+                     record.target != QStringLiteral("image-effective-dpi")))
+                {
+                    continue;
+                }
+                if (!catalog || record.page < 1 || record.page > catalog->getPageCount() ||
+                    !record.geometry.isValid() || record.geometry.isEmpty())
+                {
+                    geometryUnavailable = true;
+                    break;
+                }
+                const PDFPage* page = catalog->getPage(record.page - 1);
+                if (!page)
+                {
+                    geometryUnavailable = true;
+                    break;
+                }
+                for (const PreflightRegion& region : check.restrictions.regions)
+                {
+                    const QRectF anchor = restrictionPageBox(page, region.anchor);
+                    if (!anchor.isValid() || anchor.isEmpty())
+                    {
+                        geometryUnavailable = true;
+                        break;
+                    }
+                }
+                if (geometryUnavailable)
+                {
+                    break;
+                }
+            }
+            if (geometryUnavailable)
+            {
+                status.status = QStringLiteral("not_inspected");
+                status.reason = QStringLiteral("restriction_unsupported:geometry");
+                result.checkStatuses.push_back(status);
+                result.inspectionComplete = false;
+                if (result.errorCode.isEmpty())
+                {
+                    result.errorCode = QStringLiteral("unsupported-scope");
+                    result.errorMessage = PDFTranslationContext::tr("Check '%1' lacks required target or anchor geometry.").arg(check.id);
+                }
+                continue;
+            }
+            const PDFEvidenceGraph scoped = evidenceGraphForCheck(
+                m_activeGraph, check.restrictions, check.id, m_session);
+            const bool anyTarget = std::any_of(scoped.records.cbegin(), scoped.records.cend(),
+                                               [&](const PDFEvidenceRecord& record)
+                                               {
+                                                   return record.domain == domain &&
+                                                          (check.id != QStringLiteral("image-resolution") ||
+                                                           record.target == QStringLiteral("image-effective-dpi"));
+                                               });
+            if (!anyTarget)
+            {
+                status.status = QStringLiteral("not_applicable");
+                status.reason = QStringLiteral("restriction_excluded_all_content");
+                result.checkStatuses.push_back(status);
+                result.inspectionComplete = false;
+                if (result.errorCode.isEmpty())
+                {
+                    result.errorCode = QStringLiteral("unsupported-scope");
+                    result.errorMessage = PDFTranslationContext::tr("Check '%1' has no evidence inside its effective region.").arg(check.id);
+                }
+                continue;
+            }
         }
 
         const int errorsBefore = result.errors.size();
