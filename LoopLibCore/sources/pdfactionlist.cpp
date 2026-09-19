@@ -1049,6 +1049,13 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                                               ? PDFRepairStatus::Incomplete : PDFRepairStatus::Failed;
                     stepResult.status = PDFActionListStepStatus::Failed;
                     addDiagnostic(&stepResult, QStringLiteral("action-list.step-postflight-failed"), validatorResult.getErrorMessage());
+                    if (options.requirePostflight && !hasPreflightProfile(options))
+                    {
+                        result->diagnostics.append(QJsonObject{
+                            { QStringLiteral("code"), QStringLiteral("action-list.postflight-required") },
+                            { QStringLiteral("severity"), QStringLiteral("error") },
+                            { QStringLiteral("message"), validatorResult.getErrorMessage() } });
+                    }
                     hadFailure = true;
                 }
                 else
