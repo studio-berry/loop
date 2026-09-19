@@ -6154,7 +6154,7 @@ PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
     }
 
     const auto appendReusableFindings = [&effectivePlan](const QList<PreflightFinding>& previous,
-                                                        QList<PreflightFinding>* current)
+                                                         QList<PreflightFinding>* current)
     {
         for (const PreflightFinding& finding : previous)
         {

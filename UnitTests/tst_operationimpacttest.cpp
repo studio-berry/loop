@@ -256,14 +256,14 @@ void OperationImpactTest::goldenCorpusTargetedMatchesFullAndReportsReuse()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Impact golden parity") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("image-resolution") },
-                { QStringLiteral("min_dpi"), 300 },
-                { QStringLiteral("severity"), QStringLiteral("error") } },
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("color-mode") },
-                { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK") } },
-                { QStringLiteral("severity"), QStringLiteral("error") } } } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                            { QStringLiteral("min_dpi"), 300 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } },
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-mode") },
+                                            { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK") } },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
     };
 
     pdf::PreflightProfileData profile;
