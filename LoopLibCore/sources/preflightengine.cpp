@@ -1417,10 +1417,22 @@ bool supportsGeometricScope(const QString& checkId)
 
 QRectF restrictionPageBox(const PDFPage* page, const QString& name)
 {
-    if (name == QLatin1String("media")) return page->getMediaBox();
-    if (name == QLatin1String("crop")) return page->getCropBox();
-    if (name == QLatin1String("bleed")) return page->getBleedBox();
-    if (name == QLatin1String("art")) return page->getArtBox();
+    if (name == QLatin1String("media"))
+    {
+        return page->getMediaBox();
+    }
+    if (name == QLatin1String("crop"))
+    {
+        return page->getCropBox();
+    }
+    if (name == QLatin1String("bleed"))
+    {
+        return page->getBleedBox();
+    }
+    if (name == QLatin1String("art"))
+    {
+        return page->getArtBox();
+    }
     return page->getTrimBox();
 }
 
