@@ -419,6 +419,13 @@ public:
                                const PreflightResult& baseline,
                                const PDFRevalidationPlan& plan);
 
+    /// Produces a complete post-operation result. Checks and evidence outside
+    /// the plan are carried forward only when the prior run was complete.
+    PreflightResult revalidate(const PreflightProfileData& profile,
+                               const PDFRevalidationPlan& plan,
+                               const PreflightResult& previousResult,
+                               const PDFEvidenceGraph& previousEvidence);
+
     void setOperationControl(const PDFOperationControl* operationControl) { m_operationControl = operationControl; }
 
     PDFDocumentSession* getSession() const;

@@ -77,8 +77,10 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.impactComplete = true;
         declared.mutatesDocument = false;
+        declared.objectIds.append(QStringLiteral("production/geometry"));
         return declared;
     }
 
@@ -131,21 +133,32 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject& parameters) const override
     {
         PDFOperationImpact declared;
-        declared.domains = pdfEvidenceAllDomains();
-        declared.impactComplete = true;
+        declared.declared = true;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Images) |
+                           PDFEvidenceDomain::Colorants |
+                           PDFEvidenceDomain::Strokes |
+                           PDFEvidenceDomain::OverprintTransparency;
+        declared.impactComplete = false;
 
-        const PDFProductionGeometryModel model = PDFProductionGeometryModel::fromJson(parameters.value(QStringLiteral("geometry")).toObject());
+        const PDFProductionGeometryModel model =
+            PDFProductionGeometryModel::fromJson(parameters.value(QStringLiteral("geometry")).toObject());
         const QString contourId = parameters.value(QStringLiteral("contour_id")).toString();
+        declared.objectIds.append(contourId.isEmpty()
+                                      ? QStringLiteral("production/contour")
+                                      : QStringLiteral("production/contours/%1").arg(contourId));
         for (const PDFProductionContour& contour : model.contours)
         {
-            if (contour.id == contourId)
+            if (contour.id == contourId && contour.pageIndex >= 0)
             {
-                declared.pages.insert(int(contour.pageIndex));
-                return declared;
+                declared.pages.insert(int(contour.pageIndex + 1));
+                declared.impactComplete = true;
+                break;
             }
         }
-
-        declared.documentWide = true;
+        if (!declared.impactComplete)
+        {
+            declared.documentWide = true;
+        }
         return declared;
     }
 
@@ -240,8 +253,10 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.impactComplete = true;
         declared.mutatesDocument = false;
+        declared.objectIds.append(QStringLiteral("production/grommets"));
         return declared;
     }
     QJsonObject parameterSchema() const override
