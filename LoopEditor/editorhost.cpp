@@ -943,6 +943,7 @@ bool EditorHost::selectPreflightProfile(const QString& id)
     m_selectedPreflightProfileId = id;
     m_preflightBindings = QJsonObject();
     m_preflight.markProfileStale();
+    m_actionListController.markRecipeStale();
     Q_EMIT preflightProfilesChanged();
     bumpPresentation();
     return true;
@@ -959,6 +960,7 @@ bool EditorHost::setPreflightVariable(const QString& name, const QVariant& value
     }
     m_preflightBindings.insert(name, QJsonValue::fromVariant(value));
     m_preflight.markProfileStale();
+    m_actionListController.markRecipeStale();
     Q_EMIT preflightProfilesChanged();
     bumpPresentation();
     return true;
@@ -1440,7 +1442,17 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
 
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
-    const QString bindingsHash = actionListBindingsHash(m_actionListBindings);
+    const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                        [this](const PreflightProfileChoice& profile)
+                                        { return profile.id == m_selectedPreflightProfileId; });
+    const QJsonObject profileForPlan = profileIt != m_preflightProfiles.cend() && profileIt->valid
+                                           ? profileIt->profile
+                                           : QJsonObject();
+    const QString bindingsHash = actionListBindingsHash(QJsonObject{
+        { QStringLiteral("recipe_bindings"), m_actionListBindings },
+        { QStringLiteral("preflight_profile"), profileForPlan },
+        { QStringLiteral("preflight_bindings"), m_preflightBindings }
+    });
     if (phase == pdfinteraction::ActionListRunPhase::Plan &&
         !m_actionListController.validationMatches(documentKey, documentRevision, recipe->recipeHash, bindingsHash))
     {
@@ -1482,17 +1494,13 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
     QString preflightProfilePath;
     QJsonObject preflightProfile;
     QJsonObject preflightProfileBindings;
-    if (phase == pdfinteraction::ActionListRunPhase::Execute)
+    if ((phase == pdfinteraction::ActionListRunPhase::Plan ||
+         phase == pdfinteraction::ActionListRunPhase::Execute) &&
+        profileIt != m_preflightProfiles.cend() && profileIt->valid)
     {
-        const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                            [this](const PreflightProfileChoice& profile)
-                                            { return profile.id == m_selectedPreflightProfileId; });
-        if (profileIt != m_preflightProfiles.cend() && profileIt->valid)
-        {
-            preflightProfilePath = profileIt->source;
-            preflightProfile = profileIt->profile;
-            preflightProfileBindings = m_preflightBindings;
-        }
+        preflightProfilePath = profileIt->source;
+        preflightProfile = profileIt->profile;
+        preflightProfileBindings = m_preflightBindings;
     }
 
     const QString submittedId = m_session->scheduler().submit(
