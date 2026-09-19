@@ -26,6 +26,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -38,6 +39,7 @@
 #include <QThread>
 #include <QUrl>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -53,6 +55,7 @@
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
 #include "preflightprofileresolver.h"
@@ -358,6 +361,21 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
     QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
     QVERIFY(host.preflightStateName() != QStringLiteral("error"));
     QCOMPARE(host.preflight()->property("progress").toInt(), 100);
+
+    const QString historyPath =
+        QDir(QFileInfo(path).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                       { return event.kind == pdf::PDFOperationHistoryEventKind::DocumentOpened; }));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                       { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                event.status == pdf::PDFOperationHistoryStatus::Accepted; }));
+    QVERIFY(history.verify().verified);
 }
 
 void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()

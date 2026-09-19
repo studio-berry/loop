@@ -26,6 +26,7 @@
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfoperationimpact.h"
 #include "pdfartifactstore.h"
@@ -49,123 +50,6 @@ namespace pdftool
 
 namespace
 {
-
-bool appendPreflightProvenance(const QString& documentPath,
-                               const QByteArray& sourceData,
-                               const QString& revisionDigest,
-                               const QString& profileDigest,
-                               const QList<pdf::PreflightDecision>& decisions,
-                               pdf::PDFOperationHistoryStatus status,
-                               const QJsonObject& summary,
-                               QString* error)
-{
-    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
-    pdf::PDFArtifactStore artifacts(historyDirectory);
-    const auto imported = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("preflight-input.pdf") });
-    if (!imported.success)
-    {
-        if (error)
-        {
-            *error = imported.errorMessage;
-        }
-        return false;
-    }
-    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
-    QString historyError;
-    if (!history.open(&historyError) || !history.registerOriginalInput(imported.artifact))
-    {
-        if (error)
-        {
-            *error = historyError.isEmpty() ? QStringLiteral("Could not open preflight history.") : historyError;
-        }
-        return false;
-    }
-    pdf::PDFOperationHistoryExecution execution;
-    execution.operationId = QStringLiteral("preflight");
-    execution.operationVersion = 1;
-    execution.input = imported.artifact;
-    QUuid executionId;
-    if (!history.beginExecution(execution, &executionId))
-    {
-        if (error)
-        {
-            *error = QStringLiteral("Could not begin preflight history.");
-        }
-        return false;
-    }
-    pdf::PDFOperationHistoryEvent running;
-    running.executionId = executionId;
-    running.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
-    running.status = pdf::PDFOperationHistoryStatus::Running;
-    running.documentRevisionDigest = revisionDigest;
-    running.effectiveProfileDigest = profileDigest;
-    running.operatorIdentity = QStringLiteral("PdfTool");
-    if (!history.appendEvent(running))
-    {
-        if (error)
-        {
-            *error = QStringLiteral("Could not append preflight history start.");
-        }
-        return false;
-    }
-    pdf::PDFOperationHistoryEvent finished;
-    finished.executionId = executionId;
-    finished.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
-    finished.status = status;
-    finished.documentRevisionDigest = revisionDigest;
-    finished.effectiveProfileDigest = profileDigest;
-    finished.operatorIdentity = QStringLiteral("PdfTool");
-    finished.resultSummary = summary;
-    finished.createdUtc = QDateTime::currentDateTimeUtc();
-    if (status == pdf::PDFOperationHistoryStatus::Accepted || status == pdf::PDFOperationHistoryStatus::RolledBack)
-    {
-        finished.output = imported.artifact;
-    }
-    if (!history.appendEvent(finished))
-    {
-        const QString appendError = QStringLiteral("Could not append preflight history result.");
-        pdf::PDFOperationHistoryEvent failed;
-        failed.executionId = executionId;
-        failed.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
-        failed.status = pdf::PDFOperationHistoryStatus::Failed;
-        failed.documentRevisionDigest = revisionDigest;
-        failed.effectiveProfileDigest = profileDigest;
-        failed.operatorIdentity = QStringLiteral("PdfTool");
-        failed.resultSummary = QJsonObject{ { QStringLiteral("error"), appendError } };
-        history.appendEvent(failed);
-        if (error)
-        {
-            *error = appendError;
-        }
-        return false;
-    }
-    for (const pdf::PreflightDecision& decision : decisions)
-    {
-        const QString decisionId = pdf::preflightDecisionIdentity(decision);
-        pdf::PDFOperationHistoryEvent decisionEvent;
-        decisionEvent.executionId = executionId;
-        decisionEvent.kind = decision.countsForSignoff(revisionDigest, profileDigest)
-                                 ? pdf::PDFOperationHistoryEventKind::DecisionRecorded
-                                 : pdf::PDFOperationHistoryEventKind::DecisionInvalidated;
-        decisionEvent.status = pdf::PDFOperationHistoryStatus::Running;
-        decisionEvent.operatorIdentity = decision.operatorIdentity;
-        decisionEvent.documentRevisionDigest = revisionDigest;
-        decisionEvent.effectiveProfileDigest = profileDigest;
-        decisionEvent.approval.decisionReference = decisionId;
-        decisionEvent.resultSummary = QJsonObject{
-            { QStringLiteral("decision_id"), decisionId },
-            { QStringLiteral("finding_id"), decision.findingId },
-            { QStringLiteral("kind"), pdf::preflightDecisionKindToString(decision.kind) }
-        };
-        if (!history.appendEvent(decisionEvent))
-        {
-            if (error)
-                *error = QStringLiteral("Could not append a preflight decision event.");
-            return false;
-        }
-    }
-    return true;
-}
 
 bool loadProfileJson(const QString& profilePath, QJsonObject& profile, QString& errorMessage)
 {
@@ -698,20 +582,19 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Failed;
     }
-    QString historyError;
-    if (!appendPreflightProvenance(options.document,
-                                   sourceData,
-                                   result.documentRevisionDigest,
-                                   result.effectiveProfileDigest,
-                                   result.decisions,
-                                   historyStatus,
-                                   result.toJson(options.document),
-                                   &historyError))
+    if (const pdf::PDFOperationResult auditResult =
+            pdf::appendPreflightAuditRun(options.document,
+                                         sourceData,
+                                         result,
+                                         historyStatus,
+                                         QStringLiteral("PdfTool"),
+                                         result.toJson(options.document));
+        !auditResult)
     {
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,
                          QStringLiteral("history.write-failed"),
-                         historyError);
+                         auditResult.getErrorMessage());
         return PDFToolExitCode::ProcessingFailure;
     }
 

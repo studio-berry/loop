@@ -43,7 +43,9 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdocumentwriter.h"
 #include "pdfoperationhistorystore.h"
+#include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfsafefilewriter.h"
 
@@ -54,6 +56,7 @@
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -886,10 +889,12 @@ bool EditorHost::runPreflight()
     const PreflightProfileChoice selectedProfile = *profileIt;
     const QJsonObject bindings = m_preflightBindings;
     const QByteArray sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
+    const QString documentPath = m_session->facade().source().path;
+    const bool documentDirty = m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty);
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        [document, outcome, selectedProfile, bindings, sourceHash](pdf::PDFJobContext& context)
+        [document, outcome, selectedProfile, bindings, sourceHash, documentPath, documentDirty](pdf::PDFJobContext& context)
         {
             if (context.isCancellationRequested())
             {
@@ -932,15 +937,56 @@ bool EditorHost::runPreflight()
 
             std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
                 pdf::PDFDocumentSession::createForInspection(document.data()), &pdf::PDFDocumentSession::destroy);
+            QByteArray auditBytes;
+            if (!documentDirty)
+            {
+                QFile sourceFile(documentPath);
+                if (sourceFile.open(QIODevice::ReadOnly))
+                {
+                    const QByteArray diskBytes = sourceFile.readAll();
+                    const QByteArray diskHash = QCryptographicHash::hash(diskBytes, QCryptographicHash::Sha256);
+                    if (diskHash == sourceHash)
+                        auditBytes = diskBytes;
+                }
+            }
+            if (auditBytes.isEmpty())
+            {
+                QBuffer serialized(&auditBytes);
+                if (!serialized.open(QIODevice::WriteOnly))
+                    throw std::runtime_error("Could not prepare the current document revision for preflight audit.");
+                pdf::PDFDocumentWriter writer(nullptr, context.operationControl());
+                if (const pdf::PDFOperationResult writeResult = writer.write(&serialized, document.data()); !writeResult)
+                    throw std::runtime_error(writeResult.getErrorMessage().toStdString());
+            }
+
+            const QByteArray revisionHash = QCryptographicHash::hash(auditBytes, QCryptographicHash::Sha256);
             pdf::PreflightEngine engine(session.get());
             engine.setOperationControl(context.operationControl());
             context.reportProgress(15);
             outcome->result = engine.run(profile);
-            pdf::finalizePreflightResult(outcome->result, sourceHash, resolved);
+            pdf::finalizePreflightResult(outcome->result, revisionHash, resolved);
+
+            pdf::PDFOperationHistoryStatus auditStatus = pdf::PDFOperationHistoryStatus::Accepted;
             if (context.isCancellationRequested())
+                auditStatus = pdf::PDFOperationHistoryStatus::Cancelled;
+            else if (pdf::reducePreflightVerdict(outcome->result).state == pdf::PreflightVerdictState::Error)
+                auditStatus = pdf::PDFOperationHistoryStatus::Failed;
+
+            if (const pdf::PDFOperationResult auditResult =
+                    pdf::appendPreflightAuditRun(documentPath,
+                                                 auditBytes,
+                                                 outcome->result,
+                                                 auditStatus,
+                                                 QStringLiteral("LoopEditor"),
+                                                 outcome->result.toJson(documentPath));
+                !auditResult)
             {
-                return;
+                throw std::runtime_error(auditResult.getErrorMessage().toStdString());
             }
+
+            if (context.isCancellationRequested())
+                return;
+
             context.reportProgress(95);
             context.setResultSummary(QStringLiteral("Preflight completed."));
         });

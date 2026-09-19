@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightaudit.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
@@ -35,6 +37,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QTranslator>
@@ -78,6 +81,7 @@ private slots:
     void provisionalPass_doesNotAllowCertification();
     void certification_allowsWarningsAndWaivedErrors();
     void certification_rejectsSkippedOrBudgetLimitedChecks();
+    void auditRun_appendsCanonicalEvents();
     void certificate_roundTripsAndDetectsTampering();
     void certificate_detectsStaleDecision();
 };
@@ -458,6 +462,46 @@ void PreflightVerdictTest::certification_rejectsSkippedOrBudgetLimitedChecks()
     status.budgetAttempted = 11;
     budgeted.checkStatuses.append(status);
     QVERIFY(!pdf::preflightAllowsCertification(budgeted));
+}
+
+void PreflightVerdictTest::auditRun_appendsCanonicalEvents()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("audit.pdf"));
+    const QByteArray document("%PDF-1.4\n%%EOF\n");
+    const QString documentDigest =
+        QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = QString(64, QLatin1Char('d'));
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.checkStatuses.append({ QStringLiteral("bleed"), QStringLiteral("ok") });
+
+    const pdf::PDFOperationResult appended =
+        pdf::appendPreflightAuditRun(documentPath,
+                                     document,
+                                     result,
+                                     pdf::PDFOperationHistoryStatus::Accepted,
+                                     QStringLiteral("test"));
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+
+    pdf::PDFOperationHistoryStore history(
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3")));
+    QString error;
+    QVERIFY2(history.open(&error), qPrintable(error));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(events.size(), 3);
+    QCOMPARE(events.at(0).kind, pdf::PDFOperationHistoryEventKind::DocumentOpened);
+    QCOMPARE(events.at(1).kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
+    QCOMPARE(events.at(1).status, pdf::PDFOperationHistoryStatus::Running);
+    QCOMPARE(events.at(2).kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
+    QCOMPARE(events.at(2).status, pdf::PDFOperationHistoryStatus::Accepted);
+    QVERIFY(history.verify().verified);
 }
 
 void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()

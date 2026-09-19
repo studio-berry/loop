@@ -55,7 +55,8 @@ same thing as an issued certificate.
 ## Storage and trust limits
 
 Audit and certificate provenance use the append-only `PDFOperationHistoryEvent` chain in
-`<document>.loop-history`; there is no parallel audit log. The issuance event retains the
+`<document>.loop-history`; there is no parallel audit log. Both PdfTool and Editor preflight runs
+append `DocumentOpened` / `PreflightRun` events through the same Core audit writer. The issuance event retains the
 standalone certificate payload so invalid certificates remain inspectable instead of being deleted.
 
 The chain is tamper-evident, not tamper-proof. A person with write access to the complete sidecar can
