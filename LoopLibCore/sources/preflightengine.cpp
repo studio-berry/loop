@@ -6387,7 +6387,22 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         result.checkStatuses.push_back(status);
     }
 
-    if (profile.pdfx.has_value() && plan.full)
+    if (profile.pdfx.has_value() && plan.full && !profile.restrictions.isUnrestricted())
+    {
+        PreflightCheckStatus pdfxStatus;
+        pdfxStatus.id = QStringLiteral("pdfx");
+        pdfxStatus.status = QStringLiteral("not_inspected");
+        pdfxStatus.reason = QStringLiteral("restriction_unsupported:pdfx");
+        pdfxStatus.restrictionScope = profile.restrictions.toJson();
+        result.checkStatuses.push_back(pdfxStatus);
+        result.inspectionComplete = false;
+        if (result.errorCode.isEmpty())
+        {
+            result.errorCode = QStringLiteral("unsupported-scope");
+            result.errorMessage = PDFTranslationContext::tr("PDF/X conformance cannot honour a restricted inspection scope.");
+        }
+    }
+    else if (profile.pdfx.has_value() && plan.full)
     {
         const PDFXConformanceResult pdfxResult = evaluatePDFXPolicy(m_session, profile.pdfx.value());
         result.pdfx = pdfxResult;
