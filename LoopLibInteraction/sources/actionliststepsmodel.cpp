@@ -63,6 +63,8 @@ QVariant ActionListStepsModel::data(const QModelIndex& index, int role) const
             return step.affectedScope;
         case DiagnosticsRole:
             return step.diagnostics;
+        case FindingDeltaRole:
+            return step.repairResult.value(QStringLiteral("finding_delta")).toObject().toVariantMap();
         case Qt::DisplayRole:
             return QStringLiteral("%1 — %2").arg(step.stepId, pdf::pdfActionListStepStatusName(step.status));
         default:
@@ -80,7 +82,8 @@ QHash<int, QByteArray> ActionListStepsModel::roleNames() const
         { DurationMsRole, "durationMs" },
         { ResolvedParametersRole, "resolvedParameters" },
         { AffectedScopeRole, "affectedScope" },
-        { DiagnosticsRole, "diagnostics" }
+        { DiagnosticsRole, "diagnostics" },
+        { FindingDeltaRole, "findingDelta" }
     };
 }
 
