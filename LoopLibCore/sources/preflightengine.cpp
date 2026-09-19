@@ -970,6 +970,11 @@ QJsonObject findingToJson(const PreflightFinding& finding)
         object.insert(QStringLiteral("evidence"), finding.evidence);
     }
 
+    if (!finding.restrictionScope.isEmpty())
+    {
+        object.insert(QStringLiteral("scope_restrictions"), finding.restrictionScope);
+    }
+
     if (!finding.evidenceIds.isEmpty())
     {
         QJsonArray ids;
@@ -2139,6 +2144,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                          QList<PreflightFinding>& errors,
                          QList<PreflightFinding>& warnings)
 {
+    const QString analysisBox = check.restrictions.pageBox.value_or(check.inkCoverageAnalysisBox);
     auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false)
     {
         PreflightFinding finding;
@@ -2152,7 +2158,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
         finding.evidence = QJsonObject{
             { QStringLiteral("reason"), reason },
             { QStringLiteral("budget_exceeded"), budgetExceeded },
-            { QStringLiteral("analysis_box"), check.inkCoverageAnalysisBox },
+            { QStringLiteral("analysis_box"), analysisBox },
             { QStringLiteral("max_raster_pixels"), check.maxRasterPixels }
         };
         finding.message = pageNumber > 0
@@ -2180,15 +2186,15 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
     probeSettings.maxRasterPixels = check.maxRasterPixels;
-    if (check.inkCoverageAnalysisBox == QStringLiteral("trim"))
+    if (analysisBox == QStringLiteral("trim"))
     {
         probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Trim;
     }
-    else if (check.inkCoverageAnalysisBox == QStringLiteral("crop"))
+    else if (analysisBox == QStringLiteral("crop"))
     {
         probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Crop;
     }
-    else if (check.inkCoverageAnalysisBox == QStringLiteral("media"))
+    else if (analysisBox == QStringLiteral("media"))
     {
         probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Media;
     }
@@ -2204,6 +2210,10 @@ void runInkCoverageCheck(PDFDocumentSession* session,
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
+        if (!check.restrictions.allowsPage(int(pageIndex)))
+        {
+            continue;
+        }
         const PDFPage* page = catalog->getPage(pageIndex);
         if (!page)
         {
@@ -2246,7 +2256,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                 { QStringLiteral("peak_ink_pct"), region.peakInkCoverage * 100.0 },
                 { QStringLiteral("max_ink_pct"), check.maxInkPct },
                 { QStringLiteral("area_mm2"), region.areaMM2 },
-                { QStringLiteral("analysis_box"), check.inkCoverageAnalysisBox },
+                { QStringLiteral("analysis_box"), analysisBox },
                 { QStringLiteral("region_rank"), ++regionRank }
             };
             finding.message = PDFTranslationContext::tr(
@@ -5615,6 +5625,10 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         QJsonObject checkObject;
         checkObject.insert(QStringLiteral("id"), status.id);
         checkObject.insert(QStringLiteral("status"), status.status);
+        if (!status.restrictionScope.isEmpty())
+        {
+            checkObject.insert(QStringLiteral("scope_restrictions"), status.restrictionScope);
+        }
         if (!status.reason.isEmpty())
         {
             checkObject.insert(QStringLiteral("reason"), status.reason);
@@ -5781,6 +5795,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     result.inspectionComplete = true;
     result.profileIdentity = profile.profileIdentity;
     result.coverageScope = profile.coverageScope.isEmpty() ? preflightCoverageScopeFor(profile) : profile.coverageScope;
+    if (!profile.restrictions.isUnrestricted())
+    {
+        result.coverageScope.insert(QStringLiteral("scope_restrictions"), profile.restrictions.toJson());
+    }
     result.variableBindings = profile.variableBindings;
     result.effectiveProfileDigest = profile.effectiveDigest;
     m_activeGraph = PDFEvidenceGraph();
@@ -5802,52 +5820,6 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         result.errors.push_back(finding);
         result.pass = reducePreflightVerdict(result, &profile).isPass();
         return result;
-    }
-
-    if (profile.restrictions.hasUnsupportedScope())
-    {
-        result.inspectionComplete = false;
-        result.errorCode = QStringLiteral("unsupported-scope");
-        result.errorMessage = profile.restrictions.unsupportedReason.isEmpty()
-                                  ? PDFTranslationContext::tr("The requested inspection scope is not supported.")
-                                  : profile.restrictions.unsupportedReason;
-        PreflightFinding finding;
-        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
-        finding.type = QStringLiteral("unsupported-scope");
-        finding.severity = QStringLiteral("error");
-        finding.message = result.errorMessage;
-        result.errors.push_back(finding);
-        result.pass = reducePreflightVerdict(result, &profile).isPass();
-        return result;
-    }
-    if (profile.restrictions.pages.has_value())
-    {
-        bool anyPage = false;
-        const int pageCount = m_session && m_session->getDocument() && m_session->getDocument()->getCatalog()
-                                  ? int(m_session->getDocument()->getCatalog()->getPageCount())
-                                  : 0;
-        for (int pageIndex = 0; pageIndex < pageCount; ++pageIndex)
-        {
-            if (profile.restrictions.allowsPage(pageIndex))
-            {
-                anyPage = true;
-                break;
-            }
-        }
-        if (!anyPage)
-        {
-            result.inspectionComplete = false;
-            result.errorCode = QStringLiteral("unsupported-scope");
-            result.errorMessage = PDFTranslationContext::tr("Restriction 'pages' does not include any page in this document.");
-            PreflightFinding finding;
-            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
-            finding.type = QStringLiteral("unsupported-scope");
-            finding.severity = QStringLiteral("error");
-            finding.message = result.errorMessage;
-            result.errors.push_back(finding);
-            result.pass = reducePreflightVerdict(result, &profile).isPass();
-            return result;
-        }
     }
 
     const PDFEvidenceDomains graphDomains = plan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(plan.checkIds);
@@ -5923,6 +5895,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
 
         PreflightCheckStatus status;
         status.id = check.id;
+        status.restrictionScope = check.restrictions.toJson();
 
         if (!check.enabled)
         {
@@ -5940,17 +5913,62 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             continue;
         }
 
-        if (check.restrictions.hasUnsupportedScope() || (check.restrictions.pages.has_value() && !isGraphBackedCheckId(check.id)))
+        const int pageCount = m_session && m_session->getDocument() && m_session->getDocument()->getCatalog()
+                                  ? int(m_session->getDocument()->getCatalog()->getPageCount())
+                                  : 0;
+        if (check.restrictions.pages.has_value())
         {
-            status.status = QStringLiteral("incomplete");
-            status.reason = QStringLiteral("unsupported-scope");
+            bool anySelectedPage = false;
+            for (int page = 0; page < pageCount; ++page)
+            {
+                if (check.restrictions.allowsPage(page))
+                {
+                    anySelectedPage = true;
+                    break;
+                }
+            }
+            if (!anySelectedPage)
+            {
+                status.status = QStringLiteral("not_applicable");
+                status.reason = QStringLiteral("restriction_excluded_all_content");
+                result.checkStatuses.push_back(status);
+                result.inspectionComplete = false;
+                if (result.errorCode.isEmpty())
+                {
+                    result.errorCode = QStringLiteral("unsupported-scope");
+                    result.errorMessage = PDFTranslationContext::tr("Check '%1' has no pages in its effective restriction scope.").arg(check.id);
+                }
+                continue;
+            }
+        }
+
+        QString unsupportedDimension;
+        if (!check.restrictions.unsupportedReason.isEmpty())
+            unsupportedDimension = QStringLiteral("scope");
+        else if (check.restrictions.layers.has_value())
+            unsupportedDimension = QStringLiteral("layers");
+        else if (!check.restrictions.regions.isEmpty())
+            unsupportedDimension = QStringLiteral("regions");
+        else if (check.restrictions.objectClasses.has_value())
+            unsupportedDimension = QStringLiteral("object_classes");
+        else if (check.restrictions.pageBox.has_value() &&
+                 (check.id != QStringLiteral("ink-coverage") || *check.restrictions.pageBox == QStringLiteral("art")))
+            unsupportedDimension = QStringLiteral("page_box");
+        else if (check.restrictions.pages.has_value() &&
+                 !isGraphBackedCheckId(check.id) && check.id != QStringLiteral("ink-coverage"))
+            unsupportedDimension = QStringLiteral("pages");
+
+        if (!unsupportedDimension.isEmpty())
+        {
+            status.status = QStringLiteral("not_inspected");
+            status.reason = QStringLiteral("restriction_unsupported:%1").arg(unsupportedDimension);
             result.checkStatuses.push_back(status);
             result.inspectionComplete = false;
             if (result.errorCode.isEmpty())
             {
                 result.errorCode = QStringLiteral("unsupported-scope");
                 result.errorMessage = check.restrictions.unsupportedReason.isEmpty()
-                                          ? PDFTranslationContext::tr("Check '%1' cannot honour the requested restrictions.").arg(check.id)
+                                          ? PDFTranslationContext::tr("Check '%1' cannot honour the requested %2 restriction.").arg(check.id, unsupportedDimension)
                                           : check.restrictions.unsupportedReason;
             }
             continue;
@@ -6019,6 +6037,15 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         {
             recordCheckFailure(result, status, check, PDFTranslationContext::tr("Unknown error."));
             continue;
+        }
+
+        for (int index = errorsBefore; index < result.errors.size(); ++index)
+        {
+            result.errors[index].restrictionScope = status.restrictionScope;
+        }
+        for (int index = warningsBefore; index < result.warnings.size(); ++index)
+        {
+            result.warnings[index].restrictionScope = status.restrictionScope;
         }
 
         const auto isCheckIncomplete = [](const PreflightFinding& finding)
