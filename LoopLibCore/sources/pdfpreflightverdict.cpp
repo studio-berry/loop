@@ -123,7 +123,8 @@ QStringList enabledPreflightCheckIds(const QJsonObject& profileObject)
 PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
                                             const PDFDocument& document,
                                             const QJsonObject& parameters,
-                                            const QStringList& enabledCheckIds)
+                                            const QStringList& enabledCheckIds,
+                                            const PDFRepairPlan& repairPlan)
 {
     PDFRevalidationPlan plan;
     plan.full = false;
@@ -147,7 +148,22 @@ PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
         }
 
         PDFOperationImpact impact = operation->impact(&document, parameters);
-        impact.documentWide = false;
+        QSet<int> targetPages;
+        bool hasDocumentTarget = false;
+        for (const PDFRepairTarget& target : repairPlan.targets)
+        {
+            if (target.pageIndex < 0)
+            {
+                hasDocumentTarget = true;
+                break;
+            }
+            targetPages.insert(target.pageIndex);
+        }
+        if (!hasDocumentTarget && !targetPages.isEmpty())
+        {
+            impact.documentWide = false;
+            impact.pages = targetPages;
+        }
         const PDFRevalidationPlan domainPlan = planRevalidation(impact, enabledCheckIds);
         if (!domainPlan.full)
         {
@@ -167,6 +183,24 @@ PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
         plan.full = true;
         plan.checkIds = enabledCheckIds;
         plan.reason = QStringLiteral("step-scope-fallback");
+        return plan;
+    }
+
+    // Page scoping is safe only for graph-backed checks today. If an affected
+    // check still relies on a document-level runner, keep the smaller check set
+    // but re-run those checks across the document rather than claiming page
+    // precision the runner cannot honor.
+    if (!plan.pages.isEmpty())
+    {
+        const bool allChecksPageScoped = std::all_of(plan.checkIds.cbegin(),
+                                                     plan.checkIds.cend(),
+                                                     [](const QString& checkId)
+                                                     { return preflightEvidenceDomainForCheck(checkId).has_value(); });
+        if (!allChecksPageScoped)
+        {
+            plan.pages.clear();
+            plan.reason = QStringLiteral("step-check-scoped");
+        }
     }
     return plan;
 }
@@ -601,7 +635,8 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
         stepPlan = planRepairStepPreflight(operation,
                                            impactDocument,
                                            operationParameters,
-                                           enabledPreflightCheckIds(profileObject));
+                                           enabledPreflightCheckIds(profileObject),
+                                           plan);
         validatorOptions.revalidationPlan = &stepPlan;
     }
 
