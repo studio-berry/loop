@@ -31,7 +31,7 @@ not a promise that every check has an implementation for every dimension.
 
 | Dimension | Honored by | Explicitly uninspected by |
 | --- | --- | --- |
-| `pages` | Evidence Graph-backed checks and `ink-coverage` | Non-graph, page-spanning check runners (e.g. `bleed`, `output-intent`) until they take a per-page selector |
+| `pages` | Page-local Evidence Graph checks and `ink-coverage`; `color-inventory` only when every document page remains selected | Non-graph, page-spanning runners (e.g. `bleed`, `output-intent`) and partial-page `color-inventory`, whose spot/separation evidence is document-global |
 | `page_box` | `ink-coverage` with media/crop/trim/bleed; `image-resolution` and `thin-strokes` with geometric evidence (including art) | Other checks; `art` for ink coverage |
 | `regions` | Include and exclude anchored regions on `image-resolution` and `thin-strokes`; included geometry intersects and fully excluded evidence objects are removed | Other checks; unresolved target or anchor geometry is `not_inspected` |
 | `layers` | Named OCG membership for `image-resolution` and `thin-strokes` evidence | Other checks; unresolved OCG/OCMD membership is `not_inspected` |
