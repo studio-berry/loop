@@ -5707,6 +5707,15 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile,
                                      const QJsonObject& cliBindings,
                                      const PDFRevalidationPlan& plan)
 {
+    return run(profile, jobSpecBindings, cliBindings, plan, std::nullopt);
+}
+
+PreflightResult PreflightEngine::run(const QJsonObject& profile,
+                                     const QJsonObject& jobSpecBindings,
+                                     const QJsonObject& cliBindings,
+                                     const PDFRevalidationPlan& plan,
+                                     const std::optional<QSet<int>>& cliPages)
+{
     const PreflightProfileImportResult imported = importPreflightProfile(profile);
     if (!imported.ok)
     {
@@ -5776,6 +5785,22 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile,
     data.variableBindings = bound.bindings;
     data.fileDigest = imported.identity.digest;
     data.effectiveDigest = computeProfileDigest(bound.profile);
+    if (cliPages.has_value())
+    {
+        PreflightRestrictions cliRestrictions;
+        cliRestrictions.pages = *cliPages;
+        data.restrictions = data.restrictions.intersect(cliRestrictions);
+        for (PreflightCheckConfig& check : data.checks)
+        {
+            check.restrictions = check.restrictions.intersect(cliRestrictions);
+        }
+        const QJsonObject scopedProfile{
+            { QStringLiteral("profile"), bound.profile },
+            { QStringLiteral("cli_page_scope"), cliRestrictions.toJson() }
+        };
+        data.effectiveDigest = computeProfileDigest(scopedProfile);
+        data.coverageScope.insert(QStringLiteral("cli_page_scope"), cliRestrictions.toJson());
+    }
     data.provisional = imported.identity.provisional;
     data.profileIdentity = imported.identity.toJson();
     data.profileIdentity.insert(QStringLiteral("digest"), data.fileDigest);
