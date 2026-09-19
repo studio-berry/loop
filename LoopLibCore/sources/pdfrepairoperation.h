@@ -296,6 +296,10 @@ public:
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
 
+    /// True when transaction policy requires the invoking surface to run
+    /// declared postflight validators before any candidate can be published.
+    bool postflightRequired() const;
+
     const PDFDocument* candidate() const;
     const QList<PDFRepairPlan>& plans() const { return m_plans; }
     const QList<PDFRepairResult>& results() const { return m_results; }
