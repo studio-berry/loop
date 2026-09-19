@@ -112,6 +112,7 @@ private slots:
     void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
     void addBleedAnalyze_rejectsUnknownBleedMode();
+    void transactionPostflightRequirement_followsPlanAndOption();
     void findingDelta_tracksResolvedUnchangedIntroducedDeterministically();
     void findingDelta_incompleteOrSkippedChecksNeverFalseResolve();
     void declaredValidators_populateVerdictWhenProfileSupplied();
@@ -557,6 +558,29 @@ void RepairOperationTest::addBleedAnalyze_rejectsUnknownBleedMode()
                                                                &plan);
     QVERIFY(!analyze);
     QVERIFY(!plan.unsupportedReasons.isEmpty());
+}
+
+void RepairOperationTest::transactionPostflightRequirement_followsPlanAndOption()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                         { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.postflightRequired());
+
+    pdf::PDFRepairTransactionOptions options;
+    options.requirePostflight = false;
+    pdf::PDFRepairTransaction optedOut(source, options);
+    QVERIFY(optedOut.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                      { QStringLiteral("force"), true } }));
+    QVERIFY(optedOut.analyze());
+    QVERIFY(!optedOut.postflightRequired());
 }
 
 void RepairOperationTest::findingDelta_tracksResolvedUnchangedIntroducedDeterministically()
