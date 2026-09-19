@@ -23,11 +23,13 @@ recomputed, while `reusableEvidenceDomains` and `reusedCheckIds` describe
 what may be carried forward. The engine also records
 `recomputedEvidenceDomains` after the profile is known.
 
-Targeted revalidation is valid only with a complete baseline report containing
-outcomes for every reused check. `PreflightEngine::revalidate()` merges those
-unaffected findings and statuses with newly recomputed checks. Calling a
-targeted `run()` without a baseline is deliberately `INCOMPLETE` with
-`revalidation-baseline-required`; it cannot become a false clean pass.
+A targeted plan that reuses checks is valid only with a complete baseline report
+containing outcomes for every reused check. `PreflightEngine::revalidate()`
+merges those unaffected findings and statuses with newly recomputed checks.
+Calling `run()` on a plan that would reuse checks without a baseline is
+deliberately `INCOMPLETE` with `revalidation-baseline-required`; it cannot
+become a false clean pass. A targeted plan that recomputes every enabled check
+does not require a baseline.
 
 Every emitted preflight report includes additive `revalidation` accounting:
 full/targeted mode, plan reason, recomputed and reused checks, invalidated,
