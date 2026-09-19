@@ -332,7 +332,28 @@ EditorHost::EditorHost(QObject* parent) :
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
     m_preflightOverlayBridge.setInteractionController(m_session->interaction());
 
-    connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this,
+            [this](pdfinteraction::PreflightController::State state)
+            {
+                if (state == pdfinteraction::PreflightController::State::Stale ||
+                    state == pdfinteraction::PreflightController::State::NotChecked ||
+                    state == pdfinteraction::PreflightController::State::Running ||
+                    state == pdfinteraction::PreflightController::State::Cancelled ||
+                    state == pdfinteraction::PreflightController::State::Error)
+                {
+                    if (m_findingNavigator)
+                    {
+                        m_findingNavigator->invalidate();
+                    }
+                    m_preflight.findingsModel()->setSelectedFinding({});
+                    if (m_inspector.selectionKind() == pdfinteraction::InspectorModel::SelectionKind::Finding)
+                    {
+                        applyEmptyCanvasInspectorSelection();
+                    }
+                }
+                refreshHitTestSources();
+                bumpPresentation();
+            });
     connect(&m_preflight, &pdfinteraction::PreflightController::progressChanged, this, &EditorHost::bumpPresentation);
     connect(&m_actionListController, &pdfinteraction::ActionListController::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_actionListController, &pdfinteraction::ActionListController::progressChanged, this, &EditorHost::bumpPresentation);
@@ -757,18 +778,27 @@ void EditorHost::selectFinding(const QString& findingId)
         return;
     }
 
-    const QString documentRevision = m_session->facade().currentRevision().toString();
-    m_preflight.findingsModel()->setSelectedFinding(findingId);
-    m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision);
-
     pdfinteraction::PreflightController::EvidenceNavigationRequest request;
-    if (!m_preflight.navigationFor(findingId, &request))
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    if (!m_preflight.navigationFor(findingId, &request) ||
+        request.documentKey != m_session->revisionSource()->documentKey() ||
+        request.documentRevision != documentRevision)
     {
-        setInspectionMode(QStringLiteral("page"));
+        if (m_findingNavigator)
+        {
+            m_findingNavigator->invalidate();
+        }
+        m_preflight.findingsModel()->setSelectedFinding({});
+        applyEmptyCanvasInspectorSelection();
         bumpPresentation();
         return;
     }
 
+    if (!m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision))
+    {
+        return;
+    }
+    m_preflight.findingsModel()->setSelectedFinding(findingId);
     onPreflightNavigation(request);
 }
 
@@ -2110,7 +2140,13 @@ void EditorHost::moveSearch(int direction)
 
 void EditorHost::refreshHitTestSources()
 {
-    m_findingsHitTest.setTargets(m_preflight.findingsModel()->interactionTargets());
+    const pdfinteraction::PreflightController::State state = m_preflight.state();
+    const bool current = state == pdfinteraction::PreflightController::State::Pass ||
+                         state == pdfinteraction::PreflightController::State::Findings ||
+                         state == pdfinteraction::PreflightController::State::Incomplete;
+    m_preflightOverlayBridge.setPresentationEnabled(current);
+    m_findingsHitTest.setTargets(current ? m_preflight.findingsModel()->interactionTargets()
+                                         : QList<pdfinteraction::InteractionTarget>{});
     m_preflightOverlayBridge.applyFindings();
 }
 
@@ -2548,7 +2584,12 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
 
     if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
     {
-        selectFinding(target.id);
+        if (m_preflight.findingsModel()->selectedFindingId() != target.id ||
+            m_inspector.selectionKind() != pdfinteraction::InspectorModel::SelectionKind::Finding ||
+            m_inspector.selectionId() != target.id)
+        {
+            selectFinding(target.id);
+        }
         return;
     }
 

@@ -1,5 +1,6 @@
 #include "inspectormodel.h"
 
+#include "findingnavigation.h"
 #include "pdffixupregistry.h"
 
 #include <QJsonArray>
@@ -262,6 +263,35 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
         addProperty(selection.properties, QStringLiteral("evidence-ids"), QStringLiteral("Evidence IDs"),
                     finding->evidenceIds.join(QStringLiteral(", ")), QStringLiteral("evidence"));
     }
+
+    const auto capability = FindingTargetingCapabilityRegistry::defaultRegistry().capabilityFor(finding->checkId);
+    QString targeting;
+    if (finding->page <= 0)
+    {
+        targeting = QStringLiteral("No page target in the report.");
+    }
+    else if (!capability.has_value() || !capability->supportsPageNavigation)
+    {
+        targeting = QStringLiteral("Page navigation is unsupported for this check.");
+    }
+    else if (!capability->supportsObjectTargeting)
+    {
+        targeting = QStringLiteral("Page navigation only; object targeting is unsupported for this check.");
+    }
+    else if (finding->objectId.isEmpty())
+    {
+        targeting = QStringLiteral("Page navigation only; no object identifier in the report.");
+    }
+    else if (!finding->bbox.isValid() || finding->bbox.isEmpty())
+    {
+        targeting = QStringLiteral("Page navigation only; no object bounds in the report.");
+    }
+    else
+    {
+        targeting = QStringLiteral("Page and object location available from the report.");
+    }
+    addProperty(selection.properties, QStringLiteral("targeting"), QStringLiteral("Navigation"),
+                targeting, QStringLiteral("navigation"));
 
     QJsonObject displayEvidence = finding->evidence;
     const QJsonValue objectContext = displayEvidence.take(QStringLiteral("object_context"));

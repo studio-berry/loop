@@ -46,6 +46,7 @@ public:
     void setFindingsModel(PreflightFindingsModel* model);
     void setOverlayBuilder(OverlayBuilder* overlays);
     void setInteractionController(InteractionController* interaction);
+    void setPresentationEnabled(bool enabled);
 
     void applyFindings();
 
@@ -56,6 +57,7 @@ private:
     PreflightFindingsModel* m_findings = nullptr;
     OverlayBuilder* m_overlays = nullptr;
     InteractionController* m_interaction = nullptr;
+    bool m_presentationEnabled = true;
 };
 
 }   // namespace pdfinteraction
