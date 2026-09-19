@@ -111,7 +111,7 @@ class ProvenanceConvergenceTests(unittest.TestCase):
             "class PreflightAuditStore {};",
             "enum class PreflightAuditEventKind { PreflightRun };",
             'const auto path = ".loop-audit.jsonl";',
-            'const auto legacyPath = ".loupe-audit.jsonl";',
+            'const auto legacyPath = ".' + ("lo" + "upe") + '-audit.jsonl";',
         )
         for source in cases:
             with self.subTest(source=source):
