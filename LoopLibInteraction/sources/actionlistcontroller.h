@@ -146,6 +146,7 @@ private:
     QString m_plannedDocumentRevision;
     QString m_plannedRecipeHash;
     QString m_plannedBindingsHash;
+    QString m_plannedPlanDigest;
     int m_progress = 0;
     bool m_cancelRequested = false;
     pdf::PDFActionListExecutionResult m_result;
