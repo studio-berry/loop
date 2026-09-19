@@ -167,6 +167,7 @@ private slots:
     void executeRequiresPostflightProfile();
     void addBleedRepairRejectsUnknownMode();
     void stepPreflightIsScopedToOperationImpact();
+    void publishGateRejectsMalformedProfile();
     void dryRunDoesNotRequirePreflightProfile();
     void selectStepValidatesAndPlansWithScopedSelection();
     void selectScopedExecuteFailsClosedOnScopeViolation();
@@ -630,6 +631,12 @@ void ActionListTest::selectScopedExecuteFailsClosedOnScopeViolation()
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
     QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
+    {
+        {
+            {
+            }
+        }
+    }
     QCOMPARE(result.status, QStringLiteral("failed"));
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Failed);
     bool sawScopeViolation = false;
@@ -679,6 +686,18 @@ void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute()
     pdf::PDFActionListExecutionResult executeResult;
     pdf::PDFDocument candidate;
     QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &executeResult));
+    {
+        {
+            {
+            }
+        }
+    }
+    {
+        {
+            {
+            }
+        }
+    }
     QCOMPARE(executeResult.status, QStringLiteral("failed"));
     QCOMPARE(executeResult.steps.size(), 2);
     QCOMPARE(executeResult.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
@@ -795,6 +814,18 @@ void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRe
     pdf::PDFActionListExecutionResult executeResult;
     pdf::PDFDocument candidate;
     QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &executeResult));
+    {
+        {
+            {
+            }
+        }
+    }
+    {
+        {
+            {
+            }
+        }
+    }
     QCOMPARE(executeResult.status, QStringLiteral("failed"));
     QCOMPARE(executeResult.steps.back().status, pdf::PDFActionListStepStatus::Failed);
     bool sawExecuteStale = false;
@@ -832,6 +863,12 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
     QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
+    {
+        {
+            {
+            }
+        }
+    }
     QCOMPARE(result.status, QStringLiteral("cancelled"));
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Cancelled);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
@@ -883,6 +920,32 @@ void ActionListTest::stepPreflightIsScopedToOperationImpact()
     QVERIFY(!execution);
     QCOMPARE(result.status, QStringLiteral("failed"));
     QVERIFY(!result.postflight.isEmpty());
+    QVERIFY(candidate == pdf::PDFDocument());
+}
+
+void ActionListTest::publishGateRejectsMalformedProfile()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("malformed-profile-gate"));
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString malformedProfilePath = temporaryDirectory.filePath(QStringLiteral("malformed-profile.json"));
+    QFile malformedProfile(malformedProfilePath);
+    QVERIFY(malformedProfile.open(QIODevice::WriteOnly));
+    QVERIFY(malformedProfile.write("{") > 0);
+
+    pdf::PDFActionListExecutionOptions options;
+    options.preflightProfilePath = malformedProfilePath;
+    options.requirePostflight = true;
+    pdf::PDFActionListExecutionResult result;
+    pdf::PDFDocument candidate;
+    const pdf::PDFOperationResult execution = pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result);
+    QVERIFY(!execution);
+    QCOMPARE(result.status, QStringLiteral("failed"));
+    QVERIFY(candidate == pdf::PDFDocument());
 }
 
 void ActionListTest::dryRunDoesNotRequirePreflightProfile()

@@ -43,6 +43,8 @@ private slots:
     void incompleteImpactSelectsFullRevalidation();
     void fullRewriteSelectsFullRevalidation();
     void documentPolicySelectsFullRevalidation();
+    void fullRewriteAndDocumentWideImpactsDoNotAdvertiseNarrowedPages();
+    void stepPlannerCannotNarrowDocumentWideOrOracleImpactWithPageTargets();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
     void unaffectedChecksAreMarkedReusable();
@@ -170,6 +172,120 @@ void OperationImpactTest::documentPolicySelectsFullRevalidation()
         pdf::planRevalidation(impact, { QStringLiteral("image-resolution") }, true);
     QVERIFY(plan.full);
     QCOMPARE(plan.reason, QStringLiteral("document-policy"));
+}
+
+void OperationImpactTest::fullRewriteAndDocumentWideImpactsDoNotAdvertiseNarrowedPages()
+{
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.mutatesDocument = true;
+    impact.impactComplete = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.pages = { 0 };
+    impact.fullRewrite = true;
+    QVERIFY(impact.isFullRevalidation());
+    const QStringList checks{ QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") };
+    pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
+    QCOMPARE(plan.checkIds, checks);
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.fullRewrite = false;
+    impact.documentWide = true;
+    QVERIFY(impact.isFullRevalidation());
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("document-wide"));
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.documentWide = false;
+    impact.impactComplete = false;
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("impact-incomplete"));
+    QVERIFY(plan.pages.isEmpty());
+
+    impact.impactComplete = true;
+    impact.requiresIndependentOracle = true;
+    plan = pdf::planRevalidation(impact, checks);
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("independent-oracle"));
+    QVERIFY(plan.pages.isEmpty());
+}
+
+void OperationImpactTest::stepPlannerCannotNarrowDocumentWideOrOracleImpactWithPageTargets()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFRepairPlan repair;
+    repair.targets.append({ 0, {}, QStringLiteral("page/1/image") });
+    const QStringList enabled{ QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") };
+
+    const pdf::PDFRepairOperation* downsample =
+        pdf::PDFRepairRegistry::instance().find(QStringLiteral("downsample-images"));
+    QVERIFY(downsample);
+    const pdf::PDFRevalidationPlan full = pdf::planRepairStepPreflight(
+        downsample, document, QJsonObject{ { QStringLiteral("target_dpi"), 150 } },
+        enabled, repair);
+    QVERIFY(full.full);
+    QCOMPARE(full.checkIds, enabled);
+    QVERIFY(full.pages.isEmpty());
+
+    const pdf::PDFRepairOperation* standard =
+        pdf::PDFRepairRegistry::instance().find(QStringLiteral("standards-convert"));
+    QVERIFY(standard);
+    const pdf::PDFRevalidationPlan oracle = pdf::planRepairStepPreflight(
+        standard, document, QJsonObject{ { QStringLiteral("target"), QStringLiteral("PDF/X-4") } },
+        enabled, repair);
+    QVERIFY(oracle.full);
+    QCOMPARE(oracle.checkIds, enabled);
+    QVERIFY(oracle.pages.isEmpty());
+
+    class PageLocalRepair final : public pdf::PDFRepairOperation
+    {
+    public:
+        QString id() const override { return QStringLiteral("test-page-local"); }
+        pdf::PDFRepairRisk risk() const override { return pdf::PDFRepairRisk::Low; }
+        pdf::PDFRepairDomains domains() const override { return pdf::PDFRepairDomain::Images; }
+        pdf::PDFOperationImpact impact(const pdf::PDFDocument*, const QJsonObject&) const override
+        {
+            pdf::PDFOperationImpact declared;
+            declared.declared = true;
+            declared.mutatesDocument = true;
+            declared.impactComplete = true;
+            declared.domains = pdf::PDFEvidenceDomain::Images;
+            declared.pages.insert(0);
+            return declared;
+        }
+        pdf::PDFOperationResult analyze(const pdf::PDFDocument&, const QJsonObject&,
+                                        pdf::PDFRepairPlan*) const override
+        {
+            return pdf::PDFOperationResult(true);
+        }
+        pdf::PDFOperationResult apply(pdf::PDFDocument*, const pdf::PDFRepairPlan&,
+                                      pdf::PDFRepairResult*) const override
+        {
+            return pdf::PDFOperationResult(true);
+        }
+    } local;
+
+    repair.targets.clear();
+    repair.targets.append({ 1, {}, QStringLiteral("page/2/image") });
+    const pdf::PDFRevalidationPlan narrowed = pdf::planRepairStepPreflight(
+        &local, document, {}, enabled, repair);
+    QVERIFY(!narrowed.full);
+    QCOMPARE(narrowed.checkIds, QStringList{ QStringLiteral("image-resolution") });
+    QCOMPARE(narrowed.pages, (QSet<int>{ 0, 1 }));
+
+    repair.targets.append({ -1, {}, QStringLiteral("document/all") });
+    const pdf::PDFRevalidationPlan documentTarget = pdf::planRepairStepPreflight(
+        &local, document, {}, enabled, repair);
+    QVERIFY(!documentTarget.full);
+    QVERIFY(documentTarget.pages.isEmpty());
+    QCOMPARE(documentTarget.reason, QStringLiteral("document-target"));
 }
 
 void OperationImpactTest::imagesOnlyPlanSelectsImageResolution()

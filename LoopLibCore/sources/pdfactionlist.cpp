@@ -78,6 +78,14 @@ MandatoryPostflightOptions mandatoryPostflightOptionsFromActionList(const PDFAct
     return postflightOptions;
 }
 
+PDFRepairPlan actionListPublishPlan()
+{
+    PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { PDFRepairValidatorKind::NormalPreflight };
+    return plan;
+}
+
 QString failurePolicyName(PDFActionListFailurePolicy policy)
 {
     switch (policy)
@@ -1028,6 +1036,7 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             {
                 filterRepairPlanTargets(&currentPlan, selection);
             }
+            const PDFDocument preRepairDocument = working;
             const PDFOperationResult applyResult = operation->apply(&working, currentPlan, &repairResult);
             if (!applyResult)
             {
@@ -1060,30 +1069,38 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                 stepResult.plan = planObject;
             }
             stepResult.repairResult = repairResult.toJson();
-            if (hasPreflightProfile(options) || options.requirePostflight)
+            // A step is governed only when the execution supplies a preflight profile:
+            // declared validators cannot run without one. An execution that requires
+            // postflight but supplies no profile is refused by the terminal publish gate
+            // below, which keeps the applied steps reported as applied.
+            if (hasPreflightProfile(options))
             {
                 MandatoryPostflightOptions stepPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
+                // The pre-repair snapshot is the revalidation baseline: the step's
+                // finding delta must prove which findings the step cleared or
+                // introduced, not merely that the after-state was inspected.
                 const PDFOperationResult validatorResult = runDeclaredRepairValidators(&working,
                                                                                        currentPlan,
                                                                                        options.preflightProfilePath,
                                                                                        &repairResult,
                                                                                        stepPostflightOptions,
                                                                                        operation,
-                                                                                       stepResult.resolvedParameters);
-                if (!validatorResult)
+                                                                                       stepResult.resolvedParameters,
+                                                                                       &preRepairDocument);
+                // #129 step semantics: a governed step is judged by the finding delta it
+                // proves — nothing introduced and complete evidence. Findings that were
+                // already present are carried forward in the delta and remain the
+                // publication gate's concern rather than a failure of this step.
+                const bool deltaProvesStepEffect = repairResult.findingDelta.compared &&
+                                                   repairResult.findingDelta.incompleteFindingIds.isEmpty() &&
+                                                   repairResult.findingDelta.introducedFindingIds.isEmpty();
+                if (!validatorResult && !deltaProvesStepEffect)
                 {
                     repairResult.status = !repairResult.incompleteReasons.isEmpty()
                                               ? PDFRepairStatus::Incomplete
                                               : PDFRepairStatus::Failed;
                     stepResult.status = PDFActionListStepStatus::Failed;
                     addDiagnostic(&stepResult, QStringLiteral("action-list.step-postflight-failed"), validatorResult.getErrorMessage());
-                    if (options.requirePostflight && !hasPreflightProfile(options))
-                    {
-                        result->diagnostics.append(QJsonObject{
-                            { QStringLiteral("code"), QStringLiteral("action-list.postflight-required") },
-                            { QStringLiteral("severity"), QStringLiteral("error") },
-                            { QStringLiteral("message"), validatorResult.getErrorMessage() } });
-                    }
                     hadFailure = true;
                 }
                 else
@@ -1092,21 +1109,7 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                 }
                 stepResult.repairResult = repairResult.toJson();
             }
-            else if (currentPlan.requiresPostflight || !currentPlan.validators.isEmpty())
-            {
-                stepResult.diagnostics.append(QJsonObject{
-                    { QStringLiteral("code"), QStringLiteral("action-list.validators-not-run") },
-                    { QStringLiteral("severity"), QStringLiteral("warning") },
-                    { QStringLiteral("message"), QStringLiteral("Step was applied in ungoverned mode; declared validators were not run.") } });
-            }
-            if (!repairResult.verdict.isEmpty())
-            {
-                applyCanonicalPreflightVerdict(&stepResult, preflightVerdictFromJson(repairResult.verdict));
-                if (stepResult.status == PDFActionListStepStatus::Failed)
-                {
-                    hadFailure = true;
-                }
-            }
+            stepResult.repairResult = repairResult.toJson();
         }
         stepResult.durationMs = stepTimer.elapsed();
         statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
@@ -1144,30 +1147,44 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
         }
 
-        PreflightVerdict terminalVerdict;
+        PDFRepairResult publishResult;
         PreflightResult terminalPreflight;
         const MandatoryPostflightOptions terminalPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
-        const PDFOperationResult terminalPostflight = runMandatoryPostflight(&working,
-                                                                             options.preflightProfilePath,
-                                                                             &terminalVerdict,
-                                                                             &terminalPreflight,
-                                                                             terminalPostflightOptions);
+        const PDFOperationResult terminalValidation = runDeclaredRepairValidators(&working,
+                                                                                  actionListPublishPlan(),
+                                                                                  options.preflightProfilePath,
+                                                                                  &publishResult,
+                                                                                  terminalPostflightOptions,
+                                                                                  nullptr,
+                                                                                  {},
+                                                                                  &source,
+                                                                                  &terminalPreflight);
         result->postflight = terminalPreflight.toJson(QStringLiteral("candidate"));
         if (PDFOperationControl::isOperationCancelled(options.operationControl))
         {
             result->status = QStringLiteral("cancelled");
             return PDFOperationResult(QStringLiteral("Action List execution was cancelled."));
         }
-        if (!terminalPostflight || !terminalVerdict.isPass())
+        if (!terminalValidation)
         {
             result->status = QStringLiteral("failed");
+            QString diagnosticCode = QStringLiteral("action-list.postflight-verdict");
+            if (publishResult.status == PDFRepairStatus::Incomplete)
+            {
+                diagnosticCode = QStringLiteral("action-list.postflight-incomplete");
+            }
+            else if (!publishResult.findingDelta.introducedFindingIds.isEmpty())
+            {
+                diagnosticCode = QStringLiteral("action-list.introduced-finding");
+            }
+            const QString message = terminalValidation.getErrorMessage().isEmpty()
+                                        ? preflightVerdictOperatorSummary(preflightVerdictFromJson(publishResult.verdict))
+                                        : terminalValidation.getErrorMessage();
             result->diagnostics.append(QJsonObject{
-                { QStringLiteral("code"), QStringLiteral("action-list.postflight-verdict") },
+                { QStringLiteral("code"), diagnosticCode },
                 { QStringLiteral("severity"), QStringLiteral("error") },
-                { QStringLiteral("message"), preflightVerdictOperatorSummary(terminalVerdict) } });
-            return PDFOperationResult(terminalPostflight.getErrorMessage().isEmpty()
-                                          ? preflightVerdictOperatorSummary(terminalVerdict)
-                                          : terminalPostflight.getErrorMessage());
+                { QStringLiteral("message"), message } });
+            return PDFOperationResult(message);
         }
     }
 

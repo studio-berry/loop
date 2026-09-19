@@ -64,10 +64,7 @@ bool fuzzyRectEqual(const QRectF& actual, const QJsonArray& expected)
                       expected.at(1).toDouble(),
                       expected.at(2).toDouble(),
                       expected.at(3).toDouble());
-    return qAbs(actual.x() - rect.x()) < BOX_EPSILON
-        && qAbs(actual.y() - rect.y()) < BOX_EPSILON
-        && qAbs(actual.width() - rect.width()) < BOX_EPSILON
-        && qAbs(actual.height() - rect.height()) < BOX_EPSILON;
+    return qAbs(actual.x() - rect.x()) < BOX_EPSILON && qAbs(actual.y() - rect.y()) < BOX_EPSILON && qAbs(actual.width() - rect.width()) < BOX_EPSILON && qAbs(actual.height() - rect.height()) < BOX_EPSILON;
 }
 
 pdf::PageRotation rotationFromString(const QString& value)

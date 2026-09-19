@@ -112,9 +112,15 @@ private slots:
     void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
     void addBleedAnalyze_rejectsUnknownBleedMode();
+    void transactionPostflightRequirement_followsPlanAndOption();
+    void findingDelta_tracksResolvedUnchangedIntroducedDeterministically();
+    void findingDelta_incompleteOrSkippedChecksNeverFalseResolve();
+    void findingDelta_partialPageAndMissingStatusNeverFalseResolve();
     void declaredValidators_populateVerdictWhenProfileSupplied();
     void transactionRefusesUnverifiedCandidateWithoutPreflightProfile();
     void declaredStructuralAndSpecializedValidatorsRequireActualProof();
+    void declaredValidators_rejectMalformedProfileBeforePublish();
+    void declaredValidators_failClosedOnIncompleteInspection();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -559,6 +565,214 @@ void RepairOperationTest::addBleedAnalyze_rejectsUnknownBleedMode()
     QVERIFY(!plan.unsupportedReasons.isEmpty());
 }
 
+void RepairOperationTest::transactionPostflightRequirement_followsPlanAndOption()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                         { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.postflightRequired());
+
+    pdf::PDFRepairTransactionOptions options;
+    options.requirePostflight = false;
+    pdf::PDFRepairTransaction optedOut(source, options);
+    QVERIFY(optedOut.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                      { QStringLiteral("force"), true } }));
+    QVERIFY(optedOut.analyze());
+    QVERIFY(!optedOut.postflightRequired());
+}
+
+void RepairOperationTest::findingDelta_tracksResolvedUnchangedIntroducedDeterministically()
+{
+    const auto makeFinding = [](const QString& checkId, const QString& objectId)
+    {
+        pdf::PreflightFinding finding;
+        finding.scope = QStringLiteral("object");
+        finding.page = 1;
+        finding.objectId = objectId;
+        finding.type = checkId;
+        finding.severity = QStringLiteral("error");
+        finding.message = checkId;
+        finding.checkId = checkId;
+        return finding;
+    };
+    const auto makeStatus = [](const QString& checkId, const QString& status)
+    {
+        pdf::PreflightCheckStatus result;
+        result.id = checkId;
+        result.status = status;
+        return result;
+    };
+
+    const pdf::PreflightFinding resolved = makeFinding(QStringLiteral("image-resolution"), QStringLiteral("10 0 R"));
+    const pdf::PreflightFinding unchanged = makeFinding(QStringLiteral("color-mode"), QStringLiteral("11 0 R"));
+    const pdf::PreflightFinding introduced = makeFinding(QStringLiteral("thin-strokes"), QStringLiteral("12 0 R"));
+
+    pdf::PreflightResult before;
+    before.errors = { resolved, unchanged };
+    before.checkStatuses = {
+        makeStatus(QStringLiteral("image-resolution"), QStringLiteral("failed")),
+        makeStatus(QStringLiteral("color-mode"), QStringLiteral("failed"))
+    };
+
+    pdf::PreflightResult after;
+    after.errors = { unchanged, introduced };
+    after.checkStatuses = {
+        makeStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")),
+        makeStatus(QStringLiteral("color-mode"), QStringLiteral("failed")),
+        makeStatus(QStringLiteral("thin-strokes"), QStringLiteral("failed"))
+    };
+
+    const pdf::PDFRepairFindingDelta first = pdf::computeFindingDelta(before, after);
+    const pdf::PDFRepairFindingDelta second = pdf::computeFindingDelta(before, after);
+    QCOMPARE(first.resolvedFindingIds, QStringList{ resolved.stableId() });
+    QCOMPARE(first.unchangedFindingIds, QStringList{ unchanged.stableId() });
+    QCOMPARE(first.introducedFindingIds, QStringList{ introduced.stableId() });
+    QVERIFY(first.incompleteFindingIds.isEmpty());
+    QVERIFY(first.compared);
+    QVERIFY(first.carriedForwardFindingIds.isEmpty());
+    QCOMPARE(QJsonDocument(first.toJson()).toJson(QJsonDocument::Compact),
+             QJsonDocument(second.toJson()).toJson(QJsonDocument::Compact));
+}
+
+void RepairOperationTest::findingDelta_incompleteOrSkippedChecksNeverFalseResolve()
+{
+    pdf::PreflightFinding finding;
+    finding.scope = QStringLiteral("object");
+    finding.page = 1;
+    finding.objectId = QStringLiteral("10 0 R");
+    finding.type = QStringLiteral("image-resolution");
+    finding.severity = QStringLiteral("error");
+    finding.message = QStringLiteral("Low resolution image");
+    finding.checkId = QStringLiteral("image-resolution");
+
+    pdf::PreflightResult before;
+    before.errors = { finding };
+    pdf::PreflightCheckStatus beforeStatus;
+    beforeStatus.id = finding.checkId;
+    beforeStatus.status = QStringLiteral("failed");
+    before.checkStatuses = { beforeStatus };
+
+    pdf::PreflightResult skipped;
+    pdf::PreflightCheckStatus skippedStatus;
+    skippedStatus.id = finding.checkId;
+    skippedStatus.status = QStringLiteral("skipped");
+    skippedStatus.reason = QStringLiteral("revalidation-plan");
+    skipped.checkStatuses = { skippedStatus };
+    const pdf::PDFRepairFindingDelta skippedDelta = pdf::computeFindingDelta(before, skipped);
+    QVERIFY(skippedDelta.resolvedFindingIds.isEmpty());
+    QCOMPARE(skippedDelta.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(skippedDelta.carriedForwardFindingIds, QStringList{ finding.stableId() });
+    QVERIFY(skippedDelta.incompleteFindingIds.isEmpty());
+
+    // Targeted revalidation may omit document-level findings that have no
+    // check-status row. Coverage metadata must still prevent a false clear.
+    pdf::PreflightFinding documentFinding = finding;
+    documentFinding.scope = QStringLiteral("document");
+    documentFinding.page = 1;
+    documentFinding.objectId.clear();
+    documentFinding.checkId.clear();
+    documentFinding.type = QStringLiteral("profile");
+    before.errors = { documentFinding };
+    pdf::PreflightResult targeted;
+    targeted.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
+                                                                      { QStringLiteral("full"), false },
+                                                                      { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("image-resolution") } } });
+    const pdf::PDFRepairFindingDelta omittedDelta = pdf::computeFindingDelta(before, targeted);
+    QVERIFY(omittedDelta.resolvedFindingIds.isEmpty());
+    QCOMPARE(omittedDelta.unchangedFindingIds, QStringList{ documentFinding.stableId() });
+
+    before.errors = { finding };
+    pdf::PreflightResult incomplete;
+    incomplete.inspectionComplete = false;
+    incomplete.errorCode = QStringLiteral("budget-exceeded");
+    pdf::PreflightCheckStatus incompleteStatus;
+    incompleteStatus.id = finding.checkId;
+    incompleteStatus.status = QStringLiteral("incomplete");
+    incompleteStatus.reason = QStringLiteral("budget-exceeded");
+    incomplete.checkStatuses = { incompleteStatus };
+    const pdf::PDFRepairFindingDelta incompleteDelta = pdf::computeFindingDelta(before, incomplete);
+    QVERIFY(incompleteDelta.resolvedFindingIds.isEmpty());
+    QVERIFY(incompleteDelta.unchangedFindingIds.isEmpty());
+    QCOMPARE(incompleteDelta.incompleteFindingIds, QStringList{ finding.stableId() });
+}
+
+void RepairOperationTest::findingDelta_partialPageAndMissingStatusNeverFalseResolve()
+{
+    pdf::PreflightFinding finding;
+    finding.scope = QStringLiteral("object");
+    finding.page = 2;
+    finding.objectId = QStringLiteral("17 0 R");
+    finding.checkId = QStringLiteral("image-resolution");
+    finding.type = QStringLiteral("image-resolution");
+    finding.severity = QStringLiteral("error");
+
+    pdf::PreflightResult before;
+    before.errors = { finding };
+    pdf::PreflightCheckStatus beforeStatus;
+    beforeStatus.id = finding.checkId;
+    beforeStatus.status = QStringLiteral("failed");
+    before.checkStatuses = { beforeStatus };
+
+    pdf::PreflightResult after;
+    pdf::PreflightCheckStatus afterStatus;
+    afterStatus.id = finding.checkId;
+    afterStatus.status = QStringLiteral("ok");
+    after.checkStatuses = { afterStatus };
+    after.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
+        { QStringLiteral("full"), false },
+        { QStringLiteral("check_ids"), QJsonArray{ finding.checkId } },
+        { QStringLiteral("pages"), QJsonArray{ 0 } }
+    });
+    const pdf::PDFRepairFindingDelta omittedPage = pdf::computeFindingDelta(before, after);
+    QVERIFY(omittedPage.resolvedFindingIds.isEmpty());
+    QCOMPARE(omittedPage.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(omittedPage.carriedForwardFindingIds, QStringList{ finding.stableId() });
+    QVERIFY(omittedPage.introducedFindingIds.isEmpty());
+    QVERIFY(omittedPage.incompleteFindingIds.isEmpty());
+
+    finding.page = 1;
+    before.errors = { finding };
+    const pdf::PDFRepairFindingDelta inspectedPage = pdf::computeFindingDelta(before, after);
+    QCOMPARE(inspectedPage.resolvedFindingIds, QStringList{ finding.stableId() });
+
+    after.checkStatuses.clear();
+    const pdf::PDFRepairFindingDelta unknownStatus = pdf::computeFindingDelta(before, after);
+    QVERIFY(unknownStatus.resolvedFindingIds.isEmpty());
+    QCOMPARE(unknownStatus.incompleteFindingIds, QStringList{ finding.stableId() });
+
+    after.checkStatuses = { afterStatus };
+    after.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
+        { QStringLiteral("full"), false },
+        { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("embedded-fonts") } }
+    });
+    const pdf::PDFRepairFindingDelta omittedCheck = pdf::computeFindingDelta(before, after);
+    QVERIFY(omittedCheck.resolvedFindingIds.isEmpty());
+    QCOMPARE(omittedCheck.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(omittedCheck.carriedForwardFindingIds, QStringList{ finding.stableId() });
+
+    pdf::PreflightResult emptyBefore;
+    pdf::PreflightResult emptyAfter;
+    const pdf::PDFRepairFindingDelta comparedEmpty =
+        pdf::computeFindingDelta(emptyBefore, emptyAfter);
+    QVERIFY(comparedEmpty.compared);
+    QVERIFY(comparedEmpty.resolvedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.unchangedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.introducedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.incompleteFindingIds.isEmpty());
+    QCOMPARE(comparedEmpty.toJson().value(QStringLiteral("compared")).toBool(), true);
+
+    const pdf::PDFRepairFindingDelta notRun;
+    QVERIFY(!notRun.compared);
+    QVERIFY(!notRun.toJson().value(QStringLiteral("compared")).toBool());
+}
+
 void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied()
 {
     pdf::PDFDocument document = buildPreflightCleanDocument();
@@ -626,7 +840,7 @@ void RepairOperationTest::declaredStructuralAndSpecializedValidatorsRequireActua
     pdf::PreflightResult inspected;
     const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     const pdf::PDFOperationResult verified = pdf::runDeclaredRepairValidators(
-        &document, specialized, profilePath, &result, {}, nullptr, {}, &inspected);
+        &document, specialized, profilePath, &result, {}, nullptr, {}, nullptr, &inspected);
     QVERIFY(!verified);
     QVERIFY(!inspected.profileName.isEmpty());
     QCOMPARE(result.validations.size(), 2);
@@ -642,6 +856,74 @@ void RepairOperationTest::declaredStructuralAndSpecializedValidatorsRequireActua
     QVERIFY(!pdf::runDeclaredRepairValidators(&document, custom, {}, &unsupported));
     QCOMPARE(unsupported.validations.first().status, pdf::PDFRepairStatus::Incomplete);
     QVERIFY(unsupported.incompleteReasons.join(QStringLiteral(" ")).contains(QStringLiteral("no executable verification contract")));
+}
+
+void RepairOperationTest::declaredValidators_rejectMalformedProfileBeforePublish()
+{
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { pdf::PDFRepairValidatorKind::NormalPreflight };
+    pdf::PDFRepairResult result;
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString malformedProfilePath = temporaryDirectory.filePath(QStringLiteral("malformed-profile.json"));
+    QFile malformedProfile(malformedProfilePath);
+    QVERIFY(malformedProfile.open(QIODevice::WriteOnly));
+    QVERIFY(malformedProfile.write("{") > 0);
+
+    const pdf::PDFOperationResult validation = pdf::runDeclaredRepairValidators(&document, plan, malformedProfilePath, &result);
+    QVERIFY(!validation);
+    QCOMPARE(result.status, pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(!result.incompleteReasons.isEmpty());
+    // #649 contract: every declared validator is recorded, and a validator that
+    // could not run is recorded as Incomplete rather than omitted from the evidence.
+    QCOMPARE(result.validations.size(), 1);
+    QCOMPARE(result.validations.first().status, pdf::PDFRepairStatus::Incomplete);
+}
+
+void RepairOperationTest::declaredValidators_failClosedOnIncompleteInspection()
+{
+    pdf::PreflightResult before;
+    before.inspectionComplete = true;
+    pdf::PreflightFinding finding;
+    finding.checkId = QStringLiteral("color-mode");
+    finding.type = QStringLiteral("color-mode-mismatch");
+    finding.objectId = QStringLiteral("12 0 R");
+    before.errors = { finding };
+
+    pdf::PreflightResult after;
+    after.inspectionComplete = false;
+    after.errorCode = QStringLiteral("budget-exceeded");
+    pdf::PreflightCheckStatus incompleteStatus;
+    incompleteStatus.id = finding.checkId;
+    incompleteStatus.status = QStringLiteral("incomplete");
+    incompleteStatus.reason = QStringLiteral("budget-exceeded");
+    after.checkStatuses = { incompleteStatus };
+
+    const pdf::PDFRepairFindingDelta delta = pdf::computeFindingDelta(before, after);
+    QVERIFY(delta.resolvedFindingIds.isEmpty());
+    QCOMPARE(delta.incompleteFindingIds, QStringList{ finding.stableId() });
+
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { pdf::PDFRepairValidatorKind::NormalPreflight };
+    pdf::PDFRepairResult result;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult validation = pdf::runDeclaredRepairValidators(&document,
+                                                                                plan,
+                                                                                profilePath,
+                                                                                &result,
+                                                                                {},
+                                                                                nullptr,
+                                                                                {},
+                                                                                &document);
+    QVERIFY(!validation);
+    QVERIFY(result.status == pdf::PDFRepairStatus::Failed || result.status == pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(!result.validations.isEmpty());
+    QVERIFY(result.validations.first().status != pdf::PDFRepairStatus::Passed);
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

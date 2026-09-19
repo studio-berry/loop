@@ -3,6 +3,8 @@
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 
 #include "operatoracceptancehelpers.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfrepairdiff.h"
 
 #include <QtTest>
 #include <QFile>
@@ -19,6 +21,8 @@ private slots:
     void initTestCase();
     void repairOperation_addBleedIsFailClosedAndAtomic();
     void repairOperation_missingProfileNeverPublishesAnUnvalidatedCandidate();
+    void repairOperation_introducedFindingNeverPublishes();
+    void repairOperation_malformedProfileNeverPublishes();
     void repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange();
 
 private:
@@ -102,6 +106,11 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     QCOMPARE(results.first().toObject().value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(), QStringLiteral("pass"));
     QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);
+    const QJsonObject findingDelta = report.value(QStringLiteral("finding_delta")).toObject();
+    QVERIFY(!findingDelta.isEmpty());
+    QVERIFY(!findingDelta.value(QStringLiteral("resolved")).toArray().isEmpty());
+    QVERIFY(findingDelta.value(QStringLiteral("introduced")).toArray().isEmpty());
+    QVERIFY(findingDelta.value(QStringLiteral("incomplete")).toArray().isEmpty());
     QVERIFY(!report.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString().isEmpty());
 }
 
@@ -144,6 +153,126 @@ void RepairOperatorAcceptanceTest::repairOperation_missingProfileNeverPublishesA
     QCOMPARE(operation.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
              QStringLiteral("incomplete"));
     QVERIFY(!operation.value(QStringLiteral("validation")).toArray().isEmpty());
+}
+
+void RepairOperatorAcceptanceTest::repairOperation_introducedFindingNeverPublishes()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const QString sourcePath = temporaryDirectory.filePath(QStringLiteral("source.pdf"));
+    pdf::PDFDocument reopenedSource;
+    QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
+        source,
+        [](pdf::PDFDocument*)
+        { return pdf::PDFOperationResult(true); },
+        sourcePath,
+        &reopenedSource,
+        nullptr));
+
+    const QString profilePath = temporaryDirectory.filePath(QStringLiteral("introduced-profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("id"), QStringLiteral("introduced-finding-test") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Introduced finding test") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("page-size") },
+                                            { QStringLiteral("expected_width_pt"), 100.0 },
+                                            { QStringLiteral("expected_height_pt"), 100.0 },
+                                            { QStringLiteral("tolerance_pt"), 0.0 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+    QVERIFY(profileFile.write(QJsonDocument(profile).toJson(QJsonDocument::Indented)) > 0);
+    profileFile.close();
+
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("must-not-exist.pdf"));
+    const QString reportPath = temporaryDirectory.filePath(QStringLiteral("introduced-report.json"));
+    QByteArray stdOut;
+    QByteArray stdErr;
+    int exitCode = -1;
+    QVERIFY(operatoracceptance::runPdfTool(m_pdfToolPath,
+                                           { QStringLiteral("repair"),
+                                             sourcePath,
+                                             QStringLiteral("--operation"),
+                                             QStringLiteral("add-bleed"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("bleed_mm=3"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("force=true"),
+                                             QStringLiteral("--profile"),
+                                             profilePath,
+                                             QStringLiteral("--output"),
+                                             outputPath,
+                                             QStringLiteral("--report-file"),
+                                             reportPath,
+                                             QStringLiteral("--console-format"),
+                                             QStringLiteral("json") },
+                                           &stdOut,
+                                           &stdErr,
+                                           &exitCode));
+
+    QVERIFY(exitCode != 0);
+    QVERIFY(!QFile::exists(outputPath));
+    QVERIFY(QFile::exists(reportPath));
+
+    QFile reportFile(reportPath);
+    QVERIFY(reportFile.open(QIODevice::ReadOnly));
+    QJsonParseError parseError;
+    const QJsonDocument reportDocument = QJsonDocument::fromJson(reportFile.readAll(), &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    const QJsonObject report = reportDocument.object();
+    QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("failed"));
+    const QJsonObject findingDelta = report.value(QStringLiteral("finding_delta")).toObject();
+    QVERIFY(!findingDelta.value(QStringLiteral("introduced")).toArray().isEmpty());
+}
+
+void RepairOperatorAcceptanceTest::repairOperation_malformedProfileNeverPublishes()
+{
+    const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::exists(pdfPath));
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString malformedProfilePath = temporaryDirectory.filePath(QStringLiteral("malformed-profile.json"));
+    QFile malformedProfile(malformedProfilePath);
+    QVERIFY(malformedProfile.open(QIODevice::WriteOnly));
+    QVERIFY(malformedProfile.write("{") > 0);
+
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("must-not-exist.pdf"));
+    const QString reportPath = temporaryDirectory.filePath(QStringLiteral("malformed-report.json"));
+    QByteArray stdOut;
+    QByteArray stdErr;
+    int exitCode = -1;
+    QVERIFY(operatoracceptance::runPdfTool(m_pdfToolPath,
+                                           { QStringLiteral("repair"),
+                                             pdfPath,
+                                             QStringLiteral("--operation"),
+                                             QStringLiteral("add-bleed"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("bleed_mm=3"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("force=true"),
+                                             QStringLiteral("--profile"),
+                                             malformedProfilePath,
+                                             QStringLiteral("--output"),
+                                             outputPath,
+                                             QStringLiteral("--report-file"),
+                                             reportPath,
+                                             QStringLiteral("--console-format"),
+                                             QStringLiteral("json") },
+                                           &stdOut,
+                                           &stdErr,
+                                           &exitCode));
+
+    QVERIFY(exitCode != 0);
+    QVERIFY(!QFile::exists(outputPath));
 }
 
 void RepairOperatorAcceptanceTest::repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange()

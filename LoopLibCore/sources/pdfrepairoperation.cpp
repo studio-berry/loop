@@ -23,7 +23,9 @@
 #include "pdfrepairoperation.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
+#include "preflightengine.h"
 
+#include <QMap>
 #include <algorithm>
 #include <utility>
 
@@ -255,8 +257,169 @@ QJsonObject PDFRepairFindingDelta::toJson() const
         { QStringLiteral("resolved"), stringArray(resolvedFindingIds) },
         { QStringLiteral("unchanged"), stringArray(unchangedFindingIds) },
         { QStringLiteral("introduced"), stringArray(introducedFindingIds) },
-        { QStringLiteral("incomplete"), stringArray(incompleteFindingIds) }
+        { QStringLiteral("incomplete"), stringArray(incompleteFindingIds) },
+        { QStringLiteral("compared"), compared },
+        { QStringLiteral("carried_forward"), stringArray(carriedForwardFindingIds) }
     };
+}
+
+
+PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
+                                          const PreflightResult& after)
+{
+    enum class InspectionState
+    {
+        Complete,
+        NotInspected,
+        Incomplete
+    };
+
+    const auto inspectionState = [](const PreflightResult& result, const QString& checkId, int page)
+    {
+        const QJsonObject revalidation =
+            result.coverageScope.value(QStringLiteral("revalidation")).toObject();
+        if (!revalidation.isEmpty() && !revalidation.value(QStringLiteral("full")).toBool(true))
+        {
+            const QJsonArray checked = revalidation.value(QStringLiteral("check_ids")).toArray();
+            if (!checked.contains(checkId))
+            {
+                return InspectionState::NotInspected;
+            }
+            const QJsonArray pages = revalidation.value(QStringLiteral("pages")).toArray();
+            if (!pages.isEmpty() && (page <= 0 || !pages.contains(page - 1)))
+            {
+                return InspectionState::NotInspected;
+            }
+        }
+        for (const PreflightCheckStatus& status : result.checkStatuses)
+        {
+            if (status.id != checkId)
+            {
+                continue;
+            }
+            if (status.status == QStringLiteral("ok") ||
+                status.status == QStringLiteral("warning") ||
+                status.status == QStringLiteral("failed"))
+            {
+                return InspectionState::Complete;
+            }
+            if (status.status == QStringLiteral("skipped") &&
+                (status.reason == QStringLiteral("revalidation-plan") ||
+                 status.reason == QStringLiteral("disabled")))
+            {
+                return InspectionState::NotInspected;
+            }
+            return InspectionState::Incomplete;
+        }
+
+        // A missing check-status row does not prove a defect was cleared.
+        return InspectionState::Incomplete;
+    };
+
+    const auto isIncompleteFinding = [](const PreflightFinding& finding)
+    {
+        return finding.type == QStringLiteral("check-incomplete") ||
+               finding.type == QStringLiteral("budget-exceeded") ||
+               finding.type == QStringLiteral("evidence-incomplete") ||
+               finding.type == QStringLiteral("unsupported-scope");
+    };
+
+    QMap<QString, PreflightFinding> beforeById;
+    QMap<QString, PreflightFinding> afterById;
+    const auto collect = [](const PreflightResult& result, QMap<QString, PreflightFinding>* findings)
+    {
+        for (const PreflightFinding& finding : result.errors)
+        {
+            findings->insert(finding.stableId(), finding);
+        }
+        for (const PreflightFinding& finding : result.warnings)
+        {
+            findings->insert(finding.stableId(), finding);
+        }
+    };
+    collect(before, &beforeById);
+    collect(after, &afterById);
+
+    PDFRepairFindingDelta delta;
+    delta.compared = true;
+    QSet<QString> incomplete;
+
+    for (auto it = beforeById.cbegin(); it != beforeById.cend(); ++it)
+    {
+        const QString& findingId = it.key();
+        const PreflightFinding& finding = it.value();
+        const auto afterIt = afterById.constFind(findingId);
+        if (afterIt != afterById.cend())
+        {
+            if (isIncompleteFinding(finding) || isIncompleteFinding(afterIt.value()) ||
+                inspectionState(after, finding.checkId, finding.page) == InspectionState::Incomplete)
+            {
+                incomplete.insert(findingId);
+            }
+            else
+            {
+                delta.unchangedFindingIds.append(findingId);
+            }
+            continue;
+        }
+
+        if (!before.inspectionComplete)
+        {
+            incomplete.insert(findingId);
+            continue;
+        }
+
+        switch (inspectionState(after, finding.checkId, finding.page))
+        {
+            case InspectionState::Complete:
+                delta.resolvedFindingIds.append(findingId);
+                break;
+            case InspectionState::NotInspected:
+                // Targeted revalidation intentionally omitted this check. The
+                // known finding is carried forward rather than falsely cleared.
+                delta.unchangedFindingIds.append(findingId);
+                delta.carriedForwardFindingIds.append(findingId);
+                break;
+            case InspectionState::Incomplete:
+                incomplete.insert(findingId);
+                break;
+        }
+    }
+
+    for (auto it = afterById.cbegin(); it != afterById.cend(); ++it)
+    {
+        if (beforeById.contains(it.key()))
+        {
+            continue;
+        }
+        const PreflightFinding& finding = it.value();
+        if (!before.inspectionComplete ||
+            isIncompleteFinding(finding) ||
+            inspectionState(after, finding.checkId, finding.page) == InspectionState::Incomplete)
+        {
+            incomplete.insert(it.key());
+        }
+        else
+        {
+            delta.introducedFindingIds.append(it.key());
+        }
+    }
+
+    for (const QString& findingId : incomplete)
+    {
+        delta.incompleteFindingIds.append(findingId);
+    }
+    auto sortUnique = [](QStringList* values)
+    {
+        std::sort(values->begin(), values->end());
+        values->erase(std::unique(values->begin(), values->end()), values->end());
+    };
+    sortUnique(&delta.resolvedFindingIds);
+    sortUnique(&delta.unchangedFindingIds);
+    sortUnique(&delta.introducedFindingIds);
+    sortUnique(&delta.incompleteFindingIds);
+    sortUnique(&delta.carriedForwardFindingIds);
+    return delta;
 }
 
 QJsonObject PDFRepairResult::toJson() const
@@ -521,6 +684,8 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
         }
 
         PDFRepairResult& result = m_results[index];
+        // m_source is the pre-repair document: passing it makes the revalidation
+        // report a real cleared/introduced finding delta instead of a raw after-state.
         const PDFOperationResult verified = runDeclaredRepairValidators(
             &m_candidate,
             m_plans[index],
@@ -529,6 +694,7 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
             options,
             nullptr,
             {},
+            m_source,
             postflightOut);
         if (!verified || !result.incompleteReasons.isEmpty() || !result.validationFailures.isEmpty())
         {
@@ -583,6 +749,14 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         candidatePath,
         reopenedCandidate,
         candidateSha256);
+}
+
+bool PDFRepairTransaction::postflightRequired() const
+{
+    return m_options.requirePostflight &&
+           std::any_of(m_plans.cbegin(), m_plans.cend(),
+                       [](const PDFRepairPlan& plan)
+                       { return plan.requiresPostflight; });
 }
 
 PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const

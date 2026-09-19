@@ -24,6 +24,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -131,6 +132,9 @@ QJsonObject migratePreflightReportV3ToV4(QJsonObject document)
         document.insert(field, findings);
     }
 
+    // A pre-v4 failed report can have an empty blocking list solely because its
+    // findings had no stable ids yet. Reconstruct that list from error findings;
+    // existing explicit dispositions remain untouched.
     QJsonObject verdict = document.value(QStringLiteral("verdict")).toObject();
     if (verdict.value(QStringLiteral("state")).toString() == QStringLiteral("fail") &&
         verdict.value(QStringLiteral("blocking_finding_ids")).toArray().isEmpty())

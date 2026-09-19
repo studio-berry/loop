@@ -435,6 +435,17 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("preflight.profile-invalid"), profileError);
             return PDFToolExitCode::InvalidInvocation;
         }
+        if (!transaction.postflightRequired())
+        {
+            reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
+            pdf::PDFRepairFindingDelta missingPostflight;
+            missingPostflight.incompleteFindingIds.append(QStringLiteral("postflight-not-required-by-plan"));
+            reportJson.insert(QStringLiteral("finding_delta"), missingPostflight.toJson());
+            writeRepairReportIfRequested(options, reportJson);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
+                             PDFToolTranslationContext::tr("Repair publication requires a plan that declares postflight validation."));
+            return PDFToolExitCode::PartialOutput;
+        }
     }
 
     pdf::PreflightResult postflight;
@@ -453,6 +464,15 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportJson.insert(QStringLiteral("postflight"), postflight.toJson(candidatePath));
     }
     const pdf::PreflightVerdict canonicalVerdict = pdf::reducePreflightVerdict(postflight);
+    // The canonical transaction validation is the only repair inspection; its
+    // per-result finding delta is reported here rather than from a second run.
+    pdf::PDFRepairFindingDelta automaticFindingDelta;
+    if (!transaction.results().isEmpty())
+    {
+        automaticFindingDelta = transaction.results().first().findingDelta;
+    }
+    reportJson.insert(QStringLiteral("finding_delta"), automaticFindingDelta.toJson());
+    reportJson.insert(QStringLiteral("postflight_verdict"), canonicalVerdict.toJson());
     if (!verified || transaction.status() != pdf::PDFRepairStatus::Passed || !canonicalVerdict.isPass())
     {
         const pdf::PDFRepairStatus status = transaction.status();

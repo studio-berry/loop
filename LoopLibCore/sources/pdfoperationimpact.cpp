@@ -157,6 +157,8 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
         plan.full = true;
         plan.checkIds = enabledCheckIds;
         plan.reusedCheckIds.clear();
+        // A full run never advertises a misleading narrowed page scope (#129).
+        plan.pages.clear();
         plan.invalidatedDomains = pdfEvidenceAllDomains();
         plan.invalidatedEvidenceDomains = pdfEvidenceAllDomains();
         plan.reusableEvidenceDomains = PDFEvidenceDomains();

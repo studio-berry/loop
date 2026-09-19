@@ -330,6 +330,52 @@ Pane {
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
+                        visible: model.findingDelta && model.findingDelta.resolved && model.findingDelta.resolved.length > 0
+                        text: qsTr("Cleared (%1): %2")
+                            .arg(model.findingDelta.resolved.length)
+                            .arg(model.findingDelta.resolved.join(", "))
+                        color: "#15803d"
+                        Accessible.name: qsTr("Cleared preflight findings")
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        visible: model.findingDelta && model.findingDelta.unchanged && model.findingDelta.unchanged.length > 0
+                        text: qsTr("Remaining (%1): %2")
+                            .arg(model.findingDelta.unchanged.length)
+                            .arg(model.findingDelta.unchanged.join(", "))
+                        color: "#a16207"
+                        Accessible.name: qsTr("Remaining preflight findings")
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        visible: model.findingDelta && model.findingDelta.introduced && model.findingDelta.introduced.length > 0
+                        text: qsTr("Introduced (%1): %2")
+                            .arg(model.findingDelta.introduced.length)
+                            .arg(model.findingDelta.introduced.join(", "))
+                        color: "#b91c1c"
+                        font.bold: true
+                        Accessible.name: qsTr("Introduced preflight findings")
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        visible: model.findingDelta && model.findingDelta.incomplete && model.findingDelta.incomplete.length > 0
+                        text: qsTr("Not fully rechecked (%1): %2")
+                            .arg(model.findingDelta.incomplete.length)
+                            .arg(model.findingDelta.incomplete.join(", "))
+                        color: "#a16207"
+                        font.bold: true
+                        Accessible.name: qsTr("Incomplete preflight recheck")
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                         visible: model.diagnostics && model.diagnostics.length > 0
                         text: qsTr("Diagnostics: %1").arg(JSON.stringify(model.diagnostics))
                     }

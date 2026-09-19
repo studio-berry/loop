@@ -419,7 +419,7 @@
         "status": {
           "type": "string",
           "enum": ["ok", "warning", "failed", "skipped", "unsupported", "incomplete", "not_inspected", "not_applicable"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: intentionally not run, for example because it is disabled in the profile or outside a targeted revalidation plan. incomplete: required inspection evidence could not be collected, for example because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence. not_inspected: the check runner cannot honour the requested restriction dimension. not_applicable: the effective restriction scope selects no page or object for this check."
         },
         "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
         "diagnostics": {

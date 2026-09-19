@@ -48,6 +48,7 @@ private slots:
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
     void v2GoldenMigratesToV4Deterministically();
+    void v3MigrationBackfillsStableFindingIds();
     void compatibleSchemaWithoutMigratorFailsClosed();
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
@@ -106,7 +107,7 @@ void SchemaEvolutionTest::unsupportedMajorFailsClosed()
              pdf::PDFSchemaCompatibility::UnsupportedMajor);
     QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::Unknown, { 1, 0 }),
              pdf::PDFSchemaCompatibility::UnknownKind);
-    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 3, 0 }),
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 4, 0 }),
              pdf::PDFSchemaCompatibility::Compatible);
 }
 
@@ -227,6 +228,59 @@ void SchemaEvolutionTest::v2GoldenMigratesToV4Deterministically()
     const pdf::PDFSchemaMigrationResult second = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
     QCOMPARE(QJsonDocument(second.document).toJson(QJsonDocument::Compact),
              QJsonDocument(first.document).toJson(QJsonDocument::Compact));
+}
+
+void SchemaEvolutionTest::v3MigrationBackfillsStableFindingIds()
+{
+    const QJsonObject finding{
+        { QStringLiteral("scope"), QStringLiteral("object") },
+        { QStringLiteral("page"), 1 },
+        { QStringLiteral("object_id"), QStringLiteral("10 0 R") },
+        { QStringLiteral("type"), QStringLiteral("image-resolution") },
+        { QStringLiteral("severity"), QStringLiteral("error") },
+        { QStringLiteral("message"), QStringLiteral("localized text is not identity") },
+        { QStringLiteral("check_id"), QStringLiteral("image-resolution") }
+    };
+    QJsonObject source{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-report") },
+        { QStringLiteral("schema_version"), 3 },
+        { QStringLiteral("pass"), false },
+        { QStringLiteral("inspection_complete"), true },
+        { QStringLiteral("profile"), QStringLiteral("golden") },
+        { QStringLiteral("errors"), QJsonArray{ finding } },
+        { QStringLiteral("warnings"), QJsonArray{} },
+        { QStringLiteral("fixups_available"), QJsonArray{} },
+        { QStringLiteral("checks"), QJsonArray{} },
+        { QStringLiteral("verdict"), QJsonObject{
+                                         { QStringLiteral("state"), QStringLiteral("fail") },
+                                         { QStringLiteral("reason_code"), QStringLiteral("blocking-findings") },
+                                         { QStringLiteral("reason"), QStringLiteral("blocked") },
+                                         { QStringLiteral("blocking_finding_ids"), QJsonArray{} },
+                                         { QStringLiteral("waived_finding_ids"), QJsonArray{} } } }
+    };
+
+    const pdf::PDFSchemaMigrationResult first =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
+    QVERIFY(first.migrated);
+    QCOMPARE(first.toVersion.toString(), QStringLiteral("4.0"));
+    const QJsonObject migratedFinding =
+        first.document.value(QStringLiteral("errors")).toArray().first().toObject();
+    const QString findingId = migratedFinding.value(QStringLiteral("id")).toString();
+    QCOMPARE(findingId.size(), 16);
+    QCOMPARE(first.document.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("blocking_finding_ids")).toArray().first().toString(),
+             findingId);
+
+    QJsonObject localized = source;
+    QJsonArray localizedErrors = localized.value(QStringLiteral("errors")).toArray();
+    QJsonObject localizedFinding = localizedErrors.first().toObject();
+    localizedFinding.insert(QStringLiteral("message"), QStringLiteral("different locale"));
+    localizedFinding.insert(QStringLiteral("bbox"), QJsonArray{ 1, 2, 3, 4 });
+    localizedErrors[0] = localizedFinding;
+    localized.insert(QStringLiteral("errors"), localizedErrors);
+    const pdf::PDFSchemaMigrationResult second =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, localized);
+    QCOMPARE(second.document.value(QStringLiteral("errors")).toArray().first().toObject().value(QStringLiteral("id")).toString(),
+             findingId);
 }
 
 void SchemaEvolutionTest::compatibleSchemaWithoutMigratorFailsClosed()
@@ -532,10 +586,10 @@ void SchemaEvolutionTest::newerMinorPassesThroughAndReportsTheDocumentVersion()
 void SchemaEvolutionTest::compatibilityDiagnosticsAreStableAndDistinct()
 {
     const pdf::PDFSchemaCompatibilityDiagnostic compatible =
-        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 3, 0 });
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 4, 0 });
     QCOMPARE(compatible.compatibility, pdf::PDFSchemaCompatibility::Compatible);
     QCOMPARE(compatible.code, QStringLiteral("schema.compatible"));
-    QCOMPARE(compatible.message, QStringLiteral("Schema kind 'preflight-report' version 3.0 is supported."));
+    QCOMPARE(compatible.message, QStringLiteral("Schema kind 'preflight-report' version 4.0 is supported."));
 
     const pdf::PDFSchemaCompatibilityDiagnostic unsupported =
         pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 99, 0 });

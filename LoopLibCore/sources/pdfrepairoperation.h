@@ -164,9 +164,21 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta
     QStringList unchangedFindingIds;
     QStringList introducedFindingIds;
     QStringList incompleteFindingIds;
+    /// Distinguishes a completed empty comparison from a never-run recheck.
+    bool compared = false;
+    /// Existing findings whose checks/pages were not reinspected in a
+    /// targeted run; they are carried forward, not asserted resolved.
+    QStringList carriedForwardFindingIds;
 
     QJsonObject toJson() const;
 };
+
+/// Compares two preflight runs using stable finding identities. Findings whose
+/// checks were intentionally outside a targeted revalidation remain unchanged;
+/// findings whose checks could not complete are classified as incomplete and
+/// are never reported as resolved.
+LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
+                                                                   const PreflightResult& after);
 
 struct LOOPLIBCORESHARED_EXPORT PDFRepairResult
 {
@@ -294,6 +306,10 @@ public:
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
+
+    /// True when transaction policy requires the invoking surface to run
+    /// declared postflight validators before any candidate can be published.
+    bool postflightRequired() const;
 
     const PDFDocument* candidate() const;
     const QList<PDFRepairPlan>& plans() const { return m_plans; }

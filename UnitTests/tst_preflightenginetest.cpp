@@ -1359,6 +1359,13 @@ void PreflightEngineTest::findingStableId_ignoresMessageAndBbox()
 
     second.checkId = QStringLiteral("trim");
     QVERIFY(first.stableId() != second.stableId());
+
+    pdf::PreflightResult result;
+    result.profileName = QStringLiteral("stable-id-test");
+    result.errors = { first };
+    const QJsonObject serializedFinding =
+        result.toJson().value(QStringLiteral("errors")).toArray().first().toObject();
+    QCOMPARE(serializedFinding.value(QStringLiteral("id")).toString(), first.stableId());
 }
 
 void PreflightEngineTest::decisionRejectsMissingJustification()

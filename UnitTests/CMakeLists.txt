@@ -935,7 +935,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         tst_repairoperatoracceptance.cpp
     )
 
-    target_link_libraries(UnitTestsRepairOperatorAcceptance PRIVATE LoopLibCore Qt6::Core Qt6::Test)
+    target_link_libraries(UnitTestsRepairOperatorAcceptance PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
     add_dependencies(UnitTestsRepairOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsRepairOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
