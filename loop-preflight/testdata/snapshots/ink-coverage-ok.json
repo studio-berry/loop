@@ -1,7 +1,13 @@
 {
     "checks": [
         {
+            "diagnostics": [
+                "deprecated:analysis_box; use restrictions.page_box"
+            ],
             "id": "ink-coverage",
+            "scope_restrictions": {
+                "page_box": "bleed"
+            },
             "status": "ok"
         }
     ],
