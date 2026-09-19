@@ -22,6 +22,10 @@ not a promise that every check has an implementation for every dimension.
    restriction_excluded_all_content`; it is not a clean PASS.
 5. For `ink-coverage`, a supported `restrictions.page_box` selects the actual
    raster probe analysis box instead of merely annotating the result.
+6. Explicit legacy `analysis_box` is migrated to the effective page box for
+   `ink-coverage`; its check status carries `deprecated:analysis_box; use
+   restrictions.page_box` as a non-blocking diagnostic. Conflicting old/new
+   box requests are invalid rather than silently choosing one.
 
 ## Current capability matrix
 
@@ -29,12 +33,17 @@ not a promise that every check has an implementation for every dimension.
 | --- | --- | --- |
 | `pages` | Evidence Graph-backed checks and `ink-coverage` | Non-graph, page-spanning check runners (e.g. `bleed`, `output-intent`) until they take a per-page selector |
 | `page_box` | `ink-coverage` with media/crop/trim/bleed; `image-resolution` and `thin-strokes` with geometric evidence (including art) | Other checks; `art` for ink coverage |
-| `regions` | Include-only anchored regions on `image-resolution` and `thin-strokes`; includes intersect so check scope never widens profile scope | Other checks and exclude-mode regions; unresolved target or anchor geometry is `not_inspected` |
-| `layers` | None yet | All checks until collected evidence contains verified OCG membership |
+| `regions` | Include and exclude anchored regions on `image-resolution` and `thin-strokes`; included geometry intersects and fully excluded evidence objects are removed | Other checks; unresolved target or anchor geometry is `not_inspected` |
+| `layers` | Named OCG membership for `image-resolution` and `thin-strokes` evidence | Other checks; unresolved OCG/OCMD membership is `not_inspected` |
 | `object_classes` | `image-resolution` uses `image`; `thin-strokes` uses `vector` | Other checks until their evidence has a trustworthy object-class mapping |
 
-The uninspected cells are residual implementation work for #125, not a claim of
-support. Fixes must not be offered as safe on an incomplete scoped run.
+Content overlapping a partially excluded region is still evaluated when it
+has a remaining visible portion; no visual clipping is claimed for the finding
+bbox. The sampled quantities are object-level image resolution and stroke width,
+not region-local pixel measurements.
+
+Uninspected cells are not claims of support. Fixes must not be offered as safe
+on an incomplete scoped run.
 
 ## CLI examples
 
@@ -52,9 +61,9 @@ cannot restore a page already excluded by the authored profile or a check.
 - Qt tests for the parser, range limits, resolved scope in findings and check
   statuses, empty intersections, and CLI digest binding.
 - PdfTool process-level tests for all three selectors and profile/check narrowing.
-- Fixtures showing anchoring against non-origin/non-matching media and trim
-  boxes, OCG membership, and object-class targeting. Exclude-mode regions
-  remain `not_inspected` until partial object overlap is represented safely.
+- Fixtures proving offset trim/media anchoring, include/exclude regions,
+  named OCG membership, legacy analysis-box migration, and image/vector
+  object-class selection.
 - Independent Core/Editor/PdfTool parity proof on the same exact PDF revision
   and effective scope.
 - Rebase schema changes against #645's report v4 upgrade and rerun its relevant
