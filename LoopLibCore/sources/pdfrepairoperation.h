@@ -164,6 +164,11 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta
     QStringList unchangedFindingIds;
     QStringList introducedFindingIds;
     QStringList incompleteFindingIds;
+    /// Distinguishes a completed empty comparison from a never-run recheck.
+    bool compared = false;
+    /// Existing findings whose checks/pages were not reinspected in a
+    /// targeted run; they are carried forward, not asserted resolved.
+    QStringList carriedForwardFindingIds;
 
     QJsonObject toJson() const;
 };
