@@ -30,6 +30,7 @@
 #include "pdfoperationhistorystore.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfsafefilewriter.h"
 
 #include <algorithm>
@@ -42,6 +43,8 @@
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QTemporaryDir>
+
+#include <optional>
 
 namespace
 {
@@ -59,7 +62,7 @@ void appendRepairHistoryFailed(pdf::PDFOperationHistoryStore& history,
         { QStringLiteral("error_code"), errorCode },
         { QStringLiteral("error"), message }
     };
-    historyFailed.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    historyFailed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyFailed.operatorIdentity = approval.actorId;
     historyFailed.approval = approval;
     history.appendEvent(historyFailed);
@@ -585,6 +588,18 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                          historyError.isEmpty() ? QStringLiteral("Could not register the repair history artifacts.") : historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
+    QString retainedCertificateError;
+    const QList<pdf::PDFOperationHistoryEvent> priorHistory = operationHistory.events(&retainedCertificateError);
+    const std::optional<pdf::PreflightCertificate> priorCertificate =
+        retainedCertificateError.isEmpty()
+            ? pdf::latestPreflightCertificate(priorHistory, &retainedCertificateError)
+            : std::nullopt;
+    if (!retainedCertificateError.isEmpty())
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.read-failed"), retainedCertificateError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     pdf::PDFOperationHistoryExecution historyExecution;
     historyExecution.operationId = options.repairOperationId;
     historyExecution.operationVersion = 1;
@@ -642,6 +657,32 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
     finalFile.close();
+
+    if (priorCertificate.has_value() &&
+        priorCertificate->documentRevisionDigest.compare(sourceSha256, Qt::CaseInsensitive) == 0 &&
+        candidateSha256.compare(sourceSha256, Qt::CaseInsensitive) != 0)
+    {
+        pdf::PDFOperationHistoryEvent invalidated;
+        invalidated.executionId = historyExecutionId;
+        invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
+        invalidated.status = pdf::PDFOperationHistoryStatus::Running;
+        invalidated.operatorIdentity = QStringLiteral("PdfTool");
+        invalidated.documentRevisionDigest = candidateSha256;
+        invalidated.effectiveProfileDigest = priorCertificate->effectiveProfileDigest;
+        invalidated.approval.decisionReference = priorCertificate->certificateId;
+        invalidated.resultSummary = QJsonObject{
+            { QStringLiteral("reason"), QStringLiteral("The certified document revision changed after a fix was applied.") },
+            { QStringLiteral("previous_document_revision_digest"), sourceSha256 },
+            { QStringLiteral("current_document_revision_digest"), candidateSha256 }
+        };
+        if (!operationHistory.appendEvent(invalidated))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
+                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+    }
+
     pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
                                        { return QString(); }, false, false);
     finalReader.readFromFile(options.repairOutputDocument);
@@ -698,10 +739,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
 
     pdf::PDFOperationHistoryEvent historyAccepted;
     historyAccepted.executionId = historyExecutionId;
-    historyAccepted.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    historyAccepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyAccepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     historyAccepted.operatorIdentity = signOff.approval.actorId;
-    historyAccepted.documentRevisionDigest = sourceSha256;
+    historyAccepted.documentRevisionDigest = candidateSha256;
     historyAccepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
     historyAccepted.output = historyOutput.artifact;
     historyAccepted.reportArtifactSha256 = signOff.revalidationReportSha256;

@@ -14,8 +14,8 @@
     },
     "schema_version": {
       "type": "integer",
-      "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
+      "enum": [1, 2, 3, 4],
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 requires stable content-addressed finding ids. Decisions, digests, profile identity, coverage scope, scope restrictions, and variable bindings are additive fields in version 3+."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -128,6 +128,20 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 4 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "errors": { "items": { "$ref": "#/$defs/finding_v4" } },
+          "warnings": { "items": { "$ref": "#/$defs/finding_v4" } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "verdict": {
       "type": "object",
@@ -354,6 +368,12 @@
       "oneOf": [
         { "$ref": "#/$defs/finding_v1" },
         { "$ref": "#/$defs/finding_v2" }
+      ]
+    },
+    "finding_v4": {
+      "allOf": [
+        { "$ref": "#/$defs/finding_v2" },
+        { "required": ["id"] }
       ]
     },
     "check_status": {

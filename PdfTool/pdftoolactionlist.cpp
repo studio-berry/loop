@@ -274,10 +274,10 @@ bool recordActionListHistory(const QString& outputPath,
     {
         pdf::PDFOperationHistoryEvent failed;
         failed.executionId = executionId;
-        failed.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+        failed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
         failed.status = pdf::PDFOperationHistoryStatus::Failed;
         failed.operatorIdentity = QStringLiteral("PdfTool");
-        failed.documentRevisionDigest = sourceSha256;
+        failed.documentRevisionDigest = candidateSha256;
         failed.resultSummary = *summary;
         failed.approval = governedApproval.approval;
         history.appendEvent(failed);
@@ -288,10 +288,10 @@ bool recordActionListHistory(const QString& outputPath,
 
     pdf::PDFOperationHistoryEvent accepted;
     accepted.executionId = executionId;
-    accepted.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    accepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     accepted.operatorIdentity = signOff.approval.actorId;
-    accepted.documentRevisionDigest = sourceSha256;
+    accepted.documentRevisionDigest = candidateSha256;
     accepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
     accepted.output = output.artifact;
     accepted.resultSummary = *summary;

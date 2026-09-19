@@ -372,6 +372,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("profile-store"), { QStringLiteral("--profile-store") }, QStringLiteral("directory"), PDFToolValueType::Path);
         add(QStringLiteral("decisions"), { QStringLiteral("--decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("export-decisions"), { QStringLiteral("--export-decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("certify"), { QStringLiteral("--certify") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("require-signoff"), { QStringLiteral("--require-signoff") }, {}, PDFToolValueType::Boolean);
         add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -586,6 +587,12 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
 QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositionals(Options optionFlags)
 {
     QList<PDFToolPositionalDescriptor> positionals;
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        appendPositional(positionals, { QStringLiteral("certificate"), PDFToolValueType::Path, true, false });
+        appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
+        return positionals;
+    }
     if (optionFlags.testFlag(OpenDocument))
     {
         appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
@@ -672,6 +679,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(Diagnostics, QStringLiteral("diagnostics.bundle"));
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
     add(SchemaDiagnostics, QStringLiteral("schema.diagnostics"));
+    add(VerifyPreflightCertificate, QStringLiteral("preflight.certificate.verify"));
     add(ActionList, QStringLiteral("action-list.execute"));
     capabilities.sort();
     return capabilities;
@@ -855,6 +863,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("export-decisions"), QStringLiteral("Write the normalized operator decision JSON after the run."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("certify"), QStringLiteral("Write a standalone certified-preflight JSON after a certifiable run."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("require-signoff"), QStringLiteral("Require an active accept, waive, or override decision for every error finding."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
@@ -893,6 +902,12 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("verify-redact-copy-metadata", "Original redaction copied metadata."));
         parser->addOption(QCommandLineOption("verify-redact-copy-outline", "Original redaction copied outline."));
         parser->addOption(QCommandLineOption("verify-redact-allow-incremental", "Do not fail when the output trailer contains /Prev."));
+    }
+
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        parser->addPositionalArgument("certificate", "Certified-preflight JSON file.");
+        parser->addPositionalArgument("document", "PDF document named by the certificate.");
     }
 
     if (optionFlags.testFlag(Diagnostics))
@@ -1128,7 +1143,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         if (!parser->isSet("console-format"))
         {
             const QString command = getStandardString(Command);
-            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
+            if (command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
                 command == QStringLiteral("capabilities") || command == QStringLiteral("schema"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
@@ -1403,6 +1418,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightProfileStorePath = parser->value("profile-store");
         options.preflightDecisionsPath = parser->value("decisions");
         options.preflightDecisionsExportPath = parser->value("export-decisions");
+        options.preflightCertificateOutputPath = parser->value("certify");
         options.preflightRequireSignoff = parser->isSet("require-signoff");
         options.preflightClientId = parser->value("client");
         options.preflightProductId = parser->value("product");
@@ -1420,6 +1436,12 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
                 checkId = checkId.trimmed();
             }
         }
+    }
+
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        options.preflightCertificatePath = positionalArguments.value(0);
+        options.document = positionalArguments.value(1);
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))

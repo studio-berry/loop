@@ -21,6 +21,9 @@
 // SOFTWARE.
 
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightaudit.h"
+#include "pdfoperationhistorystore.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfrepairoperation.h"
@@ -30,9 +33,12 @@
 #include <QPainter>
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QTranslator>
@@ -74,10 +80,26 @@ private slots:
     void mandatoryPostflight_respectsCancellation();
     void mandatoryPostflight_acceptsResolvedProfileJson();
     void provisionalPass_doesNotAllowCertification();
+    void certification_allowsWarningsAndWaivedErrors();
+    void certification_rejectsSkippedOrBudgetLimitedChecks();
+    void auditRun_appendsCanonicalEvents();
+    void auditRun_preservesEffectiveRestrictions();
+    void certificate_roundTripsAndDetectsTampering();
+    void certificate_detectsStaleDecision();
+    void certificate_bindsRestrictionDigest();
 };
 
 namespace
 {
+
+pdf::PreflightCheckStatus makeCheckStatus(const QString& id, const QString& status, const QString& reason = QString())
+{
+    pdf::PreflightCheckStatus entry;
+    entry.id = id;
+    entry.status = status;
+    entry.reason = reason;
+    return entry;
+}
 
 pdf::PreflightFinding blockingFinding()
 {
@@ -403,6 +425,389 @@ void PreflightVerdictTest::provisionalPass_doesNotAllowCertification()
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QVERIFY(verdict.allowsCertificateIssuance());
     QVERIFY(!pdf::preflightAllowsCertification(result));
+}
+
+void PreflightVerdictTest::certification_allowsWarningsAndWaivedErrors()
+{
+    const QString documentDigest(64, QLatin1Char('a'));
+    const QString profileDigest(64, QLatin1Char('b'));
+
+    pdf::PreflightResult warningResult;
+    warningResult.inspectionComplete = true;
+    warningResult.documentRevisionDigest = documentDigest;
+    warningResult.effectiveProfileDigest = profileDigest;
+    warningResult.profileIdentity.insert(QStringLiteral("provisional"), false);
+    warningResult.checkStatuses.append(makeCheckStatus(QStringLiteral("fonts"), QStringLiteral("warning")));
+    QVERIFY(pdf::preflightAllowsCertification(warningResult));
+
+    pdf::PreflightResult waivedResult;
+    waivedResult.inspectionComplete = true;
+    waivedResult.documentRevisionDigest = documentDigest;
+    waivedResult.effectiveProfileDigest = profileDigest;
+    waivedResult.profileIdentity.insert(QStringLiteral("provisional"), false);
+    waivedResult.errors.append(blockingFinding());
+    waivedResult.checkStatuses.append(makeCheckStatus(QStringLiteral("color-mode"), QStringLiteral("failed")));
+
+    pdf::PreflightDecision decision;
+    decision.findingId = waivedResult.errors.first().stableId();
+    decision.kind = pdf::PreflightDecisionKind::Waive;
+    decision.justification = QStringLiteral("Approved exception.");
+    decision.operatorIdentity = QStringLiteral("operator");
+    decision.timestampUtc = QDateTime::currentDateTimeUtc();
+    decision.documentRevisionDigest = documentDigest;
+    decision.effectiveProfileDigest = profileDigest;
+    waivedResult.decisions.append(decision);
+
+    QVERIFY(pdf::preflightAllowsCertification(waivedResult));
+}
+
+void PreflightVerdictTest::certification_rejectsSkippedOrBudgetLimitedChecks()
+{
+    pdf::PreflightResult skipped;
+    skipped.inspectionComplete = true;
+    skipped.profileIdentity.insert(QStringLiteral("provisional"), false);
+    skipped.checkStatuses.append(makeCheckStatus(QStringLiteral("ink-coverage"),
+                                                 QStringLiteral("skipped"),
+                                                 QStringLiteral("inspection incomplete")));
+    QVERIFY(!pdf::preflightAllowsCertification(skipped));
+
+    pdf::PreflightResult budgeted;
+    budgeted.inspectionComplete = true;
+    budgeted.profileIdentity.insert(QStringLiteral("provisional"), false);
+    pdf::PreflightCheckStatus status;
+    status.id = QStringLiteral("ink-coverage");
+    status.status = QStringLiteral("ok");
+    status.budgetKind = QStringLiteral("raster-pixels");
+    status.budgetLimit = 10;
+    status.budgetAttempted = 11;
+    budgeted.checkStatuses.append(status);
+    QVERIFY(!pdf::preflightAllowsCertification(budgeted));
+}
+
+void PreflightVerdictTest::auditRun_appendsCanonicalEvents()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("audit.pdf"));
+    const QByteArray document("%PDF-1.4\n%%EOF\n");
+    const QString documentDigest =
+        QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = QString(64, QLatin1Char('d'));
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
+
+    const pdf::PDFOperationResult appended =
+        pdf::appendPreflightAuditRun(documentPath,
+                                     document,
+                                     result,
+                                     pdf::PDFOperationHistoryStatus::Accepted,
+                                     QStringLiteral("test"));
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+
+    pdf::PDFOperationHistoryStore history(
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3")));
+    QString error;
+    QVERIFY2(history.open(&error), qPrintable(error));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(events.size(), 3);
+    QCOMPARE(events.at(0).kind, pdf::PDFOperationHistoryEventKind::DocumentOpened);
+    QCOMPARE(events.at(1).kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
+    QCOMPARE(events.at(1).status, pdf::PDFOperationHistoryStatus::Running);
+    QCOMPARE(events.at(2).kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
+    QCOMPARE(events.at(2).status, pdf::PDFOperationHistoryStatus::Accepted);
+    QVERIFY(history.verify().verified);
+}
+
+void PreflightVerdictTest::auditRun_preservesEffectiveRestrictions()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("restricted-audit.pdf"));
+    const QByteArray document("%PDF-1.4\n%%EOF\n");
+    const QString documentDigest =
+        QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest(64, QLatin1Char('e'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.profileIdentity.insert(QStringLiteral("effective_digest"), profileDigest);
+    result.coverageScope.insert(QStringLiteral("scope_restrictions"),
+                                QJsonObject{ { QStringLiteral("pages"), QJsonArray{ 2 } },
+                                               { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")));
+
+    const QJsonObject summary = pdf::preflightAuditReportSummary(result, documentPath);
+    QCOMPARE(summary.value(QStringLiteral("effective_profile_digest")).toString(), profileDigest);
+    QCOMPARE(summary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             result.coverageScope.value(QStringLiteral("scope_restrictions")).toObject());
+
+    const pdf::PDFOperationResult appended =
+        pdf::appendPreflightAuditRun(documentPath,
+                                     document,
+                                     result,
+                                     pdf::PDFOperationHistoryStatus::Accepted,
+                                     QStringLiteral("test"),
+                                     summary);
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+
+    pdf::PDFOperationHistoryStore history(
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3")));
+    QString error;
+    QVERIFY2(history.open(&error), qPrintable(error));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    const pdf::PDFOperationHistoryEvent& finished = events.back();
+    QCOMPARE(finished.effectiveProfileDigest, profileDigest);
+    QCOMPARE(finished.resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             result.coverageScope.value(QStringLiteral("scope_restrictions")).toObject());
+}
+
+void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
+{
+    const QByteArray document("certified document revision");
+    const QString documentDigest = QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest(64, QLatin1Char('a'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
+
+    pdf::PDFOperationHistoryEvent preflight;
+    preflight.sequence = 1;
+    preflight.entryId = QUuid::createUuid();
+    preflight.executionId = QUuid::createUuid();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
+    preflight.documentRevisionDigest = documentDigest;
+    preflight.effectiveProfileDigest = profileDigest;
+    preflight.resultSummary = result.toJson(QStringLiteral("document.pdf"));
+    preflight.createdUtc = QDateTime::currentDateTimeUtc();
+    preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
+
+    pdf::PreflightCertificate certificate;
+    QString error;
+    QVERIFY(pdf::issuePreflightCertificate(result,
+                                           result.toJson(QStringLiteral("document.pdf")),
+                                           document,
+                                           { preflight },
+                                           QStringLiteral("operator"),
+                                           certificate,
+                                           error));
+    QVERIFY(error.isEmpty());
+    QCOMPARE(certificate.auditChainHeadEventId, preflight.entryId.toString(QUuid::WithoutBraces));
+
+    pdf::PDFOperationHistoryEvent mismatchedReport = preflight;
+    mismatchedReport.resultSummary.insert(QStringLiteral("tampered"), true);
+    mismatchedReport.eventHash = pdf::computeOperationHistoryEventHash(mismatchedReport, {});
+    pdf::PreflightCertificate refusedCertificate;
+    QString refusedError;
+    QVERIFY(!pdf::issuePreflightCertificate(result,
+                                            result.toJson(QStringLiteral("document.pdf")),
+                                            document,
+                                            { mismatchedReport },
+                                            QStringLiteral("operator"),
+                                            refusedCertificate,
+                                            refusedError));
+    QVERIFY(!refusedError.isEmpty());
+
+    pdf::PDFOperationHistoryEvent issuance;
+    issuance.sequence = 2;
+    issuance.entryId = QUuid::createUuid();
+    issuance.executionId = preflight.executionId;
+    issuance.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    issuance.status = pdf::PDFOperationHistoryStatus::Running;
+    issuance.documentRevisionDigest = certificate.documentRevisionDigest;
+    issuance.effectiveProfileDigest = certificate.effectiveProfileDigest;
+    issuance.approval.decisionReference = certificate.certificateId;
+    issuance.resultSummary = QJsonObject{
+        { QStringLiteral("certificate_id"), certificate.certificateId },
+        { QStringLiteral("report_digest"), certificate.reportDigest },
+        { QStringLiteral("certificate"), certificate.toJson() }
+    };
+    issuance.previousEventHash = preflight.eventHash;
+    issuance.createdUtc = QDateTime::currentDateTimeUtc();
+    issuance.eventHash = pdf::computeOperationHistoryEventHash(issuance, issuance.previousEventHash);
+    const QList<pdf::PDFOperationHistoryEvent> history{ preflight, issuance };
+
+    pdf::PreflightCertificate parsed;
+    QVERIFY(pdf::PreflightCertificate::fromJson(certificate.toJson(), parsed, error));
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, document, history).state,
+             pdf::PreflightCertificateState::Valid);
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, QByteArray("changed"), history).state,
+             pdf::PreflightCertificateState::InvalidDocumentChanged);
+
+    issuance.resultSummary.insert(QStringLiteral("tampered"), true);
+    QCOMPARE(pdf::verifyPreflightCertificate(parsed, document, { preflight, issuance }).state,
+             pdf::PreflightCertificateState::InvalidAuditChainBroken);
+}
+
+void PreflightVerdictTest::certificate_bindsRestrictionDigest()
+{
+    const QByteArray document("restricted certified revision");
+    const QString documentDigest = QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString restrictedDigest(64, QLatin1Char('f'));
+    const QString unrestrictedDigest(64, QLatin1Char('a'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = restrictedDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.coverageScope.insert(QStringLiteral("scope_restrictions"),
+                                QJsonObject{ { QStringLiteral("pages"), QJsonArray{ 1 } } });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")));
+
+    const QJsonObject summary = pdf::preflightAuditReportSummary(result, QStringLiteral("document.pdf"));
+
+    pdf::PDFOperationHistoryEvent preflight;
+    preflight.sequence = 1;
+    preflight.entryId = QUuid::createUuid();
+    preflight.executionId = QUuid::createUuid();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
+    preflight.documentRevisionDigest = documentDigest;
+    preflight.effectiveProfileDigest = restrictedDigest;
+    preflight.resultSummary = summary;
+    preflight.createdUtc = QDateTime::currentDateTimeUtc();
+    preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
+
+    pdf::PreflightCertificate certificate;
+    QString error;
+    QVERIFY(pdf::issuePreflightCertificate(result,
+                                           summary,
+                                           document,
+                                           { preflight },
+                                           QStringLiteral("operator"),
+                                           certificate,
+                                           error));
+    QCOMPARE(certificate.effectiveProfileDigest, restrictedDigest);
+
+    pdf::PreflightResult mismatched = result;
+    mismatched.effectiveProfileDigest = unrestrictedDigest;
+    pdf::PreflightCertificate refused;
+    QVERIFY(!pdf::issuePreflightCertificate(mismatched,
+                                            summary,
+                                            document,
+                                            { preflight },
+                                            QStringLiteral("operator"),
+                                            refused,
+                                            error));
+    QVERIFY(!error.isEmpty());
+}
+
+void PreflightVerdictTest::certificate_detectsStaleDecision()
+{
+    const QByteArray document("waived document revision");
+    const QString documentDigest = QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest(64, QLatin1Char('c'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.errors.append(blockingFinding());
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("color-mode"), QStringLiteral("failed")));
+
+    pdf::PreflightDecision decision;
+    decision.findingId = result.errors.first().stableId();
+    decision.kind = pdf::PreflightDecisionKind::Waive;
+    decision.justification = QStringLiteral("Approved exception.");
+    decision.operatorIdentity = QStringLiteral("operator");
+    decision.timestampUtc = QDateTime::currentDateTimeUtc();
+    decision.documentRevisionDigest = documentDigest;
+    decision.effectiveProfileDigest = profileDigest;
+    result.decisions.append(decision);
+    const QString decisionId = pdf::preflightDecisionIdentity(decision);
+
+    pdf::PDFOperationHistoryEvent preflight;
+    preflight.sequence = 1;
+    preflight.entryId = QUuid::createUuid();
+    preflight.executionId = QUuid::createUuid();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
+    preflight.documentRevisionDigest = documentDigest;
+    preflight.effectiveProfileDigest = profileDigest;
+    preflight.resultSummary = result.toJson(QStringLiteral("document.pdf"));
+    preflight.createdUtc = QDateTime::currentDateTimeUtc();
+    preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
+
+    pdf::PDFOperationHistoryEvent recorded;
+    recorded.sequence = 2;
+    recorded.entryId = QUuid::createUuid();
+    recorded.executionId = preflight.executionId;
+    recorded.kind = pdf::PDFOperationHistoryEventKind::DecisionRecorded;
+    recorded.status = pdf::PDFOperationHistoryStatus::Running;
+    recorded.documentRevisionDigest = documentDigest;
+    recorded.effectiveProfileDigest = profileDigest;
+    recorded.resultSummary = QJsonObject{ { QStringLiteral("decision_id"), decisionId } };
+    recorded.approval.decisionReference = decisionId;
+    recorded.previousEventHash = preflight.eventHash;
+    recorded.createdUtc = QDateTime::currentDateTimeUtc();
+    recorded.eventHash = pdf::computeOperationHistoryEventHash(recorded, recorded.previousEventHash);
+
+    pdf::PreflightCertificate certificate;
+    QString error;
+    QVERIFY(pdf::issuePreflightCertificate(result,
+                                           result.toJson(QStringLiteral("document.pdf")),
+                                           document,
+                                           { preflight, recorded },
+                                           QStringLiteral("operator"),
+                                           certificate,
+                                           error));
+    QCOMPARE(certificate.waivedErrorCount, 1);
+    QCOMPARE(certificate.coveringDecisionIds, QStringList{ decisionId });
+
+    pdf::PDFOperationHistoryEvent issuance;
+    issuance.sequence = 3;
+    issuance.entryId = QUuid::createUuid();
+    issuance.executionId = preflight.executionId;
+    issuance.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    issuance.status = pdf::PDFOperationHistoryStatus::Running;
+    issuance.documentRevisionDigest = certificate.documentRevisionDigest;
+    issuance.effectiveProfileDigest = certificate.effectiveProfileDigest;
+    issuance.approval.decisionReference = certificate.certificateId;
+    issuance.resultSummary = QJsonObject{
+        { QStringLiteral("certificate_id"), certificate.certificateId },
+        { QStringLiteral("report_digest"), certificate.reportDigest },
+        { QStringLiteral("certificate"), certificate.toJson() }
+    };
+    issuance.previousEventHash = recorded.eventHash;
+    issuance.createdUtc = QDateTime::currentDateTimeUtc();
+    issuance.eventHash = pdf::computeOperationHistoryEventHash(issuance, issuance.previousEventHash);
+
+    QList<pdf::PDFOperationHistoryEvent> history{ preflight, recorded, issuance };
+    QCOMPARE(pdf::verifyPreflightCertificate(certificate, document, history).state,
+             pdf::PreflightCertificateState::Valid);
+
+    pdf::PDFOperationHistoryEvent invalidated;
+    invalidated.sequence = 4;
+    invalidated.entryId = QUuid::createUuid();
+    invalidated.executionId = preflight.executionId;
+    invalidated.kind = pdf::PDFOperationHistoryEventKind::DecisionInvalidated;
+    invalidated.status = pdf::PDFOperationHistoryStatus::Running;
+    invalidated.approval.decisionReference = decisionId;
+    invalidated.resultSummary = QJsonObject{ { QStringLiteral("decision_id"), decisionId } };
+    invalidated.previousEventHash = issuance.eventHash;
+    invalidated.createdUtc = QDateTime::currentDateTimeUtc();
+    invalidated.eventHash = pdf::computeOperationHistoryEventHash(invalidated, invalidated.previousEventHash);
+    history.append(invalidated);
+
+    QCOMPARE(pdf::verifyPreflightCertificate(certificate, document, history).state,
+             pdf::PreflightCertificateState::InvalidDecisionStale);
 }
 
 void PreflightVerdictTest::editorWaivedBlocking_isPass()

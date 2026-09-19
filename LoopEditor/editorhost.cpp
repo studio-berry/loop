@@ -43,6 +43,11 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdocumentwriter.h"
+#include "pdfoperationhistorystore.h"
+#include "pdfpreflightaudit.h"
+#include "pdfpreflightcertificate.h"
+#include "pdfpreflightverdict.h"
 #include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"
@@ -52,6 +57,7 @@
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -591,6 +597,33 @@ QString EditorHost::preflightOperatorSummary() const
     return m_preflight.operatorSummary();
 }
 
+QVariantMap EditorHost::preflightCertificateStateVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreflightStateVisual(m_preflightCertificateStateName);
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    if (m_preflightCertificateStateName == QLatin1String("certified"))
+        result.insert(QStringLiteral("accessibleName"), tr("Certified preflight"));
+    else if (m_preflightCertificateStateName == QLatin1String("certificate-invalid"))
+        result.insert(QStringLiteral("accessibleName"), tr("Certified preflight invalid"));
+    else
+        result.insert(QStringLiteral("accessibleName"), tr("Not certified"));
+    return result;
+}
+
+QColor EditorHost::preflightCertificateStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreflightStateVisual(m_preflightCertificateStateName);
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
 QVariantList EditorHost::preflightProfiles() const
 {
     QVariantList profiles;
@@ -857,10 +890,12 @@ bool EditorHost::runPreflight()
     const PreflightProfileChoice selectedProfile = *profileIt;
     const QJsonObject bindings = m_preflightBindings;
     const QByteArray sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
+    const QString documentPath = m_session->facade().source().path;
+    const bool documentDirty = m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty);
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        [document, outcome, selectedProfile, bindings, sourceHash](pdf::PDFJobContext& context)
+        [document, outcome, selectedProfile, bindings, sourceHash, documentPath, documentDirty](pdf::PDFJobContext& context)
         {
             if (context.isCancellationRequested())
             {
@@ -903,15 +938,58 @@ bool EditorHost::runPreflight()
 
             std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
                 pdf::PDFDocumentSession::createForInspection(document.data()), &pdf::PDFDocumentSession::destroy);
+            QByteArray auditBytes;
+            if (!documentDirty)
+            {
+                QFile sourceFile(documentPath);
+                if (sourceFile.open(QIODevice::ReadOnly))
+                {
+                    const QByteArray diskBytes = sourceFile.readAll();
+                    const QByteArray diskHash = QCryptographicHash::hash(diskBytes, QCryptographicHash::Sha256);
+                    if (diskHash == sourceHash)
+                        auditBytes = diskBytes;
+                }
+            }
+            if (auditBytes.isEmpty())
+            {
+                QBuffer serialized(&auditBytes);
+                if (!serialized.open(QIODevice::WriteOnly))
+                    throw std::runtime_error("Could not prepare the current document revision for preflight audit.");
+                pdf::PDFDocumentWriter writer(nullptr, context.operationControl());
+                if (const pdf::PDFOperationResult writeResult = writer.write(&serialized, document.data()); !writeResult)
+                    throw std::runtime_error(writeResult.getErrorMessage().toStdString());
+            }
+
+            const QByteArray revisionHash = QCryptographicHash::hash(auditBytes, QCryptographicHash::Sha256);
             pdf::PreflightEngine engine(session.get());
             engine.setOperationControl(context.operationControl());
             context.reportProgress(15);
             outcome->result = engine.run(profile);
-            pdf::finalizePreflightResult(outcome->result, sourceHash, resolved);
+            pdf::finalizePreflightResult(outcome->result, revisionHash, resolved);
+
+            pdf::PDFOperationHistoryStatus auditStatus = pdf::PDFOperationHistoryStatus::Accepted;
             if (context.isCancellationRequested())
+                auditStatus = pdf::PDFOperationHistoryStatus::Cancelled;
+            else if (pdf::reducePreflightVerdict(outcome->result).state == pdf::PreflightVerdictState::Error)
+                auditStatus = pdf::PDFOperationHistoryStatus::Failed;
+
+            const QJsonObject auditSummary =
+                pdf::preflightAuditReportSummary(outcome->result, documentPath);
+            if (const pdf::PDFOperationResult auditResult =
+                    pdf::appendPreflightAuditRun(documentPath,
+                                                 auditBytes,
+                                                 outcome->result,
+                                                 auditStatus,
+                                                 QStringLiteral("LoopEditor"),
+                                                 auditSummary);
+                !auditResult)
             {
-                return;
+                throw std::runtime_error(auditResult.getErrorMessage().toStdString());
             }
+
+            if (context.isCancellationRequested())
+                return;
+
             context.reportProgress(95);
             context.setResultSummary(QStringLiteral("Preflight completed."));
         });
@@ -2172,6 +2250,7 @@ void EditorHost::syncDocumentLifecycle()
                                       facade.facets().testFlag(pdfinteraction::DocumentFacet::Dirty),
                                       facade.facets().testFlag(pdfinteraction::DocumentFacet::Stale),
                                       std::move(outputState), facade.typedError());
+    refreshPreflightCertificateState();
 }
 
 void EditorHost::onDocumentGone()
@@ -2193,6 +2272,8 @@ void EditorHost::onDocumentGone()
     m_production.clear();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
+    m_preflightCertificateStateName = QStringLiteral("not-certified");
+    m_preflightCertificateSummary = tr("No certified preflight is recorded for this document.");
     updateCanvasAccessibilitySummary();
 }
 
@@ -2364,6 +2445,75 @@ void EditorHost::refreshCanvasTrace()
     }
 }
 
+void EditorHost::refreshPreflightCertificateState()
+{
+    m_preflightCertificateStateName = QStringLiteral("not-certified");
+    m_preflightCertificateSummary = tr("No certified preflight is recorded for this document.");
+
+    if (!hasDocument())
+        return;
+
+    const QString documentPath = m_session->facade().source().path;
+    if (documentPath.isEmpty())
+        return;
+
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    if (!QFileInfo::exists(historyPath))
+        return;
+
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    if (!history.open(&historyError))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("Certified preflight history could not be opened: %1").arg(historyError);
+        return;
+    }
+
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    if (!historyError.isEmpty())
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("Certified preflight history could not be read: %1").arg(historyError);
+        return;
+    }
+
+    QString certificateError;
+    const std::optional<pdf::PreflightCertificate> certificate =
+        pdf::latestPreflightCertificate(events, &certificateError);
+    if (!certificate.has_value())
+    {
+        if (!certificateError.isEmpty())
+        {
+            m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+            m_preflightCertificateSummary = certificateError;
+        }
+        return;
+    }
+
+    if (m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("The certified revision has unsaved document changes.");
+        return;
+    }
+
+    QFile document(documentPath);
+    if (!document.open(QIODevice::ReadOnly))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("The certified document bytes could not be read.");
+        return;
+    }
+
+    const pdf::PreflightCertificateVerification verification =
+        pdf::verifyPreflightCertificate(*certificate, document.readAll(), events);
+    m_preflightCertificateStateName =
+        verification.isValid() ? QStringLiteral("certified") : QStringLiteral("certificate-invalid");
+    m_preflightCertificateSummary = verification.reason;
+}
+
 void EditorHost::syncRevisionModels()
 {
     if (!m_session->revisionSource())
@@ -2383,6 +2533,7 @@ void EditorHost::syncRevisionModels()
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
     m_production.setCurrentRevision(documentKey, documentRevision);
+    refreshPreflightCertificateState();
 
     if (hasDocument())
     {

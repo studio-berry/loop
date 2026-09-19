@@ -636,6 +636,26 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
 
 bool preflightAllowsCertification(const PreflightResult& result)
 {
+    if (!result.inspectionComplete)
+    {
+        return false;
+    }
+    for (const PreflightCheckStatus& status : result.checkStatuses)
+    {
+        const QString normalizedStatus = status.status.trimmed().toLower();
+        const QString normalizedReason = status.reason.trimmed().toLower();
+        if (normalizedStatus.isEmpty() ||
+            normalizedStatus == QLatin1String("skipped") ||
+            normalizedStatus == QLatin1String("incomplete") ||
+            normalizedStatus == QLatin1String("unsupported") ||
+            normalizedStatus == QLatin1String("not_inspected") ||
+            normalizedStatus == QLatin1String("not-inspected") ||
+            normalizedReason == QLatin1String("budget-exceeded") ||
+            !status.budgetKind.isEmpty())
+        {
+            return false;
+        }
+    }
     const PreflightVerdict verdict = reducePreflightVerdict(result);
     if (!verdict.allowsCertificateIssuance())
     {

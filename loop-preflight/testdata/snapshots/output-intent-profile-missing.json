@@ -20,7 +20,7 @@
     "pass": false,
     "profile": "Loop Test - Output Intent",
     "schema_kind": "preflight-report",
-    "schema_version": 3,
+    "schema_version": 4,
     "verdict": {
         "blocking_finding_ids": [
             "a6b84f6769bb1713"
