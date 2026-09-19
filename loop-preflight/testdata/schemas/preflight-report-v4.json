@@ -10,7 +10,7 @@
   "checks": [
     {
       "id": "bleed",
-      "status": "passed"
+      "status": "ok"
     }
   ],
   "verdict": {
