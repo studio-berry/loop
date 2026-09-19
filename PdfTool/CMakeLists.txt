@@ -73,6 +73,8 @@ set(_loop_pdftool_sources
     pdftoolpreflightprofile.cpp
     pdftoolpreflightprofile.h
     pdftoolpreflightchecks.h
+    pdftoolverifycertificate.cpp
+    pdftoolverifycertificate.h
     pdftoolocr.cpp
     pdftoolocr.h
     ocrsidecarclient.cpp
