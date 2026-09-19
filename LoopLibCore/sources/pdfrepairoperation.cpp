@@ -24,6 +24,8 @@
 #include "pdfdocumentwriter.h"
 #include "preflightengine.h"
 
+#include <QMap>
+
 #include <algorithm>
 #include <utility>
 
