@@ -47,6 +47,7 @@
 #include <QJsonObject>
 #include <QUuid>
 
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -1276,6 +1277,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     QJsonObject preflightProfile;
     QJsonObject preflightResolution;
     QString effectiveProfileDigest;
+    std::optional<PreflightResult> initialPreflightResult;
     if (runPreflight)
     {
         PreflightProfileResolver resolver;
@@ -1433,6 +1435,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PreflightEngine engine(&session);
             PreflightResult preflightResult = engine.run(preflightProfile);
             preflightResult.profileResolution = preflightResolution;
+            initialPreflightResult = preflightResult;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("initial"), preflightReport);
@@ -1696,8 +1699,16 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 revalidationPlan.full = true;
                 revalidationPlan.reason = QStringLiteral("profile-unparsed");
             }
-            PreflightResult preflightResult = profileParsed ? engine.run(profileData, revalidationPlan)
-                                                            : engine.run(preflightProfile, revalidationPlan);
+            PreflightResult preflightResult;
+            if (profileParsed && initialPreflightResult.has_value())
+            {
+                preflightResult = engine.revalidate(profileData, *initialPreflightResult, revalidationPlan);
+            }
+            else
+            {
+                preflightResult = profileParsed ? engine.run(profileData, revalidationPlan)
+                                                : engine.run(preflightProfile, revalidationPlan);
+            }
             preflightResult.profileResolution = preflightResolution;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
