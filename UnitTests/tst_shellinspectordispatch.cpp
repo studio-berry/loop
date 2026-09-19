@@ -206,6 +206,32 @@ void ShellInspectorDispatchTest::staleFindingCannotSelectInspectorOrCanvas()
     QCOMPARE(inspector->selectionId(), findingId);
     QCOMPARE(overlays->findings().size(), 1);
 
+    pdf::PreflightFinding unknown = finding;
+    unknown.checkId = QStringLiteral("future-check");
+    unknown.type = QStringLiteral("future-check");
+    unknown.objectId = QStringLiteral("67");
+    report.errors = { unknown };
+    preflight->beginRun(preflight->documentKey(), preflight->documentRevision(),
+                        QStringLiteral("profile-b"), QStringLiteral("job-3"));
+    QVERIFY(preflight->acceptResult(QStringLiteral("job-3"), preflight->documentRevision(), report));
+    host.selectFinding(unknown.stableId());
+    QCOMPARE(host.currentPage(), 1);
+    QCOMPARE(inspector->selectionId(), unknown.stableId());
+    QVERIFY(overlays->findings().isEmpty());
+    bool targetingUnavailable = false;
+    for (int row = 0; row < inspector->rowCount(); ++row)
+    {
+        const QModelIndex property = inspector->index(row);
+        if (inspector->data(property, pdfinteraction::InspectorModel::PropertyIdRole).toString() ==
+            QStringLiteral("targeting"))
+        {
+            QCOMPARE(inspector->data(property, pdfinteraction::InspectorModel::ValueRole).toString(),
+                     QStringLiteral("Page navigation only; object targeting is unsupported for this check."));
+            targetingUnavailable = true;
+        }
+    }
+    QVERIFY(targetingUnavailable);
+
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(file.readAll(), originalBytes);
 }
