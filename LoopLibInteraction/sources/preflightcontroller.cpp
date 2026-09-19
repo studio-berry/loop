@@ -197,6 +197,10 @@ void PreflightController::markStale(QString summary)
     }
 
     m_operatorSummary = std::move(summary);
+    if (m_hasResult)
+    {
+        m_retainedState = State::Stale;
+    }
     setState(State::Stale);
 }
 
@@ -208,6 +212,10 @@ void PreflightController::restoreRetainedState(State terminalState)
     // ("Preflight was cancelled." / "Preflight failed: ...") and made the
     // transition unobservable from stateChanged, which is that summary's notifier.
     // A retained result still wins, so the last good verdict stays on screen.
+    if (m_hasResult && m_retainedState == State::Stale)
+    {
+        m_operatorSummary = QStringLiteral("Previous preflight remains stale. %1").arg(m_operatorSummary);
+    }
     setState(m_hasResult ? m_retainedState : terminalState);
 }
 
