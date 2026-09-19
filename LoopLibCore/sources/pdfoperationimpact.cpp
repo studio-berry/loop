@@ -25,6 +25,7 @@
 #include <QJsonArray>
 
 #include <algorithm>
+#include <utility>
 
 namespace pdf
 {
@@ -185,10 +186,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
         const std::optional<PDFEvidenceDomain> domain = preflightEvidenceDomainForCheck(checkId);
         if (!domain.has_value())
         {
-            plan.full = true;
-            plan.checkIds = enabledCheckIds;
-            plan.reason = QStringLiteral("unmapped-check");
-            return plan;
+            return selectFull(QStringLiteral("unmapped-check"));
         }
         if (impact.domains.testFlag(*domain))
         {
@@ -198,10 +196,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
 
     if (plan.checkIds.isEmpty())
     {
-        plan.full = true;
-        plan.checkIds = enabledCheckIds;
-        plan.reason = QStringLiteral("no-targeted-checks");
-        return plan;
+        return selectFull(QStringLiteral("no-targeted-checks"));
     }
 
     plan.full = false;
