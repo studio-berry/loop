@@ -22,9 +22,13 @@
       },
       "id": "add-bleed",
       "impact": {
-        "document_wide": true,
+        "all_pages": true,
+        "document_wide": false,
         "domains": [
-          "images"
+          "colorants",
+          "images",
+          "overprintTransparency",
+          "strokes"
         ],
         "full_rewrite": false,
         "impact_complete": true,
@@ -47,10 +51,10 @@
       "produces": "Expanded Media/Crop/Bleed boxes (TrimBox preserved), optional mirror/pixel-repeat/stretch edge content, and metadata updates describing the correction.",
       "requires_postflight": true,
       "revalidation": {
-        "class": "full",
-        "description": "Declares complete impact on the images evidence domain with document-wide scope; planRevalidation selects a full profile rerun before considering evidence domains."
+        "class": "targeted",
+        "description": "Declares complete impact on images, colorants, strokes, and overprint/transparency with all-page scope; planRevalidation reruns only checks mapped to those evidence domains."
       },
-      "revalidation_class": "full",
+      "revalidation_class": "targeted",
       "reversibility": {
         "retention": "Operation-history rollback can discard an uncommitted candidate; after atomic publish the prior artifact remains addressable only through file history outside Loop.",
         "rollback_in_session": true
@@ -90,6 +94,7 @@
       },
       "id": "downsample-images",
       "impact": {
+        "all_pages": false,
         "document_wide": true,
         "domains": [
           "colorants",
@@ -158,9 +163,15 @@
       },
       "id": "production.add-contour-bleed",
       "impact": {
-        "document_wide": true,
-        "domains": [],
-        "full_rewrite": true,
+        "all_pages": false,
+        "document_wide": false,
+        "domains": [
+          "colorants",
+          "images",
+          "overprintTransparency",
+          "strokes"
+        ],
+        "full_rewrite": false,
         "impact_complete": false,
         "requires_independent_oracle": false
       },
@@ -216,10 +227,11 @@
       },
       "id": "production.place-grommets",
       "impact": {
-        "document_wide": true,
+        "all_pages": false,
+        "document_wide": false,
         "domains": [],
-        "full_rewrite": true,
-        "impact_complete": false,
+        "full_rewrite": false,
+        "impact_complete": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -271,10 +283,11 @@
       },
       "id": "production.validate-wide-format",
       "impact": {
-        "document_wide": true,
+        "all_pages": false,
+        "document_wide": false,
         "domains": [],
-        "full_rewrite": true,
-        "impact_complete": false,
+        "full_rewrite": false,
+        "impact_complete": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -332,6 +345,7 @@
       },
       "id": "rgb-to-cmyk",
       "impact": {
+        "all_pages": false,
         "document_wide": true,
         "domains": [
           "colorants",
@@ -408,6 +422,7 @@
       },
       "id": "standards-convert",
       "impact": {
+        "all_pages": false,
         "document_wide": true,
         "domains": [],
         "full_rewrite": true,

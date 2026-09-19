@@ -41,8 +41,8 @@
         "records": ["page-boxes", "page-content", "images", "metadata"]
       },
       "revalidation": {
-        "class": "full",
-        "description": "Declares complete impact on the images evidence domain with document-wide scope; planRevalidation selects a full profile rerun before considering evidence domains."
+        "class": "targeted",
+        "description": "Declares complete impact on images, colorants, strokes, and overprint/transparency with all-page scope; planRevalidation reruns only checks mapped to those evidence domains."
       },
       "surface_parity": {
         "cli": true,
