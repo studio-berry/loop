@@ -294,6 +294,13 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
             }
             return InspectionState::Incomplete;
         }
+
+        const QJsonObject revalidation =
+            result.coverageScope.value(QStringLiteral("revalidation")).toObject();
+        if (!revalidation.isEmpty() && !revalidation.value(QStringLiteral("full")).toBool(true))
+        {
+            return InspectionState::NotInspected;
+        }
         return result.inspectionComplete ? InspectionState::Complete : InspectionState::Incomplete;
     };
 
@@ -384,7 +391,10 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
         }
     }
 
-    delta.incompleteFindingIds = incomplete.values();
+    for (const QString& findingId : incomplete)
+    {
+        delta.incompleteFindingIds.append(findingId);
+    }
     auto sortUnique = [](QStringList* values)
     {
         std::sort(values->begin(), values->end());
