@@ -135,6 +135,7 @@ private slots:
     void run_ocgRestrictionExcludesOtherLayers();
     void run_cliPageScopeNeverWidensAuthoredProfile();
     void run_colorInventoryPartialPageSelectionIsIncomplete();
+    void run_restrictedPdfxDoesNotClaimDocumentWideConformance();
     void run_legacyAnalysisBoxMigratesAndDiagnoses();
     void run_unresolvedVariableIsIncomplete();
 };
@@ -2646,6 +2647,32 @@ void PreflightEngineTest::run_colorInventoryPartialPageSelectionIsIncomplete()
     QCOMPARE(result.checkStatuses.size(), 1);
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("not_inspected"));
     QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("restriction_unsupported:pages"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_restrictedPdfxDoesNotClaimDocumentWideConformance()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Scoped PDF/X") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } } },
+        { QStringLiteral("pdfx"), QJsonObject{ { QStringLiteral("target"), QStringLiteral("PDF/X-4") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+            { QStringLiteral("min_dpi"), 300 } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QVERIFY(!result.pdfx.has_value());
+    QCOMPARE(result.checkStatuses.last().id, QStringLiteral("pdfx"));
+    QCOMPARE(result.checkStatuses.last().status, QStringLiteral("not_inspected"));
+    QCOMPARE(result.checkStatuses.last().reason, QStringLiteral("restriction_unsupported:pdfx"));
     QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
 }
 
