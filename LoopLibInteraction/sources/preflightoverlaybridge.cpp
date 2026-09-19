@@ -61,10 +61,41 @@ void PreflightOverlayBridge::setInteractionController(InteractionController* int
     m_interaction = interaction;
 }
 
+void PreflightOverlayBridge::setPresentationEnabled(bool enabled)
+{
+    if (m_presentationEnabled == enabled)
+    {
+        return;
+    }
+
+    m_presentationEnabled = enabled;
+    applyFindings();
+}
+
 void PreflightOverlayBridge::applyFindings()
 {
     if (!m_findings || !m_overlays)
     {
+        return;
+    }
+
+    if (!m_presentationEnabled)
+    {
+        m_overlays->setFindings({});
+        m_overlays->setEvidence({});
+        m_overlays->setSeverities({});
+        m_overlays->setFocusedId({});
+        if (m_interaction)
+        {
+            if (m_interaction->state().selected().kind == InteractionTargetKind::Finding)
+            {
+                m_interaction->selectTarget(InteractionTarget());
+            }
+            else
+            {
+                m_interaction->refreshOverlay();
+            }
+        }
         return;
     }
 
