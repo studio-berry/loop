@@ -1033,7 +1033,7 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                 stepResult.plan = planObject;
             }
             stepResult.repairResult = repairResult.toJson();
-            if (hasPreflightProfile(options))
+            if (hasPreflightProfile(options) || options.requirePostflight)
             {
                 MandatoryPostflightOptions stepPostflightOptions = mandatoryPostflightOptionsFromActionList(options);
                 const PDFOperationResult validatorResult = runDeclaredRepairValidators(&working,
@@ -1043,13 +1043,33 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                                                                                        stepPostflightOptions,
                                                                                        operation,
                                                                                        stepResult.resolvedParameters);
-                stepResult.repairResult = repairResult.toJson();
                 if (!validatorResult)
                 {
+                    repairResult.status = !repairResult.incompleteReasons.isEmpty()
+                                              ? PDFRepairStatus::Incomplete : PDFRepairStatus::Failed;
                     stepResult.status = PDFActionListStepStatus::Failed;
                     addDiagnostic(&stepResult, QStringLiteral("action-list.step-postflight-failed"), validatorResult.getErrorMessage());
+                    if (options.requirePostflight && !hasPreflightProfile(options))
+                    {
+                        result->diagnostics.append(QJsonObject{
+                            { QStringLiteral("code"), QStringLiteral("action-list.postflight-required") },
+                            { QStringLiteral("severity"), QStringLiteral("error") },
+                            { QStringLiteral("message"), validatorResult.getErrorMessage() } });
+                    }
                     hadFailure = true;
                 }
+                else
+                {
+                    repairResult.status = PDFRepairStatus::Passed;
+                }
+                stepResult.repairResult = repairResult.toJson();
+            }
+            else if (currentPlan.requiresPostflight || !currentPlan.validators.isEmpty())
+            {
+                stepResult.diagnostics.append(QJsonObject{
+                    { QStringLiteral("code"), QStringLiteral("action-list.validators-not-run") },
+                    { QStringLiteral("severity"), QStringLiteral("warning") },
+                    { QStringLiteral("message"), QStringLiteral("Step was applied in ungoverned mode; declared validators were not run.") } });
             }
             if (!repairResult.verdict.isEmpty())
             {

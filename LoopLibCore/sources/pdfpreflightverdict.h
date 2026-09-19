@@ -102,7 +102,8 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult runDeclaredRepairValidators(PDFDocum
                                                                         PDFRepairResult* result,
                                                                         MandatoryPostflightOptions options = {},
                                                                         const PDFRepairOperation* operation = nullptr,
-                                                                        const QJsonObject& operationParameters = {});
+                                                                        const QJsonObject& operationParameters = {},
+                                                                        PreflightResult* postflightOut = nullptr);
 
 /// Certificate issuance (#133) may proceed only on a PASS verdict against a
 /// non-provisional profile identity.

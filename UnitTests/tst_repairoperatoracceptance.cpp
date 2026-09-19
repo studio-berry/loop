@@ -6,6 +6,7 @@
 
 #include <QtTest>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -17,6 +18,7 @@ class RepairOperatorAcceptanceTest : public QObject
 private slots:
     void initTestCase();
     void repairOperation_addBleedIsFailClosedAndAtomic();
+    void repairOperation_missingProfileNeverPublishesAnUnvalidatedCandidate();
     void repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange();
 
 private:
@@ -88,9 +90,61 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     const QJsonObject report = reportDocument.object();
     QCOMPARE(report.value(QStringLiteral("schema")).toString(), QStringLiteral("loop.repair-operation"));
     QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
+    const QJsonArray results = report.value(QStringLiteral("results")).toArray();
+    QCOMPARE(results.size(), 1);
+    QCOMPARE(results.first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
+    const QJsonArray validations = results.first().toObject().value(QStringLiteral("validation")).toArray();
+    QCOMPARE(validations.size(), 2);
+    QCOMPARE(validations.at(0).toObject().value(QStringLiteral("validator")).toString(), QStringLiteral("structural-integrity"));
+    QCOMPARE(validations.at(0).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
+    QCOMPARE(validations.at(1).toObject().value(QStringLiteral("validator")).toString(), QStringLiteral("normal-preflight"));
+    QCOMPARE(validations.at(1).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
+    QCOMPARE(results.first().toObject().value(QStringLiteral("verdict")).toObject()
+                 .value(QStringLiteral("state")).toString(), QStringLiteral("pass"));
     QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);
     QVERIFY(!report.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString().isEmpty());
+}
+
+void RepairOperatorAcceptanceTest::repairOperation_missingProfileNeverPublishesAnUnvalidatedCandidate()
+{
+    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QByteArray originalSha256 = operatoracceptance::fileSha256(source);
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString output = directory.filePath(QStringLiteral("unvalidated.pdf"));
+    const QString reportPath = directory.filePath(QStringLiteral("unvalidated-report.json"));
+
+    QByteArray out;
+    QByteArray err;
+    int exitCode = -1;
+    QVERIFY(operatoracceptance::runPdfTool(
+        m_pdfToolPath,
+        { QStringLiteral("repair"), source,
+          QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+          QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+          QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+          QStringLiteral("--param"), QStringLiteral("force=true"),
+          QStringLiteral("--output"), output,
+          QStringLiteral("--allow-incomplete"),
+          QStringLiteral("--report-file"), reportPath,
+          QStringLiteral("--console-format"), QStringLiteral("json") },
+        &out, &err, &exitCode));
+
+    QVERIFY(exitCode != 0);
+    QVERIFY(!QFile::exists(output));
+    QVERIFY(QFile::exists(reportPath));
+    QCOMPARE(operatoracceptance::fileSha256(source), originalSha256);
+    QFile reportFile(reportPath);
+    QVERIFY(reportFile.open(QIODevice::ReadOnly));
+    const QJsonObject report = QJsonDocument::fromJson(reportFile.readAll()).object();
+    QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("incomplete"));
+    const QJsonObject operation = report.value(QStringLiteral("results")).toArray().first().toObject();
+    QCOMPARE(operation.value(QStringLiteral("status")).toString(), QStringLiteral("incomplete"));
+    QVERIFY(!operation.value(QStringLiteral("incomplete_reasons")).toArray().isEmpty());
+    QCOMPARE(operation.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+             QStringLiteral("incomplete"));
+    QVERIFY(!operation.value(QStringLiteral("validation")).toArray().isEmpty());
 }
 
 void RepairOperatorAcceptanceTest::repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange()
