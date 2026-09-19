@@ -782,6 +782,10 @@ void ActionListTest::stepPreflightIsScopedToOperationImpact()
     const pdf::PDFOperationResult execution = pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result);
 
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
+    const QJsonObject findingDelta = result.steps.front().repairResult.value(QStringLiteral("finding_delta")).toObject();
+    QVERIFY(!findingDelta.isEmpty());
+    QVERIFY(!findingDelta.value(QStringLiteral("resolved")).toArray().isEmpty());
+    QVERIFY(findingDelta.value(QStringLiteral("introduced")).toArray().isEmpty());
     QVERIFY(!execution);
     QCOMPARE(result.status, QStringLiteral("failed"));
     QVERIFY(!result.postflight.isEmpty());
