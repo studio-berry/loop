@@ -2520,6 +2520,26 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     QVERIFY(!mediaAnchored.pass);
     QCOMPARE(mediaAnchored.checkStatuses.first().status, QStringLiteral("not_applicable"));
 
+    const pdf::PreflightResult excludedRegion = engine.run(QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Excluded region") },
+        { QStringLiteral("restrictions"), QJsonObject{
+            { QStringLiteral("regions"), QJsonArray{ QJsonObject{
+                { QStringLiteral("name"), QStringLiteral("trim-corner") },
+                { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 200, 60 } },
+                { QStringLiteral("anchor"), QStringLiteral("media") },
+                { QStringLiteral("mode"), QStringLiteral("exclude") }
+            } } }
+        } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+            { QStringLiteral("min_effective_width_pt"), 0.25 },
+            { QStringLiteral("severity"), QStringLiteral("warning") }
+        } } }
+    });
+    QVERIFY(excludedRegion.inspectionComplete);
+    QCOMPARE(excludedRegion.warnings.size(), 1);
+    QVERIFY(excludedRegion.warnings.first().bbox.intersects(QRectF(0, 130, 200, 30)));
+
     const pdf::PreflightResult excluded = run(QStringLiteral("Nonexistent"));
     QVERIFY(!excluded.pass);
     QVERIFY(!excluded.inspectionComplete);
