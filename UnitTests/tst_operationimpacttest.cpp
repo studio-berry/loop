@@ -159,7 +159,10 @@ void OperationImpactTest::fullRewriteAndDocumentWideImpactsDoNotAdvertiseNarrowe
 
 void OperationImpactTest::stepPlannerCannotNarrowDocumentWideOrOracleImpactWithPageTargets()
 {
-    const pdf::PDFDocument document = buildLowDpiImagePage();
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    const pdf::PDFDocument document = builder.build();
     pdf::PDFRepairPlan repair;
     repair.targets.append({ 0, {}, QStringLiteral("page/1/image") });
     const QStringList enabled{ QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") };
