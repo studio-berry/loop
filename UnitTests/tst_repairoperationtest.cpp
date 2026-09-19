@@ -639,6 +639,25 @@ void RepairOperationTest::findingDelta_incompleteOrSkippedChecksNeverFalseResolv
     QCOMPARE(skippedDelta.unchangedFindingIds, QStringList{ finding.stableId() });
     QVERIFY(skippedDelta.incompleteFindingIds.isEmpty());
 
+    // Targeted revalidation may omit document-level findings that have no
+    // check-status row. Coverage metadata must still prevent a false clear.
+    pdf::PreflightFinding documentFinding = finding;
+    documentFinding.scope = QStringLiteral("document");
+    documentFinding.page = 1;
+    documentFinding.objectId.clear();
+    documentFinding.checkId.clear();
+    documentFinding.type = QStringLiteral("profile");
+    before.errors = { documentFinding };
+    pdf::PreflightResult targeted;
+    targeted.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
+        { QStringLiteral("full"), false },
+        { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("image-resolution") } }
+    });
+    const pdf::PDFRepairFindingDelta omittedDelta = pdf::computeFindingDelta(before, targeted);
+    QVERIFY(omittedDelta.resolvedFindingIds.isEmpty());
+    QCOMPARE(omittedDelta.unchangedFindingIds, QStringList{ documentFinding.stableId() });
+
+    before.errors = { finding };
     pdf::PreflightResult incomplete;
     incomplete.inspectionComplete = false;
     incomplete.errorCode = QStringLiteral("budget-exceeded");
