@@ -1679,6 +1679,7 @@ void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
     QCOMPARE(result.checkStatuses.size(), 1);
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("skipped"));
     QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("ink coverage raster exceeds the pixel budget"));
+    QVERIFY(!pdf::preflightAllowsCertification(result));
 }
 
 void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
