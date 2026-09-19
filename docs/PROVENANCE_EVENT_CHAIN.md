@@ -41,8 +41,8 @@ kinds hash the new fields as part of their canonical payload.
 
 `scripts/ci/check_source_integrity.py` enforces the runtime convergence rule on
 tracked production sources. It rejects reintroduction of the superseded
-`PreflightAuditEvent` / `PreflightAuditStore` declarations and the legacy
-`.loop-audit.jsonl` / `.loupe-audit.jsonl` sidecar literals. Documentation
+`PreflightAuditEvent` / `PreflightAuditStore` declarations and legacy audit
+JSONL sidecar literals. Documentation
 and interchange schemas may describe provenance, but runtime persistence must
 continue to terminate in `PDFOperationHistoryStore`.
 
