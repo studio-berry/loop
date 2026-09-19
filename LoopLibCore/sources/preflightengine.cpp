@@ -1483,11 +1483,28 @@ PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph,
         {
             overlap = overlap.intersected(restrictionPageBox(page, *restrictions.pageBox));
         }
+        bool excluded = false;
         for (const PreflightRegion& region : restrictions.regions)
         {
-            overlap = overlap.intersected(region.rectPt.translated(restrictionPageBox(page, region.anchor).topLeft()));
+            const QRectF anchorBox = restrictionPageBox(page, region.anchor);
+            const QRectF regionBox = region.rectPt.translated(anchorBox.topLeft());
+            if (region.mode == QLatin1String("exclude"))
+            {
+                if (regionBox.contains(overlap))
+                {
+                    excluded = true;
+                    break;
+                }
+                continue;
+            }
+            overlap = overlap.intersected(regionBox);
+            if (overlap.isEmpty())
+            {
+                excluded = true;
+                break;
+            }
         }
-        if (!overlap.isEmpty())
+        if (!excluded && !overlap.isEmpty())
         {
             kept.append(record);
         }
@@ -6045,10 +6062,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             unsupportedDimension = QStringLiteral("scope");
         else if (check.restrictions.layers.has_value() && !supportsGeometricScope(check.id))
             unsupportedDimension = QStringLiteral("layers");
-        else if (!check.restrictions.regions.isEmpty() &&
-                 (!supportsGeometricScope(check.id) ||
-                  std::any_of(check.restrictions.regions.cbegin(), check.restrictions.regions.cend(),
-                              [](const PreflightRegion& region) { return region.mode == QLatin1String("exclude"); })))
+        else if (!check.restrictions.regions.isEmpty() && !supportsGeometricScope(check.id))
             unsupportedDimension = QStringLiteral("regions");
         else if (check.restrictions.objectClasses.has_value() && !supportsGeometricScope(check.id))
             unsupportedDimension = QStringLiteral("object_classes");
@@ -6195,6 +6209,15 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                 {
                     geometryUnavailable = true;
                     break;
+                }
+                if (check.restrictions.pageBox.has_value())
+                {
+                    const QRectF requested = restrictionPageBox(page, *check.restrictions.pageBox);
+                    if (!requested.isValid() || requested.isEmpty())
+                    {
+                        geometryUnavailable = true;
+                        break;
+                    }
                 }
                 for (const PreflightRegion& region : check.restrictions.regions)
                 {
