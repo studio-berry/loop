@@ -244,9 +244,14 @@ void PreflightInteractionTest::controllerRetainsCompletedResultAcrossCancellatio
     QVERIFY(controller.hasResult());
 
     controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    PreflightController::EvidenceNavigationRequest request;
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+    QVERIFY(controller.overlaysForPage(1).isEmpty());
     QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
     QCOMPARE(controller.state(), PreflightController::State::Findings);
     QCOMPARE(controller.findingsModel()->rowCount(), 1);
+    QVERIFY(controller.navigationFor(finding.stableId(), &request));
+    QCOMPARE(controller.overlaysForPage(1).size(), 1);
 
     controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
     QCOMPARE(controller.state(), PreflightController::State::Stale);
