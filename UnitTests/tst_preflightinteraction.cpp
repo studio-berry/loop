@@ -33,6 +33,7 @@
 #include "documentcontextsource.h"
 #include "findingnavigation.h"
 #include "hittestsource.h"
+#include "inspectormodel.h"
 #include "interactioncontroller.h"
 #include "interactionstate.h"
 #include "overlaybuilder.h"
@@ -167,6 +168,7 @@ private slots:
     void stalePresentationRetainsReportButClearsOverlayAndSelection();
     void controllerMarksStaleWhenTheProfileChanges();
     void targetingCapabilitiesAreConservativeAndStable();
+    void inspectorReportsMissingTargetAndBudgetWithoutInventingObjectFacts();
 };
 
 void PreflightInteractionTest::modelRetainsStableIdentityAndFilters()
@@ -445,6 +447,67 @@ void PreflightInteractionTest::targetingCapabilitiesAreConservativeAndStable()
     QCOMPARE(request.page, 2);
     QVERIFY(!request.hasPreciseTarget);
     QCOMPARE(request.inspectionMode, QStringLiteral("page"));
+}
+
+void PreflightInteractionTest::inspectorReportsMissingTargetAndBudgetWithoutInventingObjectFacts()
+{
+    PreflightFindingsModel findings;
+    pdf::PreflightFinding finding = makeFinding(QStringLiteral("future-check"), 0,
+                                                QStringLiteral("error"), QRectF());
+    finding.scope = QStringLiteral("document");
+    pdf::PreflightResult report;
+    report.errors = { finding };
+    pdf::PreflightCheckStatus status;
+    status.id = finding.checkId;
+    status.status = QStringLiteral("incomplete");
+    status.reason = QStringLiteral("budget-exceeded");
+    status.budgetKind = QStringLiteral("raster-pixels");
+    status.budgetLimit = 400;
+    status.budgetAttempted = 800;
+    report.checkStatuses = { status };
+    findings.replace(QStringLiteral("doc"), QStringLiteral("revision"), report);
+
+    pdfinteraction::InspectorModel inspector;
+    inspector.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("revision"));
+    QVERIFY(inspector.setFindingSelection(findings, finding.stableId(), QStringLiteral("revision")));
+
+    QHash<QString, QString> shown;
+    for (int row = 0; row < inspector.rowCount(); ++row)
+    {
+        const QModelIndex index = inspector.index(row);
+        shown.insert(inspector.data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString(),
+                     inspector.data(index, pdfinteraction::InspectorModel::ValueRole).toString());
+        QVERIFY(inspector.data(index, pdfinteraction::InspectorModel::SectionRole).toString() != QStringLiteral("object-context"));
+    }
+    QCOMPARE(shown.value(QStringLiteral("targeting")), QStringLiteral("No page target in the report."));
+    QCOMPARE(shown.value(QStringLiteral("check-status")), QStringLiteral("incomplete"));
+    QCOMPARE(shown.value(QStringLiteral("check-reason")), QStringLiteral("budget-exceeded"));
+    QCOMPARE(shown.value(QStringLiteral("budget-limit")), QStringLiteral("400"));
+    QCOMPARE(shown.value(QStringLiteral("budget-attempted")), QStringLiteral("800"));
+    QVERIFY(!shown.contains(QStringLiteral("page")));
+    QVERIFY(!shown.contains(QStringLiteral("object")));
+    QVERIFY(!shown.contains(QStringLiteral("bounds")));
+    QVERIFY(!shown.contains(QStringLiteral("evidence-ids")));
+    QVERIFY(!inspector.hasCorrectiveOperation());
+    QVERIFY(!inspector.requestCorrectiveOperation(QStringLiteral("add-bleed")));
+
+    finding.page = 2;
+    finding.bbox = QRectF(10, 15, 20, 25);
+    finding.objectId = QStringLiteral("52");
+    findings.replace(QStringLiteral("doc"), QStringLiteral("revision"), { finding }, {});
+    QVERIFY(inspector.setFindingSelection(findings, finding.stableId(), QStringLiteral("revision")));
+    bool foundTargeting = false;
+    for (int row = 0; row < inspector.rowCount(); ++row)
+    {
+        const QModelIndex index = inspector.index(row);
+        if (inspector.data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString() == QStringLiteral("targeting"))
+        {
+            QCOMPARE(inspector.data(index, pdfinteraction::InspectorModel::ValueRole).toString(),
+                     QStringLiteral("Page navigation only; object targeting is unsupported for this check."));
+            foundTargeting = true;
+        }
+    }
+    QVERIFY(foundTargeting);
 }
 
 QTEST_GUILESS_MAIN(PreflightInteractionTest)
