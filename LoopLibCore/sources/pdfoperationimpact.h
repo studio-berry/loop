@@ -44,6 +44,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFOperationImpact
     QSet<int> pages;
     QStringList objectIds;
     bool declared = false;
+    bool allPages = false;
     bool documentWide = false;
     bool fullRewrite = false;
     bool impactComplete = false;
