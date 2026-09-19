@@ -5815,6 +5815,9 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         effectivePlan = fullRevalidationPlan(profile);
         effectivePlan.reason = QStringLiteral("pdfx-requires-full");
     }
+    effectivePlan.recomputedEvidenceDomains = effectivePlan.full
+                                                  ? evidenceDomainsForProfile(profile)
+                                                  : evidenceDomainsForCheckIds(effectivePlan.checkIds);
 
     PreflightResult result;
     result.profileName = profile.name;
