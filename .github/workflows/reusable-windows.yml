@@ -383,6 +383,11 @@ jobs:
         shell: pwsh
         run: .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile developer -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 
+      - name: Verify Windows test runtime wiring
+        working-directory: loop
+        shell: pwsh
+        run: python scripts/ci/check_windows_qt_test_runtime.py --build-dir build
+
       - name: Run unit tests
         working-directory: loop/build
         shell: pwsh

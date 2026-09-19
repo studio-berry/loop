@@ -1066,3 +1066,12 @@ if(WIN32)
             $<TARGET_FILE_DIR:UnitTests>
         COMMENT "Copy Qt6Test runtime for unit tests")
 endif()
+
+# Windows test processes must be able to resolve the Qt runtime. Loop's Qt comes
+# from LOOP_QT_ROOT (an aqt install), not from vcpkg, so no Qt DLL sits beside
+# these executables and the loader otherwise stops with a modal system error
+# instead of a test failure. cmake/LoopTestQtRuntime.cmake records the Qt bin
+# directory on every test this directory defines; the include must stay in this
+# directory (which owns the registrations), and
+# scripts/ci/check_windows_qt_test_runtime.py fails the proof if it disappears.
+include(${CMAKE_SOURCE_DIR}/cmake/LoopTestQtRuntime.cmake)

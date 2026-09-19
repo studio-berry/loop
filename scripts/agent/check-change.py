@@ -441,6 +441,17 @@ def main() -> int:
         args.dry_run,
     )
 
+    # The Windows Qt test-runtime wiring is one include line in a file every new
+    # test target appends to, so a merge against a branch that predates it can
+    # drop it silently; assert it on every change set.
+    add_result(
+        evidence,
+        "qt_test_runtime",
+        [python, "scripts/ci/check_windows_qt_test_runtime.py"],
+        ROOT,
+        args.dry_run,
+    )
+
     if sources:
         add_format_checks(
             evidence,

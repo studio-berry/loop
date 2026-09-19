@@ -64,7 +64,7 @@ void QuickDocumentModelTest::searchesUseAnIndependentProcessingBudget()
                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference streamReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), content)));
+            std::move(streamDictionary), QByteArray(content))));
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
     builder.mergeTo(pageReference,
@@ -95,7 +95,7 @@ void QuickDocumentModelTest::exhaustedSearchReturnsAnIncompleteResult()
                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference streamReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), content)));
+            std::move(streamDictionary), QByteArray(content))));
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
     builder.mergeTo(pageReference,

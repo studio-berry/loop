@@ -57,12 +57,24 @@ fails CI if any known generated dependency path is tracked again.
 
 ### Windows local test executables
 
-Windows test executables need the configured Qt and Loop/vcpkg runtime DLLs beside
-the executable. If the dependency set is not deployed into the build output,
-the process can wait behind a missing-DLL system error instead of printing a
-normal test failure. For a Release test directory, run `windeployqt` with the
-configured Qt root and deploy the Qt/Loop dependencies into that same
-directory before invoking CTest. Generated DLLs and plugin directories remain
+Windows test executables need the configured Qt runtime, and Loop's Qt comes from
+`LOOP_QT_ROOT` (an aqt install), not from vcpkg, so no Qt DLL is deployed beside
+them. CTest does not need a primed shell: `UnitTests/CMakeLists.txt` records the
+Qt bin directory on every test it defines, so `ctest --test-dir build-local` runs
+from any shell.
+
+Anything started by hand instead — `build-local/usr/bin/LoopEditor.exe`,
+`PdfTool.exe`, the Quick smoke scripts — needs that directory on `PATH`, or
+Windows blocks in the loader with `Qt6Core.dll was not found` (and
+`Qt6Quick.dll was not found` for the editor and Quick binaries) instead of
+printing a test or startup failure. Dot-source the Windows development
+environment first:
+
+    . .\scripts\dev-env.ps1
+
+`LOOP_QT_ROOT` must point at the aqt install that ships qtbase; the Qt
+online-installer kit at `C:\Qt\<version>\msvc2022_64` has no `Qt6Core.dll`, and
+`scripts/dev-env.ps1` rejects it. Generated DLLs and plugin directories stay
 local build output and must not be committed.
 
 ## Tracked source integrity
