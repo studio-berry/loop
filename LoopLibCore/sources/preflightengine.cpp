@@ -6169,7 +6169,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                           result.errors,
                           result.warnings);
 
-    if (!effectivePlan.full && result.inspectionComplete)
+    if (!effectivePlan.full && !effectivePlan.reusedCheckIds.isEmpty() && result.inspectionComplete)
     {
         result.inspectionComplete = false;
         result.errorCode = QStringLiteral("revalidation-baseline-required");
@@ -6185,7 +6185,7 @@ PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
                                             const PreflightResult& baseline,
                                             const PDFRevalidationPlan& plan)
 {
-    if (plan.full || profile.pdfx.has_value())
+    if (plan.full || profile.pdfx.has_value() || plan.reusedCheckIds.isEmpty())
     {
         return run(profile, plan);
     }
