@@ -132,6 +132,7 @@ private slots:
     void run_anchoredIncludeRegionFiltersStrokeEvidence();
     void run_objectClassScopeExcludesUnrelatedCheck();
     void run_cliPageScopeNeverWidensAuthoredProfile();
+    void run_legacyAnalysisBoxMigratesAndDiagnoses();
     void run_unresolvedVariableIsIncomplete();
 };
 
@@ -2462,6 +2463,46 @@ void PreflightEngineTest::run_cliPageScopeNeverWidensAuthoredProfile()
     QVERIFY(!disjoint.inspectionComplete);
     QCOMPARE(disjoint.checkStatuses.first().status, QStringLiteral("not_applicable"));
     QCOMPARE(disjoint.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray());
+}
+
+void PreflightEngineTest::run_legacyAnalysisBoxMigratesAndDiagnoses()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 36, 36));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject legacy{
+        { QStringLiteral("name"), QStringLiteral("Legacy TAC") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 },
+            { QStringLiteral("analysis_box"), QStringLiteral("media") }
+        } } }
+    };
+    pdf::PreflightProfileData parsed;
+    QString error;
+    QVERIFY(pdf::PreflightEngine::parseProfile(legacy, parsed, error));
+    QCOMPARE(parsed.checks.first().restrictions.pageBox.value_or(QString()), QStringLiteral("media"));
+    QVERIFY(parsed.checks.first().deprecatedAnalysisBox);
+    const pdf::PreflightResult result = engine.run(legacy);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().restrictionScope.value(QStringLiteral("page_box")).toString(),
+             QStringLiteral("media"));
+    QVERIFY(result.checkStatuses.first().diagnostics.contains(
+        QStringLiteral("deprecated:analysis_box; use restrictions.page_box")));
+    QCOMPARE(result.toJson().value(QStringLiteral("checks")).toArray().first().toObject()
+                 .value(QStringLiteral("diagnostics")).toArray().first().toString(),
+             QStringLiteral("deprecated:analysis_box; use restrictions.page_box"));
+
+    QJsonObject conflictingCheck = legacy.value(QStringLiteral("checks")).toArray().first().toObject();
+    conflictingCheck.insert(QStringLiteral("restrictions"), QJsonObject{
+        { QStringLiteral("page_box"), QStringLiteral("trim") }
+    });
+    QJsonObject conflicting = legacy;
+    conflicting.insert(QStringLiteral("checks"), QJsonArray{ conflictingCheck });
+    QVERIFY(!pdf::PreflightEngine::parseProfile(conflicting, parsed, error));
+    QVERIFY(error.contains(QStringLiteral("conflicting analysis_box")));
 }
 
 void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
