@@ -38,6 +38,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QTranslator>
@@ -82,12 +83,23 @@ private slots:
     void certification_allowsWarningsAndWaivedErrors();
     void certification_rejectsSkippedOrBudgetLimitedChecks();
     void auditRun_appendsCanonicalEvents();
+    void auditRun_preservesEffectiveRestrictions();
     void certificate_roundTripsAndDetectsTampering();
     void certificate_detectsStaleDecision();
+    void certificate_bindsRestrictionDigest();
 };
 
 namespace
 {
+
+pdf::PreflightCheckStatus makeCheckStatus(const QString& id, const QString& status, const QString& reason = QString())
+{
+    pdf::PreflightCheckStatus entry;
+    entry.id = id;
+    entry.status = status;
+    entry.reason = reason;
+    return entry;
+}
 
 pdf::PreflightFinding blockingFinding()
 {
@@ -106,14 +118,16 @@ pdf::PreflightResult budgetExceededResult()
     pdf::PreflightResult result;
     result.pass = true;
     result.inspectionComplete = false;
-    result.checkStatuses.append({ QStringLiteral("ink-coverage"),
-                                  QStringLiteral("incomplete"),
-                                  QStringLiteral("budget-exceeded"),
-                                  QStringLiteral("raster-pixels"),
-                                  QStringLiteral("raster-tile"),
-                                  100,
-                                  101,
-                                  QStringLiteral("page 1") });
+    result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("ink-coverage"),
+                                                          QStringLiteral("incomplete"),
+                                                          QStringLiteral("budget-exceeded"),
+                                                          QJsonObject{},
+                                                          QStringList{},
+                                                          QStringLiteral("raster-pixels"),
+                                                          QStringLiteral("raster-tile"),
+                                                          100,
+                                                          101,
+                                                          QStringLiteral("page 1") });
     return result;
 }
 
@@ -164,14 +178,16 @@ void PreflightVerdictTest::budgetExceededWithoutFindings_isIncomplete()
 {
     pdf::PreflightResult result;
     result.inspectionComplete = false;
-    result.checkStatuses.append({ QStringLiteral("ink-coverage"),
-                                  QStringLiteral("incomplete"),
-                                  QStringLiteral("budget-exceeded"),
-                                  QStringLiteral("raster-pixels"),
-                                  QStringLiteral("raster-tile"),
-                                  100,
-                                  101,
-                                  QStringLiteral("page 1") });
+    result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("ink-coverage"),
+                                                          QStringLiteral("incomplete"),
+                                                          QStringLiteral("budget-exceeded"),
+                                                          QJsonObject{},
+                                                          QStringList{},
+                                                          QStringLiteral("raster-pixels"),
+                                                          QStringLiteral("raster-tile"),
+                                                          100,
+                                                          101,
+                                                          QStringLiteral("page 1") });
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -297,14 +313,16 @@ void PreflightVerdictTest::cancellationMarkedIncomplete_isNotPass()
 {
     pdf::PreflightResult result;
     result.inspectionComplete = false;
-    result.checkStatuses.append({ QStringLiteral("image-resolution"),
-                                  QStringLiteral("incomplete"),
-                                  QStringLiteral("cancelled"),
-                                  QString(),
-                                  QString(),
-                                  0,
-                                  0,
-                                  QStringLiteral("operator cancel") });
+    result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("image-resolution"),
+                                                          QStringLiteral("incomplete"),
+                                                          QStringLiteral("cancelled"),
+                                                          QJsonObject{},
+                                                          QStringList{},
+                                                          QString(),
+                                                          QString(),
+                                                          0,
+                                                          0,
+                                                          QStringLiteral("operator cancel") });
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -419,7 +437,7 @@ void PreflightVerdictTest::certification_allowsWarningsAndWaivedErrors()
     warningResult.documentRevisionDigest = documentDigest;
     warningResult.effectiveProfileDigest = profileDigest;
     warningResult.profileIdentity.insert(QStringLiteral("provisional"), false);
-    warningResult.checkStatuses.append({ QStringLiteral("fonts"), QStringLiteral("warning") });
+    warningResult.checkStatuses.append(makeCheckStatus(QStringLiteral("fonts"), QStringLiteral("warning")));
     QVERIFY(pdf::preflightAllowsCertification(warningResult));
 
     pdf::PreflightResult waivedResult;
@@ -428,7 +446,7 @@ void PreflightVerdictTest::certification_allowsWarningsAndWaivedErrors()
     waivedResult.effectiveProfileDigest = profileDigest;
     waivedResult.profileIdentity.insert(QStringLiteral("provisional"), false);
     waivedResult.errors.append(blockingFinding());
-    waivedResult.checkStatuses.append({ QStringLiteral("color-mode"), QStringLiteral("failed") });
+    waivedResult.checkStatuses.append(makeCheckStatus(QStringLiteral("color-mode"), QStringLiteral("failed")));
 
     pdf::PreflightDecision decision;
     decision.findingId = waivedResult.errors.first().stableId();
@@ -448,7 +466,9 @@ void PreflightVerdictTest::certification_rejectsSkippedOrBudgetLimitedChecks()
     pdf::PreflightResult skipped;
     skipped.inspectionComplete = true;
     skipped.profileIdentity.insert(QStringLiteral("provisional"), false);
-    skipped.checkStatuses.append({ QStringLiteral("ink-coverage"), QStringLiteral("skipped"), QStringLiteral("inspection incomplete") });
+    skipped.checkStatuses.append(makeCheckStatus(QStringLiteral("ink-coverage"),
+                                                 QStringLiteral("skipped"),
+                                                 QStringLiteral("inspection incomplete")));
     QVERIFY(!pdf::preflightAllowsCertification(skipped));
 
     pdf::PreflightResult budgeted;
@@ -478,7 +498,7 @@ void PreflightVerdictTest::auditRun_appendsCanonicalEvents()
     result.documentRevisionDigest = documentDigest;
     result.effectiveProfileDigest = QString(64, QLatin1Char('d'));
     result.profileIdentity.insert(QStringLiteral("provisional"), false);
-    result.checkStatuses.append({ QStringLiteral("bleed"), QStringLiteral("ok") });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
 
     const pdf::PDFOperationResult appended =
         pdf::appendPreflightAuditRun(documentPath,
@@ -504,6 +524,54 @@ void PreflightVerdictTest::auditRun_appendsCanonicalEvents()
     QVERIFY(history.verify().verified);
 }
 
+void PreflightVerdictTest::auditRun_preservesEffectiveRestrictions()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("restricted-audit.pdf"));
+    const QByteArray document("%PDF-1.4\n%%EOF\n");
+    const QString documentDigest =
+        QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest(64, QLatin1Char('e'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.profileIdentity.insert(QStringLiteral("effective_digest"), profileDigest);
+    result.coverageScope.insert(QStringLiteral("scope_restrictions"),
+                                QJsonObject{ { QStringLiteral("pages"), QJsonArray{ 2 } },
+                                               { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")));
+
+    const QJsonObject summary = pdf::preflightAuditReportSummary(result, documentPath);
+    QCOMPARE(summary.value(QStringLiteral("effective_profile_digest")).toString(), profileDigest);
+    QCOMPARE(summary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             result.coverageScope.value(QStringLiteral("scope_restrictions")).toObject());
+
+    const pdf::PDFOperationResult appended =
+        pdf::appendPreflightAuditRun(documentPath,
+                                     document,
+                                     result,
+                                     pdf::PDFOperationHistoryStatus::Accepted,
+                                     QStringLiteral("test"),
+                                     summary);
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+
+    pdf::PDFOperationHistoryStore history(
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3")));
+    QString error;
+    QVERIFY2(history.open(&error), qPrintable(error));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    const pdf::PDFOperationHistoryEvent& finished = events.back();
+    QCOMPARE(finished.effectiveProfileDigest, profileDigest);
+    QCOMPARE(finished.resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             result.coverageScope.value(QStringLiteral("scope_restrictions")).toObject());
+}
+
 void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
 {
     const QByteArray document("certified document revision");
@@ -515,7 +583,7 @@ void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
     result.documentRevisionDigest = documentDigest;
     result.effectiveProfileDigest = profileDigest;
     result.profileIdentity.insert(QStringLiteral("provisional"), false);
-    result.checkStatuses.append({ QStringLiteral("bleed"), QStringLiteral("ok") });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
 
     pdf::PDFOperationHistoryEvent preflight;
     preflight.sequence = 1;
@@ -586,6 +654,60 @@ void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
              pdf::PreflightCertificateState::InvalidAuditChainBroken);
 }
 
+void PreflightVerdictTest::certificate_bindsRestrictionDigest()
+{
+    const QByteArray document("restricted certified revision");
+    const QString documentDigest = QString::fromLatin1(QCryptographicHash::hash(document, QCryptographicHash::Sha256).toHex());
+    const QString restrictedDigest(64, QLatin1Char('f'));
+    const QString unrestrictedDigest(64, QLatin1Char('a'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = restrictedDigest;
+    result.profileIdentity.insert(QStringLiteral("provisional"), false);
+    result.coverageScope.insert(QStringLiteral("scope_restrictions"),
+                                QJsonObject{ { QStringLiteral("pages"), QJsonArray{ 1 } } });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")));
+
+    const QJsonObject summary = pdf::preflightAuditReportSummary(result, QStringLiteral("document.pdf"));
+
+    pdf::PDFOperationHistoryEvent preflight;
+    preflight.sequence = 1;
+    preflight.entryId = QUuid::createUuid();
+    preflight.executionId = QUuid::createUuid();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
+    preflight.documentRevisionDigest = documentDigest;
+    preflight.effectiveProfileDigest = restrictedDigest;
+    preflight.resultSummary = summary;
+    preflight.createdUtc = QDateTime::currentDateTimeUtc();
+    preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
+
+    pdf::PreflightCertificate certificate;
+    QString error;
+    QVERIFY(pdf::issuePreflightCertificate(result,
+                                           summary,
+                                           document,
+                                           { preflight },
+                                           QStringLiteral("operator"),
+                                           certificate,
+                                           error));
+    QCOMPARE(certificate.effectiveProfileDigest, restrictedDigest);
+
+    pdf::PreflightResult mismatched = result;
+    mismatched.effectiveProfileDigest = unrestrictedDigest;
+    pdf::PreflightCertificate refused;
+    QVERIFY(!pdf::issuePreflightCertificate(mismatched,
+                                            summary,
+                                            document,
+                                            { preflight },
+                                            QStringLiteral("operator"),
+                                            refused,
+                                            error));
+    QVERIFY(!error.isEmpty());
+}
+
 void PreflightVerdictTest::certificate_detectsStaleDecision()
 {
     const QByteArray document("waived document revision");
@@ -598,7 +720,7 @@ void PreflightVerdictTest::certificate_detectsStaleDecision()
     result.effectiveProfileDigest = profileDigest;
     result.profileIdentity.insert(QStringLiteral("provisional"), false);
     result.errors.append(blockingFinding());
-    result.checkStatuses.append({ QStringLiteral("color-mode"), QStringLiteral("failed") });
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("color-mode"), QStringLiteral("failed")));
 
     pdf::PreflightDecision decision;
     decision.findingId = result.errors.first().stableId();

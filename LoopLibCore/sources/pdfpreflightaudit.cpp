@@ -13,6 +13,24 @@
 namespace pdf
 {
 
+QJsonObject preflightAuditReportSummary(const PreflightResult& result, const QString& documentPath)
+{
+    QJsonObject summary = result.toJson(documentPath);
+    if (!result.effectiveProfileDigest.isEmpty())
+    {
+        summary.insert(QStringLiteral("effective_profile_digest"), result.effectiveProfileDigest);
+    }
+    if (!result.profileIdentity.isEmpty())
+    {
+        summary.insert(QStringLiteral("profile_identity"), result.profileIdentity);
+    }
+    if (!result.coverageScope.isEmpty())
+    {
+        summary.insert(QStringLiteral("coverage_scope"), result.coverageScope);
+    }
+    return summary;
+}
+
 PDFOperationResult appendPreflightAuditRun(const QString& documentPath,
                                            const QByteArray& documentBytes,
                                            const PreflightResult& result,
@@ -75,7 +93,7 @@ PDFOperationResult appendPreflightAuditRun(const QString& documentPath,
     finished.operatorIdentity = operatorIdentity.trimmed();
     finished.documentRevisionDigest = result.documentRevisionDigest;
     finished.effectiveProfileDigest = result.effectiveProfileDigest;
-    finished.resultSummary = summary.isEmpty() ? result.toJson(documentPath) : summary;
+    finished.resultSummary = summary.isEmpty() ? preflightAuditReportSummary(result, documentPath) : summary;
     if (status == PDFOperationHistoryStatus::Accepted || status == PDFOperationHistoryStatus::RolledBack)
         finished.output = imported.artifact;
     if (const PDFOperationResult finishedResult = history.appendEvent(finished); !finishedResult)

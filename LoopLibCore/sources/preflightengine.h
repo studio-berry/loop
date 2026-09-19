@@ -49,7 +49,7 @@ namespace pdf
 {
 
 /// Report contract version emitted by PreflightResult::toJson().
-inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 3;
+inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 4;
 
 /// Finding location scope in normalized preflight reports.
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_DOCUMENT("document");
@@ -193,6 +193,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckConfig
     int maxRegionsPerPage = 20;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
     QString inkCoverageAnalysisBox = QStringLiteral("bleed");
+    bool deprecatedAnalysisBox = false;
 
     // image-resolution parameters.
     int minDpi = 0;
@@ -251,6 +252,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightFinding
     QString checkId;
     QJsonObject evidence;
     QStringList evidenceIds;
+    QJsonObject restrictionScope;
 
     /// Stable identity for this finding. The identity excludes translated
     /// message text and geometry so it survives locale changes and fixups.
@@ -342,6 +344,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QJsonObject restrictionScope;
+    QStringList diagnostics;
     QString budgetKind;
     QString budgetPool;
     qint64 budgetLimit = 0;
@@ -413,6 +417,11 @@ public:
                         const QJsonObject& jobSpecBindings,
                         const QJsonObject& cliBindings,
                         const PDFRevalidationPlan& plan);
+    PreflightResult run(const QJsonObject& profile,
+                        const QJsonObject& jobSpecBindings,
+                        const QJsonObject& cliBindings,
+                        const PDFRevalidationPlan& plan,
+                        const std::optional<QSet<int>>& cliPages);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
     PreflightResult revalidate(const PreflightProfileData& profile,

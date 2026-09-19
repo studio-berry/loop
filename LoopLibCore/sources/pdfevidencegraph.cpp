@@ -44,6 +44,7 @@
 #include <QPainterPathStroker>
 #include <QBuffer>
 #include <QSet>
+#include <QVector>
 #include <QCryptographicHash>
 
 #include <cmath>
@@ -704,6 +705,44 @@ protected:
         return false;
     }
 
+    void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
+    {
+        if (tag != "OC")
+        {
+            m_layerStack.push_back({ false, QString() });
+            return;
+        }
+        PDFObjectReference reference;
+        if (properties.isReference())
+        {
+            reference = properties.getReference();
+        }
+        else if (properties.isName() && getPropertiesDictionary())
+        {
+            const PDFObject& referenced = getPropertiesDictionary()->get(properties.getString());
+            if (referenced.isReference())
+            {
+                reference = referenced.getReference();
+            }
+        }
+        QString name;
+        const PDFOptionalContentActivity* activity = getOptionalContentActivity();
+        const PDFOptionalContentProperties* available = activity ? activity->getProperties() : nullptr;
+        if (reference.isValid() && available && available->hasOptionalContentGroup(reference))
+        {
+            name = available->getOptionalContentGroup(reference).getName();
+        }
+        m_layerStack.push_back({ true, name });
+    }
+
+    void performMarkedContentEnd() override
+    {
+        if (!m_layerStack.isEmpty())
+        {
+            m_layerStack.removeLast();
+        }
+    }
+
     bool performOriginalImagePainting(const PDFImage& image,
                                       const PDFStream* stream,
                                       PDFObjectReference reference) override
@@ -757,6 +796,7 @@ protected:
                                     qreal(image.getImageData().getHeight()) / heightInches);
         record.units = QStringLiteral("dpi");
         record.geometry = imageBoundsFromCtm(ctm);
+        attachLayerProvenance(record);
         record.id = QStringLiteral("img:%1:%2:%3").arg(m_pageNumber).arg(record.objectId.isEmpty() ? QStringLiteral("anon") : record.objectId).arg(++m_imageOrdinal);
         appendEvidenceRecord(m_graph, record, m_budget);
         return true;
@@ -866,6 +906,7 @@ protected:
         record.extra.insert(QStringLiteral("declared_width"), declaredWidth);
         record.extra.insert(QStringLiteral("effective_width"), effectiveWidth);
         record.extra.insert(QStringLiteral("hairline"), hairline);
+        attachLayerProvenance(record);
         record.id = QStringLiteral("stroke:%1:%2").arg(m_pageNumber).arg(++m_strokeOrdinal);
         appendEvidenceRecord(m_graph, record, m_budget);
     }
@@ -961,6 +1002,29 @@ protected:
     }
 
 private:
+    void attachLayerProvenance(PDFEvidenceRecord& record) const
+    {
+        QJsonArray names;
+        bool complete = true;
+        for (const auto& layer : m_layerStack)
+        {
+            if (!layer.first)
+            {
+                continue;
+            }
+            if (layer.second.isEmpty())
+            {
+                complete = false;
+            }
+            else
+            {
+                names.append(layer.second);
+            }
+        }
+        record.extra.insert(QStringLiteral("ocg_names"), names);
+        record.extra.insert(QStringLiteral("ocg_complete"), complete);
+    }
+
     struct TransparencyGroupFrame
     {
         TransparencyColorFamily blendSpace = TransparencyColorFamily::Unknown;
@@ -1063,6 +1127,7 @@ private:
     QPainterPath m_clipPath;
     std::vector<QPainterPath> m_clipStack;
     std::vector<TransparencyGroupFrame> m_groups;
+    QVector<QPair<bool, QString>> m_layerStack;
     int m_imageOrdinal = 0;
     int m_strokeOrdinal = 0;
 };

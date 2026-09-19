@@ -39,7 +39,7 @@
 #include <QTemporaryFile>
 
 #ifndef LOOP_PREFLIGHT_SCHEMA_VERSION
-#define LOOP_PREFLIGHT_SCHEMA_VERSION 3
+#define LOOP_PREFLIGHT_SCHEMA_VERSION 4
 #endif
 
 namespace pdfplugin::preflight
@@ -322,7 +322,14 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
     }
 
     const QJsonValue id = finding.value(QStringLiteral("id"));
-    if (!id.isUndefined() && (!id.isString() || !isStableFindingId(id.toString())))
+    if (schemaVersion >= 4)
+    {
+        if (!id.isString() || !isStableFindingId(id.toString()))
+        {
+            return setValidationError(errorMessage, QStringLiteral("%1.id must be a 16-character lowercase hexadecimal stable finding id.").arg(context));
+        }
+    }
+    else if (!id.isUndefined() && (!id.isString() || !isStableFindingId(id.toString())))
     {
         return setValidationError(errorMessage, QStringLiteral("%1.id must be a 16-character lowercase hexadecimal stable finding id.").arg(context));
     }
@@ -399,6 +406,7 @@ inline const QSet<QString>& findingV2AllowedProperties()
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
+        QStringLiteral("scope_restrictions"),
         QStringLiteral("check_id"),
         QStringLiteral("evidence"),
         QStringLiteral("evidence_ids")

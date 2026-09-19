@@ -26,6 +26,13 @@
 namespace pdf
 {
 
+/// Canonical audit summary for a completed preflight run. Binds the effective
+/// profile digest and coverage scope, including CLI/profile restriction scope,
+/// into the retained report payload shared by PdfTool, Editor, and certificate
+/// verification.
+LOOPLIBCORESHARED_EXPORT QJsonObject preflightAuditReportSummary(const PreflightResult& result,
+                                                                  const QString& documentPath = QString());
+
 /// Appends one completed preflight act to the canonical operation-history
 /// chain. The document bytes are retained as an immutable artifact outside the
 /// PDF; no provenance is written into the document itself.

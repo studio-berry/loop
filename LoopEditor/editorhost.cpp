@@ -973,13 +973,15 @@ bool EditorHost::runPreflight()
             else if (pdf::reducePreflightVerdict(outcome->result).state == pdf::PreflightVerdictState::Error)
                 auditStatus = pdf::PDFOperationHistoryStatus::Failed;
 
+            const QJsonObject auditSummary =
+                pdf::preflightAuditReportSummary(outcome->result, documentPath);
             if (const pdf::PDFOperationResult auditResult =
                     pdf::appendPreflightAuditRun(documentPath,
                                                  auditBytes,
                                                  outcome->result,
                                                  auditStatus,
                                                  QStringLiteral("LoopEditor"),
-                                                 outcome->result.toJson(documentPath));
+                                                 auditSummary);
                 !auditResult)
             {
                 throw std::runtime_error(auditResult.getErrorMessage().toStdString());

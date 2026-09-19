@@ -623,7 +623,7 @@ add_executable(UnitTestsPdfToolContract
     tst_pdftoolcontract.cpp
 )
 
-target_link_libraries(UnitTestsPdfToolContract PRIVATE Qt6::Core Qt6::Test)
+target_link_libraries(UnitTestsPdfToolContract PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 add_dependencies(UnitTestsPdfToolContract PdfTool)
 target_compile_definitions(UnitTestsPdfToolContract PRIVATE
     PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"

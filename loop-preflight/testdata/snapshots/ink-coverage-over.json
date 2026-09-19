@@ -1,7 +1,13 @@
 {
     "checks": [
         {
+            "diagnostics": [
+                "deprecated:analysis_box; use restrictions.page_box"
+            ],
             "id": "ink-coverage",
+            "scope_restrictions": {
+                "page_box": "bleed"
+            },
             "status": "warning"
         }
     ],
@@ -13,7 +19,7 @@
     "pass": true,
     "profile": "Loop Test - Ink Coverage",
     "schema_kind": "preflight-report",
-    "schema_version": 3,
+    "schema_version": 4,
     "verdict": {
         "blocking_finding_ids": [
         ],
@@ -42,6 +48,9 @@
             "message": "Total ink coverage 370% exceeds maximum 300% over 4361 mm^2 on page 1",
             "page": 1,
             "scope": "object",
+            "scope_restrictions": {
+                "page_box": "bleed"
+            },
             "severity": "warning",
             "type": "ink-coverage"
         }

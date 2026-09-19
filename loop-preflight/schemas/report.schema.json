@@ -14,8 +14,8 @@
     },
     "schema_version": {
       "type": "integer",
-      "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
+      "enum": [1, 2, 3, 4],
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 requires stable content-addressed finding ids. Decisions, digests, profile identity, coverage scope, scope restrictions, and variable bindings are additive fields in version 3+."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -132,6 +132,20 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 4 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "errors": { "items": { "$ref": "#/$defs/finding_v4" } },
+          "warnings": { "items": { "$ref": "#/$defs/finding_v4" } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "revalidation": {
       "type": "object",
@@ -297,6 +311,31 @@
       },
       "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
     },
+    "scope_restrictions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "page_box": { "enum": ["media", "crop", "trim", "bleed", "art"] },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "rect_pt", "anchor", "mode"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "rect_pt": { "$ref": "#/$defs/bbox" },
+              "anchor": { "enum": ["media", "crop", "trim", "bleed"] },
+              "mode": { "enum": ["include", "exclude"] }
+            }
+          }
+        },
+        "layers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "object_classes": { "type": "array", "items": { "enum": ["text", "image", "vector", "annotation", "shading", "form"] }, "uniqueItems": true },
+        "unsupported_reason": { "type": "string" }
+      }
+    },
     "finding_v2": {
       "type": "object",
       "additionalProperties": false,
@@ -337,6 +376,7 @@
           "description": "Human-readable description for the report panel."
         },
         "bbox": { "$ref": "#/$defs/bbox" },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
         "check_id": {
           "type": "string",
           "description": "Optional profile check id that produced this finding."
@@ -356,6 +396,12 @@
         { "$ref": "#/$defs/finding_v2" }
       ]
     },
+    "finding_v4": {
+      "allOf": [
+        { "$ref": "#/$defs/finding_v2" },
+        { "required": ["id"] }
+      ]
+    },
     "check_status": {
       "type": "object",
       "additionalProperties": false,
@@ -368,8 +414,14 @@
         },
         "status": {
           "type": "string",
-          "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
+          "enum": ["ok", "warning", "failed", "skipped", "unsupported", "incomplete", "not_inspected", "not_applicable"],
           "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
+        },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
+        "diagnostics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Non-blocking diagnostics, including migration warnings for deprecated profile inputs."
         },
         "reason": {
           "type": "string",

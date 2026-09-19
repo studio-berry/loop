@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name": "Loop Restriction - page-box",
+  "restrictions": {
+    "page_box": "trim"
+  },
+  "checks": [
+    {
+      "id": "bleed",
+      "amount_pt": 9
+    }
+  ]
+}

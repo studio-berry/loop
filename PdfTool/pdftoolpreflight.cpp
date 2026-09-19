@@ -25,6 +25,7 @@
 #include "preflightclirun.h"
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
+#include "pdfpreflightaudit.h"
 #include "pdfpreflightverdict.h"
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
@@ -480,6 +481,9 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     inspectionRequest.profile = runProfile;
     inspectionRequest.jobSpec = jobSpec;
     inspectionRequest.cliBindings = cliBindings;
+    inspectionRequest.firstPage = options.pageSelectorFirstPage;
+    inspectionRequest.lastPage = options.pageSelectorLastPage;
+    inspectionRequest.selectedPages = options.pageSelectorSelection;
     inspectionRequest.plan = revalidationPlan;
     inspectionRequest.cancellation = &cancellationControl;
 
@@ -582,13 +586,14 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Failed;
     }
+    const QJsonObject auditSummary = pdf::preflightAuditReportSummary(result, options.document);
     if (const pdf::PDFOperationResult auditResult =
             pdf::appendPreflightAuditRun(options.document,
                                          sourceData,
                                          result,
                                          historyStatus,
                                          QStringLiteral("PdfTool"),
-                                         result.toJson(options.document));
+                                         auditSummary);
         !auditResult)
     {
         reportDiagnostic(options,
@@ -617,7 +622,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         pdf::PreflightCertificate certificate;
         QString certificateError;
         if (!pdf::issuePreflightCertificate(result,
-                                            result.toJson(options.document),
+                                            auditSummary,
                                             sourceData,
                                             events,
                                             QStringLiteral("PdfTool"),
@@ -694,7 +699,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PreflightProfile;
+    return ConsoleFormat | OpenDocument | PreflightProfile | PageSelector;
 }
 
 }   // namespace pdftool
