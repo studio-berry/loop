@@ -6147,6 +6147,8 @@ PreflightResult PreflightEngine::revalidate(const PreflightProfileData& profile,
 
     if (!result.inspectionComplete || !m_activeGraph.isComplete())
     {
+        revalidation.insert(QStringLiteral("reused_check_ids"), QJsonArray());
+        revalidation.insert(QStringLiteral("reason"), QStringLiteral("targeted-recompute-incomplete"));
         result.revalidation = revalidation;
         return result;
     }
