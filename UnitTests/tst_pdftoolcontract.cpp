@@ -113,6 +113,7 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void preflightPageSelectorsNarrowReportScope();
     void schemaRejectsNonJsonOutput();
     void schemaReportsTheMatrixForEveryKind();
     void schemaReportsUnsupportedMajorIdenticallyToCore();
@@ -340,6 +341,65 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::preflightPageSelectorsNarrowReportScope()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Scoped image preflight") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+            { QStringLiteral("min_dpi"), 300 }
+        } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const QStringList base{ QStringLiteral("preflight"), pdfPath,
+                            QStringLiteral("--profile"), profilePath,
+                            QStringLiteral("--console-format"), QStringLiteral("json") };
+    QStringList first = base;
+    first << QStringLiteral("--page-select") << QStringLiteral("1");
+    const ToolRun inspected = runPdfTool(first);
+    QVERIFY2(inspected.exitCode >= 0 && inspected.exitCode != 2, inspected.stderrData.constData());
+    const QJsonObject inspectedReport = inspected.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY(!inspectedReport.isEmpty());
+    QCOMPARE(inspectedReport.value(QStringLiteral("coverage_scope")).toObject()
+                 .value(QStringLiteral("cli_page_scope")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    QCOMPARE(inspectedReport.value(QStringLiteral("checks")).toArray().first().toObject()
+                 .value(QStringLiteral("scope_restrictions")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+
+    QStringList disjoint = base;
+    disjoint << QStringLiteral("--page-first") << QStringLiteral("2")
+             << QStringLiteral("--page-select") << QStringLiteral("1");
+    const ToolRun excluded = runPdfTool(disjoint);
+    QVERIFY(excluded.exitCode != 0);
+    const QJsonObject excludedReport = excluded.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY(!excludedReport.value(QStringLiteral("pass")).toBool(true));
+    QCOMPARE(excludedReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+             QStringLiteral("incomplete"));
+    QCOMPARE(excludedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("status")).toString(),
+             QStringLiteral("not_applicable"));
+
+    QStringList malformed = base;
+    malformed << QStringLiteral("--page-select") << QStringLiteral("1-nope");
+    const ToolRun invalid = runPdfTool(malformed);
+    QVERIFY(invalid.exitCode != 0);
+    const QJsonObject invalidReport = invalid.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QCOMPARE(invalidReport.value(QStringLiteral("error")).toObject().value(QStringLiteral("code")).toString(),
+             QStringLiteral("unsupported-scope"));
 }
 
 void PdfToolContractTest::schemaRejectsNonJsonOutput()
