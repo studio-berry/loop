@@ -158,10 +158,10 @@
       },
       "id": "production.add-contour-bleed",
       "impact": {
-        "document_wide": true,
+        "document_wide": false,
         "domains": [],
-        "full_rewrite": true,
-        "impact_complete": false,
+        "full_rewrite": false,
+        "impact_complete": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -216,10 +216,10 @@
       },
       "id": "production.place-grommets",
       "impact": {
-        "document_wide": true,
+        "document_wide": false,
         "domains": [],
-        "full_rewrite": true,
-        "impact_complete": false,
+        "full_rewrite": false,
+        "impact_complete": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",
@@ -271,10 +271,10 @@
       },
       "id": "production.validate-wide-format",
       "impact": {
-        "document_wide": true,
+        "document_wide": false,
         "domains": [],
-        "full_rewrite": true,
-        "impact_complete": false,
+        "full_rewrite": false,
+        "impact_complete": true,
         "requires_independent_oracle": false
       },
       "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp",

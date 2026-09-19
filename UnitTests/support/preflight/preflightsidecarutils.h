@@ -576,6 +576,7 @@ inline const QSet<QString>& normalizedReportAllowedProperties()
         QStringLiteral("document_revision_digest"),
         QStringLiteral("effective_profile_digest"),
         QStringLiteral("decisions"),
+        QStringLiteral("revalidation"),
         QStringLiteral("errors"),
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),
