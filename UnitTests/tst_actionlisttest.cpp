@@ -172,6 +172,7 @@ private slots:
     void selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute();
     void selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision();
     void rejectsNonObjectSelectValue();
+    void rejectsMalformedStepInput();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -666,6 +667,59 @@ void ActionListTest::rejectsNonObjectSelectValue()
     };
     pdf::PDFActionList actionList;
     QVERIFY(!pdf::PDFActionList::fromJson(recipeJson, &actionList));
+}
+
+void ActionListTest::rejectsMalformedStepInput()
+{
+    const QJsonObject validStep{
+        { QStringLiteral("id"), QStringLiteral("repair") },
+        { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+        { QStringLiteral("params"), QJsonObject() }
+    };
+    const auto rejectStep = [&](const QJsonObject& step, const QString& field)
+    {
+        const QJsonObject recipe{
+            { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+            { QStringLiteral("id"), QStringLiteral("invalid-step") },
+            { QStringLiteral("name"), QStringLiteral("Invalid step") },
+            { QStringLiteral("steps"), QJsonArray{ step } }
+        };
+        pdf::PDFActionList parsed;
+        parsed.id = QStringLiteral("unchanged");
+        const pdf::PDFOperationResult outcome = pdf::PDFActionList::fromJson(recipe, &parsed);
+        QVERIFY(!outcome);
+        QVERIFY2(outcome.getErrorMessage().contains(field), qPrintable(outcome.getErrorMessage()));
+        QCOMPARE(parsed.id, QStringLiteral("unchanged"));
+    };
+
+    QJsonObject step = validStep;
+    step.insert(QStringLiteral("params"), QJsonArray());
+    rejectStep(step, QStringLiteral("params"));
+    step.insert(QStringLiteral("params"), QJsonValue(QJsonValue::Null));
+    rejectStep(step, QStringLiteral("params"));
+    step.remove(QStringLiteral("params"));
+    rejectStep(step, QStringLiteral("params"));
+
+    step = validStep;
+    step.insert(QStringLiteral("when"), QStringLiteral("not a condition"));
+    rejectStep(step, QStringLiteral("when"));
+    step.insert(QStringLiteral("when"), QJsonValue(QJsonValue::Null));
+    rejectStep(step, QStringLiteral("when"));
+
+    step.insert(QStringLiteral("when"), QJsonObject{
+                                            { QStringLiteral("previousStepStatus"), QStringLiteral("succeeded") } });
+    rejectStep(step, QStringLiteral("when.previousStepStatus"));
+    step.insert(QStringLiteral("when"), QJsonObject{
+                                            { QStringLiteral("previousStepStatus"), QJsonValue(QJsonValue::Null) } });
+    rejectStep(step, QStringLiteral("when.previousStepStatus"));
+
+    pdf::PDFActionList parsed;
+    QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
+                                              { QStringLiteral("steps"), QStringLiteral("not an array") } },
+                                          &parsed));
+    QVERIFY(!pdf::PDFActionList::fromJson(QJsonObject{
+                                              { QStringLiteral("steps"), QJsonArray{ QStringLiteral("not a step object") } } },
+                                          &parsed));
 }
 
 void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision()
