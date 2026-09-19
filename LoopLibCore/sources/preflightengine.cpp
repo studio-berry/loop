@@ -658,6 +658,43 @@ QJsonObject PreflightRestrictions::toJson() const
     {
         object.insert(QStringLiteral("page_box"), *pageBox);
     }
+    if (!regions.isEmpty())
+    {
+        QJsonArray regionArray;
+        for (const PreflightRegion& region : regions)
+        {
+            regionArray.append(QJsonObject{
+                { QStringLiteral("name"), region.name },
+                { QStringLiteral("rect_pt"), QJsonArray{
+                                                   region.rectPt.left(),
+                                                   region.rectPt.top(),
+                                                   region.rectPt.right(),
+                                                   region.rectPt.bottom() } },
+                { QStringLiteral("anchor"), region.anchor },
+                { QStringLiteral("mode"), region.mode }
+            });
+        }
+        object.insert(QStringLiteral("regions"), regionArray);
+    }
+    const auto sortedValues = [](const QSet<QString>& values)
+    {
+        QStringList sorted = values.values();
+        sorted.sort();
+        QJsonArray array;
+        for (const QString& value : sorted)
+        {
+            array.append(value);
+        }
+        return array;
+    };
+    if (layers.has_value())
+    {
+        object.insert(QStringLiteral("layers"), sortedValues(*layers));
+    }
+    if (objectClasses.has_value())
+    {
+        object.insert(QStringLiteral("object_classes"), sortedValues(*objectClasses));
+    }
     if (!unsupportedReason.isEmpty())
     {
         object.insert(QStringLiteral("unsupported_reason"), unsupportedReason);
@@ -727,21 +764,13 @@ bool parsePreflightRestrictions(const QJsonObject& object,
         for (const QString& part : parts)
         {
             const int dash = part.indexOf(QLatin1Char('-'));
-            int first = 0;
-            int last = 0;
-            if (dash < 0)
+            bool firstValid = false;
+            bool lastValid = false;
+            const int first = (dash < 0 ? part : part.left(dash)).toInt(&firstValid);
+            const int last = (dash < 0 ? part : part.mid(dash + 1)).toInt(&lastValid);
+            if (!firstValid || !lastValid || first < 1 || last < first || last > 100000)
             {
-                first = part.toInt();
-                last = first;
-            }
-            else
-            {
-                first = part.left(dash).toInt();
-                last = part.mid(dash + 1).toInt();
-            }
-            if (first < 1 || last < first)
-            {
-                errorMessage = QStringLiteral("Restriction 'pages' contains an empty or inverted range.");
+                errorMessage = QStringLiteral("Restriction 'pages' contains an invalid, inverted, or oversized range.");
                 return false;
             }
             for (int page = first; page <= last; ++page)
@@ -766,7 +795,6 @@ bool parsePreflightRestrictions(const QJsonObject& object,
             return false;
         }
         restrictions.pageBox = box;
-        restrictions.unsupportedReason = QStringLiteral("page_box restrictions are not honoured by the current check runners.");
     }
     if (object.contains(QStringLiteral("regions")))
     {
@@ -784,19 +812,54 @@ bool parsePreflightRestrictions(const QJsonObject& object,
             }
             const QJsonObject regionObject = regionValue.toObject();
             PreflightRegion region;
-            region.name = regionObject.value(QStringLiteral("name")).toString();
+            region.name = regionObject.value(QStringLiteral("name")).toString().trimmed();
             const QJsonArray rect = regionObject.value(QStringLiteral("rect_pt")).toArray();
             if (region.name.isEmpty() || rect.size() != 4)
             {
                 errorMessage = QStringLiteral("Each restriction region requires name and rect_pt[4].");
                 return false;
             }
+            for (const QJsonValue& coordinate : rect)
+            {
+                if (!coordinate.isDouble() || !std::isfinite(coordinate.toDouble()))
+                {
+                    errorMessage = QStringLiteral("Restriction region rect_pt must contain four finite numbers.");
+                    return false;
+                }
+            }
             region.rectPt = QRectF(QPointF(rect.at(0).toDouble(), rect.at(1).toDouble()), QPointF(rect.at(2).toDouble(), rect.at(3).toDouble()));
-            region.anchor = regionObject.value(QStringLiteral("anchor")).toString(QStringLiteral("trim"));
-            region.mode = regionObject.value(QStringLiteral("mode")).toString(QStringLiteral("include"));
+            if (!region.rectPt.isValid() || region.rectPt.isEmpty())
+            {
+                errorMessage = QStringLiteral("Restriction region rect_pt must have a positive width and height.");
+                return false;
+            }
+            const QJsonValue anchorValue = regionObject.value(QStringLiteral("anchor"));
+            const QJsonValue modeValue = regionObject.value(QStringLiteral("mode"));
+            if (!anchorValue.isUndefined() && !anchorValue.isString())
+            {
+                errorMessage = QStringLiteral("Restriction region anchor must be a page-box name.");
+                return false;
+            }
+            if (!modeValue.isUndefined() && !modeValue.isString())
+            {
+                errorMessage = QStringLiteral("Restriction region mode must be include or exclude.");
+                return false;
+            }
+            region.anchor = anchorValue.toString(QStringLiteral("trim"));
+            region.mode = modeValue.toString(QStringLiteral("include"));
+            if (region.anchor != QLatin1String("media") && region.anchor != QLatin1String("crop") &&
+                region.anchor != QLatin1String("trim") && region.anchor != QLatin1String("bleed"))
+            {
+                errorMessage = QStringLiteral("Restriction region has an unsupported anchor.");
+                return false;
+            }
+            if (region.mode != QLatin1String("include") && region.mode != QLatin1String("exclude"))
+            {
+                errorMessage = QStringLiteral("Restriction region has an unsupported mode.");
+                return false;
+            }
             restrictions.regions.push_back(region);
         }
-        restrictions.unsupportedReason = QStringLiteral("region restrictions are not honoured by the current check runners.");
     }
     if (object.contains(QStringLiteral("layers")))
     {
@@ -816,7 +879,6 @@ bool parsePreflightRestrictions(const QJsonObject& object,
             layers.insert(value.toString());
         }
         restrictions.layers = layers;
-        restrictions.unsupportedReason = QStringLiteral("layer restrictions are not honoured by the current check runners.");
     }
     if (object.contains(QStringLiteral("object_classes")))
     {
@@ -840,7 +902,6 @@ bool parsePreflightRestrictions(const QJsonObject& object,
             classes.insert(value.toString());
         }
         restrictions.objectClasses = classes;
-        restrictions.unsupportedReason = QStringLiteral("object_class restrictions are not honoured by the current check runners.");
     }
     return true;
 }
