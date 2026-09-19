@@ -28,10 +28,10 @@ not a promise that every check has an implementation for every dimension.
 | Dimension | Honored by | Explicitly uninspected by |
 | --- | --- | --- |
 | `pages` | Evidence Graph-backed checks and `ink-coverage` | Non-graph, page-spanning check runners (e.g. `bleed`, `output-intent`) until they take a per-page selector |
-| `page_box` | `ink-coverage` with media/crop/trim/bleed | Other checks; `art` for ink coverage |
-| `regions` | None yet | All checks; engine parses, validates, and records geometry but does not approximate it |
+| `page_box` | `ink-coverage` with media/crop/trim/bleed; `image-resolution` and `thin-strokes` with geometric evidence (including art) | Other checks; `art` for ink coverage |
+| `regions` | Include-only anchored regions on `image-resolution` and `thin-strokes`; includes intersect so check scope never widens profile scope | Other checks and exclude-mode regions; unresolved target or anchor geometry is `not_inspected` |
 | `layers` | None yet | All checks until collected evidence contains verified OCG membership |
-| `object_classes` | None yet | All checks until the runner has a trustworthy object-class mapping |
+| `object_classes` | `image-resolution` uses `image`; `thin-strokes` uses `vector` | Other checks until their evidence has a trustworthy object-class mapping |
 
 The uninspected cells are residual implementation work for #125, not a claim of
 support. Fixes must not be offered as safe on an incomplete scoped run.
@@ -52,9 +52,9 @@ cannot restore a page already excluded by the authored profile or a check.
 - Qt tests for the parser, range limits, resolved scope in findings and check
   statuses, empty intersections, and CLI digest binding.
 - PdfTool process-level tests for all three selectors and profile/check narrowing.
-- Fixtures showing anchored region, OCG, and object-class targeting where the
-  corresponding runner is implemented; otherwise a test must assert
-  `not_inspected` and an incomplete verdict.
+- Fixtures showing anchoring against non-origin/non-matching media and trim
+  boxes, OCG membership, and object-class targeting. Exclude-mode regions
+  remain `not_inspected` until partial object overlap is represented safely.
 - Independent Core/Editor/PdfTool parity proof on the same exact PDF revision
   and effective scope.
 - Rebase schema changes against #645's report v4 upgrade and rerun its relevant
