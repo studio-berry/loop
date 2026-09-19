@@ -49,6 +49,8 @@
 namespace pdf
 {
 
+struct PreflightResult;
+
 enum class PDFRepairStatus
 {
     Planned,
@@ -165,6 +167,13 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta
 
     QJsonObject toJson() const;
 };
+
+/// Compares two preflight runs using stable finding identities. Findings whose
+/// checks were intentionally outside a targeted revalidation remain unchanged;
+/// findings whose checks could not complete are classified as incomplete and
+/// are never reported as resolved.
+LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
+                                                                    const PreflightResult& after);
 
 struct LOOPLIBCORESHARED_EXPORT PDFRepairResult
 {
