@@ -6083,6 +6083,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
                  (check.id != QStringLiteral("ink-coverage") || *check.restrictions.pageBox == QStringLiteral("art")))
             unsupportedDimension = QStringLiteral("page_box");
         else if (check.restrictions.pages.has_value() &&
+                 check.id == QStringLiteral("color-inventory") &&
+                 int(check.restrictions.pages->size()) != pageCount)
+            unsupportedDimension = QStringLiteral("pages");
+        else if (check.restrictions.pages.has_value() &&
                  !isGraphBackedCheckId(check.id) && check.id != QStringLiteral("ink-coverage"))
             unsupportedDimension = QStringLiteral("pages");
 
