@@ -163,6 +163,7 @@ private slots:
     void cliParityRecipeHashAndOutputSha256();
     void surfacesPerStepValidationErrors();
     void controllerFencesValidationPlanAndStaleCompletion();
+    void confirmedPlanDigestIsRequiredForSuccessfulExecution();
     void executeRequiresPostflightProfile();
     void addBleedRepairRejectsUnknownMode();
     void stepPreflightIsScopedToOperationImpact();
@@ -502,6 +503,7 @@ void ActionListTest::controllerFencesValidationPlanAndStaleCompletion()
                         QStringLiteral("plan-job"));
     pdf::PDFActionListExecutionResult plan;
     plan.recipeHash = QStringLiteral("recipe-hash-a");
+    plan.planDigest = QStringLiteral("confirmed-plan-digest");
     plan.status = QStringLiteral("planned");
     QVERIFY(controller.acceptPlan(QStringLiteral("plan-job"), QStringLiteral("rev-1"), plan));
     QVERIFY(controller.planMatches(QStringLiteral("doc"), QStringLiteral("rev-1"),
@@ -523,6 +525,48 @@ void ActionListTest::controllerFencesValidationPlanAndStaleCompletion()
     controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-3"));
     QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Idle);
     QVERIFY(!controller.validationReady());
+}
+
+void ActionListTest::confirmedPlanDigestIsRequiredForSuccessfulExecution()
+{
+    pdfinteraction::ActionListController controller;
+    const auto begin = [&](pdfinteraction::ActionListController::State phase, const QString& jobId)
+    {
+        controller.beginRun(phase, QStringLiteral("document"), QStringLiteral("revision"),
+                            QStringLiteral("recipe"), QStringLiteral("recipe-hash"),
+                            QStringLiteral("profile-and-bindings-hash"), jobId);
+    };
+    begin(pdfinteraction::ActionListController::State::Validating, QStringLiteral("validation"));
+    QVERIFY(controller.acceptValidation(QStringLiteral("validation"), QStringLiteral("revision"), {}, {}));
+
+    begin(pdfinteraction::ActionListController::State::Planning, QStringLiteral("planning"));
+    pdf::PDFActionListExecutionResult plan;
+    plan.status = QStringLiteral("planned");
+    plan.planDigest = QStringLiteral("confirmed-plan");
+    QVERIFY(controller.acceptPlan(QStringLiteral("planning"), QStringLiteral("revision"), plan));
+    QVERIFY(controller.planMatches(QStringLiteral("document"), QStringLiteral("revision"),
+                                   QStringLiteral("recipe-hash"), QStringLiteral("profile-and-bindings-hash")));
+    QVERIFY(!controller.planMatches(QStringLiteral("document"), QStringLiteral("revision"),
+                                    QStringLiteral("recipe-hash"), QStringLiteral("changed-profile-and-bindings")));
+
+    begin(pdfinteraction::ActionListController::State::Running, QStringLiteral("execution"));
+    pdf::PDFActionListExecutionResult executed;
+    executed.status = QStringLiteral("succeeded");
+    executed.planDigest = QStringLiteral("changed-plan");
+    QVERIFY(!controller.acceptExecution(QStringLiteral("execution"), QStringLiteral("revision"), executed));
+    QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Failed);
+    QCOMPARE(controller.result().status, QStringLiteral("failed"));
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("confirmed plan")));
+
+    controller.clear();
+    begin(pdfinteraction::ActionListController::State::Validating, QStringLiteral("validation-2"));
+    QVERIFY(controller.acceptValidation(QStringLiteral("validation-2"), QStringLiteral("revision"), {}, {}));
+    begin(pdfinteraction::ActionListController::State::Planning, QStringLiteral("planning-2"));
+    QVERIFY(controller.acceptPlan(QStringLiteral("planning-2"), QStringLiteral("revision"), plan));
+    begin(pdfinteraction::ActionListController::State::Running, QStringLiteral("execution-2"));
+    executed.planDigest = plan.planDigest;
+    QVERIFY(controller.acceptExecution(QStringLiteral("execution-2"), QStringLiteral("revision"), executed));
+    QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Succeeded);
 }
 
 void ActionListTest::selectStepValidatesAndPlansWithScopedSelection()
