@@ -372,6 +372,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightResult
     QString documentRevisionDigest;
     QString effectiveProfileDigest;
     QList<PreflightDecision> decisions;
+    QJsonObject revalidation;
 
     QJsonObject toJson(const QString& pdfPath = QString()) const;
 };
@@ -414,6 +415,13 @@ public:
                         const PDFRevalidationPlan& plan);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
+
+    /// Produces a complete post-operation result. Checks and evidence outside
+    /// the plan are carried forward only when the prior run was complete.
+    PreflightResult revalidate(const PreflightProfileData& profile,
+                               const PDFRevalidationPlan& plan,
+                               const PreflightResult& previousResult,
+                               const PDFEvidenceGraph& previousEvidence);
 
     void setOperationControl(const PDFOperationControl* operationControl) { m_operationControl = operationControl; }
 
