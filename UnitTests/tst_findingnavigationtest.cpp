@@ -269,6 +269,28 @@ void FindingNavigationTest::staleRequestsClearPresentationAndCannotBecomeCurrent
     const pdfinteraction::FindingNavigationResult unknown = navigator.navigate(unknownRequest);
     QCOMPARE(unknown.outcome, pdfinteraction::FindingNavigationOutcome::UnsupportedCheck);
     QCOMPARE(viewport.currentPage(), pageBeforeUnknown);
+
+    QVERIFY(navigator.navigate(currentRequest).accepted());
+    QVERIFY(interaction.state().selected().isValid());
+    const pdfinteraction::FindingNavigationResult unknownAfterSelection = navigator.navigate(unknownRequest);
+    QCOMPARE(unknownAfterSelection.outcome, pdfinteraction::FindingNavigationOutcome::UnsupportedCheck);
+    QVERIFY(!interaction.state().selected().isValid());
+    QVERIFY(overlays.evidence().isEmpty());
+    QCOMPARE(navigator.currentInspectionMode(), pdfinteraction::FindingInspectionMode::None);
+
+    QVERIFY(navigator.navigate(currentRequest).accepted());
+    auto invalidRequest = currentRequest;
+    invalidRequest.findingId.clear();
+    const pdfinteraction::FindingNavigationResult invalid = navigator.navigate(invalidRequest);
+    QCOMPARE(invalid.outcome, pdfinteraction::FindingNavigationOutcome::Rejected);
+    QVERIFY(!interaction.state().selected().isValid());
+    QCOMPARE(navigator.currentInspectionMode(), pdfinteraction::FindingInspectionMode::None);
+
+    QVERIFY(navigator.navigate(currentRequest).accepted());
+    staleRequest.checkId = QStringLiteral("future-check");
+    const pdfinteraction::FindingNavigationResult staleUnknown = navigator.navigate(staleRequest);
+    QCOMPARE(staleUnknown.outcome, pdfinteraction::FindingNavigationOutcome::Stale);
+    QVERIFY(!interaction.state().selected().isValid());
 }
 
 QTEST_GUILESS_MAIN(FindingNavigationTest)

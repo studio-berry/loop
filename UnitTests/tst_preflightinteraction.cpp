@@ -33,6 +33,7 @@
 #include "documentcontextsource.h"
 #include "findingnavigation.h"
 #include "hittestsource.h"
+#include "inspectormodel.h"
 #include "interactioncontroller.h"
 #include "interactionstate.h"
 #include "overlaybuilder.h"
@@ -159,13 +160,16 @@ private slots:
     void controllerAcceptsCurrentResultAndBuildsNavigation();
     void controllerRejectsStaleAndCancelledResults();
     void controllerRetainsCompletedResultAcrossCancellationAndStaleness();
+    void staleRetainedReportCannotBeRestoredByFailedOrCancelledRerun();
     void controllerRepresentsIncompleteRun();
     void controllerMarksAnInFlightRunStaleAndCancelsIt();
     void controllerRejectsDuplicateTerminalResults();
     void overlayAdapterMapsStableIdsAndSeverities();
     void dockSelectionSetsFocusedOverlayPrimitive();
+    void stalePresentationRetainsReportButClearsOverlayAndSelection();
     void controllerMarksStaleWhenTheProfileChanges();
     void targetingCapabilitiesAreConservativeAndStable();
+    void inspectorReportsMissingTargetAndBudgetWithoutInventingObjectFacts();
 };
 
 void PreflightInteractionTest::modelRetainsStableIdentityAndFilters()
@@ -241,15 +245,57 @@ void PreflightInteractionTest::controllerRetainsCompletedResultAcrossCancellatio
     QVERIFY(controller.hasResult());
 
     controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    PreflightController::EvidenceNavigationRequest request;
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+    QVERIFY(controller.overlaysForPage(1).isEmpty());
     QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
     QCOMPARE(controller.state(), PreflightController::State::Findings);
     QCOMPARE(controller.findingsModel()->rowCount(), 1);
+    QVERIFY(controller.navigationFor(finding.stableId(), &request));
+    QCOMPARE(controller.overlaysForPage(1).size(), 1);
 
     controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
     QCOMPARE(controller.state(), PreflightController::State::Stale);
     QVERIFY(!controller.navigationFor(finding.stableId(), nullptr));
     const QByteArray report = controller.serializedReport(QStringLiteral("fixture.pdf"));
     QVERIFY(report.contains("preflight-report"));
+}
+
+void PreflightInteractionTest::staleRetainedReportCannotBeRestoredByFailedOrCancelledRerun()
+{
+    PreflightController controller;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-a"), QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+
+    controller.markProfileStale();
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-2"));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.hasResult());
+    QCOMPARE(controller.findingsModel()->rowCount(), 1);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("stale")));
+    PreflightController::EvidenceNavigationRequest request;
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+    QVERIFY(controller.overlaysForPage(1).isEmpty());
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-3"));
+    QVERIFY(controller.failRun(QStringLiteral("job-3"), QStringLiteral("rev-1"),
+                               QStringLiteral("invalid replacement")));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("stale")));
+    QVERIFY(!controller.navigationFor(finding.stableId(), &request));
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                        QStringLiteral("profile-b"), QStringLiteral("job-4"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-4"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+    QVERIFY(controller.navigationFor(finding.stableId(), &request));
 }
 
 void PreflightInteractionTest::controllerRepresentsIncompleteRun()
@@ -309,14 +355,23 @@ void PreflightInteractionTest::overlayAdapterMapsStableIdsAndSeverities()
 {
     PreflightFindingsModel model;
     const pdf::PreflightFinding error = makeFinding(QStringLiteral("bleed"), 2, QStringLiteral("error"), QRectF(1, 2, 3, 4));
-    const pdf::PreflightFinding warning = makeFinding(QStringLiteral("fonts"), 2, QStringLiteral("warning"), QRectF(5, 6, 7, 8));
-    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { error }, { warning });
+    const pdf::PreflightFinding warning = makeFinding(QStringLiteral("embedded-fonts"), 2, QStringLiteral("warning"), QRectF(5, 6, 7, 8));
+    const pdf::PreflightFinding unknown = makeFinding(QStringLiteral("future-check"), 2, QStringLiteral("warning"), QRectF(9, 10, 11, 12));
+    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { error }, { warning, unknown });
 
     const QList<pdfinteraction::InteractionTarget> targets = model.interactionTargets();
     QCOMPARE(targets.size(), 2);
     QCOMPARE(targets.at(0).id, error.stableId());
     QCOMPARE(targets.at(0).pageIndex, 1);
     QCOMPARE(targets.at(0).kind, pdfinteraction::InteractionTargetKind::Finding);
+    QCOMPARE(targets.at(1).id, warning.stableId());
+    const QVector<pdfinteraction::FindingOverlay> pageOverlays = model.overlays(QStringLiteral("rev-1"), 2);
+    QCOMPARE(pageOverlays.size(), 2);
+    QVERIFY(!std::any_of(targets.cbegin(), targets.cend(),
+                         [&](const pdfinteraction::InteractionTarget& target)
+                         {
+                             return target.id == unknown.stableId();
+                         }));
 
     const QHash<QString, pdfinteraction::OverlaySeverity> severities = model.severityMap();
     QCOMPARE(severities.value(error.stableId()), pdfinteraction::OverlaySeverity::Error);
@@ -358,6 +413,47 @@ void PreflightInteractionTest::dockSelectionSetsFocusedOverlayPrimitive()
     QVERIFY(primitive->focused);
     QCOMPARE(primitive->severity, pdfinteraction::OverlaySeverity::Error);
     QCOMPARE(controller.state().selected().id, findingId);
+}
+
+void PreflightInteractionTest::stalePresentationRetainsReportButClearsOverlayAndSelection()
+{
+    FakeGeometrySource geometry(2);
+    pdfinteraction::ViewportController viewport;
+    viewport.setGeometrySource(&geometry);
+    viewport.setPixelPerMM(PixelPerMM);
+    viewport.setViewportSizePx(QSize(300, 500));
+    viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
+
+    pdfinteraction::OverlayBuilder overlays(viewport);
+    FakeRevisionSource revisions;
+    pdfinteraction::HitTestDispatcher dispatcher;
+    pdfinteraction::InteractionController interaction(revisions, viewport, dispatcher, overlays);
+
+    PreflightFindingsModel model;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(20, 20, 20, 20));
+    model.replace(QStringLiteral("doc-1"), revisions.revision.toString(), { finding }, {});
+    pdfinteraction::PreflightOverlayBridge bridge;
+    bridge.setFindingsModel(&model);
+    bridge.setOverlayBuilder(&overlays);
+    bridge.setInteractionController(&interaction);
+    bridge.applyFindings();
+    model.setSelectedFinding(finding.stableId());
+    QCOMPARE(overlays.findings().size(), 1);
+    QCOMPARE(interaction.state().selected().id, finding.stableId());
+
+    bridge.setPresentationEnabled(false);
+    QCOMPARE(model.rowCount(), 1);
+    QVERIFY(overlays.findings().isEmpty());
+    QVERIFY(overlays.evidence().isEmpty());
+    QVERIFY(!interaction.state().selected().isValid());
+
+    model.setSelectedFinding({});
+    bridge.applyFindings();
+    QVERIFY(overlays.findings().isEmpty());
+    bridge.setPresentationEnabled(true);
+    QCOMPARE(overlays.findings().size(), 1);
+    QCOMPARE(model.rowCount(), 1);
+    QVERIFY(!interaction.state().selected().isValid());
 }
 
 void PreflightInteractionTest::controllerMarksStaleWhenTheProfileChanges()
@@ -403,6 +499,67 @@ void PreflightInteractionTest::targetingCapabilitiesAreConservativeAndStable()
     QCOMPARE(request.page, 2);
     QVERIFY(!request.hasPreciseTarget);
     QCOMPARE(request.inspectionMode, QStringLiteral("page"));
+}
+
+void PreflightInteractionTest::inspectorReportsMissingTargetAndBudgetWithoutInventingObjectFacts()
+{
+    PreflightFindingsModel findings;
+    pdf::PreflightFinding finding = makeFinding(QStringLiteral("future-check"), 0,
+                                                QStringLiteral("error"), QRectF());
+    finding.scope = QStringLiteral("document");
+    pdf::PreflightResult report;
+    report.errors = { finding };
+    pdf::PreflightCheckStatus status;
+    status.id = finding.checkId;
+    status.status = QStringLiteral("incomplete");
+    status.reason = QStringLiteral("budget-exceeded");
+    status.budgetKind = QStringLiteral("raster-pixels");
+    status.budgetLimit = 400;
+    status.budgetAttempted = 800;
+    report.checkStatuses = { status };
+    findings.replace(QStringLiteral("doc"), QStringLiteral("revision"), report);
+
+    pdfinteraction::InspectorModel inspector;
+    inspector.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("revision"));
+    QVERIFY(inspector.setFindingSelection(findings, finding.stableId(), QStringLiteral("revision")));
+
+    QHash<QString, QString> shown;
+    for (int row = 0; row < inspector.rowCount(); ++row)
+    {
+        const QModelIndex index = inspector.index(row);
+        shown.insert(inspector.data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString(),
+                     inspector.data(index, pdfinteraction::InspectorModel::ValueRole).toString());
+        QVERIFY(inspector.data(index, pdfinteraction::InspectorModel::SectionRole).toString() != QStringLiteral("object-context"));
+    }
+    QCOMPARE(shown.value(QStringLiteral("targeting")), QStringLiteral("No page target in the report."));
+    QCOMPARE(shown.value(QStringLiteral("check-status")), QStringLiteral("incomplete"));
+    QCOMPARE(shown.value(QStringLiteral("check-reason")), QStringLiteral("budget-exceeded"));
+    QCOMPARE(shown.value(QStringLiteral("budget-limit")), QStringLiteral("400"));
+    QCOMPARE(shown.value(QStringLiteral("budget-attempted")), QStringLiteral("800"));
+    QVERIFY(!shown.contains(QStringLiteral("page")));
+    QVERIFY(!shown.contains(QStringLiteral("object")));
+    QVERIFY(!shown.contains(QStringLiteral("bounds")));
+    QVERIFY(!shown.contains(QStringLiteral("evidence-ids")));
+    QVERIFY(!inspector.hasCorrectiveOperation());
+    QVERIFY(!inspector.requestCorrectiveOperation(QStringLiteral("add-bleed")));
+
+    finding.page = 2;
+    finding.bbox = QRectF(10, 15, 20, 25);
+    finding.objectId = QStringLiteral("52");
+    findings.replace(QStringLiteral("doc"), QStringLiteral("revision"), { finding }, {});
+    QVERIFY(inspector.setFindingSelection(findings, finding.stableId(), QStringLiteral("revision")));
+    bool foundTargeting = false;
+    for (int row = 0; row < inspector.rowCount(); ++row)
+    {
+        const QModelIndex index = inspector.index(row);
+        if (inspector.data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString() == QStringLiteral("targeting"))
+        {
+            QCOMPARE(inspector.data(index, pdfinteraction::InspectorModel::ValueRole).toString(),
+                     QStringLiteral("Page navigation only; object targeting is unsupported for this check."));
+            foundTargeting = true;
+        }
+    }
+    QVERIFY(foundTargeting);
 }
 
 QTEST_GUILESS_MAIN(PreflightInteractionTest)

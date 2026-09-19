@@ -61,10 +61,41 @@ void PreflightOverlayBridge::setInteractionController(InteractionController* int
     m_interaction = interaction;
 }
 
+void PreflightOverlayBridge::setPresentationEnabled(bool enabled)
+{
+    if (m_presentationEnabled == enabled)
+    {
+        return;
+    }
+
+    m_presentationEnabled = enabled;
+    applyFindings();
+}
+
 void PreflightOverlayBridge::applyFindings()
 {
     if (!m_findings || !m_overlays)
     {
+        return;
+    }
+
+    if (!m_presentationEnabled)
+    {
+        m_overlays->setFindings({});
+        m_overlays->setEvidence({});
+        m_overlays->setSeverities({});
+        m_overlays->setFocusedId({});
+        if (m_interaction)
+        {
+            if (m_interaction->state().selected().kind == InteractionTargetKind::Finding)
+            {
+                m_interaction->selectTarget(InteractionTarget());
+            }
+            else
+            {
+                m_interaction->refreshOverlay();
+            }
+        }
         return;
     }
 
@@ -78,7 +109,7 @@ void PreflightOverlayBridge::applyFindings()
         if (!selectedId.isEmpty())
         {
             const PreflightFindingView* finding = m_findings->finding(selectedId);
-            if (finding && finding->page > 0)
+            if (finding && finding->page > 0 && finding->bbox.isValid() && !finding->bbox.isEmpty())
             {
                 InteractionTarget target;
                 target.kind = InteractionTargetKind::Finding;
@@ -90,7 +121,14 @@ void PreflightOverlayBridge::applyFindings()
             }
         }
 
-        m_interaction->refreshOverlay();
+        if (m_interaction->state().selected().kind == InteractionTargetKind::Finding)
+        {
+            m_interaction->selectTarget(InteractionTarget());
+        }
+        else
+        {
+            m_interaction->refreshOverlay();
+        }
     }
 }
 
