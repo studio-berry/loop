@@ -466,6 +466,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportJson.insert(QStringLiteral("results"), resultsJson(QList<pdf::PDFRepairResult>{ automaticRepairResult }));
         reportJson.insert(QStringLiteral("finding_delta"), automaticRepairResult.findingDelta.toJson());
         reportJson.insert(QStringLiteral("postflight"), preflight.toJson(candidatePath));
+        const pdf::PreflightVerdict postflightVerdict = pdf::reducePreflightVerdict(preflight);
+        reportJson.insert(QStringLiteral("postflight_verdict"), postflightVerdict.toJson());
         if (!automaticPostflight)
         {
             if (automaticRepairResult.status == pdf::PDFRepairStatus::Incomplete)
