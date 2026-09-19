@@ -2435,7 +2435,7 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     QVERIFY(dir.isValid());
     const QString path = dir.filePath(QStringLiteral("two-layers.pdf"));
     const QByteArray content =
-        "/OC /Artwork BDC\n0.1 w 10 20 m 180 20 l S\nEMC\n"
+        "/OC /Artwork BDC\n0.1 w 10 50 m 180 50 l S\nEMC\n"
         "/OC /Marks BDC\n0.1 w 10 140 m 180 140 l S\nEMC\n";
     QByteArray pdfBytes("%PDF-1.4\n");
     QVector<qint64> offsets{ 0 };
@@ -2446,7 +2446,7 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     };
     appendObject(1, "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [5 0 R 6 0 R] /D << /Order [5 0 R 6 0 R] /ON [5 0 R 6 0 R] >> >> >>");
     appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-    appendObject(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Properties << /Artwork 5 0 R /Marks 6 0 R >> >> /Contents 4 0 R >>");
+    appendObject(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /TrimBox [20 20 180 180] /Resources << /Properties << /Artwork 5 0 R /Marks 6 0 R >> >> /Contents 4 0 R >>");
     appendObject(4, "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream");
     appendObject(5, "<< /Type /OCG /Name (Artwork) >>");
     appendObject(6, "<< /Type /OCG /Name (Marks) >>");
@@ -2487,11 +2487,39 @@ void PreflightEngineTest::run_ocgRestrictionExcludesOtherLayers()
     const pdf::PreflightResult artwork = run(QStringLiteral("Artwork"));
     QVERIFY(artwork.inspectionComplete);
     QCOMPARE(artwork.warnings.size(), 1);
-    QVERIFY(artwork.warnings.first().bbox.intersects(QRectF(0, 10, 200, 30)));
+    QVERIFY(artwork.warnings.first().bbox.intersects(QRectF(0, 40, 200, 30)));
     const pdf::PreflightResult marks = run(QStringLiteral("Marks"));
     QVERIFY(marks.inspectionComplete);
     QCOMPARE(marks.warnings.size(), 1);
     QVERIFY(marks.warnings.first().bbox.intersects(QRectF(0, 130, 200, 30)));
+    const auto runAnchor = [&](const QString& anchor)
+    {
+        return engine.run(QJsonObject{
+            { QStringLiteral("name"), QStringLiteral("Anchored trim region") },
+            { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                { QStringLiteral("min_effective_width_pt"), 0.25 },
+                { QStringLiteral("severity"), QStringLiteral("warning") },
+                { QStringLiteral("restrictions"), QJsonObject{
+                    { QStringLiteral("regions"), QJsonArray{ QJsonObject{
+                        { QStringLiteral("name"), QStringLiteral("corner") },
+                        { QStringLiteral("rect_pt"), QJsonArray{ 0, 0, 40, 40 } },
+                        { QStringLiteral("anchor"), anchor },
+                        { QStringLiteral("mode"), QStringLiteral("include") }
+                    } } }
+                } }
+            } } }
+        });
+    };
+    const pdf::PreflightResult trimAnchored = runAnchor(QStringLiteral("trim"));
+    QVERIFY(trimAnchored.inspectionComplete);
+    QCOMPARE(trimAnchored.warnings.size(), 1);
+    QVERIFY(trimAnchored.warnings.first().bbox.intersects(QRectF(0, 40, 200, 30)));
+    const pdf::PreflightResult mediaAnchored = runAnchor(QStringLiteral("media"));
+    QVERIFY(!mediaAnchored.inspectionComplete);
+    QVERIFY(!mediaAnchored.pass);
+    QCOMPARE(mediaAnchored.checkStatuses.first().status, QStringLiteral("not_applicable"));
+
     const pdf::PreflightResult excluded = run(QStringLiteral("Nonexistent"));
     QVERIFY(!excluded.pass);
     QVERIFY(!excluded.inspectionComplete);
