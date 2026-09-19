@@ -680,6 +680,14 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         candidateSha256);
 }
 
+bool PDFRepairTransaction::postflightRequired() const
+{
+    return m_options.requirePostflight &&
+           std::any_of(m_plans.cbegin(), m_plans.cend(),
+                       [](const PDFRepairPlan& plan)
+                       { return plan.requiresPostflight; });
+}
+
 PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const
 {
     PDFOperationSavePolicy result = PDFOperationSavePolicy::incrementalAppend(QStringLiteral("empty transaction"));
