@@ -572,6 +572,7 @@ public:
     {
         PDFOperationImpact declared;
         declared.declared = true;
+        declared.domains = pdfEvidenceAllDomains();
         declared.documentWide = true;
         declared.fullRewrite = true;
         declared.impactComplete = false;
