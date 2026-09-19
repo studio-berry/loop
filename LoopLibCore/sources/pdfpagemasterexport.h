@@ -102,6 +102,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFPageMasterExportCancelToken
 struct LOOPLIBCORESHARED_EXPORT PDFPageMasterExportJob
 {
     using ManifestPersistFunction = std::function<bool(const QString&, const QJsonObject&)>;
+    using BeforeOutputCommitFunction = std::function<void(int)>;
 
     std::map<int, PDFDocument> documents;
     std::map<int, QImage> images;
@@ -149,6 +150,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFPageMasterExportJob
     /// Optional deterministic manifest persistence seam for callers/tests. An empty
     /// function uses the normal atomic file writer.
     ManifestPersistFunction manifestPersist;
+
+    /// Optional crash-safety test seam invoked after an output is fully staged and
+    /// before the atomic commit publishes it at the final path.
+    BeforeOutputCommitFunction beforeOutputCommit;
 };
 
 /// Result of PDFPageMasterExport::run().

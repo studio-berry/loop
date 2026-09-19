@@ -1778,9 +1778,20 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         }
 
         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
-        const PDFOperationResult writeResult = PDFSafeFileWriter::writeData(
+        const PDFOperationResult writeResult = PDFSafeFileWriter::writeDevice(
             fileName,
-            candidateData,
+            [&candidateData, &job, index](QIODevice* device) -> bool
+            {
+                if (device->write(candidateData) != candidateData.size())
+                {
+                    return false;
+                }
+                if (job.beforeOutputCommit)
+                {
+                    job.beforeOutputCommit(int(index));
+                }
+                return true;
+            },
             job.overwriteFiles ? PDFSafeFileWriter::OverwritePolicy::Overwrite : PDFSafeFileWriter::OverwritePolicy::Fail);
         if (!writeResult)
         {

@@ -224,39 +224,29 @@ int runCrashHarness(const QStringList& arguments)
         return 2;
     }
 
+    const QDir outputDirectory(arguments.at(2));
     pdf::PDFDocument source = buildFilledPage();
+    const auto page = documentPage(0, source);
     pdf::PDFPageMasterExportJob job;
-    job.assembledDocuments.push_back({ documentPage(0, source) });
+    for (int index = 0; index < 5; ++index)
+    {
+        job.assembledDocuments.push_back({ page });
+        job.outputFileNames.push_back(outputDirectory.filePath(QStringLiteral("output-%1.pdf").arg(index + 1)));
+    }
     job.documents.emplace(0, std::move(source));
-    job.outputFileNames.push_back(arguments.at(2));
     job.overwriteFiles = true;
     job.manifestPath = arguments.at(3);
-    job.manifestPersist = [](const QString& path, const QJsonObject& manifest)
+    job.beforeOutputCommit = [](int index)
     {
-        const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
-        if (!outputs.isEmpty() && outputs.first().toObject().value(QStringLiteral("status")).toString() == QStringLiteral("written"))
+        if (index != 2)
         {
-            // Simulate process death after the atomic PDF commit and before its
-            // manifest update. The parent verifies the final path remains valid.
+            return;
+        }
 #if defined(Q_OS_WIN) && defined(__MINGW32__)
-            ::_exit(91);
+        ::_exit(91);
 #else
-            std::quick_exit(91);
+        std::quick_exit(91);
 #endif
-        }
-
-        // Real persistence, mirroring PDFPageMasterExport::run()'s internal
-        // persistManifest() (not reachable from here - it's file-local to
-        // pdfpagemasterexport.cpp). Without this, no manifest ever reaches disk:
-        // the harness only intercepted the crash condition and otherwise just
-        // returned true without writing anything, so the initial 'pending'
-        // persist call (made before any output is written) silently no-opped.
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        {
-            return false;
-        }
-        return file.write(QJsonDocument(manifest).toJson(QJsonDocument::Compact)) >= 0;
     };
 
     const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
@@ -920,6 +910,7 @@ void PageMasterExportTest::manifest_persistedWithWrittenStatuses()
     const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
     QVERIFY(result.success);
     QVERIFY(QFile::exists(result.manifestPath));
+    QCOMPARE(readDocument(outputPath).getCatalog()->getPageCount(), 1);
 
     const QJsonArray outputs = result.manifest.value(QStringLiteral("outputs")).toArray();
     QCOMPARE(outputs.size(), 1);
@@ -1168,28 +1159,52 @@ void PageMasterExportTest::processKill_afterAtomicOutputLeavesNoPartialFile()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString outputPath = tempDir.filePath(QStringLiteral("crash-safe.pdf"));
+    QStringList outputPaths;
+    for (int index = 0; index < 5; ++index)
+    {
+        outputPaths.push_back(tempDir.filePath(QStringLiteral("output-%1.pdf").arg(index + 1)));
+    }
     const QString manifestPath = tempDir.filePath(QStringLiteral("crash-safe.json"));
     QProcess child;
-    child.start(QCoreApplication::applicationFilePath(), { QStringLiteral("--pagemaster-crash-harness"), outputPath, manifestPath });
+    child.start(QCoreApplication::applicationFilePath(),
+                { QStringLiteral("--pagemaster-crash-harness"), tempDir.path(), manifestPath });
     QVERIFY2(child.waitForFinished(10000), qPrintable(child.errorString()));
     QCOMPARE(child.exitStatus(), QProcess::NormalExit);
     QCOMPARE(child.exitCode(), 91);
 
-    QVERIFY(QFile::exists(outputPath));
-    QVERIFY(readDocument(outputPath).getCatalog()->getPageCount() == 1);
+    for (int index = 0; index < 2; ++index)
+    {
+        QVERIFY(QFile::exists(outputPaths.at(index)));
+        QCOMPARE(readDocument(outputPaths.at(index)).getCatalog()->getPageCount(), 1);
+    }
+    for (int index = 2; index < outputPaths.size(); ++index)
+    {
+        QVERIFY(!QFile::exists(outputPaths.at(index)));
+    }
+
     QVERIFY(QFile::exists(manifestPath));
     QFile manifestFile(manifestPath);
     QVERIFY(manifestFile.open(QIODevice::ReadOnly));
     QJsonParseError parseError;
-    const QJsonDocument manifest = QJsonDocument::fromJson(manifestFile.readAll(), &parseError);
+    const QJsonDocument manifestDocument = QJsonDocument::fromJson(manifestFile.readAll(), &parseError);
     QVERIFY(parseError.error == QJsonParseError::NoError);
-    QCOMPARE(manifest.object().value(QStringLiteral("outputs")).toArray().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("pending"));
+    QVERIFY(manifestDocument.isObject());
+    const QJsonObject manifest = manifestDocument.object();
+    QCOMPARE(manifest.value(QStringLiteral("schema_version")).toInt(), 1);
+    QVERIFY(!manifest.value(QStringLiteral("batch_id")).toString().isEmpty());
+    const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    QCOMPARE(outputs.size(), 5);
+    QCOMPARE(outputs.at(0).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("written"));
+    QCOMPARE(outputs.at(1).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("written"));
+    QCOMPARE(outputs.at(2).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("pending"));
+    QCOMPARE(outputs.at(3).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("pending"));
+    QCOMPARE(outputs.at(4).toObject().value(QStringLiteral("status")).toString(), QStringLiteral("pending"));
 
-    const QStringList temporaryFiles = QDir(tempDir.path()).entryList(QDir::Files | QDir::Hidden);
-    for (const QString& fileName : temporaryFiles)
+    const QStringList stagedCandidates = QDir(tempDir.path()).entryList(
+        { QStringLiteral("*output-3.pdf*") }, QDir::Files | QDir::Hidden);
+    for (const QString& fileName : stagedCandidates)
     {
-        QVERIFY2(!fileName.startsWith(QStringLiteral("crash-safe.pdf.")), qPrintable(fileName));
+        QVERIFY2(fileName != QStringLiteral("output-3.pdf"), qPrintable(fileName));
     }
 }
 
