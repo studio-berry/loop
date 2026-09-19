@@ -449,10 +449,12 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     {
         reportJson.insert(QStringLiteral("postflight"), postflight.toJson(candidatePath));
     }
-    if (!verified || transaction.status() != pdf::PDFRepairStatus::Passed)
+    const pdf::PreflightVerdict canonicalVerdict = pdf::reducePreflightVerdict(postflight);
+    if (!verified || transaction.status() != pdf::PDFRepairStatus::Passed || !canonicalVerdict.isPass())
     {
         const pdf::PDFRepairStatus status = transaction.status();
-        const bool incomplete = status == pdf::PDFRepairStatus::Incomplete;
+        const bool incomplete = status == pdf::PDFRepairStatus::Incomplete ||
+                                canonicalVerdict.state == pdf::PreflightVerdictState::Incomplete;
         reportJson.insert(QStringLiteral("status"), incomplete ? QStringLiteral("incomplete") : QStringLiteral("failed"));
         writeRepairReportIfRequested(options, reportJson);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.declared-validation-failed"),
