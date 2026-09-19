@@ -527,8 +527,8 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
             profilePath,
             &result,
             options,
-            m_entries[index].operation,
-            m_entries[index].parameters,
+            nullptr,
+            {},
             postflightOut);
         if (!verified || !result.incompleteReasons.isEmpty() || !result.validationFailures.isEmpty())
         {
