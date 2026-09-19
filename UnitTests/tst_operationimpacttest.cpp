@@ -33,6 +33,8 @@
 #include <QtTest>
 #include <QFile>
 
+#include <algorithm>
+
 class OperationImpactTest : public QObject
 {
     Q_OBJECT
