@@ -360,13 +360,14 @@
       "loop-preflight/schemas/report.schema.json": [
         1,
         2,
-        3
+        3,
+        4
       ]
     },
     "runtime": {
       "action_list": 2,
       "preflight_decisions": 1,
-      "preflight_report": 3
+      "preflight_report": 4
     }
   },
   "sources": [
