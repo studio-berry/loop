@@ -163,6 +163,7 @@ PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
         {
             impact.documentWide = false;
             impact.pages = targetPages;
+            plan.pages.unite(targetPages);
         }
         const PDFRevalidationPlan domainPlan = planRevalidation(impact, enabledCheckIds);
         if (!domainPlan.full)
