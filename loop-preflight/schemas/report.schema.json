@@ -136,13 +136,14 @@
     "revalidation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["full", "mode", "check_ids", "reused_check_ids", "invalidated_evidence_domains", "reusable_evidence_domains", "pages", "reason", "baseline_reused"],
+      "required": ["full", "mode", "check_ids", "reused_check_ids", "invalidated_evidence_domains", "recomputed_evidence_domains", "reusable_evidence_domains", "pages", "reason", "baseline_reused"],
       "properties": {
         "full": { "type": "boolean" },
         "mode": { "type": "string", "enum": ["full", "targeted"] },
         "check_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "reused_check_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "invalidated_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "recomputed_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
         "reusable_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
         "pages": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "uniqueItems": true },
         "reason": { "type": "string", "minLength": 1 },
