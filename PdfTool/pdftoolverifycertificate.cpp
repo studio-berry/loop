@@ -85,17 +85,22 @@ PDFToolExitCode PDFToolVerifyCertificate::execute(const PDFToolOptions& options)
     }
     const QByteArray documentBytes = documentFile.readAll();
     const QString historyDirectory = QFileInfo(options.document).absoluteFilePath() + QStringLiteral(".loop-history");
-    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
-    if (!history.open(&error))
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    QList<pdf::PDFOperationHistoryEvent> events;
+    if (QFileInfo::exists(historyPath))
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), error);
-        return PDFToolExitCode::InputError;
-    }
-    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
-    if (!error.isEmpty())
-    {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), error);
-        return PDFToolExitCode::InputError;
+        pdf::PDFOperationHistoryStore history(historyPath);
+        if (!history.open(&error))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), error);
+            return PDFToolExitCode::InputError;
+        }
+        events = history.events(&error);
+        if (!error.isEmpty())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-unavailable"), error);
+            return PDFToolExitCode::InputError;
+        }
     }
 
     const pdf::PreflightCertificateVerification verification = pdf::verifyPreflightCertificate(certificate, documentBytes, events);

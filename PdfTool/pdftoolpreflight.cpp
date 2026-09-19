@@ -636,8 +636,22 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             return PDFToolExitCode::ProcessingFailure;
         }
 
+        const QList<pdf::PDFOperationHistoryEvent> issuanceEvents = history.events(&historyError);
+        if (!historyError.isEmpty() || issuanceEvents.isEmpty() ||
+            issuanceEvents.back().entryId.toString(QUuid::WithoutBraces) != certificate.auditChainHeadEventId)
+        {
+            certificateFile.cancelWriting();
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("certificate.audit-changed"),
+                             historyError.isEmpty()
+                                 ? QStringLiteral("The audit chain changed while the certificate was being prepared.")
+                                 : historyError);
+            return PDFToolExitCode::ProcessingFailure;
+        }
+
         pdf::PDFOperationHistoryEvent certificateEvent;
-        certificateEvent.executionId = events.back().executionId;
+        certificateEvent.executionId = issuanceEvents.back().executionId;
         certificateEvent.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
         certificateEvent.status = pdf::PDFOperationHistoryStatus::Running;
         certificateEvent.operatorIdentity = QStringLiteral("PdfTool");

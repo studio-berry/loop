@@ -237,13 +237,15 @@ bool issuePreflightCertificate(const PreflightResult& result,
         return false;
     }
 
+    const QString expectedReportDigest = reportDigest(report);
     bool matchingPreflightFound = false;
     for (const PDFOperationHistoryEvent& event : history)
     {
         if (event.kind == PDFOperationHistoryEventKind::PreflightRun &&
             event.status == PDFOperationHistoryStatus::Accepted &&
             event.documentRevisionDigest.compare(documentDigest, Qt::CaseInsensitive) == 0 &&
-            event.effectiveProfileDigest.compare(result.effectiveProfileDigest, Qt::CaseInsensitive) == 0)
+            event.effectiveProfileDigest.compare(result.effectiveProfileDigest, Qt::CaseInsensitive) == 0 &&
+            reportDigest(event.resultSummary).compare(expectedReportDigest, Qt::CaseInsensitive) == 0)
         {
             matchingPreflightFound = true;
         }
@@ -290,7 +292,7 @@ bool issuePreflightCertificate(const PreflightResult& result,
     certificate.issuedBy = issuedBy.trimmed();
     certificate.documentRevisionDigest = documentDigest;
     certificate.effectiveProfileDigest = result.effectiveProfileDigest.toLower();
-    certificate.reportDigest = reportDigest(report);
+    certificate.reportDigest = expectedReportDigest;
     certificate.auditChainHeadEventId = history.back().entryId.toString(QUuid::WithoutBraces);
     certificate.errorCount = result.errors.size();
     certificate.waivedErrorCount = verdict.waivedFindingIds.size();

@@ -525,6 +525,7 @@ void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
     preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
     preflight.documentRevisionDigest = documentDigest;
     preflight.effectiveProfileDigest = profileDigest;
+    preflight.resultSummary = result.toJson(QStringLiteral("document.pdf"));
     preflight.createdUtc = QDateTime::currentDateTimeUtc();
     preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
 
@@ -539,6 +540,20 @@ void PreflightVerdictTest::certificate_roundTripsAndDetectsTampering()
                                            error));
     QVERIFY(error.isEmpty());
     QCOMPARE(certificate.auditChainHeadEventId, preflight.entryId.toString(QUuid::WithoutBraces));
+
+    pdf::PDFOperationHistoryEvent mismatchedReport = preflight;
+    mismatchedReport.resultSummary.insert(QStringLiteral("tampered"), true);
+    mismatchedReport.eventHash = pdf::computeOperationHistoryEventHash(mismatchedReport, {});
+    pdf::PreflightCertificate refusedCertificate;
+    QString refusedError;
+    QVERIFY(!pdf::issuePreflightCertificate(result,
+                                            result.toJson(QStringLiteral("document.pdf")),
+                                            document,
+                                            { mismatchedReport },
+                                            QStringLiteral("operator"),
+                                            refusedCertificate,
+                                            refusedError));
+    QVERIFY(!refusedError.isEmpty());
 
     pdf::PDFOperationHistoryEvent issuance;
     issuance.sequence = 2;
@@ -604,6 +619,7 @@ void PreflightVerdictTest::certificate_detectsStaleDecision()
     preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
     preflight.documentRevisionDigest = documentDigest;
     preflight.effectiveProfileDigest = profileDigest;
+    preflight.resultSummary = result.toJson(QStringLiteral("document.pdf"));
     preflight.createdUtc = QDateTime::currentDateTimeUtc();
     preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, {});
 
