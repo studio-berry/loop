@@ -272,8 +272,23 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
         Incomplete
     };
 
-    const auto inspectionState = [](const PreflightResult& result, const QString& checkId)
+    const auto inspectionState = [](const PreflightResult& result, const QString& checkId, int page)
     {
+        const QJsonObject revalidation =
+            result.coverageScope.value(QStringLiteral("revalidation")).toObject();
+        if (!revalidation.isEmpty() && !revalidation.value(QStringLiteral("full")).toBool(true))
+        {
+            const QJsonArray checked = revalidation.value(QStringLiteral("check_ids")).toArray();
+            if (!checked.contains(checkId))
+            {
+                return InspectionState::NotInspected;
+            }
+            const QJsonArray pages = revalidation.value(QStringLiteral("pages")).toArray();
+            if (!pages.isEmpty() && (page <= 0 || !pages.contains(page - 1)))
+            {
+                return InspectionState::NotInspected;
+            }
+        }
         for (const PreflightCheckStatus& status : result.checkStatuses)
         {
             if (status.id != checkId)
@@ -295,13 +310,8 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
             return InspectionState::Incomplete;
         }
 
-        const QJsonObject revalidation =
-            result.coverageScope.value(QStringLiteral("revalidation")).toObject();
-        if (!revalidation.isEmpty() && !revalidation.value(QStringLiteral("full")).toBool(true))
-        {
-            return InspectionState::NotInspected;
-        }
-        return result.inspectionComplete ? InspectionState::Complete : InspectionState::Incomplete;
+        // A missing check-status row does not prove a defect was cleared.
+        return InspectionState::Incomplete;
     };
 
     const auto isIncompleteFinding = [](const PreflightFinding& finding)
@@ -339,7 +349,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
         if (afterIt != afterById.cend())
         {
             if (isIncompleteFinding(finding) || isIncompleteFinding(afterIt.value()) ||
-                inspectionState(after, finding.checkId) == InspectionState::Incomplete)
+                inspectionState(after, finding.checkId, finding.page) == InspectionState::Incomplete)
             {
                 incomplete.insert(findingId);
             }
@@ -356,7 +366,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
             continue;
         }
 
-        switch (inspectionState(after, finding.checkId))
+        switch (inspectionState(after, finding.checkId, finding.page))
         {
             case InspectionState::Complete:
                 delta.resolvedFindingIds.append(findingId);
@@ -381,7 +391,7 @@ PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
         const PreflightFinding& finding = it.value();
         if (!before.inspectionComplete ||
             isIncompleteFinding(finding) ||
-            inspectionState(after, finding.checkId) == InspectionState::Incomplete)
+            inspectionState(after, finding.checkId, finding.page) == InspectionState::Incomplete)
         {
             incomplete.insert(it.key());
         }
