@@ -39,11 +39,13 @@ private slots:
     void incompleteImpactSelectsFullRevalidation();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
-    void emptyTargetedPlanFallsBackToFull();
+    void unaffectedChecksAreMarkedReusable();
+    void fullRewriteSelectsFullRevalidation();
     void standardsConvertRequiresOracle();
     void registeredOperationsDeclareImpact();
+    void targetedWithoutBaselineIsIncomplete();
     void targetedMatchesFullOnImageProfile();
-    void targetedMatchesFullOnMultiCheckImageProfile();
+    void targetedReusesBaselineFindings();
 };
 
 namespace
@@ -137,15 +139,29 @@ void OperationImpactTest::unmappedCheckForcesFullPlan()
     QCOMPARE(plan.reason, QStringLiteral("unmapped-check"));
 }
 
-void OperationImpactTest::emptyTargetedPlanFallsBackToFull()
+void OperationImpactTest::unaffectedChecksAreMarkedReusable()
 {
     pdf::PDFOperationImpact impact;
     impact.domains = pdf::PDFEvidenceDomain::Images;
     impact.impactComplete = true;
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("embedded-fonts") });
+    QVERIFY(!plan.full);
+    QVERIFY(plan.checkIds.isEmpty());
+    QCOMPARE(plan.reusedCheckIds, QStringList{ QStringLiteral("embedded-fonts") });
+    QVERIFY(plan.invalidatedEvidenceDomains.testFlag(pdf::PDFEvidenceDomain::Images));
+    QVERIFY(plan.reusableEvidenceDomains.testFlag(pdf::PDFEvidenceDomain::Fonts));
+}
+
+void OperationImpactTest::fullRewriteSelectsFullRevalidation()
+{
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    impact.fullRewrite = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution") });
     QVERIFY(plan.full);
-    QCOMPARE(plan.reason, QStringLiteral("no-targeted-checks"));
-    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("embedded-fonts") });
+    QCOMPARE(plan.reason, QStringLiteral("full-rewrite"));
+    QCOMPARE(plan.invalidatedEvidenceDomains, pdf::pdfEvidenceAllDomains());
 }
 
 void OperationImpactTest::standardsConvertRequiresOracle()
@@ -168,8 +184,34 @@ void OperationImpactTest::registeredOperationsDeclareImpact()
         const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(id);
         QVERIFY(operation);
         const pdf::PDFOperationImpact impact = operation->impact(nullptr, QJsonObject());
-        QVERIFY(impact.toJson().contains(QStringLiteral("impact_complete")));
+        QVERIFY2(impact.impactComplete || impact.requiresIndependentOracle,
+                 qPrintable(QStringLiteral("Operation '%1' inherits an undeclared/incomplete impact.").arg(id)));
+        if (impact.impactComplete && impact.mutatesDocument)
+        {
+            QVERIFY2(impact.documentWide || impact.domains != pdf::PDFEvidenceDomains() ||
+                         !impact.pages.isEmpty() || !impact.objectIds.isEmpty(),
+                     qPrintable(QStringLiteral("Operation '%1' declares mutation without an impact scope.").arg(id)));
+        }
+        QVERIFY(impact.toJson().contains(QStringLiteral("mutates_document")));
     }
+}
+
+void OperationImpactTest::targetedWithoutBaselineIsIncomplete()
+{
+    pdf::PDFDocument document = buildLowDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain::Fonts;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
+        impact,
+        { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
+
+    const pdf::PreflightResult targeted = engine.run(multiCheckImageProfile(), plan);
+    QVERIFY(!targeted.inspectionComplete);
+    QCOMPARE(targeted.errorCode, QStringLiteral("revalidation-baseline-required"));
 }
 
 void OperationImpactTest::targetedMatchesFullOnImageProfile()
@@ -177,7 +219,12 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
     pdf::PDFDocument document = buildLowDpiImagePage();
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
-    const pdf::PreflightResult full = engine.run(imageProfile());
+    const QJsonObject profileObject = imageProfile();
+    const pdf::PreflightResult full = engine.run(profileObject);
+
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
 
     pdf::PDFOperationImpact impact;
     impact.domains = pdf::PDFEvidenceDomain::Images;
@@ -186,33 +233,48 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
     QVERIFY(!plan.full);
     QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
 
-    const pdf::PreflightResult targeted = engine.run(imageProfile(), plan);
+    const pdf::PreflightResult targeted = engine.revalidate(profile, full, plan);
+    QVERIFY(targeted.inspectionComplete);
     QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
     QCOMPARE(targeted.errors.size(), full.errors.size());
 }
 
-void OperationImpactTest::targetedMatchesFullOnMultiCheckImageProfile()
+void OperationImpactTest::targetedReusesBaselineFindings()
 {
     pdf::PDFDocument document = buildLowDpiImagePage();
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
-    const QJsonObject profile = multiCheckImageProfile();
-    const pdf::PreflightResult full = engine.run(profile);
+    const QJsonObject profileObject = multiCheckImageProfile();
+    const pdf::PreflightResult full = engine.run(profileObject);
+    QCOMPARE(full.errors.size(), 1);
+
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
 
     pdf::PDFOperationImpact impact;
-    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.domains = pdf::PDFEvidenceDomain::Fonts;
     impact.impactComplete = true;
-    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
+        impact,
+        { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
     QVERIFY(!plan.full);
-    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("embedded-fonts") });
+    QCOMPARE(plan.reusedCheckIds, QStringList{ QStringLiteral("image-resolution") });
 
-    const pdf::PreflightResult targeted = engine.run(profile, plan);
+    const pdf::PreflightResult targeted = engine.revalidate(profile, full, plan);
+    QVERIFY(targeted.inspectionComplete);
     QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
     QCOMPARE(targeted.errors.size(), full.errors.size());
-    for (const pdf::PreflightFinding& error : targeted.errors)
-    {
-        QCOMPARE(error.checkId, QStringLiteral("image-resolution"));
-    }
+    QCOMPARE(targeted.errors.first().checkId, QStringLiteral("image-resolution"));
+
+    const QJsonObject accounting = targeted.toJson().value(QStringLiteral("revalidation")).toObject();
+    QCOMPARE(accounting.value(QStringLiteral("mode")).toString(), QStringLiteral("targeted"));
+    QVERIFY(accounting.value(QStringLiteral("baseline_reused")).toBool());
+    QCOMPARE(accounting.value(QStringLiteral("check_ids")).toArray().first().toString(),
+             QStringLiteral("embedded-fonts"));
+    QCOMPARE(accounting.value(QStringLiteral("reused_check_ids")).toArray().first().toString(),
+             QStringLiteral("image-resolution"));
 }
 
 QTEST_APPLESS_MAIN(OperationImpactTest)
