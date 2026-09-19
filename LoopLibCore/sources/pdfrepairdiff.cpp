@@ -32,6 +32,7 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QPainter>
@@ -89,10 +90,14 @@ QString pageRotationName(PageRotation rotation)
 {
     switch (rotation)
     {
-        case PageRotation::None: return QStringLiteral("0");
-        case PageRotation::Rotate90: return QStringLiteral("90");
-        case PageRotation::Rotate180: return QStringLiteral("180");
-        case PageRotation::Rotate270: return QStringLiteral("270");
+        case PageRotation::None:
+            return QStringLiteral("0");
+        case PageRotation::Rotate90:
+            return QStringLiteral("90");
+        case PageRotation::Rotate180:
+            return QStringLiteral("180");
+        case PageRotation::Rotate270:
+            return QStringLiteral("270");
     }
     return QStringLiteral("unknown");
 }
@@ -101,17 +106,28 @@ QString objectTypeName(PDFObject::Type type)
 {
     switch (type)
     {
-        case PDFObject::Type::Null: return QStringLiteral("null");
-        case PDFObject::Type::Bool: return QStringLiteral("bool");
-        case PDFObject::Type::Int: return QStringLiteral("int");
-        case PDFObject::Type::Real: return QStringLiteral("real");
-        case PDFObject::Type::String: return QStringLiteral("string");
-        case PDFObject::Type::Name: return QStringLiteral("name");
-        case PDFObject::Type::Array: return QStringLiteral("array");
-        case PDFObject::Type::Dictionary: return QStringLiteral("dictionary");
-        case PDFObject::Type::Stream: return QStringLiteral("stream");
-        case PDFObject::Type::Reference: return QStringLiteral("reference");
-        case PDFObject::Type::LastType: break;
+        case PDFObject::Type::Null:
+            return QStringLiteral("null");
+        case PDFObject::Type::Bool:
+            return QStringLiteral("bool");
+        case PDFObject::Type::Int:
+            return QStringLiteral("int");
+        case PDFObject::Type::Real:
+            return QStringLiteral("real");
+        case PDFObject::Type::String:
+            return QStringLiteral("string");
+        case PDFObject::Type::Name:
+            return QStringLiteral("name");
+        case PDFObject::Type::Array:
+            return QStringLiteral("array");
+        case PDFObject::Type::Dictionary:
+            return QStringLiteral("dictionary");
+        case PDFObject::Type::Stream:
+            return QStringLiteral("stream");
+        case PDFObject::Type::Reference:
+            return QStringLiteral("reference");
+        case PDFObject::Type::LastType:
+            break;
     }
     return QStringLiteral("unknown");
 }
@@ -122,9 +138,9 @@ QByteArray digest(const QByteArray& bytes)
 }
 
 QByteArray normalizedObject(const PDFDocument& document,
-                           const PDFObject& object,
-                           std::set<PDFObjectReference>& activeReferences,
-                           int depth = 0);
+                            const PDFObject& object,
+                            std::set<PDFObjectReference>& activeReferences,
+                            int depth = 0);
 
 QByteArray normalizedDictionary(const PDFDocument& document,
                                 const PDFDictionary* dictionary,
@@ -156,9 +172,7 @@ QByteArray normalizedDictionary(const PDFDocument& document,
     }
 
     std::sort(entries.begin(), entries.end(), [](const Entry& left, const Entry& right)
-    {
-        return left.key < right.key;
-    });
+              { return left.key < right.key; });
 
     QByteArray result("dict{");
     for (const Entry& entry : entries)
@@ -173,9 +187,9 @@ QByteArray normalizedDictionary(const PDFDocument& document,
 }
 
 QByteArray normalizedObject(const PDFDocument& document,
-                           const PDFObject& inputObject,
-                           std::set<PDFObjectReference>& activeReferences,
-                           int depth)
+                            const PDFObject& inputObject,
+                            std::set<PDFObjectReference>& activeReferences,
+                            int depth)
 {
     if (depth > 64)
     {
@@ -195,12 +209,18 @@ QByteArray normalizedObject(const PDFDocument& document,
         return result;
     }
 
-    if (inputObject.isNull()) return QByteArrayLiteral("null");
-    if (inputObject.isBool()) return inputObject.getBool() ? QByteArrayLiteral("true") : QByteArrayLiteral("false");
-    if (inputObject.isInt()) return QByteArray("int:") + QByteArray::number(inputObject.getInteger());
-    if (inputObject.isReal()) return QByteArray("real:") + QByteArray::number(inputObject.getReal(), 'g', 17);
-    if (inputObject.isString()) return QByteArray("string:") + inputObject.getString().toHex();
-    if (inputObject.isName()) return QByteArray("name:") + inputObject.getString().toHex();
+    if (inputObject.isNull())
+        return QByteArrayLiteral("null");
+    if (inputObject.isBool())
+        return inputObject.getBool() ? QByteArrayLiteral("true") : QByteArrayLiteral("false");
+    if (inputObject.isInt())
+        return QByteArray("int:") + QByteArray::number(inputObject.getInteger());
+    if (inputObject.isReal())
+        return QByteArray("real:") + QByteArray::number(inputObject.getReal(), 'g', 17);
+    if (inputObject.isString())
+        return QByteArray("string:") + inputObject.getString().toHex();
+    if (inputObject.isName())
+        return QByteArray("name:") + inputObject.getString().toHex();
     if (inputObject.isArray())
     {
         QByteArray result("array[");
@@ -292,8 +312,7 @@ QStringList outputIntentIdentities(const PDFDocument& document)
     QStringList result;
     for (const PDFOutputIntent& intent : document.getCatalog()->getOutputIntents())
     {
-        result.append(intent.getOutputConditionIdentifier() + QLatin1Char('|') + intent.getOutputCondition()
-                      + QLatin1Char('|') + objectDigest(document, intent.getOutputProfile()));
+        result.append(intent.getOutputConditionIdentifier() + QLatin1Char('|') + intent.getOutputCondition() + QLatin1Char('|') + objectDigest(document, intent.getOutputProfile()));
     }
     std::sort(result.begin(), result.end());
     return result;
@@ -362,17 +381,28 @@ PDFRepairChangeClass classify(const QString& kind,
                               const PDFRepairDiffOptions& options)
 {
     bool expected = false;
-    if (kind == QStringLiteral("page_box")) expected = options.expected.pageBoxes;
-    else if (kind == QStringLiteral("content")) expected = options.expected.pageContent;
-    else if (kind == QStringLiteral("image")) expected = options.expected.images;
-    else if (kind == QStringLiteral("font")) expected = options.expected.fonts;
-    else if (kind == QStringLiteral("color_space")) expected = options.expected.colorSpaces;
-    else if (kind == QStringLiteral("output_intent")) expected = options.expected.outputIntent;
-    else if (kind == QStringLiteral("metadata")) expected = options.expected.metadata;
-    else if (kind == QStringLiteral("annotation")) expected = options.expected.annotations;
-    else if (kind == QStringLiteral("signature")) expected = options.expected.signatures;
-    else if (kind == QStringLiteral("page_count") || kind == QStringLiteral("page_order")) return PDFRepairChangeClass::Unexpected;
-    else return PDFRepairChangeClass::Informational;
+    if (kind == QStringLiteral("page_box"))
+        expected = options.expected.pageBoxes;
+    else if (kind == QStringLiteral("content"))
+        expected = options.expected.pageContent;
+    else if (kind == QStringLiteral("image"))
+        expected = options.expected.images;
+    else if (kind == QStringLiteral("font"))
+        expected = options.expected.fonts;
+    else if (kind == QStringLiteral("color_space"))
+        expected = options.expected.colorSpaces;
+    else if (kind == QStringLiteral("output_intent"))
+        expected = options.expected.outputIntent;
+    else if (kind == QStringLiteral("metadata"))
+        expected = options.expected.metadata;
+    else if (kind == QStringLiteral("annotation"))
+        expected = options.expected.annotations;
+    else if (kind == QStringLiteral("signature"))
+        expected = options.expected.signatures;
+    else if (kind == QStringLiteral("page_count") || kind == QStringLiteral("page_order"))
+        return PDFRepairChangeClass::Unexpected;
+    else
+        return PDFRepairChangeClass::Informational;
 
     if (!options.affectedPages.isEmpty() && path.startsWith(QStringLiteral("pages/")))
     {
@@ -427,8 +457,8 @@ QImage renderPage(const PDFDocument& document, int pageIndex, const QRectF& regi
     QPainter painter(&image);
     const PDFPage* page = document.getCatalog()->getPage(static_cast<size_t>(pageIndex));
     const QTransform transform = PDFRenderer::createMediaBoxToDevicePointMatrix(region,
-                                                                                    QRectF(0, 0, width, height),
-                                                                                    page->getPageRotation());
+                                                                                QRectF(0, 0, width, height),
+                                                                                page->getPageRotation());
     const QList<PDFRenderError> errors = renderer.render(&painter, transform, static_cast<size_t>(pageIndex));
     painter.end();
     for (const PDFRenderError& error : errors)
@@ -493,7 +523,7 @@ PDFRepairPageVisualDiff compareImages(const QImage& before,
                 ++result.changedPixelCount;
                 result.changedPixelBounds |= QRect(x, y, 1, 1);
                 const QPointF pagePoint(pageRegion.left() + (x + 0.5) * pageRegion.width() / before.width(),
-                                         pageRegion.top() + (y + 0.5) * pageRegion.height() / before.height());
+                                        pageRegion.top() + (y + 0.5) * pageRegion.height() / before.height());
                 if (!options.allowedRegions.isEmpty() && !insideAllowedRegion(options.allowedRegions, pageIndex, pagePoint))
                 {
                     ++result.unexpectedChangedPixelCount;
@@ -538,16 +568,20 @@ void addChange(PDFRepairDiffReport* report,
     report->structuralChanges.append(std::move(change));
 }
 
-} // namespace
+}   // namespace
 
 QString pdfRepairDiffStatusName(PDFRepairDiffStatus status)
 {
     switch (status)
     {
-        case PDFRepairDiffStatus::Complete: return QStringLiteral("complete");
-        case PDFRepairDiffStatus::CompleteWithWarnings: return QStringLiteral("complete-with-warnings");
-        case PDFRepairDiffStatus::Incomplete: return QStringLiteral("incomplete");
-        case PDFRepairDiffStatus::Failed: return QStringLiteral("failed");
+        case PDFRepairDiffStatus::Complete:
+            return QStringLiteral("complete");
+        case PDFRepairDiffStatus::CompleteWithWarnings:
+            return QStringLiteral("complete-with-warnings");
+        case PDFRepairDiffStatus::Incomplete:
+            return QStringLiteral("incomplete");
+        case PDFRepairDiffStatus::Failed:
+            return QStringLiteral("failed");
     }
     return QStringLiteral("failed");
 }
@@ -556,9 +590,12 @@ QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass)
 {
     switch (changeClass)
     {
-        case PDFRepairChangeClass::Expected: return QStringLiteral("expected");
-        case PDFRepairChangeClass::Unexpected: return QStringLiteral("unexpected");
-        case PDFRepairChangeClass::Informational: return QStringLiteral("informational");
+        case PDFRepairChangeClass::Expected:
+            return QStringLiteral("expected");
+        case PDFRepairChangeClass::Unexpected:
+            return QStringLiteral("unexpected");
+        case PDFRepairChangeClass::Informational:
+            return QStringLiteral("informational");
     }
     return QStringLiteral("informational");
 }
@@ -581,17 +618,13 @@ QJsonObject PDFRepairDiffReport::toJson() const
             { QStringLiteral("mean_absolute_delta"), page.meanAbsoluteDelta },
             { QStringLiteral("max_channel_delta"), page.maxChannelDelta },
             { QStringLiteral("changed_bounds"), QJsonObject{
-                  { QStringLiteral("left"), page.changedPixelBounds.left() },
-                  { QStringLiteral("top"), page.changedPixelBounds.top() },
-                  { QStringLiteral("width"), page.changedPixelBounds.width() },
-                  { QStringLiteral("height"), page.changedPixelBounds.height() } } },
+                                                    { QStringLiteral("left"), page.changedPixelBounds.left() },
+                                                    { QStringLiteral("top"), page.changedPixelBounds.top() },
+                                                    { QStringLiteral("width"), page.changedPixelBounds.width() },
+                                                    { QStringLiteral("height"), page.changedPixelBounds.height() } } },
             { QStringLiteral("common_region_compared"), page.commonRegionCompared },
             { QStringLiteral("warnings"), QJsonArray::fromStringList(page.warnings) },
-            { QStringLiteral("artifacts"), QJsonObject{
-                  { QStringLiteral("before"), page.beforeImagePath },
-                  { QStringLiteral("after"), page.afterImagePath },
-                  { QStringLiteral("diff"), page.diffImagePath } } }
-        });
+            { QStringLiteral("artifacts"), QJsonObject{ { QStringLiteral("before"), page.beforeImagePath }, { QStringLiteral("after"), page.afterImagePath }, { QStringLiteral("diff"), page.diffImagePath } } } });
     }
 
     QJsonArray changesJson;
@@ -602,8 +635,7 @@ QJsonObject PDFRepairDiffReport::toJson() const
             { QStringLiteral("kind"), change.kind },
             { QStringLiteral("before"), change.beforeValue },
             { QStringLiteral("after"), change.afterValue },
-            { QStringLiteral("classification"), pdfRepairChangeClassName(change.classification) }
-        });
+            { QStringLiteral("classification"), pdfRepairChangeClassName(change.classification) } });
     }
 
     int expectedCount = 0;
@@ -618,14 +650,15 @@ QJsonObject PDFRepairDiffReport::toJson() const
         { QStringLiteral("schema"), QStringLiteral("loop.repair-diff") },
         { QStringLiteral("version"), schemaVersion },
         { QStringLiteral("status"), pdfRepairDiffStatusName(status) },
-        { QStringLiteral("source"), QJsonObject{{ QStringLiteral("sha256"), sourceFingerprint }} },
-        { QStringLiteral("candidate"), QJsonObject{{ QStringLiteral("sha256"), candidateFingerprint }} },
+        { QStringLiteral("source"), QJsonObject{ { QStringLiteral("sha256"), sourceFingerprint } } },
+        { QStringLiteral("candidate"), QJsonObject{ { QStringLiteral("sha256"), candidateFingerprint } } },
         { QStringLiteral("summary"), QJsonObject{
-              { QStringLiteral("pages_compared"), pages.size() },
-              { QStringLiteral("pages_visually_changed"), std::count_if(pages.cbegin(), pages.cend(), [](const PDFRepairPageVisualDiff& page) { return page.changedPixelCount > 0; }) },
-              { QStringLiteral("expected_structural_changes"), expectedCount },
-              { QStringLiteral("unexpected_structural_changes"), unexpectedCount },
-              { QStringLiteral("incomplete_checks"), incompleteReasons.size() } } },
+                                         { QStringLiteral("pages_compared"), pages.size() },
+                                         { QStringLiteral("pages_visually_changed"), std::count_if(pages.cbegin(), pages.cend(), [](const PDFRepairPageVisualDiff& page)
+                                                                                                   { return page.changedPixelCount > 0; }) },
+                                         { QStringLiteral("expected_structural_changes"), expectedCount },
+                                         { QStringLiteral("unexpected_structural_changes"), unexpectedCount },
+                                         { QStringLiteral("incomplete_checks"), incompleteReasons.size() } } },
         { QStringLiteral("pages"), pagesJson },
         { QStringLiteral("structural_changes"), changesJson },
         { QStringLiteral("warnings"), QJsonArray::fromStringList(warnings) },
@@ -666,7 +699,12 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
         // single MediaBox resize cascades into every inherited box reading as changed
         // too. Report that as the one page-box edit it actually is instead of one
         // structural change per inherited box.
-        struct NamedBox { const char* name; const QRectF* before; const QRectF* after; };
+        struct NamedBox
+        {
+            const char* name;
+            const QRectF* before;
+            const QRectF* after;
+        };
         const NamedBox namedBoxes[] = {
             { "media_box", &left.mediaBox, &right.mediaBox },
             { "crop_box", &left.cropBox, &right.cropBox },
@@ -690,17 +728,22 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
             addChange(report, prefix + QStringLiteral("page_box"), QStringLiteral("page_box"),
                       beforeBoxes.join(QStringLiteral("; ")), afterBoxes.join(QStringLiteral("; ")), options);
         }
-        if (left.rotation != right.rotation) addChange(report, prefix + QStringLiteral("rotation"), QStringLiteral("page_order"), pageRotationName(left.rotation), pageRotationName(right.rotation), options);
+        if (left.rotation != right.rotation)
+            addChange(report, prefix + QStringLiteral("rotation"), QStringLiteral("page_order"), pageRotationName(left.rotation), pageRotationName(right.rotation), options);
         if (options.compareAnnotations && left.annotationTypes != right.annotationTypes)
         {
             addChange(report, prefix + QStringLiteral("annotations"), QStringLiteral("annotation"), left.annotationTypes.join(','), right.annotationTypes.join(','), options);
         }
-        if (left.contentDigest != right.contentDigest) addChange(report, prefix + QStringLiteral("content"), QStringLiteral("content"), left.contentDigest, right.contentDigest, options);
+        if (left.contentDigest != right.contentDigest)
+            addChange(report, prefix + QStringLiteral("content"), QStringLiteral("content"), left.contentDigest, right.contentDigest, options);
         if (options.compareResources)
         {
-            if (left.fontsDigest != right.fontsDigest) addChange(report, prefix + QStringLiteral("fonts"), QStringLiteral("font"), left.fontsDigest, right.fontsDigest, options);
-            if (left.imagesDigest != right.imagesDigest) addChange(report, prefix + QStringLiteral("images"), QStringLiteral("image"), left.imagesDigest, right.imagesDigest, options);
-            if (left.colorSpacesDigest != right.colorSpacesDigest) addChange(report, prefix + QStringLiteral("color_spaces"), QStringLiteral("color_space"), left.colorSpacesDigest, right.colorSpacesDigest, options);
+            if (left.fontsDigest != right.fontsDigest)
+                addChange(report, prefix + QStringLiteral("fonts"), QStringLiteral("font"), left.fontsDigest, right.fontsDigest, options);
+            if (left.imagesDigest != right.imagesDigest)
+                addChange(report, prefix + QStringLiteral("images"), QStringLiteral("image"), left.imagesDigest, right.imagesDigest, options);
+            if (left.colorSpacesDigest != right.colorSpacesDigest)
+                addChange(report, prefix + QStringLiteral("color_spaces"), QStringLiteral("color_space"), left.colorSpacesDigest, right.colorSpacesDigest, options);
         }
     }
 
@@ -731,9 +774,7 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
     }
 
     std::sort(report->structuralChanges.begin(), report->structuralChanges.end(), [](const PDFRepairStructuralChange& left, const PDFRepairStructuralChange& right)
-    {
-        return std::tie(left.path, left.kind) < std::tie(right.path, right.kind);
-    });
+              { return std::tie(left.path, left.kind) < std::tie(right.path, right.kind); });
 
     if (options.renderVisualDiff)
     {
@@ -799,7 +840,8 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
     {
         report->status = PDFRepairDiffStatus::Incomplete;
     }
-    else if (std::any_of(report->pages.cbegin(), report->pages.cend(), [](const PDFRepairPageVisualDiff& page) { return !page.warnings.isEmpty(); }))
+    else if (std::any_of(report->pages.cbegin(), report->pages.cend(), [](const PDFRepairPageVisualDiff& page)
+                         { return !page.warnings.isEmpty(); }))
     {
         report->status = PDFRepairDiffStatus::CompleteWithWarnings;
     }
@@ -811,7 +853,7 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
     const std::function<PDFOperationResult(PDFDocument*)>& applyRepair,
     const QString& candidatePath,
     PDFDocument* reopenedCandidate,
-    QByteArray* candidateSha256)
+    QByteArray* serializedCandidateBytes)
 {
     if (!reopenedCandidate || candidatePath.isEmpty())
     {
@@ -833,17 +875,27 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
         return writeResult;
     }
 
-    PDFDocumentReader reader(nullptr, [] (bool*) { return QString(); }, false, false);
+    PDFDocumentReader reader(nullptr, [](bool*)
+                             { return QString(); }, false, false);
     *reopenedCandidate = reader.readFromFile(candidatePath);
     if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
     {
         return PDFOperationResult(QStringLiteral("Serialized repair candidate could not be reopened: %1").arg(reader.getErrorMessage()));
     }
-    if (candidateSha256)
+    if (serializedCandidateBytes)
     {
-        *candidateSha256 = QCryptographicHash::hash(reader.getSource(), QCryptographicHash::Sha256);
+        QFile serializedCandidate(candidatePath);
+        if (!serializedCandidate.open(QIODevice::ReadOnly))
+        {
+            return PDFOperationResult(QStringLiteral("Serialized repair candidate could not be read back: %1").arg(serializedCandidate.errorString()));
+        }
+        *serializedCandidateBytes = serializedCandidate.readAll();
+        if (serializedCandidate.error() != QFileDevice::NoError)
+        {
+            return PDFOperationResult(QStringLiteral("Serialized repair candidate could not be read back: %1").arg(serializedCandidate.errorString()));
+        }
     }
     return PDFOperationResult(true);
 }
 
-} // namespace pdf
+}   // namespace pdf

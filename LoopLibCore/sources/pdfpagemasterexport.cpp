@@ -24,6 +24,7 @@
 #include "pdfobjectselector.h"
 #include "pdfartifactidentity.h"
 #include "pdfdocumentwriter.h"
+#include "pdfgovernedexecution.h"
 #include "pdfsafefilewriter.h"
 #include "pdfprogress.h"
 #include "preflightengine.h"
@@ -37,6 +38,7 @@
 #include <QCoreApplication>
 #include <QBuffer>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -1125,6 +1127,34 @@ void setOutputActionListResult(QJsonObject& manifest, int index,
     manifest.insert(QStringLiteral("outputs"), outputs);
 }
 
+void setOutputGovernedPublication(QJsonObject& manifest,
+                                  int index,
+                                  const PDFGovernedExecutionApproval& approval,
+                                  const PDFGovernedExecutionRevalidation& revalidation,
+                                  const PDFGovernedExecutionSignOff& signOff,
+                                  bool signedOff,
+                                  const QString& status)
+{
+    QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return;
+    }
+    QJsonObject output = outputs.at(index).toObject();
+    QJsonObject governed{
+        { QStringLiteral("status"), status },
+        { QStringLiteral("approval"), approval.toJson() },
+        { QStringLiteral("revalidation"), revalidation.toJson() }
+    };
+    if (signedOff)
+    {
+        governed.insert(QStringLiteral("sign_off"), signOff.toJson());
+    }
+    output.insert(QStringLiteral("governed"), governed);
+    outputs.replace(index, output);
+    manifest.insert(QStringLiteral("outputs"), outputs);
+}
+
 int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
 {
     const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
@@ -1716,10 +1746,42 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
-        // PDFDocumentWriter(safeWrite=true) uses QSaveFile: temp write then commit/rename
-        // without deleting the previous final until the new bytes are durable.
+        // Serialize once, then publish those exact bytes. The governed gate
+        // below must certify the bytes that reached the destination, not a
+        // second serialization of the in-memory document.
+        QByteArray candidateData;
+        QBuffer candidateBuffer(&candidateData);
+        if (!candidateBuffer.open(QIODevice::WriteOnly))
+        {
+            const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                "Could not prepare document bytes for '%1'.")
+                                        .arg(fileName);
+            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+            persistManifestForJob(manifestPath, manifest);
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+        }
         PDFDocumentWriter writer(nullptr);
-        const PDFOperationResult writeResult = writer.write(fileName, &assembledDocument, true);
+        const PDFOperationResult serializeResult = writer.write(&candidateBuffer, &assembledDocument);
+        candidateBuffer.close();
+        if (!serializeResult)
+        {
+            const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                "Could not serialize document for '%1'.")
+                                        .arg(fileName);
+            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+            persistManifestForJob(manifestPath, manifest);
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
+        const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+        const PDFOperationResult writeResult = PDFSafeFileWriter::writeData(
+            fileName,
+            candidateData,
+            job.overwriteFiles ? PDFSafeFileWriter::OverwritePolicy::Overwrite : PDFSafeFileWriter::OverwritePolicy::Fail);
         if (!writeResult)
         {
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
@@ -1730,6 +1792,68 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
+        PDFGovernedExecutionApproval governedApproval;
+        PDFGovernedExecutionRevalidation governedRevalidation;
+        PDFGovernedExecutionSignOff governedSignOff;
+        bool governedSignedOff = false;
+        if (runPreflight)
+        {
+            const QString sourceRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(canonicalJson(sourceIdentities), QCryptographicHash::Sha256).toHex());
+            const QString planDigest = exportConfigurationDigest(job, sourceIdentities, effectiveProfileDigest);
+            governedApproval.planDigest = planDigest;
+            governedApproval.sourceSha256 = sourceRevisionDigest;
+            governedApproval.candidateSha256 = candidateSha256;
+            governedApproval.approval.kind = PDFApprovalKind::Policy;
+            governedApproval.approval.actorId = QStringLiteral("PageMaster");
+            governedApproval.approval.decision = QStringLiteral("approve");
+            governedApproval.approval.policyId = QStringLiteral("pagemaster-preflight");
+            governedApproval.approval.rationale = QStringLiteral("PageMaster output passed the configured preflight gate before publication.");
+            governedApproval.approval.evidenceSha256 = planDigest;
+            governedApproval.approval.decisionReference = QStringLiteral("pagemaster-plan:%1").arg(planDigest);
+            governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+            const PDFOperationResult governedResult = finalizeGovernedPublication(governedApproval,
+                                                                                  planDigest,
+                                                                                  sourceRevisionDigest,
+                                                                                  candidateSha256,
+                                                                                  fileName,
+                                                                                  preflightProfile,
+                                                                                  QStringLiteral("PageMaster"),
+                                                                                  QStringLiteral("pagemaster-postflight"),
+                                                                                  &governedRevalidation,
+                                                                                  &governedSignOff);
+            governedSignedOff = bool(governedResult);
+            setOutputGovernedPublication(manifest,
+                                         int(index),
+                                         governedApproval,
+                                         governedRevalidation,
+                                         governedSignOff,
+                                         governedSignedOff,
+                                         governedSignedOff ? QStringLiteral("signed-off") : QStringLiteral("revalidation-failed"));
+            if (!governedResult && !(job.forcePreflight && governedRevalidation.bytesVerified))
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Published output '%1' failed governed revalidation: %2.")
+                                            .arg(fileName, governedResult.getErrorMessage());
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+        else
+        {
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("governed"), QJsonObject{
+                                                          { QStringLiteral("status"), QStringLiteral("not-certified") },
+                                                          { QStringLiteral("reason"), QStringLiteral("preflight-required-for-sign-off") },
+                                                          { QStringLiteral("published_sha256"), candidateSha256 } });
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
         }
 
         setOutputStatus(manifest, int(index), OUTPUT_STATUS_WRITTEN);

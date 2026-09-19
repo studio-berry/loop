@@ -269,6 +269,8 @@ add_executable(UnitTestsGovernedExecution
 )
 
 target_link_libraries(UnitTestsGovernedExecution PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsGovernedExecution PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsGovernedExecution PROPERTIES
     WIN32_EXECUTABLE OFF

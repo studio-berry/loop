@@ -1,4 +1,6 @@
 {
+  "schema_kind": "action-list",
+  "schema_version": 2,
   "schema": "loop-action-list/2",
   "id": "golden-v2-select",
   "name": "Golden v2 with selector",

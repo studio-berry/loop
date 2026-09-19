@@ -23,8 +23,11 @@
 #include "pdfgovernedexecution.h"
 
 #include "pdfartifactidentity.h"
+#include "pdfdocumentreader.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
+#include <QFile>
 #include <QJsonArray>
 
 namespace pdf
@@ -60,6 +63,11 @@ bool approvalAuthorizesPublication(const PDFApprovalRecord& approval)
         return false;
     }
     return approval.decision.trimmed().compare(QStringLiteral("approve"), Qt::CaseInsensitive) == 0;
+}
+
+QString digestJson(const QJsonObject& object)
+{
+    return digestHex(canonicalJson(object));
 }
 
 }   // namespace
@@ -168,6 +176,49 @@ PDFGovernedExecutionApproval PDFGovernedExecutionApproval::fromJson(const QJsonO
     return approval;
 }
 
+bool PDFGovernedExecutionRevalidation::isSignOffEligible() const
+{
+    return bytesVerified && isPDFSha256(artifactSha256) && isPDFSha256(reportSha256) &&
+           isPDFSha256(effectiveProfileDigest) && verdict.isPass();
+}
+
+QJsonObject PDFGovernedExecutionRevalidation::toJson() const
+{
+    return QJsonObject{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-revalidation") },
+        { QStringLiteral("schema_version"), schemaVersion },
+        { QStringLiteral("bytes_verified"), bytesVerified },
+        { QStringLiteral("artifact_sha256"), artifactSha256 },
+        { QStringLiteral("report_sha256"), reportSha256 },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest },
+        { QStringLiteral("verdict"), verdict.toJson() },
+        { QStringLiteral("sign_off_eligible"), isSignOffEligible() },
+        { QStringLiteral("report"), report }
+    };
+}
+
+bool PDFGovernedExecutionSignOff::isValid() const
+{
+    return isPDFSha256(planDigest) && isPDFSha256(sourceSha256) && isPDFSha256(candidateSha256) &&
+           isPDFSha256(publishedSha256) && isPDFSha256(revalidationReportSha256) &&
+           isPDFSha256(effectiveProfileDigest) && approval.isValid();
+}
+
+QJsonObject PDFGovernedExecutionSignOff::toJson() const
+{
+    return QJsonObject{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), schemaVersion },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("published_sha256"), publishedSha256 },
+        { QStringLiteral("revalidation_report_sha256"), revalidationReportSha256 },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest },
+        { QStringLiteral("approval"), approval.toJson() }
+    };
+}
+
 bool preflightDecisionQualifiesAsOperationApproval(const PreflightDecision& decision)
 {
     Q_UNUSED(decision);
@@ -267,6 +318,159 @@ PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& 
     if (!approvalAuthorizesPublication(approval.approval))
     {
         return PDFOperationResult(QStringLiteral("Governed approval requires an affirmative non-None approval decision."));
+    }
+    return PDFOperationResult(true);
+}
+
+PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
+                                              const QJsonObject& profile,
+                                              const QString& expectedSha256,
+                                              PDFGovernedExecutionRevalidation* revalidation)
+{
+    if (!revalidation)
+    {
+        return PDFOperationResult(QStringLiteral("Governed revalidation output is null."));
+    }
+    *revalidation = PDFGovernedExecutionRevalidation();
+    if (profile.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("Governed revalidation requires a non-empty preflight profile."));
+    }
+
+    QFile publishedFile(publishedPath);
+    if (!publishedFile.open(QIODevice::ReadOnly))
+    {
+        return PDFOperationResult(QStringLiteral("Could not open the published artifact for revalidation."));
+    }
+    const QByteArray publishedBytes = publishedFile.readAll();
+    if (publishedFile.error() != QFileDevice::NoError)
+    {
+        return PDFOperationResult(QStringLiteral("Could not read the published artifact for revalidation."));
+    }
+
+    revalidation->artifactSha256 = QString::fromLatin1(QCryptographicHash::hash(publishedBytes, QCryptographicHash::Sha256).toHex());
+    if (!expectedSha256.trimmed().isEmpty() && !sha256Matches(revalidation->artifactSha256, expectedSha256))
+    {
+        return PDFOperationResult(QStringLiteral("Published artifact bytes do not match the reviewed candidate (expected %1, actual %2).")
+                                      .arg(expectedSha256.trimmed().toLower(), revalidation->artifactSha256));
+    }
+
+    PDFDocumentReader reader(nullptr, [](bool*)
+                             { return QString(); }, false, false);
+    PDFDocument document = reader.readFromFile(publishedPath);
+    if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
+    {
+        return PDFOperationResult(QStringLiteral("The published artifact could not be reopened for revalidation."));
+    }
+
+    PDFDocumentSession session(&document);
+    PreflightResult result = PreflightEngine(&session).run(profile);
+    revalidation->report = result.toJson();
+    revalidation->reportSha256 = digestJson(revalidation->report);
+    revalidation->effectiveProfileDigest = result.effectiveProfileDigest;
+    if (!isPDFSha256(revalidation->effectiveProfileDigest))
+    {
+        revalidation->effectiveProfileDigest = digestJson(profile);
+    }
+    revalidation->verdict = reducePreflightVerdict(result);
+    revalidation->bytesVerified = true;
+    if (!revalidation->isSignOffEligible())
+    {
+        return PDFOperationResult(preflightVerdictOperatorSummary(revalidation->verdict));
+    }
+    return PDFOperationResult(true);
+}
+
+PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApproval& approval,
+                                               const QString& expectedPlanDigest,
+                                               const QString& expectedSourceSha256,
+                                               const QString& expectedCandidateSha256,
+                                               const QString& publishedPath,
+                                               const QJsonObject& profile,
+                                               const QString& signOffActor,
+                                               const QString& signOffPolicy,
+                                               PDFGovernedExecutionRevalidation* revalidation,
+                                               PDFGovernedExecutionSignOff* signOff)
+{
+    if (!revalidation || !signOff)
+    {
+        return PDFOperationResult(QStringLiteral("Governed publication outputs are null."));
+    }
+    if (const PDFOperationResult approvalResult = validateGovernedApproval(approval,
+                                                                           expectedPlanDigest,
+                                                                           expectedSourceSha256,
+                                                                           expectedCandidateSha256);
+        !approvalResult)
+    {
+        return approvalResult;
+    }
+
+    if (const PDFOperationResult revalidationResult = revalidateGovernedArtifact(publishedPath,
+                                                                                 profile,
+                                                                                 expectedCandidateSha256,
+                                                                                 revalidation);
+        !revalidationResult)
+    {
+        return revalidationResult;
+    }
+
+    PDFApprovalRecord certificateApproval;
+    certificateApproval.kind = PDFApprovalKind::System;
+    certificateApproval.actorId = signOffActor.trimmed();
+    certificateApproval.decision = QStringLiteral("approve");
+    certificateApproval.policyId = signOffPolicy.trimmed();
+    certificateApproval.rationale = QStringLiteral("Published bytes were reopened and passed the effective preflight profile.");
+    certificateApproval.evidenceSha256 = revalidation->reportSha256;
+    certificateApproval.decisionReference = QStringLiteral("published-revalidation:%1").arg(revalidation->artifactSha256);
+    certificateApproval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    *signOff = PDFGovernedExecutionSignOff();
+    signOff->planDigest = expectedPlanDigest.trimmed().toLower();
+    signOff->sourceSha256 = expectedSourceSha256.trimmed().toLower();
+    signOff->candidateSha256 = expectedCandidateSha256.trimmed().toLower();
+    signOff->publishedSha256 = revalidation->artifactSha256;
+    signOff->revalidationReportSha256 = revalidation->reportSha256;
+    signOff->effectiveProfileDigest = revalidation->effectiveProfileDigest;
+    signOff->approval = certificateApproval;
+    return validateGovernedSignOff(*signOff,
+                                   approval,
+                                   *revalidation,
+                                   expectedPlanDigest,
+                                   expectedSourceSha256,
+                                   expectedCandidateSha256);
+}
+
+PDFOperationResult validateGovernedSignOff(const PDFGovernedExecutionSignOff& signOff,
+                                           const PDFGovernedExecutionApproval& approval,
+                                           const PDFGovernedExecutionRevalidation& revalidation,
+                                           const QString& expectedPlanDigest,
+                                           const QString& expectedSourceSha256,
+                                           const QString& expectedCandidateSha256)
+{
+    if (!signOff.isValid())
+    {
+        return PDFOperationResult(QStringLiteral("Governed sign-off is incomplete or invalid."));
+    }
+    if (const PDFOperationResult approvalResult = validateGovernedApproval(approval,
+                                                                           expectedPlanDigest,
+                                                                           expectedSourceSha256,
+                                                                           expectedCandidateSha256);
+        !approvalResult)
+    {
+        return approvalResult;
+    }
+    if (!revalidation.isSignOffEligible())
+    {
+        return PDFOperationResult(QStringLiteral("Governed sign-off requires a complete passing revalidation."));
+    }
+    if (!sha256Matches(signOff.planDigest, expectedPlanDigest) ||
+        !sha256Matches(signOff.sourceSha256, expectedSourceSha256) ||
+        !sha256Matches(signOff.candidateSha256, expectedCandidateSha256) ||
+        !sha256Matches(signOff.publishedSha256, revalidation.artifactSha256) ||
+        !sha256Matches(signOff.revalidationReportSha256, revalidation.reportSha256) ||
+        !sha256Matches(signOff.effectiveProfileDigest, revalidation.effectiveProfileDigest))
+    {
+        return PDFOperationResult(QStringLiteral("Governed sign-off does not match the published artifact or revalidation evidence."));
     }
     return PDFOperationResult(true);
 }

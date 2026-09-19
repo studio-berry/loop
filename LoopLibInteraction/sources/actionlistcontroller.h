@@ -42,6 +42,8 @@ class ActionListController final : public QObject
     Q_PROPERTY(QString operatorSummary READ operatorSummary NOTIFY stateChanged)
     Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
     Q_PROPERTY(QString recipeHash READ recipeHash NOTIFY resultChanged)
+    Q_PROPERTY(QString planDigest READ planDigest NOTIFY resultChanged)
+    Q_PROPERTY(QString governedStatus READ governedStatus NOTIFY resultChanged)
     Q_PROPERTY(QString resultStatus READ resultStatus NOTIFY resultChanged)
     Q_PROPERTY(bool validationReady READ validationReady NOTIFY resultChanged)
 
@@ -71,6 +73,19 @@ public:
     QString jobId() const { return m_jobId; }
     int progress() const noexcept { return m_progress; }
     QString recipeHash() const { return m_result.recipeHash; }
+    QString planDigest() const { return m_result.planDigest; }
+    QString governedStatus() const
+    {
+        if (m_result.governed.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("schema")).toString() == QStringLiteral("loop.governed-sign-off"))
+        {
+            return QStringLiteral("signed-off");
+        }
+        if (m_result.status == QStringLiteral("planned"))
+        {
+            return QStringLiteral("pending");
+        }
+        return m_result.governed.isEmpty() ? QStringLiteral("not-run") : QStringLiteral("not-certified");
+    }
     QString resultStatus() const { return m_result.status; }
     bool validationReady() const noexcept { return !m_validatedRecipeHash.isEmpty() && m_state == State::Idle; }
     const pdf::PDFActionListExecutionResult& result() const noexcept { return m_result; }

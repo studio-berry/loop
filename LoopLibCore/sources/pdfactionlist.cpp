@@ -22,8 +22,12 @@
 
 #include "pdfactionlist.h"
 
+#include "pdfartifactidentity.h"
+#include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
+#include "preflightengine.h"
 
+#include <QBuffer>
 #include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QJsonDocument>
@@ -42,6 +46,27 @@ namespace
 bool hasPreflightProfile(const PDFActionListExecutionOptions& options)
 {
     return !options.preflightProfilePath.trimmed().isEmpty() || !options.preflightProfile.isEmpty();
+}
+
+QString sourceSha256ForActionList(const PDFDocument& source)
+{
+    if (!source.getSourceDataHash().isEmpty())
+    {
+        return QString::fromLatin1(source.getSourceDataHash().toHex());
+    }
+
+    QByteArray serialized;
+    QBuffer buffer(&serialized);
+    if (!buffer.open(QIODevice::WriteOnly))
+    {
+        return {};
+    }
+    PDFDocumentWriter writer(nullptr);
+    if (!writer.write(&buffer, &source))
+    {
+        return {};
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(serialized, QCryptographicHash::Sha256).toHex());
 }
 
 MandatoryPostflightOptions mandatoryPostflightOptionsFromActionList(const PDFActionListExecutionOptions& options)
@@ -608,12 +633,31 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("action_list"), actionListId },
         { QStringLiteral("action_list_schema"), actionListSchema },
         { QStringLiteral("recipe_hash"), recipeHash },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
         { QStringLiteral("status"), status },
         { QStringLiteral("duration_ms"), durationMs },
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("postflight"), postflight },
+        { QStringLiteral("governed"), governed },
         { QStringLiteral("steps"), stepJson }
     };
+}
+
+QString computeActionListPlanDigest(const PDFActionList& actionList,
+                                    const QJsonObject& bindings,
+                                    const QString& sourceSha256,
+                                    const QJsonObject& effectiveProfile)
+{
+    const QJsonObject envelope{
+        { QStringLiteral("schema_kind"), QStringLiteral("action-list-plan") },
+        { QStringLiteral("schema_version"), QStringLiteral("1.0") },
+        { QStringLiteral("source_sha256"), sourceSha256.trimmed().toLower() },
+        { QStringLiteral("action_list"), actionList.toJson() },
+        { QStringLiteral("bindings"), bindings },
+        { QStringLiteral("effective_profile"), effectiveProfile }
+    };
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(envelope), QCryptographicHash::Sha256).toHex());
 }
 
 QString PDFActionListExecutor::schemaVersion()
@@ -733,6 +777,34 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
     result->actionListId = actionList.id;
     result->actionListSchema = actionList.schema;
     result->recipeHash = recipeHash(actionList);
+    result->sourceSha256 = sourceSha256ForActionList(source);
+    if (result->sourceSha256.isEmpty())
+    {
+        result->status = QStringLiteral("failed");
+        result->diagnostics.append(QJsonObject{
+            { QStringLiteral("code"), QStringLiteral("action-list.source-identity-unavailable") },
+            { QStringLiteral("severity"), QStringLiteral("error") },
+            { QStringLiteral("message"), QStringLiteral("A source byte identity could not be established for the Action List plan.") } });
+        return PDFOperationResult(QStringLiteral("A source byte identity could not be established for the Action List plan."));
+    }
+    QJsonObject effectiveProfile = options.preflightProfile;
+    if (effectiveProfile.isEmpty() && !options.preflightProfilePath.trimmed().isEmpty())
+    {
+        QString profileError;
+        if (!PreflightEngine::loadProfile(options.preflightProfilePath, effectiveProfile, profileError))
+        {
+            result->status = QStringLiteral("failed");
+            result->diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.profile-unreadable") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), profileError } });
+            return PDFOperationResult(profileError);
+        }
+    }
+    result->planDigest = computeActionListPlanDigest(actionList,
+                                                     options.bindings,
+                                                     result->sourceSha256,
+                                                     effectiveProfile);
     QElapsedTimer totalTimer;
     totalTimer.start();
 

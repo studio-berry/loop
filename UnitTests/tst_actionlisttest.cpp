@@ -387,7 +387,8 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
                                                 adapterOutcome,
                                                 defaultPreflightProfilePath())(local.context);
     }
-    QVERIFY(adapterOutcome->ok);
+    QVERIFY2(adapterOutcome->ok,
+             qPrintable(QString::fromUtf8(QJsonDocument(adapterOutcome->executionResult.toJson()).toJson(QJsonDocument::Compact))));
     QCOMPARE(adapterOutcome->executionResult.recipeHash, cliResult.recipeHash);
 
     QProcess process;
@@ -399,6 +400,10 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
 #endif
     );
     QVERIFY2(QFileInfo::exists(pdfTool), qPrintable(QStringLiteral("PdfTool was not found at %1").arg(pdfTool)));
+    const QString cliStdoutPath = tempDir.filePath(QStringLiteral("cli.stdout"));
+    const QString cliStderrPath = tempDir.filePath(QStringLiteral("cli.stderr"));
+    process.setStandardOutputFile(cliStdoutPath);
+    process.setStandardErrorFile(cliStderrPath);
     process.start(pdfTool,
                   { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, inputPath,
                     QStringLiteral("--param"), QStringLiteral("bleed=3"), QStringLiteral("--output"), outputPath,
@@ -406,22 +411,47 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
                     QStringLiteral("--console-format"), QStringLiteral("json") });
     QVERIFY(process.waitForFinished(30000));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
-    QCOMPARE(process.exitCode(), 0);
-    const QJsonDocument cliOutput = QJsonDocument::fromJson(process.readAllStandardOutput());
-    QVERIFY2(cliOutput.isObject(), qPrintable(QString::fromLocal8Bit(process.readAllStandardError())));
+    QVERIFY2(process.exitCode() == 0,
+             qPrintable(QStringLiteral("PdfTool action-list failed with exit %1.").arg(process.exitCode())));
+    QFile cliStdoutFile(cliStdoutPath);
+    QVERIFY2(cliStdoutFile.open(QIODevice::ReadOnly), qPrintable(cliStdoutFile.errorString()));
+    const QByteArray cliOutputBytes = cliStdoutFile.readAll();
+    QFile cliStderrFile(cliStderrPath);
+    QVERIFY2(cliStderrFile.open(QIODevice::ReadOnly), qPrintable(cliStderrFile.errorString()));
+    const QByteArray cliStderr = cliStderrFile.readAll();
+    const QJsonDocument cliOutput = QJsonDocument::fromJson(cliOutputBytes);
+    QVERIFY2(cliOutput.isObject(), qPrintable(QStringLiteral("PdfTool returned non-JSON output. stdout=%1 stderr=%2 error=%3 input=%4 recipe=%5 output=%6")
+                                                  .arg(QString::fromLocal8Bit(cliOutputBytes),
+                                                       QString::fromLocal8Bit(cliStderr),
+                                                       process.errorString(),
+                                                       inputPath,
+                                                       recipePath,
+                                                       outputPath)));
     const QJsonObject cliData = cliOutput.object().value(QStringLiteral("data")).toObject();
     QCOMPARE(cliData.value(QStringLiteral("recipe_hash")).toString(), cliResult.recipeHash);
     const QString cliOutputHash = cliData.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString();
     QVERIFY(!cliOutputHash.isEmpty());
 
-    QByteArray adapterData;
-    pdf::PDFDocument reopenedAdapter;
-    QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-        *adapterOutcome->candidate, [](pdf::PDFDocument*)
-        { return pdf::PDFOperationResult(true); },
-        tempDir.filePath(QStringLiteral("adapter.pdf")), &reopenedAdapter, &adapterData));
+    QFile outputFile(outputPath);
+    QVERIFY(outputFile.open(QIODevice::ReadOnly));
+    const QByteArray publishedBytes = outputFile.readAll();
     QCOMPARE(cliOutputHash,
-             QString::fromLatin1(QCryptographicHash::hash(adapterData, QCryptographicHash::Sha256).toHex()));
+             QString::fromLatin1(QCryptographicHash::hash(publishedBytes, QCryptographicHash::Sha256).toHex()));
+    QCOMPARE(cliData.value(QStringLiteral("recipe_hash")).toString(), cliResult.recipeHash);
+    QCOMPARE(cliData.value(QStringLiteral("plan_digest")).toString(), adapterOutcome->executionResult.planDigest);
+    QCOMPARE(cliData.value(QStringLiteral("source_sha256")).toString(), adapterOutcome->executionResult.sourceSha256);
+
+    const QJsonObject governed = cliData.value(QStringLiteral("governed")).toObject();
+    const QJsonObject revalidation = governed.value(QStringLiteral("revalidation")).toObject();
+    const QJsonObject signOff = governed.value(QStringLiteral("sign_off")).toObject();
+    QVERIFY(revalidation.value(QStringLiteral("bytes_verified")).toBool());
+    QVERIFY(revalidation.value(QStringLiteral("sign_off_eligible")).toBool());
+    QCOMPARE(signOff.value(QStringLiteral("plan_digest")).toString(), cliData.value(QStringLiteral("plan_digest")).toString());
+    QCOMPARE(signOff.value(QStringLiteral("source_sha256")).toString(), cliData.value(QStringLiteral("source_sha256")).toString());
+    QCOMPARE(signOff.value(QStringLiteral("candidate_sha256")).toString(), cliOutputHash);
+    QCOMPARE(signOff.value(QStringLiteral("published_sha256")).toString(), cliOutputHash);
+    QCOMPARE(adapterOutcome->executionResult.governed.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("plan_digest")).toString(),
+             adapterOutcome->executionResult.planDigest);
 }
 
 void ActionListTest::surfacesPerStepValidationErrors()
