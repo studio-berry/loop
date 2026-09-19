@@ -62,8 +62,7 @@ QJsonObject geometrySchema()
         { QStringLiteral("type"), QStringLiteral("object") },
         { QStringLiteral("required"), QJsonArray{ QStringLiteral("geometry") } },
         { QStringLiteral("properties"), QJsonObject{
-            { QStringLiteral("geometry"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } }
-        } }
+                                            { QStringLiteral("geometry"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } } } }
     };
 }
 
@@ -251,9 +250,8 @@ public:
             { QStringLiteral("type"), QStringLiteral("object") },
             { QStringLiteral("required"), QJsonArray{ QStringLiteral("rect") } },
             { QStringLiteral("properties"), QJsonObject{
-                { QStringLiteral("rect"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } },
-                { QStringLiteral("spec"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } }
-            } }
+                                                { QStringLiteral("rect"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } },
+                                                { QStringLiteral("spec"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } } } }
         };
     }
 
@@ -299,6 +297,6 @@ const bool registerProductionRepairOperations = []
     return true;
 }();
 
-} // namespace
+}   // namespace
 
-} // namespace pdf
+}   // namespace pdf

@@ -294,7 +294,6 @@ void OperationImpactTest::targetedReusesBaselineFindings()
 }
 
 
-
 void OperationImpactTest::goldenFixtureSubsetMatchesFull_data()
 {
     QTest::addColumn<QString>("fixture");
