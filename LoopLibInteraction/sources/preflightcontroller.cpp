@@ -242,7 +242,8 @@ QByteArray PreflightController::serializedReport(const QString& documentPath) co
 bool PreflightController::navigationFor(const QString& findingId,
                                         EvidenceNavigationRequest* request) const
 {
-    if (!request || m_state == State::Stale || m_state == State::Cancelled ||
+    if (!request || !m_hasResult ||
+        (m_state != State::Pass && m_state != State::Findings && m_state != State::Incomplete) ||
         !m_findings.containsCurrent(findingId, m_documentRevision))
     {
         return false;
@@ -279,7 +280,8 @@ bool PreflightController::navigationFor(const QString& findingId,
 
 QVector<FindingOverlay> PreflightController::overlaysForPage(int page) const
 {
-    if (m_state == State::Stale || m_state == State::Cancelled || m_state == State::NotChecked)
+    if (!m_hasResult ||
+        (m_state != State::Pass && m_state != State::Findings && m_state != State::Incomplete))
     {
         return {};
     }
