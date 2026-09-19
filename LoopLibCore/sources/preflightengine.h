@@ -49,7 +49,7 @@ namespace pdf
 {
 
 /// Report contract version emitted by PreflightResult::toJson().
-inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 3;
+inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 4;
 
 /// Finding location scope in normalized preflight reports.
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_DOCUMENT("document");
