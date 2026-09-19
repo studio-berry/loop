@@ -633,6 +633,8 @@ void RepairOperationTest::findingDelta_tracksResolvedUnchangedIntroducedDetermin
     QCOMPARE(first.unchangedFindingIds, QStringList{ unchanged.stableId() });
     QCOMPARE(first.introducedFindingIds, QStringList{ introduced.stableId() });
     QVERIFY(first.incompleteFindingIds.isEmpty());
+    QVERIFY(first.compared);
+    QVERIFY(first.carriedForwardFindingIds.isEmpty());
     QCOMPARE(QJsonDocument(first.toJson()).toJson(QJsonDocument::Compact),
              QJsonDocument(second.toJson()).toJson(QJsonDocument::Compact));
 }
@@ -664,6 +666,7 @@ void RepairOperationTest::findingDelta_incompleteOrSkippedChecksNeverFalseResolv
     const pdf::PDFRepairFindingDelta skippedDelta = pdf::computeFindingDelta(before, skipped);
     QVERIFY(skippedDelta.resolvedFindingIds.isEmpty());
     QCOMPARE(skippedDelta.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(skippedDelta.carriedForwardFindingIds, QStringList{ finding.stableId() });
     QVERIFY(skippedDelta.incompleteFindingIds.isEmpty());
 
     // Targeted revalidation may omit document-level findings that have no
@@ -728,6 +731,7 @@ void RepairOperationTest::findingDelta_partialPageAndMissingStatusNeverFalseReso
     const pdf::PDFRepairFindingDelta omittedPage = pdf::computeFindingDelta(before, after);
     QVERIFY(omittedPage.resolvedFindingIds.isEmpty());
     QCOMPARE(omittedPage.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(omittedPage.carriedForwardFindingIds, QStringList{ finding.stableId() });
     QVERIFY(omittedPage.introducedFindingIds.isEmpty());
     QVERIFY(omittedPage.incompleteFindingIds.isEmpty());
 
@@ -749,6 +753,22 @@ void RepairOperationTest::findingDelta_partialPageAndMissingStatusNeverFalseReso
     const pdf::PDFRepairFindingDelta omittedCheck = pdf::computeFindingDelta(before, after);
     QVERIFY(omittedCheck.resolvedFindingIds.isEmpty());
     QCOMPARE(omittedCheck.unchangedFindingIds, QStringList{ finding.stableId() });
+    QCOMPARE(omittedCheck.carriedForwardFindingIds, QStringList{ finding.stableId() });
+
+    pdf::PreflightResult emptyBefore;
+    pdf::PreflightResult emptyAfter;
+    const pdf::PDFRepairFindingDelta comparedEmpty =
+        pdf::computeFindingDelta(emptyBefore, emptyAfter);
+    QVERIFY(comparedEmpty.compared);
+    QVERIFY(comparedEmpty.resolvedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.unchangedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.introducedFindingIds.isEmpty());
+    QVERIFY(comparedEmpty.incompleteFindingIds.isEmpty());
+    QCOMPARE(comparedEmpty.toJson().value(QStringLiteral("compared")).toBool(), true);
+
+    const pdf::PDFRepairFindingDelta notRun;
+    QVERIFY(!notRun.compared);
+    QVERIFY(!notRun.toJson().value(QStringLiteral("compared")).toBool());
 }
 
 void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied()
