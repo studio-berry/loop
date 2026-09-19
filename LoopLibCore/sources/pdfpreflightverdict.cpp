@@ -598,6 +598,63 @@ PDFOperationResult runMandatoryPostflight(PDFDocument* document,
     return PDFOperationResult(summary);
 }
 
+PDFRepairFindingDelta computeRepairStepFindingDelta(const PDFDocument& baselineDocument,
+                                                    PDFDocument* afterDocument,
+                                                    const PDFRepairPlan& plan,
+                                                    const QString& profilePath,
+                                                    MandatoryPostflightOptions options,
+                                                    const PDFRepairOperation* operation,
+                                                    const QJsonObject& operationParameters)
+{
+    PDFRepairFindingDelta empty;
+    if (!afterDocument)
+    {
+        return empty;
+    }
+
+    MandatoryPostflightOptions validatorOptions = options;
+    PDFRevalidationPlan stepPlan;
+    if (operation && !validatorOptions.revalidationPlan)
+    {
+        QJsonObject profileObject = validatorOptions.profileJson;
+        if (profileObject.isEmpty())
+        {
+            QString loadError;
+            if (!PreflightEngine::loadProfile(profilePath, profileObject, loadError))
+            {
+                return empty;
+            }
+        }
+        stepPlan = planRepairStepPreflight(operation,
+                                           baselineDocument,
+                                           operationParameters,
+                                           enabledPreflightCheckIds(profileObject),
+                                           plan);
+        validatorOptions.revalidationPlan = &stepPlan;
+    }
+
+    PDFDocument baselineCandidate = baselineDocument;
+    PreflightVerdict baselineVerdict;
+    PreflightResult baselineResult;
+    MandatoryPostflightOptions baselineOptions = validatorOptions;
+    baselineOptions.allowIncomplete = true;
+    runMandatoryPostflight(&baselineCandidate,
+                           profilePath,
+                           &baselineVerdict,
+                           &baselineResult,
+                           baselineOptions);
+
+    PreflightVerdict afterVerdict;
+    PreflightResult afterResult;
+    runMandatoryPostflight(afterDocument,
+                           profilePath,
+                           &afterVerdict,
+                           &afterResult,
+                           validatorOptions);
+
+    return computeFindingDelta(baselineResult, afterResult);
+}
+
 PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                const PDFRepairPlan& plan,
                                                const QString& profilePath,
@@ -605,7 +662,8 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                MandatoryPostflightOptions options,
                                                const PDFRepairOperation* operation,
                                                const QJsonObject& operationParameters,
-                                               const PDFDocument* baselineDocument)
+                                               const PDFDocument* baselineDocument,
+                                               PreflightResult* postflightResultOut)
 {
     if (!document || !result)
     {
@@ -678,6 +736,10 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
         return postflight;
     }
     result->verdict = verdict.toJson();
+    if (postflightResultOut)
+    {
+        *postflightResultOut = preflightResult;
+    }
 
     bool deltaIncomplete = false;
     bool introducedFindings = false;

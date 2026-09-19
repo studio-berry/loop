@@ -116,6 +116,8 @@ private slots:
     void findingDelta_tracksResolvedUnchangedIntroducedDeterministically();
     void findingDelta_incompleteOrSkippedChecksNeverFalseResolve();
     void declaredValidators_populateVerdictWhenProfileSupplied();
+    void declaredValidators_rejectMalformedProfileBeforePublish();
+    void declaredValidators_failClosedOnIncompleteInspection();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -710,6 +712,71 @@ void RepairOperationTest::declaredValidators_populateVerdictWhenProfileSupplied(
     QCOMPARE(result.validations.first().status, pdf::PDFRepairStatus::Failed);
     QVERIFY(!validation);
     QCOMPARE(result.verdict.value(QStringLiteral("state")).toString(), QStringLiteral("fail"));
+}
+
+void RepairOperationTest::declaredValidators_rejectMalformedProfileBeforePublish()
+{
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { pdf::PDFRepairValidatorKind::NormalPreflight };
+    pdf::PDFRepairResult result;
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString malformedProfilePath = temporaryDirectory.filePath(QStringLiteral("malformed-profile.json"));
+    QFile malformedProfile(malformedProfilePath);
+    QVERIFY(malformedProfile.open(QIODevice::WriteOnly));
+    QVERIFY(malformedProfile.write("{") > 0);
+
+    const pdf::PDFOperationResult validation = pdf::runDeclaredRepairValidators(&document, plan, malformedProfilePath, &result);
+    QVERIFY(!validation);
+    QCOMPARE(result.status, pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(!result.incompleteReasons.isEmpty());
+    QVERIFY(result.validations.isEmpty());
+}
+
+void RepairOperationTest::declaredValidators_failClosedOnIncompleteInspection()
+{
+    pdf::PreflightResult before;
+    before.inspectionComplete = true;
+    pdf::PreflightFinding finding;
+    finding.checkId = QStringLiteral("color-mode");
+    finding.type = QStringLiteral("color-mode-mismatch");
+    finding.objectId = QStringLiteral("12 0 R");
+    before.errors = { finding };
+
+    pdf::PreflightResult after;
+    after.inspectionComplete = false;
+    after.errorCode = QStringLiteral("budget-exceeded");
+    pdf::PreflightCheckStatus incompleteStatus;
+    incompleteStatus.id = finding.checkId;
+    incompleteStatus.status = QStringLiteral("incomplete");
+    incompleteStatus.reason = QStringLiteral("budget-exceeded");
+    after.checkStatuses = { incompleteStatus };
+
+    const pdf::PDFRepairFindingDelta delta = pdf::computeFindingDelta(before, after);
+    QVERIFY(delta.resolvedFindingIds.isEmpty());
+    QCOMPARE(delta.incompleteFindingIds, QStringList{ finding.stableId() });
+
+    pdf::PDFDocument document = buildPreflightCleanDocument();
+    pdf::PDFRepairPlan plan;
+    plan.requiresPostflight = true;
+    plan.validators = { pdf::PDFRepairValidatorKind::NormalPreflight };
+    pdf::PDFRepairResult result;
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const pdf::PDFOperationResult validation = pdf::runDeclaredRepairValidators(&document,
+                                                                                plan,
+                                                                                profilePath,
+                                                                                &result,
+                                                                                {},
+                                                                                nullptr,
+                                                                                {},
+                                                                                &document);
+    QVERIFY(!validation);
+    QVERIFY(result.status == pdf::PDFRepairStatus::Failed || result.status == pdf::PDFRepairStatus::Incomplete);
+    QVERIFY(!result.validations.isEmpty());
+    QVERIFY(result.validations.first().status != pdf::PDFRepairStatus::Passed);
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

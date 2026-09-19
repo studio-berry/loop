@@ -32,6 +32,7 @@ namespace pdf
 
 class PDFDocument;
 class PDFRepairOperation;
+struct PDFRepairFindingDelta;
 struct PDFRepairPlan;
 struct PDFRepairResult;
 
@@ -93,9 +94,20 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult runMandatoryPostflight(PDFDocument* 
                                                                    PreflightResult* resultOut = nullptr,
                                                                    MandatoryPostflightOptions options = {});
 
+/// Computes a scoped finding delta for operator feedback during step execution.
+/// This is diagnostic-only and does not gate publication.
+LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeRepairStepFindingDelta(const PDFDocument& baselineDocument,
+                                                                             PDFDocument* afterDocument,
+                                                                             const PDFRepairPlan& plan,
+                                                                             const QString& profilePath,
+                                                                             MandatoryPostflightOptions options = {},
+                                                                             const PDFRepairOperation* operation = nullptr,
+                                                                             const QJsonObject& operationParameters = {});
+
 /// Executes declared repair validators (notably NormalPreflight) against the
 /// candidate and populates \p result verdict / validation records. When
 /// \p operation is supplied, NormalPreflight is scoped to that step's impact.
+/// This is the single governed publish gate for repair and Action List commit.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                                         const PDFRepairPlan& plan,
                                                                         const QString& profilePath,
@@ -103,7 +115,8 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult runDeclaredRepairValidators(PDFDocum
                                                                         MandatoryPostflightOptions options = {},
                                                                         const PDFRepairOperation* operation = nullptr,
                                                                         const QJsonObject& operationParameters = {},
-                                                                        const PDFDocument* baselineDocument = nullptr);
+                                                                        const PDFDocument* baselineDocument = nullptr,
+                                                                        PreflightResult* postflightResultOut = nullptr);
 
 /// Certificate issuance (#133) may proceed only on a PASS verdict against a
 /// non-provisional profile identity.
