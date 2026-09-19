@@ -384,6 +384,8 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
     QVERIFY2(before.contains(QStringLiteral("kind")) && before.contains(QStringLiteral("colorRole")) && before.contains(QStringLiteral("icon")) && before.contains(QStringLiteral("accessibleName")),
              "the visual must carry the full canonical treatment for QML to render");
     QCOMPARE(before.value(QStringLiteral("accessibleName")).toString(), QStringLiteral("Not checked"));
+    QCOMPARE(host.preflightCertificateStateName(), QStringLiteral("not-certified"));
+    QCOMPARE(host.preflightCertificateStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("NotChecked"));
 
     // The colour is resolved from the visual's own colour role, never chosen by the QML child. It must
     // be a real colour and it must not be the pass colour.

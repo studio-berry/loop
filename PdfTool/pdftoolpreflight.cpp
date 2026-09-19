@@ -41,6 +41,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QUuid>
 
 namespace pdftool
@@ -743,37 +744,51 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.refused"), certificateError);
             return PDFToolExitCode::Findings;
         }
-        QFile certificateFile(options.preflightCertificateOutputPath);
-        if (!certificateFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        {
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.output-failed"), certificateFile.errorString());
-            return PDFToolExitCode::ProcessingFailure;
-        }
         const QByteArray certificateJson = QJsonDocument(certificate.toJson()).toJson(QJsonDocument::Indented);
-        if (certificateFile.write(certificateJson) != certificateJson.size())
+        QSaveFile certificateFile(options.preflightCertificateOutputPath);
+        if (!certificateFile.open(QIODevice::WriteOnly) ||
+            certificateFile.write(certificateJson) != certificateJson.size())
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.output-failed"), certificateFile.errorString());
             return PDFToolExitCode::ProcessingFailure;
         }
-        if (!events.isEmpty())
+
+        pdf::PDFOperationHistoryEvent certificateEvent;
+        certificateEvent.executionId = events.back().executionId;
+        certificateEvent.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+        certificateEvent.status = pdf::PDFOperationHistoryStatus::Running;
+        certificateEvent.operatorIdentity = QStringLiteral("PdfTool");
+        certificateEvent.documentRevisionDigest = certificate.documentRevisionDigest;
+        certificateEvent.effectiveProfileDigest = certificate.effectiveProfileDigest;
+        certificateEvent.approval.decisionReference = certificate.certificateId;
+        certificateEvent.resultSummary = QJsonObject{
+            { QStringLiteral("certificate_id"), certificate.certificateId },
+            { QStringLiteral("report_digest"), certificate.reportDigest },
+            { QStringLiteral("certificate"), certificate.toJson() }
+        };
+        if (!history.appendEvent(certificateEvent))
         {
-            pdf::PDFOperationHistoryEvent certificateEvent;
-            certificateEvent.executionId = events.back().executionId;
-            certificateEvent.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
-            certificateEvent.status = pdf::PDFOperationHistoryStatus::Running;
-            certificateEvent.operatorIdentity = QStringLiteral("PdfTool");
-            certificateEvent.documentRevisionDigest = certificate.documentRevisionDigest;
-            certificateEvent.effectiveProfileDigest = certificate.effectiveProfileDigest;
-            certificateEvent.approval.decisionReference = certificate.certificateId;
-            certificateEvent.resultSummary = QJsonObject{
-                { QStringLiteral("certificate_id"), certificate.certificateId },
-                { QStringLiteral("report_digest"), certificate.reportDigest }
+            certificateFile.cancelWriting();
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-write-failed"), QStringLiteral("Could not append certificate issuance to the audit history."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+
+        if (!certificateFile.commit())
+        {
+            pdf::PDFOperationHistoryEvent invalidated;
+            invalidated.executionId = certificateEvent.executionId;
+            invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
+            invalidated.status = pdf::PDFOperationHistoryStatus::Failed;
+            invalidated.operatorIdentity = QStringLiteral("PdfTool");
+            invalidated.documentRevisionDigest = certificate.documentRevisionDigest;
+            invalidated.effectiveProfileDigest = certificate.effectiveProfileDigest;
+            invalidated.approval.decisionReference = certificate.certificateId;
+            invalidated.resultSummary = QJsonObject{
+                { QStringLiteral("reason"), QStringLiteral("Certificate export failed after issuance was recorded.") }
             };
-            if (!history.appendEvent(certificateEvent))
-            {
-                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.audit-write-failed"), QStringLiteral("Could not append certificate issuance to the audit history."));
-                return PDFToolExitCode::ProcessingFailure;
-            }
+            history.appendEvent(invalidated);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("certificate.output-failed"), certificateFile.errorString());
+            return PDFToolExitCode::ProcessingFailure;
         }
     }
 

@@ -43,6 +43,8 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfoperationhistorystore.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"
@@ -589,6 +591,33 @@ QColor EditorHost::preflightStateColor() const
 QString EditorHost::preflightOperatorSummary() const
 {
     return m_preflight.operatorSummary();
+}
+
+QVariantMap EditorHost::preflightCertificateStateVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreflightStateVisual(m_preflightCertificateStateName);
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    if (m_preflightCertificateStateName == QLatin1String("certified"))
+        result.insert(QStringLiteral("accessibleName"), tr("Certified preflight"));
+    else if (m_preflightCertificateStateName == QLatin1String("certificate-invalid"))
+        result.insert(QStringLiteral("accessibleName"), tr("Certified preflight invalid"));
+    else
+        result.insert(QStringLiteral("accessibleName"), tr("Not certified"));
+    return result;
+}
+
+QColor EditorHost::preflightCertificateStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreflightStateVisual(m_preflightCertificateStateName);
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
 }
 
 QVariantList EditorHost::preflightProfiles() const
@@ -2172,6 +2201,7 @@ void EditorHost::syncDocumentLifecycle()
                                       facade.facets().testFlag(pdfinteraction::DocumentFacet::Dirty),
                                       facade.facets().testFlag(pdfinteraction::DocumentFacet::Stale),
                                       std::move(outputState), facade.typedError());
+    refreshPreflightCertificateState();
 }
 
 void EditorHost::onDocumentGone()
@@ -2193,6 +2223,8 @@ void EditorHost::onDocumentGone()
     m_production.clear();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
+    m_preflightCertificateStateName = QStringLiteral("not-certified");
+    m_preflightCertificateSummary = tr("No certified preflight is recorded for this document.");
     updateCanvasAccessibilitySummary();
 }
 
@@ -2364,6 +2396,75 @@ void EditorHost::refreshCanvasTrace()
     }
 }
 
+void EditorHost::refreshPreflightCertificateState()
+{
+    m_preflightCertificateStateName = QStringLiteral("not-certified");
+    m_preflightCertificateSummary = tr("No certified preflight is recorded for this document.");
+
+    if (!hasDocument())
+        return;
+
+    const QString documentPath = m_session->facade().source().path;
+    if (documentPath.isEmpty())
+        return;
+
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    if (!QFileInfo::exists(historyPath))
+        return;
+
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    if (!history.open(&historyError))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("Certified preflight history could not be opened: %1").arg(historyError);
+        return;
+    }
+
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    if (!historyError.isEmpty())
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("Certified preflight history could not be read: %1").arg(historyError);
+        return;
+    }
+
+    QString certificateError;
+    const std::optional<pdf::PreflightCertificate> certificate =
+        pdf::latestPreflightCertificate(events, &certificateError);
+    if (!certificate.has_value())
+    {
+        if (!certificateError.isEmpty())
+        {
+            m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+            m_preflightCertificateSummary = certificateError;
+        }
+        return;
+    }
+
+    if (m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("The certified revision has unsaved document changes.");
+        return;
+    }
+
+    QFile document(documentPath);
+    if (!document.open(QIODevice::ReadOnly))
+    {
+        m_preflightCertificateStateName = QStringLiteral("certificate-invalid");
+        m_preflightCertificateSummary = tr("The certified document bytes could not be read.");
+        return;
+    }
+
+    const pdf::PreflightCertificateVerification verification =
+        pdf::verifyPreflightCertificate(*certificate, document.readAll(), events);
+    m_preflightCertificateStateName =
+        verification.isValid() ? QStringLiteral("certified") : QStringLiteral("certificate-invalid");
+    m_preflightCertificateSummary = verification.reason;
+}
+
 void EditorHost::syncRevisionModels()
 {
     if (!m_session->revisionSource())
@@ -2383,6 +2484,7 @@ void EditorHost::syncRevisionModels()
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
     m_production.setCurrentRevision(documentKey, documentRevision);
+    refreshPreflightCertificateState();
 
     if (hasDocument())
     {

@@ -22,6 +22,8 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <optional>
+
 namespace pdf
 {
 
@@ -80,6 +82,13 @@ LOOPLIBCORESHARED_EXPORT PreflightCertificateVerification verifyPreflightCertifi
     const PreflightCertificate& certificate,
     const QByteArray& documentBytes,
     const QList<PDFOperationHistoryEvent>& history);
+
+/// Returns the newest certificate retained in a CertificateIssued event. A
+/// malformed retained certificate is reported through errorMessage rather than
+/// being silently treated as "not certified".
+LOOPLIBCORESHARED_EXPORT std::optional<PreflightCertificate> latestPreflightCertificate(
+    const QList<PDFOperationHistoryEvent>& history,
+    QString* errorMessage = nullptr);
 
 }   // namespace pdf
 

@@ -189,6 +189,10 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     {
         return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
     }
+    if (normalized == QLatin1String("not-certified"))
+    {
+        return makeVisual(StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline);
+    }
 
     // "not-checked", "cancelled", an empty string (nothing has run) and anything unrecognised are
     // all "not a pass and nothing to trust" - the safe default.

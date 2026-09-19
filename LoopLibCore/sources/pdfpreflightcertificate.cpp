@@ -40,6 +40,84 @@ QString reportDigest(const QJsonObject& report)
     return digest(canonicalJson(report));
 }
 
+bool verifyHistoryChain(const QList<PDFOperationHistoryEvent>& history, QString* errorMessage = nullptr)
+{
+    QByteArray previousHash;
+    qint64 expectedSequence = 1;
+    for (const PDFOperationHistoryEvent& event : history)
+    {
+        if (event.sequence != expectedSequence)
+        {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("The operation history sequence is discontinuous.");
+            return false;
+        }
+        if (event.previousEventHash != previousHash ||
+            event.eventHash != computeOperationHistoryEventHash(event, previousHash))
+        {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("The operation history hash chain is broken.");
+            return false;
+        }
+        previousHash = event.eventHash;
+        ++expectedSequence;
+    }
+    if (errorMessage)
+        errorMessage->clear();
+    return true;
+}
+
+int eventIndex(const QList<PDFOperationHistoryEvent>& history, const QString& entryId)
+{
+    for (int index = 0; index < history.size(); ++index)
+    {
+        if (history.at(index).entryId.toString(QUuid::WithoutBraces) == entryId)
+            return index;
+    }
+    return -1;
+}
+
+bool decisionIsActiveAt(const QList<PDFOperationHistoryEvent>& history,
+                        const QString& decisionId,
+                        int throughIndex)
+{
+    bool active = false;
+    const int lastIndex = qMin(throughIndex, history.size() - 1);
+    for (int index = 0; index <= lastIndex; ++index)
+    {
+        const PDFOperationHistoryEvent& event = history.at(index);
+        if (event.kind == PDFOperationHistoryEventKind::DecisionRecorded &&
+            event.resultSummary.value(QStringLiteral("decision_id")).toString() == decisionId)
+        {
+            active = true;
+        }
+        else if (event.kind == PDFOperationHistoryEventKind::DecisionInvalidated &&
+                 (event.resultSummary.value(QStringLiteral("decision_id")).toString() == decisionId ||
+                  event.approval.decisionReference == decisionId))
+        {
+            active = false;
+        }
+    }
+    return active;
+}
+
+bool decisionWasInvalidatedAfter(const QList<PDFOperationHistoryEvent>& history,
+                                 const QString& decisionId,
+                                 int afterIndex)
+{
+    for (int index = afterIndex + 1; index < history.size(); ++index)
+    {
+        const PDFOperationHistoryEvent& event = history.at(index);
+        if (event.kind == PDFOperationHistoryEventKind::DecisionInvalidated &&
+            (event.resultSummary.value(QStringLiteral("decision_id")).toString() == decisionId ||
+             event.approval.decisionReference == decisionId))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 }   // namespace
 
 QString preflightCertificateStateToString(PreflightCertificateState state)
@@ -99,7 +177,8 @@ bool PreflightCertificate::fromJson(const QJsonObject& object,
     for (const QJsonValue& value : object.value(QStringLiteral("covering_decision_ids")).toArray())
         certificate.coveringDecisionIds.append(value.toString());
 
-    if (certificate.certificateId.isEmpty() || !certificate.issuedAtUtc.isValid() || certificate.issuedBy.isEmpty() ||
+    if (object.value(QStringLiteral("type")).toString() != QLatin1String("loop-certified-preflight") ||
+        certificate.certificateId.isEmpty() || !certificate.issuedAtUtc.isValid() || certificate.issuedBy.isEmpty() ||
         !validDigest(certificate.documentRevisionDigest) || !validDigest(certificate.effectiveProfileDigest) ||
         !validDigest(certificate.reportDigest) || certificate.auditChainHeadEventId.isEmpty() ||
         certificate.errorCount < 0 || certificate.waivedErrorCount < 0)
@@ -151,9 +230,14 @@ bool issuePreflightCertificate(const PreflightResult& result,
         errorMessage = QStringLiteral("Certification requires an operator and an effective profile digest.");
         return false;
     }
+    if (history.isEmpty() || !verifyHistoryChain(history, &errorMessage))
+    {
+        if (errorMessage.isEmpty())
+            errorMessage = QStringLiteral("Certification requires a verified audit history.");
+        return false;
+    }
 
-    const QString expectedReportDigest = reportDigest(report);
-    const PDFOperationHistoryEvent* head = nullptr;
+    bool matchingPreflightFound = false;
     for (const PDFOperationHistoryEvent& event : history)
     {
         if (event.kind == PDFOperationHistoryEventKind::PreflightRun &&
@@ -161,31 +245,56 @@ bool issuePreflightCertificate(const PreflightResult& result,
             event.documentRevisionDigest.compare(documentDigest, Qt::CaseInsensitive) == 0 &&
             event.effectiveProfileDigest.compare(result.effectiveProfileDigest, Qt::CaseInsensitive) == 0)
         {
-            head = &event;
+            matchingPreflightFound = true;
         }
     }
-    if (!head)
+    if (!matchingPreflightFound)
     {
         errorMessage = QStringLiteral("Certification requires an accepted preflight event in the audit chain.");
         return false;
     }
 
     const PreflightVerdict verdict = reducePreflightVerdict(result);
+    QStringList coveringDecisionIds;
+    for (const QString& waivedFindingId : verdict.waivedFindingIds)
+    {
+        bool covered = false;
+        for (const PreflightDecision& decision : result.decisions)
+        {
+            if (decision.findingId != waivedFindingId ||
+                !decision.countsForSignoff(documentDigest, result.effectiveProfileDigest))
+            {
+                continue;
+            }
+
+            const QString decisionId = preflightDecisionIdentity(decision);
+            if (!decisionIsActiveAt(history, decisionId, history.size() - 1))
+            {
+                errorMessage = QStringLiteral("Certification requires every covering decision to be recorded as active in the audit chain.");
+                return false;
+            }
+            coveringDecisionIds.append(decisionId);
+            covered = true;
+            break;
+        }
+        if (!covered)
+        {
+            errorMessage = QStringLiteral("Certification could not resolve an active decision for a waived error.");
+            return false;
+        }
+    }
+    coveringDecisionIds.removeDuplicates();
+
     certificate.certificateId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     certificate.issuedAtUtc = QDateTime::currentDateTimeUtc();
     certificate.issuedBy = issuedBy.trimmed();
     certificate.documentRevisionDigest = documentDigest;
     certificate.effectiveProfileDigest = result.effectiveProfileDigest.toLower();
-    certificate.reportDigest = expectedReportDigest;
-    certificate.auditChainHeadEventId = head->entryId.toString(QUuid::WithoutBraces);
+    certificate.reportDigest = reportDigest(report);
+    certificate.auditChainHeadEventId = history.back().entryId.toString(QUuid::WithoutBraces);
     certificate.errorCount = result.errors.size();
     certificate.waivedErrorCount = verdict.waivedFindingIds.size();
-    for (const PreflightDecision& decision : result.decisions)
-    {
-        if (decision.countsForSignoff(documentDigest, result.effectiveProfileDigest))
-            certificate.coveringDecisionIds.append(preflightDecisionIdentity(decision));
-    }
-    certificate.coveringDecisionIds.removeDuplicates();
+    certificate.coveringDecisionIds = coveringDecisionIds;
     errorMessage.clear();
     return true;
 }
@@ -210,65 +319,113 @@ PreflightCertificateVerification verifyPreflightCertificate(const PreflightCerti
         return result;
     }
 
-    QByteArray previous;
-    qint64 expectedSequence = history.isEmpty() ? 0 : 1;
-    bool headFound = false;
-    bool issuanceFound = false;
-    for (const PDFOperationHistoryEvent& event : history)
+    QString chainError;
+    if (history.isEmpty() || !verifyHistoryChain(history, &chainError))
     {
-        if (event.sequence != expectedSequence || event.previousEventHash != previous ||
-            event.eventHash != computeOperationHistoryEventHash(event, previous))
-        {
-            result.state = PreflightCertificateState::InvalidAuditChainBroken;
-            result.reason = QStringLiteral("The operation history hash chain is broken.");
-            return result;
-        }
-        headFound = headFound || event.entryId.toString(QUuid::WithoutBraces) == certificate.auditChainHeadEventId;
-        if (event.kind == PDFOperationHistoryEventKind::CertificateIssued &&
-            event.approval.decisionReference == certificate.certificateId &&
-            event.resultSummary.value(QStringLiteral("report_digest")).toString().compare(certificate.reportDigest, Qt::CaseInsensitive) == 0)
-        {
-            issuanceFound = true;
-        }
-        previous = event.eventHash;
-        ++expectedSequence;
+        result.state = PreflightCertificateState::InvalidAuditChainBroken;
+        result.reason = chainError.isEmpty() ? QStringLiteral("The operation history is unavailable.") : chainError;
+        return result;
     }
-    if (!headFound)
+
+    const int headIndex = eventIndex(history, certificate.auditChainHeadEventId);
+    if (headIndex < 0)
     {
         result.state = PreflightCertificateState::InvalidAuditChainBroken;
         result.reason = QStringLiteral("The certificate audit-chain head is not present.");
         return result;
     }
-    if (!issuanceFound)
+
+    const int issuanceIndex = headIndex + 1;
+    if (issuanceIndex >= history.size())
     {
         result.state = PreflightCertificateState::InvalidCertificate;
-        result.reason = QStringLiteral("The certificate issuance event is missing or does not match the certificate.");
+        result.reason = QStringLiteral("The certificate issuance event is missing.");
         return result;
+    }
+
+    const PDFOperationHistoryEvent& issuance = history.at(issuanceIndex);
+    const QJsonObject retainedCertificate = issuance.resultSummary.value(QStringLiteral("certificate")).toObject();
+    if (issuance.kind != PDFOperationHistoryEventKind::CertificateIssued ||
+        issuance.approval.decisionReference != certificate.certificateId ||
+        issuance.documentRevisionDigest.compare(certificate.documentRevisionDigest, Qt::CaseInsensitive) != 0 ||
+        issuance.effectiveProfileDigest.compare(certificate.effectiveProfileDigest, Qt::CaseInsensitive) != 0 ||
+        issuance.resultSummary.value(QStringLiteral("report_digest")).toString().compare(certificate.reportDigest, Qt::CaseInsensitive) != 0 ||
+        retainedCertificate.isEmpty() ||
+        canonicalJson(retainedCertificate) != canonicalJson(certificate.toJson()))
+    {
+        result.state = PreflightCertificateState::InvalidCertificate;
+        result.reason = QStringLiteral("The certificate issuance event does not match the certificate.");
+        return result;
+    }
+
+    for (int index = issuanceIndex + 1; index < history.size(); ++index)
+    {
+        const PDFOperationHistoryEvent& event = history.at(index);
+        if (event.kind == PDFOperationHistoryEventKind::CertificateInvalidated &&
+            event.approval.decisionReference == certificate.certificateId)
+        {
+            result.state = PreflightCertificateState::InvalidCertificate;
+            result.reason = event.resultSummary.value(QStringLiteral("reason")).toString(
+                QStringLiteral("The certificate was invalidated by a later operation."));
+            return result;
+        }
     }
 
     for (const QString& decisionId : certificate.coveringDecisionIds)
     {
-        bool recorded = false;
-        bool invalidated = false;
-        for (const PDFOperationHistoryEvent& event : history)
-        {
-            if (event.kind == PDFOperationHistoryEventKind::DecisionRecorded &&
-                event.resultSummary.value(QStringLiteral("decision_id")).toString() == decisionId)
-                recorded = true;
-            if (event.kind == PDFOperationHistoryEventKind::DecisionInvalidated &&
-                event.approval.decisionReference == decisionId)
-                invalidated = true;
-        }
-        if (!recorded || invalidated)
+        if (!decisionIsActiveAt(history, decisionId, headIndex) ||
+            decisionWasInvalidatedAfter(history, decisionId, issuanceIndex))
         {
             result.state = PreflightCertificateState::InvalidDecisionStale;
             result.reason = QStringLiteral("A decision covering this certificate is stale or missing.");
             return result;
         }
     }
+
     result.state = PreflightCertificateState::Valid;
-    result.reason = QStringLiteral("The certificate matches the document and verified audit chain.");
+    result.reason = QStringLiteral("Certified preflight matches the document and verified audit chain.");
     return result;
+}
+
+std::optional<PreflightCertificate> latestPreflightCertificate(const QList<PDFOperationHistoryEvent>& history,
+                                                               QString* errorMessage)
+{
+    if (errorMessage)
+        errorMessage->clear();
+
+    for (int index = history.size() - 1; index >= 0; --index)
+    {
+        const PDFOperationHistoryEvent& event = history.at(index);
+        if (event.kind != PDFOperationHistoryEventKind::CertificateIssued)
+            continue;
+
+        const QString certificateId = event.resultSummary.value(QStringLiteral("certificate_id")).toString();
+        if (certificateId.isEmpty())
+        {
+            // Older repair history used CertificateIssued for governed repair
+            // completion. It is not a certified-preflight record.
+            continue;
+        }
+
+        const QJsonObject object = event.resultSummary.value(QStringLiteral("certificate")).toObject();
+        if (object.isEmpty())
+        {
+            if (errorMessage)
+                *errorMessage = QStringLiteral("The retained certificate record is incomplete.");
+            return std::nullopt;
+        }
+
+        PreflightCertificate certificate;
+        QString parseError;
+        if (!PreflightCertificate::fromJson(object, certificate, parseError))
+        {
+            if (errorMessage)
+                *errorMessage = parseError;
+            return std::nullopt;
+        }
+        return certificate;
+    }
+    return std::nullopt;
 }
 
 }   // namespace pdf

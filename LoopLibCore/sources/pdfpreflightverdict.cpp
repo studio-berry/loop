@@ -642,8 +642,16 @@ bool preflightAllowsCertification(const PreflightResult& result)
     }
     for (const PreflightCheckStatus& status : result.checkStatuses)
     {
-        if (status.status.compare(QStringLiteral("ok"), Qt::CaseInsensitive) != 0 ||
-            !status.budgetKind.isEmpty() || status.budgetAttempted > status.budgetLimit)
+        const QString normalizedStatus = status.status.trimmed().toLower();
+        const QString normalizedReason = status.reason.trimmed().toLower();
+        if (normalizedStatus.isEmpty() ||
+            normalizedStatus == QLatin1String("skipped") ||
+            normalizedStatus == QLatin1String("incomplete") ||
+            normalizedStatus == QLatin1String("unsupported") ||
+            normalizedStatus == QLatin1String("not_inspected") ||
+            normalizedStatus == QLatin1String("not-inspected") ||
+            normalizedReason == QLatin1String("budget-exceeded") ||
+            !status.budgetKind.isEmpty())
         {
             return false;
         }

@@ -74,6 +74,28 @@ Pane {
             }
         }
 
+        RowLayout {
+            objectName: "preflightCertificateBadge"
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                Layout.alignment: Qt.AlignTop
+                font.pixelSize: 14
+                color: root.host ? root.host.preflightCertificateStateColor : "transparent"
+                text: root.host ? (root.preflightIconGlyphs[root.host.preflightCertificateStateVisual.icon] || "") : ""
+                Accessible.ignored: true
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: root.host ? root.host.preflightCertificateSummary : ""
+                Accessible.name: root.host ? root.host.preflightCertificateStateVisual.accessibleName : qsTr("Certified preflight status")
+                Accessible.description: qsTr("Certified preflight is tamper-evident attribution, not a digital signature.")
+            }
+        }
+
         ComboBox {
             id: profileSelector
             objectName: "preflightProfileSelector"

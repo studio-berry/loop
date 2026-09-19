@@ -630,6 +630,7 @@ void LoopStateVisualTest::preflightStateVisualMapping_data()
     QTest::newRow("running") << QStringLiteral("running") << StateKind::Info;
     QTest::newRow("pass") << QStringLiteral("pass") << StateKind::Passed;
     QTest::newRow("certified") << QStringLiteral("certified") << StateKind::Passed;
+    QTest::newRow("not-certified") << QStringLiteral("not-certified") << StateKind::NotChecked;
     QTest::newRow("findings") << QStringLiteral("findings") << StateKind::Error;
     QTest::newRow("fail") << QStringLiteral("fail") << StateKind::Error;
     QTest::newRow("incomplete") << QStringLiteral("incomplete") << StateKind::Incomplete;
