@@ -142,6 +142,7 @@ public:
     {
         PDFOperationImpact declared;
         declared.declared = true;
+        declared.allPages = true;
         declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Images) |
                            PDFEvidenceDomain::Colorants |
                            PDFEvidenceDomain::Strokes |
