@@ -90,6 +90,11 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
     QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);
+    const QJsonObject findingDelta = report.value(QStringLiteral("finding_delta")).toObject();
+    QVERIFY(!findingDelta.isEmpty());
+    QVERIFY(!findingDelta.value(QStringLiteral("resolved")).toArray().isEmpty());
+    QVERIFY(findingDelta.value(QStringLiteral("introduced")).toArray().isEmpty());
+    QVERIFY(findingDelta.value(QStringLiteral("incomplete")).toArray().isEmpty());
     QVERIFY(!report.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString().isEmpty());
 }
 
