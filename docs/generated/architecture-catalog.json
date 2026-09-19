@@ -498,6 +498,10 @@
       "stable",
       "unstable"
     ],
+    ".github/workflows/issue-promotion.yml": [
+      "dev",
+      "stable"
+    ],
     ".github/workflows/release-gate.yml": [
       "stable"
     ]
