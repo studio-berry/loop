@@ -129,6 +129,7 @@ private slots:
     void run_emptyCheckIntersectionCannotPass();
     void run_unhonoredRestrictionIsNotInspected();
     void run_inkCoverageHonorsPageBoxAndPageRange();
+    void run_cliPageScopeNeverWidensAuthoredProfile();
     void run_unresolvedVariableIsIncomplete();
 };
 
@@ -2354,6 +2355,44 @@ void PreflightEngineTest::run_inkCoverageHonorsPageBoxAndPageRange()
     {
         QVERIFY(finding.page != 1);
     }
+}
+
+void PreflightEngineTest::run_cliPageScopeNeverWidensAuthoredProfile()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("CLI pages") },
+        { QStringLiteral("restrictions"), QJsonObject{
+            { QStringLiteral("pages"), QStringLiteral("1-2") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+            { QStringLiteral("min_dpi"), 300 }
+        } } }
+    };
+    pdf::PDFRevalidationPlan plan;
+    plan.full = true;
+    const pdf::PreflightResult original = engine.run(profile);
+    const pdf::PreflightResult narrowed = engine.run(profile, QJsonObject(), QJsonObject(), plan,
+                                                     std::optional<QSet<int>>(QSet<int>{ 1 }));
+    QVERIFY(narrowed.inspectionComplete);
+    QCOMPARE(narrowed.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(),
+             QJsonArray({ 2 }));
+    QCOMPARE(narrowed.coverageScope.value(QStringLiteral("cli_page_scope")).toObject()
+                 .value(QStringLiteral("pages")).toArray(), QJsonArray({ 2 }));
+    QVERIFY(narrowed.effectiveProfileDigest != original.effectiveProfileDigest);
+
+    const pdf::PreflightResult disjoint = engine.run(profile, QJsonObject(), QJsonObject(), plan,
+                                                     std::optional<QSet<int>>(QSet<int>{ 2 }));
+    QVERIFY(!disjoint.pass);
+    QVERIFY(!disjoint.inspectionComplete);
+    QCOMPARE(disjoint.checkStatuses.first().status, QStringLiteral("not_applicable"));
+    QCOMPARE(disjoint.checkStatuses.first().restrictionScope.value(QStringLiteral("pages")).toArray(), QJsonArray());
 }
 
 void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
