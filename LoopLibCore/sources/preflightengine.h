@@ -193,6 +193,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckConfig
     int maxRegionsPerPage = 20;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
     QString inkCoverageAnalysisBox = QStringLiteral("bleed");
+    bool deprecatedAnalysisBox = false;
 
     // image-resolution parameters.
     int minDpi = 0;
@@ -344,6 +345,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckStatus
     QString status;
     QString reason;
     QJsonObject restrictionScope;
+    QStringList diagnostics;
     QString budgetKind;
     QString budgetPool;
     qint64 budgetLimit = 0;
