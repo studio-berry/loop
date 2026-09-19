@@ -432,6 +432,21 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("preflight.profile-invalid"), profileError);
             return PDFToolExitCode::InvalidInvocation;
         }
+        if (!transaction.postflightRequired())
+        {
+            reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
+            reportJson.insert(QStringLiteral("finding_delta"), QJsonObject{
+                { QStringLiteral("resolved"), QJsonArray() },
+                { QStringLiteral("unchanged"), QJsonArray() },
+                { QStringLiteral("introduced"), QJsonArray() },
+                { QStringLiteral("incomplete"), QJsonArray{ QStringLiteral("postflight-not-required-by-plan") } }
+            });
+            writeRepairReportIfRequested(options, reportJson);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
+                             PDFToolTranslationContext::tr("Repair publication requires a plan that declares postflight validation."));
+            return PDFToolExitCode::PartialOutput;
+        }
+
         pdf::PDFRepairResult automaticRepairResult = transaction.results().isEmpty()
                                                           ? pdf::PDFRepairResult()
                                                           : transaction.results().first();
