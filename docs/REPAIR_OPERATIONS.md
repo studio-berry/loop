@@ -18,8 +18,14 @@ expected changes, warnings and required validators.
    reopens it, so the reviewed artifact is the artifact that can be committed.
 5. `compareCandidate()` invokes the #28 deterministic structural and visual
    diff engine with the plan's expected changes and affected pages.
-6. The caller may run the normal preflight profile against the reopened
-   candidate. Incomplete or unexpected evidence never becomes a final output.
+6. Repairs that declare normal postflight automatically run the same effective
+   preflight profile before and after the fix. The post-fix run is executed on a
+   serialized-and-reopened candidate, uses the operation's affected checks/pages
+   when those runners can honor the scope, and otherwise falls back conservatively.
+7. Stable finding IDs are compared into deterministic `resolved`, `unchanged`,
+   `introduced`, and `incomplete` groups. Introduced findings or incomplete
+   evidence make the candidate non-publishable; a skipped targeted check never
+   makes a known finding look resolved.
 
 The source document is never mutated by analysis or by a failed transaction.
 Final output publication is an atomic `PDFSafeFileWriter` write followed by a
