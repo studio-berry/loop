@@ -271,6 +271,31 @@
       },
       "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
     },
+    "scope_restrictions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "page_box": { "enum": ["media", "crop", "trim", "bleed", "art"] },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "rect_pt", "anchor", "mode"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "rect_pt": { "$ref": "#/$defs/bbox" },
+              "anchor": { "enum": ["media", "crop", "trim", "bleed"] },
+              "mode": { "enum": ["include", "exclude"] }
+            }
+          }
+        },
+        "layers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "object_classes": { "type": "array", "items": { "enum": ["text", "image", "vector", "annotation", "shading", "form"] }, "uniqueItems": true },
+        "unsupported_reason": { "type": "string" }
+      }
+    },
     "finding_v2": {
       "type": "object",
       "additionalProperties": false,
@@ -311,6 +336,7 @@
           "description": "Human-readable description for the report panel."
         },
         "bbox": { "$ref": "#/$defs/bbox" },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
         "check_id": {
           "type": "string",
           "description": "Optional profile check id that produced this finding."
@@ -342,9 +368,10 @@
         },
         "status": {
           "type": "string",
-          "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
+          "enum": ["ok", "warning", "failed", "skipped", "unsupported", "incomplete", "not_inspected", "not_applicable"],
           "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
         },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
         "reason": {
           "type": "string",
           "description": "Present for skipped/unsupported/failed statuses; omitted for ok/warning."
