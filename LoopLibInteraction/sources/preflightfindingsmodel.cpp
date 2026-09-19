@@ -226,7 +226,7 @@ void PreflightFindingsModel::clear()
 
 void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
 {
-    if (!findingId.isEmpty() && !finding(findingId))
+    if ((!findingId.isEmpty() && !finding(findingId)) || m_selectedFindingId == findingId)
     {
         return;
     }
