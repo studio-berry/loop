@@ -22,6 +22,7 @@
 
 #include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfoperationimpact.h"
@@ -46,6 +47,8 @@ private slots:
     void targetedWithoutBaselineIsIncomplete();
     void targetedMatchesFullOnImageProfile();
     void targetedReusesBaselineFindings();
+    void goldenFixtureSubsetMatchesFull_data();
+    void goldenFixtureSubsetMatchesFull();
 };
 
 namespace
@@ -91,6 +94,19 @@ QJsonObject imageProfile()
                                         { QStringLiteral("min_dpi"), 300 },
                                         { QStringLiteral("severity"), QStringLiteral("error") } } } }
     };
+}
+
+pdf::PDFDocument loadGoldenFixture(const QString& fileName)
+{
+    const QString path = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fileName;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(path);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        qFatal("Failed to load golden fixture '%s'", qPrintable(fileName));
+    }
+    return document;
 }
 
 QJsonObject multiCheckImageProfile()
@@ -275,6 +291,54 @@ void OperationImpactTest::targetedReusesBaselineFindings()
              QStringLiteral("embedded-fonts"));
     QCOMPARE(accounting.value(QStringLiteral("reused_check_ids")).toArray().first().toString(),
              QStringLiteral("image-resolution"));
+}
+
+
+
+void OperationImpactTest::goldenFixtureSubsetMatchesFull_data()
+{
+    QTest::addColumn<QString>("fixture");
+    QTest::addColumn<int>("affectedDomain");
+
+    QTest::newRow("reuse-font-failure") << QStringLiteral("font-not-embedded.pdf")
+                                        << int(pdf::PDFEvidenceDomain::Images);
+    QTest::newRow("reuse-image-failure") << QStringLiteral("image-dpi-low.pdf")
+                                         << int(pdf::PDFEvidenceDomain::Fonts);
+}
+
+void OperationImpactTest::goldenFixtureSubsetMatchesFull()
+{
+    QFETCH(QString, fixture);
+    QFETCH(int, affectedDomain);
+
+    pdf::PDFDocument document = loadGoldenFixture(fixture);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    QJsonObject profileObject = multiCheckImageProfile();
+    QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();
+    QJsonObject imageCheck = checks.at(0).toObject();
+    imageCheck.insert(QStringLiteral("severity"), QStringLiteral("error"));
+    checks.replace(0, imageCheck);
+    profileObject.insert(QStringLiteral("checks"), checks);
+
+    const pdf::PreflightResult full = engine.run(profileObject);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QVERIFY(pdf::PreflightEngine::parseProfile(profileObject, profile, errorMessage));
+
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain(affectedDomain);
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
+        impact,
+        { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
+    const pdf::PreflightResult targeted = engine.revalidate(profile, full, plan);
+
+    QVERIFY(targeted.inspectionComplete);
+    QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
+    QCOMPARE(targeted.errors.size(), full.errors.size());
+    QCOMPARE(targeted.warnings.size(), full.warnings.size());
 }
 
 QTEST_APPLESS_MAIN(OperationImpactTest)
