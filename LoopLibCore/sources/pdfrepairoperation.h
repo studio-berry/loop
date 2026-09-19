@@ -49,6 +49,8 @@
 namespace pdf
 {
 
+struct PreflightResult;
+
 enum class PDFRepairStatus
 {
     Planned,
@@ -279,6 +281,12 @@ public:
                            const QJsonObject& parameters);
     PDFOperationResult analyze();
     PDFOperationResult apply();
+    /// Verifies declared validators on the isolated candidate, never on source
+    /// bytes. An unrun or incomplete validator cannot mark the repair Passed.
+    PDFOperationResult validateCandidate(const QString& profilePath,
+                                         PreflightResult* postflightOut = nullptr,
+                                         const QJsonObject& profileJson = {},
+                                         const QJsonObject& profileBindings = {});
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
                                           PDFDocument* reopenedCandidate,
