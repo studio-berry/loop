@@ -77,6 +77,16 @@ LOOPLIBCORESHARED_EXPORT QString preflightGateFailureMessage(const QString& file
 LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
                                                                  const PreflightProfileData* effectiveProfile = nullptr);
 
+/// The single Core planner used by step postflight, check selection and impact
+/// qualification. An operation-wide/uncertain declaration cannot be narrowed
+/// by page-local repair targets.
+LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan planRepairStepPreflight(
+    const PDFRepairOperation* operation,
+    const PDFDocument& document,
+    const QJsonObject& parameters,
+    const QStringList& enabledCheckIds,
+    const PDFRepairPlan& repairPlan);
+
 struct LOOPLIBCORESHARED_EXPORT MandatoryPostflightOptions
 {
     bool allowIncomplete = false;
