@@ -139,7 +139,7 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
                                      bool hasDocumentPolicy)
 {
     PDFRevalidationPlan plan;
-    plan.pages = impact.pages;
+    plan.pages = impact.allPages ? QSet<int>() : impact.pages;
     plan.invalidatedDomains = impact.domains;
     plan.requiresIndependentOracle = impact.requiresIndependentOracle;
 
