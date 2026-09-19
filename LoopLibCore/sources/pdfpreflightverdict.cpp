@@ -569,7 +569,8 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                PDFRepairResult* result,
                                                MandatoryPostflightOptions options,
                                                const PDFRepairOperation* operation,
-                                               const QJsonObject& operationParameters)
+                                               const QJsonObject& operationParameters,
+                                               const PDFDocument* baselineDocument)
 {
     if (!document || !result)
     {
@@ -596,11 +597,35 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                 return PDFOperationResult(loadError);
             }
         }
+        const PDFDocument& impactDocument = baselineDocument ? *baselineDocument : *document;
         stepPlan = planRepairStepPreflight(operation,
-                                           *document,
+                                           impactDocument,
                                            operationParameters,
                                            enabledPreflightCheckIds(profileObject));
         validatorOptions.revalidationPlan = &stepPlan;
+    }
+
+    PreflightResult baselineResult;
+    if (baselineDocument)
+    {
+        PDFDocument baselineCandidate = *baselineDocument;
+        PreflightVerdict baselineVerdict;
+        MandatoryPostflightOptions baselineOptions = validatorOptions;
+        baselineOptions.allowIncomplete = true;
+        const PDFOperationResult baselineRun = runMandatoryPostflight(&baselineCandidate,
+                                                                      profilePath,
+                                                                      &baselineVerdict,
+                                                                      &baselineResult,
+                                                                      baselineOptions);
+        // A failing baseline is expected when a repair is targeting a finding.
+        // Only failures that happened before a normalized result existed are
+        // infrastructure/profile failures that prevent a trustworthy delta.
+        if (!baselineRun && baselineResult.profileName.isEmpty())
+        {
+            result->status = PDFRepairStatus::Incomplete;
+            result->incompleteReasons.append(baselineRun.getErrorMessage());
+            return baselineRun;
+        }
     }
 
     PreflightVerdict verdict;
@@ -610,28 +635,70 @@ PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
                                                                  &verdict,
                                                                  &preflightResult,
                                                                  validatorOptions);
+    if (!postflight && preflightResult.profileName.isEmpty())
+    {
+        result->status = PDFRepairStatus::Incomplete;
+        result->incompleteReasons.append(postflight.getErrorMessage());
+        return postflight;
+    }
     result->verdict = verdict.toJson();
+
+    bool deltaIncomplete = false;
+    bool introducedFindings = false;
+    if (baselineDocument)
+    {
+        result->findingDelta = computeFindingDelta(baselineResult, preflightResult);
+        deltaIncomplete = !baselineResult.inspectionComplete ||
+                          !preflightResult.inspectionComplete ||
+                          !result->findingDelta.incompleteFindingIds.isEmpty();
+        introducedFindings = !result->findingDelta.introducedFindingIds.isEmpty();
+    }
 
     PDFRepairValidationResult validation;
     validation.validatorId = QStringLiteral("normal-preflight");
-    validation.summary = preflightVerdictOperatorSummary(verdict);
-    if (postflight && verdict.isPass())
+
+    PDFOperationResult validationResult = postflight;
+    if (deltaIncomplete)
+    {
+        validation.status = PDFRepairStatus::Incomplete;
+        validation.summary = QStringLiteral("Repair revalidation was incomplete; no finding was cleared without complete evidence.");
+        result->incompleteReasons.append(validation.summary);
+        result->status = PDFRepairStatus::Incomplete;
+        validationResult = PDFOperationResult(validation.summary);
+    }
+    else if (introducedFindings)
+    {
+        validation.status = PDFRepairStatus::Failed;
+        validation.summary = QStringLiteral("Repair introduced %1 new preflight finding(s).")
+                                 .arg(result->findingDelta.introducedFindingIds.size());
+        validation.evidence = result->findingDelta.introducedFindingIds;
+        result->validationFailures.append(validation.summary);
+        result->status = PDFRepairStatus::Failed;
+        validationResult = PDFOperationResult(validation.summary);
+    }
+    else if (postflight && verdict.isPass())
     {
         validation.status = PDFRepairStatus::Passed;
+        validation.summary = preflightVerdictOperatorSummary(verdict);
+        result->status = PDFRepairStatus::Passed;
     }
     else if (verdict.state == PreflightVerdictState::Incomplete)
     {
         validation.status = PDFRepairStatus::Incomplete;
+        validation.summary = preflightVerdictOperatorSummary(verdict);
         result->incompleteReasons.append(validation.summary);
+        result->status = PDFRepairStatus::Incomplete;
     }
     else
     {
         validation.status = PDFRepairStatus::Failed;
+        validation.summary = preflightVerdictOperatorSummary(verdict);
         result->validationFailures.append(validation.summary);
+        result->status = PDFRepairStatus::Failed;
     }
     result->validations.append(std::move(validation));
 
-    return postflight;
+    return validationResult;
 }
 
 bool preflightAllowsCertification(const PreflightResult& result)
