@@ -93,7 +93,7 @@ QString stableFindingIdFromJson(const QJsonObject& finding)
     if (scope.isEmpty())
     {
         scope = !objectId.isEmpty() ? QStringLiteral("object")
-                                   : (page > 0 ? QStringLiteral("page") : QStringLiteral("document"));
+                                    : (page > 0 ? QStringLiteral("page") : QStringLiteral("document"));
     }
 
     QCryptographicHash hash(QCryptographicHash::Sha256);

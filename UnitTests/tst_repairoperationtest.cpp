@@ -674,9 +674,8 @@ void RepairOperationTest::findingDelta_incompleteOrSkippedChecksNeverFalseResolv
     before.errors = { documentFinding };
     pdf::PreflightResult targeted;
     targeted.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
-        { QStringLiteral("full"), false },
-        { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("image-resolution") } }
-    });
+                                                                      { QStringLiteral("full"), false },
+                                                                      { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("image-resolution") } } });
     const pdf::PDFRepairFindingDelta omittedDelta = pdf::computeFindingDelta(before, targeted);
     QVERIFY(omittedDelta.resolvedFindingIds.isEmpty());
     QCOMPARE(omittedDelta.unchangedFindingIds, QStringList{ documentFinding.stableId() });

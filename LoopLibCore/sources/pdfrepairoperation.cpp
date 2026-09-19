@@ -263,7 +263,7 @@ QJsonObject PDFRepairFindingDelta::toJson() const
 
 
 PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
-                                         const PreflightResult& after)
+                                          const PreflightResult& after)
 {
     enum class InspectionState
     {

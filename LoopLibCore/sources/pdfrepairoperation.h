@@ -173,7 +173,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta
 /// findings whose checks could not complete are classified as incomplete and
 /// are never reported as resolved.
 LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
-                                                                    const PreflightResult& after);
+                                                                   const PreflightResult& after);
 
 struct LOOPLIBCORESHARED_EXPORT PDFRepairResult
 {

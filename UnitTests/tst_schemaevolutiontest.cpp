@@ -243,11 +243,11 @@ void SchemaEvolutionTest::v3MigrationBackfillsStableFindingIds()
         { QStringLiteral("fixups_available"), QJsonArray{} },
         { QStringLiteral("checks"), QJsonArray{} },
         { QStringLiteral("verdict"), QJsonObject{
-                                              { QStringLiteral("state"), QStringLiteral("fail") },
-                                              { QStringLiteral("reason_code"), QStringLiteral("blocking-findings") },
-                                              { QStringLiteral("reason"), QStringLiteral("blocked") },
-                                              { QStringLiteral("blocking_finding_ids"), QJsonArray{} },
-                                              { QStringLiteral("waived_finding_ids"), QJsonArray{} } } }
+                                         { QStringLiteral("state"), QStringLiteral("fail") },
+                                         { QStringLiteral("reason_code"), QStringLiteral("blocking-findings") },
+                                         { QStringLiteral("reason"), QStringLiteral("blocked") },
+                                         { QStringLiteral("blocking_finding_ids"), QJsonArray{} },
+                                         { QStringLiteral("waived_finding_ids"), QJsonArray{} } } }
     };
 
     const pdf::PDFSchemaMigrationResult first =
@@ -258,8 +258,7 @@ void SchemaEvolutionTest::v3MigrationBackfillsStableFindingIds()
         first.document.value(QStringLiteral("errors")).toArray().first().toObject();
     const QString findingId = migratedFinding.value(QStringLiteral("id")).toString();
     QCOMPARE(findingId.size(), 16);
-    QCOMPARE(first.document.value(QStringLiteral("verdict")).toObject()
-                 .value(QStringLiteral("blocking_finding_ids")).toArray().first().toString(),
+    QCOMPARE(first.document.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("blocking_finding_ids")).toArray().first().toString(),
              findingId);
 
     QJsonObject localized = source;
@@ -271,8 +270,7 @@ void SchemaEvolutionTest::v3MigrationBackfillsStableFindingIds()
     localized.insert(QStringLiteral("errors"), localizedErrors);
     const pdf::PDFSchemaMigrationResult second =
         pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, localized);
-    QCOMPARE(second.document.value(QStringLiteral("errors")).toArray().first().toObject()
-                 .value(QStringLiteral("id")).toString(),
+    QCOMPARE(second.document.value(QStringLiteral("errors")).toArray().first().toObject().value(QStringLiteral("id")).toString(),
              findingId);
 }
 

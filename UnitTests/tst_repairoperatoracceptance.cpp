@@ -129,12 +129,12 @@ void RepairOperatorAcceptanceTest::repairOperation_introducedFindingNeverPublish
         { QStringLiteral("version"), QStringLiteral("1.0.0") },
         { QStringLiteral("name"), QStringLiteral("Introduced finding test") },
         { QStringLiteral("checks"), QJsonArray{
-                                          QJsonObject{
-                                              { QStringLiteral("id"), QStringLiteral("page-size") },
-                                              { QStringLiteral("expected_width_pt"), 100.0 },
-                                              { QStringLiteral("expected_height_pt"), 100.0 },
-                                              { QStringLiteral("tolerance_pt"), 0.0 },
-                                              { QStringLiteral("severity"), QStringLiteral("error") } } } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("page-size") },
+                                            { QStringLiteral("expected_width_pt"), 100.0 },
+                                            { QStringLiteral("expected_height_pt"), 100.0 },
+                                            { QStringLiteral("tolerance_pt"), 0.0 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
     };
     QVERIFY(profileFile.write(QJsonDocument(profile).toJson(QJsonDocument::Indented)) > 0);
     profileFile.close();

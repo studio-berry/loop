@@ -445,8 +445,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         }
 
         pdf::PDFRepairResult automaticRepairResult = transaction.results().isEmpty()
-                                                          ? pdf::PDFRepairResult()
-                                                          : transaction.results().first();
+                                                         ? pdf::PDFRepairResult()
+                                                         : transaction.results().first();
         automaticRepairResult.operationId = options.repairOperationId;
         pdf::MandatoryPostflightOptions repairPostflightOptions;
         repairPostflightOptions.operationControl = &cancelControl;
