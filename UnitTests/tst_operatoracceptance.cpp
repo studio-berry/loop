@@ -979,8 +979,23 @@ void OperatorAcceptanceTest::isNormalizedReport_requiresTheSidecarContract()
 
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
     QVERIFY(!pdfplugin::preflight::isNormalizedReport(QJsonObject()));
-    report.insert(QStringLiteral("warnings"), QStringLiteral("not-an-array"));
-    QVERIFY(!pdfplugin::preflight::isNormalizedReport(report));
+
+    QJsonObject invalidV4Report;
+    invalidV4Report.insert(QStringLiteral("schema_version"), 4);
+    invalidV4Report.insert(QStringLiteral("inspection_complete"), true);
+    invalidV4Report.insert(QStringLiteral("pass"), true);
+    invalidV4Report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
+    invalidV4Report.insert(QStringLiteral("errors"), QJsonArray());
+    invalidV4Report.insert(QStringLiteral("warnings"), QStringLiteral("not-an-array"));
+    invalidV4Report.insert(QStringLiteral("fixups_available"), QJsonArray());
+    invalidV4Report.insert(QStringLiteral("checks"), QJsonArray());
+    invalidV4Report.insert(QStringLiteral("verdict"), QJsonObject{
+                                                          { QStringLiteral("state"), QStringLiteral("pass") },
+                                                          { QStringLiteral("reason_code"), QStringLiteral("no-blocking-findings") },
+                                                          { QStringLiteral("reason"), QStringLiteral("ok") },
+                                                          { QStringLiteral("blocking_finding_ids"), QJsonArray{} },
+                                                          { QStringLiteral("waived_finding_ids"), QJsonArray{} } });
+    QVERIFY(!pdfplugin::preflight::isNormalizedReport(invalidV4Report));
 }
 
 void OperatorAcceptanceTest::isNormalizedReport_acceptsSchemaV3InspectionIncompletePass()

@@ -366,7 +366,7 @@ void PdfToolContractTest::schemaReportsTheMatrixForEveryKind()
         QVERIFY2(kinds.contains(expected), qPrintable(expected));
     }
     QCOMPARE(kinds.value(QStringLiteral("preflight-report")).toObject().value(QStringLiteral("current")).toString(),
-             QStringLiteral("3.0"));
+             QStringLiteral("4.0"));
 }
 
 void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
@@ -384,7 +384,7 @@ void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
     QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.unsupported-major"));
     QCOMPARE(data.value(QStringLiteral("message")).toString(),
              QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
-                            "this build supports major(s) 1, 2, 3."));
+                            "this build supports major(s) 1, 2, 3, 4."));
     QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
              false);
 }
@@ -427,7 +427,7 @@ void PdfToolContractTest::schemaReportsUnreadyForAnUnusableVersion()
 
 void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
 {
-    const QString current = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v3.json");
+    const QString current = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v4.json");
     const ToolRun currentRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), current });
     verifyEnvelope(currentRun, 0, QStringLiteral("schema"));
     const QJsonObject currentData = currentRun.json.value(QStringLiteral("data")).toObject();
@@ -435,14 +435,14 @@ void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
     QCOMPARE(currentData.value(QStringLiteral("migration")).toObject().value(QStringLiteral("applied")).toBool(),
              false);
 
-    const QString previous = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json");
+    const QString previous = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v3.json");
     const ToolRun previousRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), previous });
     verifyEnvelope(previousRun, 0, QStringLiteral("schema"));
     const QJsonObject migration = previousRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("migration")).toObject();
     QCOMPARE(migration.value(QStringLiteral("required")).toBool(), true);
     QCOMPARE(migration.value(QStringLiteral("applied")).toBool(), true);
-    QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("2.0"));
-    QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("3.0"));
+    QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("3.0"));
+    QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("4.0"));
 }
 
 void PdfToolContractTest::capabilitiesReportMatrixVersions()
