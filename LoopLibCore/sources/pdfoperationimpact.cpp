@@ -72,6 +72,7 @@ QJsonObject PDFOperationImpact::toJson() const
         { QStringLiteral("pages"), pageArray },
         { QStringLiteral("object_ids"), QJsonArray::fromStringList(objectIds) },
         { QStringLiteral("declared"), declared },
+        { QStringLiteral("all_pages"), allPages },
         { QStringLiteral("document_wide"), documentWide },
         { QStringLiteral("full_rewrite"), fullRewrite },
         { QStringLiteral("impact_complete"), impactComplete },
@@ -219,6 +220,10 @@ PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impa
         if (!impact.impactComplete)
         {
             combined.impactComplete = false;
+        }
+        if (impact.allPages)
+        {
+            combined.allPages = true;
         }
         if (impact.documentWide)
         {
