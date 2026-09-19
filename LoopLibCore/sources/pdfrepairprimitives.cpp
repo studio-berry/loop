@@ -142,8 +142,10 @@ public:
     {
         PDFOperationImpact declared;
         declared.declared = true;
-        declared.domains = PDFEvidenceDomain::Images;
-        declared.documentWide = true;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Images) |
+                           PDFEvidenceDomain::Colorants |
+                           PDFEvidenceDomain::Strokes |
+                           PDFEvidenceDomain::OverprintTransparency;
         declared.impactComplete = true;
         return declared;
     }
