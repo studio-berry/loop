@@ -89,6 +89,7 @@ private slots:
     void certificate_detectsStaleDecision();
     void certificate_bindsRestrictionDigest();
     void evidenceBundle_bindsIdentitiesAndVerifiesOffline();
+    void evidenceBundle_bindsGovernedSignOff();
     void evidenceBundle_detectsTamperedMembers();
     void evidenceBundle_carriesNoRawPaths();
 };
@@ -469,6 +470,106 @@ void PreflightVerdictTest::evidenceBundle_bindsIdentitiesAndVerifiesOffline()
     const QJsonObject history = manifest.value(QStringLiteral("history")).toObject();
     QCOMPARE(history.value(QStringLiteral("chain_mode")).toString(), QStringLiteral("path-redacted"));
     QVERIFY(!history.value(QStringLiteral("canonical_chain_digest")).toString().isEmpty());
+}
+
+void PreflightVerdictTest::evidenceBundle_bindsGovernedSignOff()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+
+    const QString publishedDigest(64, QLatin1Char('a'));
+    const QString candidateDigest(64, QLatin1Char('c'));
+    const QString approvalActor = QStringLiteral("operator");
+
+    pdf::PDFApprovalRecord approval;
+    approval.kind = pdf::PDFApprovalKind::Human;
+    approval.actorId = approvalActor;
+    approval.decision = QStringLiteral("publish");
+    approval.rationale = QStringLiteral("Signed off after revalidation; sheet at %1").arg(documentPath);
+    approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    const QJsonObject signOff{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), QString(64, QLatin1Char('e')) },
+        { QStringLiteral("source_sha256"), sha256Hex(fixture.document) },
+        { QStringLiteral("candidate_sha256"), candidateDigest },
+        { QStringLiteral("published_sha256"), publishedDigest },
+        { QStringLiteral("revalidation_report_sha256"), QString(64, QLatin1Char('f')) },
+        { QStringLiteral("effective_profile_digest"), fixture.certificate.effectiveProfileDigest },
+        { QStringLiteral("approval"), approval.toJson() }
+    };
+
+    pdf::PreflightEvidenceBundleRequest request = fixture.request;
+    request.signOff = signOff;
+    request.output = pdf::PreflightEvidenceBundleOutput{ publishedDigest, 4096 };
+
+    pdf::PreflightEvidenceBundle bundle;
+    QVERIFY2(pdf::buildPreflightEvidenceBundle(request, bundle, error), qPrintable(error));
+
+    const QString bundleDirectory = temporary.filePath(QStringLiteral("signed-bundle"));
+    QVERIFY2(pdf::writePreflightEvidenceBundle(bundle, bundleDirectory, error), qPrintable(error));
+    const pdf::PreflightEvidenceBundleVerification verification =
+        pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error);
+    QVERIFY2(verification.valid, qPrintable(bundleFindings(verification)));
+    QCOMPARE(verification.membersChecked, 5);
+
+    const QJsonObject manifest = bundle.manifest;
+    QCOMPARE(manifest.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("published_sha256")).toString(),
+             publishedDigest);
+    QCOMPARE(manifest.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("effective_profile_digest")).toString(),
+             fixture.certificate.effectiveProfileDigest);
+    QCOMPARE(manifest.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString(),
+             publishedDigest);
+    QCOMPARE(manifest.value(QStringLiteral("output")).toObject().value(QStringLiteral("byte_count")).toInt(), 4096);
+
+    // The approval travels with its actor and timestamp, and its free-form
+    // rationale is path-redacted like every other member.
+    const QJsonArray approvals = manifest.value(QStringLiteral("approvals")).toArray();
+    QCOMPARE(approvals.size(), 1);
+    const QJsonObject exportedApproval = approvals.last().toObject();
+    QCOMPARE(exportedApproval.value(QStringLiteral("actor_id")).toString(), approvalActor);
+    QVERIFY(!exportedApproval.value(QStringLiteral("decided_utc")).toString().isEmpty());
+    QVERIFY(exportedApproval.value(QStringLiteral("rationale")).toString().contains(pdf::preflightEvidenceBundlePathPlaceholder()));
+
+    // The sign-off record is bound to the exact accepted identities, so a source,
+    // profile, or publication the manifest does not describe is refused.
+    pdf::PreflightEvidenceBundle refused;
+    pdf::PreflightEvidenceBundleRequest wrongSource = request;
+    QJsonObject wrongSourceSignOff = signOff;
+    wrongSourceSignOff.insert(QStringLiteral("source_sha256"), QString(64, QLatin1Char('9')));
+    wrongSource.signOff = wrongSourceSignOff;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongSource, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("source revision")), qPrintable(error));
+
+    pdf::PreflightEvidenceBundleRequest wrongOutput = request;
+    wrongOutput.output = pdf::PreflightEvidenceBundleOutput{ candidateDigest, 4096 };
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongOutput, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("sign-off published")), qPrintable(error));
+
+    pdf::PreflightEvidenceBundleRequest wrongProfile = request;
+    QJsonObject wrongProfileSignOff = signOff;
+    wrongProfileSignOff.insert(QStringLiteral("effective_profile_digest"), QString(64, QLatin1Char('7')));
+    wrongProfile.signOff = wrongProfileSignOff;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongProfile, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("effective profile")), qPrintable(error));
+
+    // Tampering with the exported sign-off member is still attributable.
+    QVERIFY(rewriteMember(bundleDirectory,
+                          pdf::preflightEvidenceBundleSignOffMember(),
+                          QByteArrayLiteral("{}")));
+    const pdf::PreflightEvidenceBundleVerification tampered =
+        pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error);
+    QVERIFY(!tampered.valid);
+    QVERIFY2(hasFinding(tampered,
+                        QStringLiteral("member.size-mismatch"),
+                        pdf::preflightEvidenceBundleSignOffMember()),
+             qPrintable(bundleFindings(tampered)));
 }
 
 void PreflightVerdictTest::evidenceBundle_detectsTamperedMembers()
