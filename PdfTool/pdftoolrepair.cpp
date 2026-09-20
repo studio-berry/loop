@@ -596,8 +596,27 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                          historyError.isEmpty() ? QStringLiteral("Could not register the repair history artifacts.") : historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
+    // A certificate lives in the certified document's own chain - the same chain
+    // verify-certificate reads - so the retained certificate is read from the input
+    // document's history and its invalidation is recorded there. The repair's own
+    // events belong to the output document's history, which never holds the
+    // certificate that the fix is superseding.
+    const QString certifiedHistoryDirectory =
+        QFileInfo(options.repairFiles.first()).absoluteFilePath() + QStringLiteral(".loop-history");
+    const bool certifiedHistoryIsOutput = certifiedHistoryDirectory == historyDirectory;
+    pdf::PDFOperationHistoryStore certifiedHistory(QDir(certifiedHistoryDirectory).filePath(QStringLiteral("history.sqlite3")));
+    pdf::PDFOperationHistoryStore& retainedHistory = certifiedHistoryIsOutput ? operationHistory : certifiedHistory;
+
     QString retainedCertificateError;
-    const QList<pdf::PDFOperationHistoryEvent> priorHistory = operationHistory.events(&retainedCertificateError);
+    const bool hasRetainedHistory = certifiedHistoryIsOutput || QFileInfo(retainedHistory.databasePath()).exists();
+    if (hasRetainedHistory && !certifiedHistoryIsOutput && !certifiedHistory.open(&retainedCertificateError))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.open-failed"), retainedCertificateError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+    const QList<pdf::PDFOperationHistoryEvent> priorHistory =
+        hasRetainedHistory ? retainedHistory.events(&retainedCertificateError)
+                           : QList<pdf::PDFOperationHistoryEvent>();
     const std::optional<pdf::PreflightCertificate> priorCertificate =
         retainedCertificateError.isEmpty()
             ? pdf::latestPreflightCertificate(priorHistory, &retainedCertificateError)
@@ -670,8 +689,21 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         priorCertificate->documentRevisionDigest.compare(sourceSha256, Qt::CaseInsensitive) == 0 &&
         candidateSha256.compare(sourceSha256, Qt::CaseInsensitive) != 0)
     {
+        // The invalidation is evidence in the certified document's chain, so it needs
+        // its own execution there; the repair's execution belongs to the output chain.
+        pdf::PDFOperationHistoryExecution invalidationExecution;
+        invalidationExecution.operationId = options.repairOperationId;
+        invalidationExecution.operationVersion = 1;
+        invalidationExecution.input = historyInput.artifact;
+        invalidationExecution.parameters = QJsonObject{
+            { QStringLiteral("certificate_id"), priorCertificate->certificateId },
+            { QStringLiteral("superseded_revision_digest"), sourceSha256 },
+            { QStringLiteral("replacement_revision_digest"), candidateSha256 }
+        };
+        invalidationExecution.startedUtc = QDateTime::currentDateTimeUtc();
+        QUuid invalidationExecutionId;
+
         pdf::PDFOperationHistoryEvent invalidated;
-        invalidated.executionId = historyExecutionId;
         invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
         invalidated.status = pdf::PDFOperationHistoryStatus::Running;
         invalidated.operatorIdentity = QStringLiteral("PdfTool");
@@ -683,10 +715,22 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
             { QStringLiteral("previous_document_revision_digest"), sourceSha256 },
             { QStringLiteral("current_document_revision_digest"), candidateSha256 }
         };
-        if (!operationHistory.appendEvent(invalidated))
+
+        pdf::PDFOperationResult invalidationRecorded = retainedHistory.registerArtifact(historyInput.artifact);
+        if (invalidationRecorded)
+        {
+            invalidationRecorded = retainedHistory.beginExecution(invalidationExecution, &invalidationExecutionId);
+        }
+        if (invalidationRecorded)
+        {
+            invalidated.executionId = invalidationExecutionId;
+            invalidationRecorded = retainedHistory.appendEvent(invalidated);
+        }
+        if (!invalidationRecorded)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
-                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted."));
+                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted: ")
+                                 + invalidationRecorded.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
     }

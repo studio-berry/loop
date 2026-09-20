@@ -2,6 +2,7 @@
 
 #include "pdfpreflightcertificate.h"
 
+#include "pdfartifactidentity.h"
 #include "pdfpreflightverdict.h"
 #include "pdfutils.h"
 
@@ -237,7 +238,10 @@ bool issuePreflightCertificate(const PreflightResult& result,
         return false;
     }
 
-    const QString expectedReportDigest = reportDigest(report);
+    // The audit chain records the report in its persisted, redacted form, so bind
+    // that same form: a digest over the unredacted report could never be
+    // re-derived from the chain (see PDFOperationHistoryStore::appendEvent).
+    const QString expectedReportDigest = reportDigest(redactSensitiveJson(report).toObject());
     bool matchingPreflightFound = false;
     for (const PDFOperationHistoryEvent& event : history)
     {

@@ -470,6 +470,33 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     }
 
     QString error;
+    if (event.output)
+    {
+        // The event hash covers the output artifact identity, so it must be the
+        // identity a later read reconstructs from the artifacts row. Callers
+        // legitimately pass the same bytes under role-specific names (a repair
+        // publishes candidate-output.pdf, the next preflight inspects those bytes
+        // as preflight-input.pdf) and the row keeps its first registered name, so
+        // hash the persisted identity rather than the caller's label.
+        // registerArtifact fails loudly when immutable metadata disagrees with an
+        // existing registration for the same digest.
+        const PDFOperationResult registered = registerArtifact(*event.output, {});
+        if (!registered)
+            return registered;
+
+        QSqlQuery persisted(m_impl->database);
+        persisted.prepare(QStringLiteral("SELECT size_bytes, media_type, logical_name, storage_token FROM artifacts WHERE sha256 = ?"));
+        persisted.addBindValue(event.output->sha256.toLower());
+        if (!persisted.exec() || !persisted.next())
+            return PDFOperationResult(queryError(persisted));
+
+        event.output->sha256 = event.output->sha256.toLower();
+        event.output->size = persisted.value(0).toLongLong();
+        event.output->mediaType = persisted.value(1).toString();
+        event.output->logicalName = persisted.value(2).toString();
+        event.output->storageToken = persisted.value(3).toString();
+    }
+
     const bool ownsTransaction = !m_impl->joinOpenTransaction;
     if (ownsTransaction && !exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error))
         return PDFOperationResult(error);

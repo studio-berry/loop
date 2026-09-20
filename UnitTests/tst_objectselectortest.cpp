@@ -993,6 +993,9 @@ void ObjectSelectorTest::executorPreviewNeverMutatesOutsideSelection()
 
     pdf::PDFActionListExecutionOptions options;
     options.revision = pdf::revisionIdentityForDocument(source);
+    // This case asserts selection scope on a preview execution; it does not publish,
+    // so it declares preview intent instead of satisfying the publication gate.
+    options.requirePostflight = false;
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
     const pdf::PDFDocument sourceCopy = source;

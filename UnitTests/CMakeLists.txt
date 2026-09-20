@@ -954,6 +954,32 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsRepairOperatorAcceptance  "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsRepairOperatorAcceptance")
+
+    # Operator acceptance for the closed preflight workflow (#134): one CLI run
+    # through detect -> fix -> recheck -> sign off -> verify, plus the fail-closed
+    # certificate paths.
+    add_executable(UnitTestsPreflightWorkflowAcceptance
+        tst_preflightworkflowacceptance.cpp
+    )
+
+    target_link_libraries(UnitTestsPreflightWorkflowAcceptance PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    add_dependencies(UnitTestsPreflightWorkflowAcceptance PdfTool)
+    target_compile_definitions(UnitTestsPreflightWorkflowAcceptance PRIVATE
+        PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+        LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+    )
+    target_include_directories(UnitTestsPreflightWorkflowAcceptance PRIVATE
+        ${CMAKE_SOURCE_DIR}/LoopLibCore/sources
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
+
+    set_target_properties(UnitTestsPreflightWorkflowAcceptance PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsPreflightWorkflowAcceptance  "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPreflightWorkflowAcceptance")
 endif()
 
 # Compiles both identity headers into one TU so the pdf::PDFArtifactIdentity
