@@ -447,6 +447,17 @@ void PreflightVerdictTest::evidenceBundle_bindsIdentitiesAndVerifiesOffline()
     QCOMPARE(manifest.value(QStringLiteral("history")).toObject().value(QStringLiteral("event_count")).toInt(), 3);
     QCOMPARE(manifest.value(QStringLiteral("members")).toArray().size(), 4);
 
+    // A certificate that does not bind the supplied report is refused rather
+    // than shipped with an unprovable binding.
+    const pdf::PreflightEvidenceBundleRequest request = fixture.request;
+    pdf::PreflightEvidenceBundleRequest unbound = request;
+    QJsonObject mutatedReport = unbound.report;
+    mutatedReport.insert(QStringLiteral("verdict_comment"), QStringLiteral("edited after certification"));
+    unbound.report = mutatedReport;
+    pdf::PreflightEvidenceBundle refused;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(unbound, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("does not bind")), qPrintable(error));
+
     // The certificate's issuance point is inside the exported slice even though
     // the canonical chain continues past it: the exported head is the later
     // CertificateIssued event, and the certificate's head is present as an event.
