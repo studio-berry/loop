@@ -451,6 +451,7 @@
     "UnitTestsPreflightInteraction",
     "UnitTestsPreflightProfileResolver",
     "UnitTestsPreflightVerdict",
+    "UnitTestsPreflightWorkflowAcceptance",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
     "UnitTestsProductOperatorLoop",
