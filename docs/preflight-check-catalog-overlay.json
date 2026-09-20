@@ -88,6 +88,18 @@
    "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)",
    "state": "CLOSED",
    "milestone": "0.3.0"
+  },
+  "#664": {
+   "number": 664,
+   "title": "[0.3.0] No check inspects formal GWG 2022/2024 sheetfed or packaging conformance",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#665": {
+   "number": 665,
+   "title": "[0.3.0] No check validates or produces PDF/X-5 and PDF/A-3 output",
+   "state": "OPEN",
+   "milestone": null
   }
  },
  "checks": {
@@ -1297,7 +1309,7 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "#664"
   },
   {
    "id": "imposition-and-reader-spreads",
@@ -1333,7 +1345,7 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "#665"
   },
   {
    "id": "bleed-raster-strip-depth",

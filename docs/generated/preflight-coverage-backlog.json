@@ -81,6 +81,18 @@
       "state": "CLOSED",
       "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)"
     },
+    "#664": {
+      "milestone": null,
+      "number": 664,
+      "state": "OPEN",
+      "title": "[0.3.0] No check inspects formal GWG 2022/2024 sheetfed or packaging conformance"
+    },
+    "#665": {
+      "milestone": null,
+      "number": 665,
+      "state": "OPEN",
+      "title": "[0.3.0] No check validates or produces PDF/X-5 and PDF/A-3 output"
+    },
     "#70": {
       "milestone": null,
       "number": 70,
@@ -124,7 +136,7 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
+      "closed_by": "#664",
       "families": [
         "sheetfed-offset",
         "packaging"
@@ -159,7 +171,7 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
+      "closed_by": "#665",
       "families": [
         "sheetfed-offset",
         "packaging",
