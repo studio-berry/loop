@@ -729,8 +729,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         if (!invalidationRecorded)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
-                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted: ")
-                                 + invalidationRecorded.getErrorMessage());
+                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted: ") + invalidationRecorded.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
     }
