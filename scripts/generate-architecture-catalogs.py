@@ -21,6 +21,7 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
+PREFLIGHT_BACKLOG_PATH = ROOT / "docs" / "generated" / "preflight-coverage-backlog.json"
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
 CORRECTION_CATALOG_PATH = ROOT / "docs" / "generated" / "correction-operation-catalog.json"
 CORRECTION_OVERLAY_PATH = ROOT / "docs" / "correction-operation-catalog-overlay.json"
@@ -125,7 +126,158 @@ def parse_preflight_checks() -> list[str]:
     return checks
 
 
-def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
+PREFLIGHT_CHECK_ENVELOPE_FIELDS = {"id", "severity", "enabled"}
+PREFLIGHT_PARAMETER_TYPES = {"number", "integer", "boolean", "string", "string-list", "object"}
+PREFLIGHT_PARAMETER_FIELDS = ("id", "type", "default", "range", "meaning")
+PREFLIGHT_SEVERITY_FIELDS = ("finding_type", "severity", "condition")
+PREFLIGHT_SEVERITY_VALUES = {"error", "warning", "info"}
+PREFLIGHT_FINDING_FIELDS = {
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "object_id",
+    "bbox",
+    "evidence_ids",
+}
+PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "closed_by")
+PREFLIGHT_BACKLOG_PRIORITIES = {"P1", "P2", "P3"}
+PREFLIGHT_BACKLOG_STATES = {"open", "landed", "closed"}
+PREFLIGHT_BACKLOG_UNFILED = "unfiled"
+GITHUB_ISSUE_REF = re.compile(r"#[1-9][0-9]*")
+CHECK_ID = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def parse_profile_check_field_names() -> set[str]:
+    """Profile fields the engine's own check parser reads from a profile row.
+
+    Scraped from the ``checks`` loop of ``PreflightEngine::parseProfile`` rather
+    than from the published profile schema, so a field the engine accepts but the
+    schema does not yet name (``required_types``, ``raster_white_threshold``) is
+    still a legal catalog parameter id. Check ``id``/``severity``/``enabled`` are
+    the envelope every check shares and are described by the ``severity`` block,
+    so they are excluded.
+    """
+    source = read(ROOT / "LoopLibCore" / "sources" / "preflightengine.cpp")
+    marker = 'const QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();'
+    start = source.find(marker)
+    if start < 0:
+        raise ValueError("could not find the profile checks loop in preflightengine.cpp")
+    end = source.find("profile.checks.push_back(check);", start)
+    if end < 0:
+        raise ValueError("could not find the end of the profile checks loop")
+    body = source[start:end]
+    names = set(re.findall(r'checkObject\.(?:value|contains)\(QStringLiteral\("([a-z0-9_]+)"\)\)', body))
+    names.add("restrictions")
+    names -= PREFLIGHT_CHECK_ENVELOPE_FIELDS
+    if len(names) < 20:
+        raise ValueError("profile check field scrape is incomplete")
+    return names
+
+
+def preflight_fixup_ids(fixup_registry: list[dict[str, Any]]) -> list[str]:
+    """Registered preflight fixup ids, from the repair-operation registry."""
+    return unique_sorted(operation["id"] for operation in fixup_registry if operation["is_preflight_fixup"])
+
+
+def validate_check_parameters(check_id: str, parameters: Any, known_fields: set[str]) -> None:
+    if not isinstance(parameters, list):
+        raise ValueError(f"catalog entry '{check_id}' parameters must be an array")
+    seen: set[str] = set()
+    for parameter in parameters:
+        if not isinstance(parameter, dict):
+            raise ValueError(f"catalog entry '{check_id}' has a non-object parameter")
+        absent = sorted(set(PREFLIGHT_PARAMETER_FIELDS) - set(parameter))
+        extra = sorted(set(parameter) - set(PREFLIGHT_PARAMETER_FIELDS))
+        if absent or extra:
+            raise ValueError(
+                f"catalog entry '{check_id}' parameter must carry exactly "
+                f"{', '.join(PREFLIGHT_PARAMETER_FIELDS)}"
+            )
+        identifier = parameter["id"]
+        if identifier not in known_fields:
+            raise ValueError(
+                f"catalog entry '{check_id}' parameter '{identifier}' is not a profile check field the engine reads"
+            )
+        if identifier in seen:
+            raise ValueError(f"catalog entry '{check_id}' repeats parameter '{identifier}'")
+        seen.add(identifier)
+        if parameter["type"] not in PREFLIGHT_PARAMETER_TYPES:
+            raise ValueError(f"catalog entry '{check_id}' parameter '{identifier}' has invalid type")
+        if not isinstance(parameter["range"], str) or not parameter["range"].strip():
+            raise ValueError(f"catalog entry '{check_id}' parameter '{identifier}' needs a range string")
+        if not isinstance(parameter["meaning"], str) or not parameter["meaning"].strip():
+            raise ValueError(f"catalog entry '{check_id}' parameter '{identifier}' needs a meaning")
+        default = parameter["default"]
+        if not isinstance(default, (str, int, float, bool, list, dict)) and default is not None:
+            raise ValueError(f"catalog entry '{check_id}' parameter '{identifier}' has an unsupported default")
+
+
+def validate_check_severity(check_id: str, severity: Any) -> None:
+    if not isinstance(severity, list) or not severity:
+        raise ValueError(f"catalog entry '{check_id}' severity must be a non-empty array")
+    for entry in severity:
+        if not isinstance(entry, dict):
+            raise ValueError(f"catalog entry '{check_id}' has a non-object severity entry")
+        absent = sorted(set(PREFLIGHT_SEVERITY_FIELDS) - set(entry))
+        extra = sorted(set(entry) - set(PREFLIGHT_SEVERITY_FIELDS))
+        if absent or extra:
+            raise ValueError(
+                f"catalog entry '{check_id}' severity entry must carry exactly "
+                f"{', '.join(PREFLIGHT_SEVERITY_FIELDS)}"
+            )
+        finding_types = entry["finding_type"]
+        if isinstance(finding_types, str):
+            finding_types = [finding_types]
+        if not isinstance(finding_types, list) or not finding_types or not all(
+            isinstance(item, str) and item.strip() for item in finding_types
+        ):
+            raise ValueError(f"catalog entry '{check_id}' severity entry needs finding_type names")
+        if entry["severity"] not in PREFLIGHT_SEVERITY_VALUES:
+            raise ValueError(f"catalog entry '{check_id}' severity entry has an invalid severity")
+        if not isinstance(entry["condition"], str) or not entry["condition"].strip():
+            raise ValueError(f"catalog entry '{check_id}' severity entry needs a condition")
+
+
+def validate_check_evidence(check_id: str, evidence: Any) -> None:
+    if not isinstance(evidence, list) or not evidence:
+        raise ValueError(f"catalog entry '{check_id}' evidence must be a non-empty array")
+    seen: set[str] = set()
+    for name in evidence:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"catalog entry '{check_id}' has an empty evidence field name")
+        if name in seen:
+            raise ValueError(f"catalog entry '{check_id}' repeats evidence field '{name}'")
+        seen.add(name)
+        if name in PREFLIGHT_FINDING_FIELDS:
+            continue
+        if name.startswith("evidence.") and len(name) > len("evidence."):
+            continue
+        raise ValueError(
+            f"catalog entry '{check_id}' evidence field '{name}' is neither a report finding "
+            "field nor an evidence.<key> entry"
+        )
+
+
+def validate_check_fixups(check_id: str, fixups: Any, known_fixups: set[str]) -> None:
+    if not isinstance(fixups, list):
+        raise ValueError(f"catalog entry '{check_id}' fixups must be an array")
+    seen: set[str] = set()
+    for fixup_id in fixups:
+        if not isinstance(fixup_id, str) or not fixup_id:
+            raise ValueError(f"catalog entry '{check_id}' has an empty fixup id")
+        if fixup_id in seen:
+            raise ValueError(f"catalog entry '{check_id}' repeats fixup '{fixup_id}'")
+        seen.add(fixup_id)
+        if fixup_id not in known_fixups:
+            raise ValueError(
+                f"catalog entry '{check_id}' fixup '{fixup_id}' is not a registered preflight fixup"
+            )
+
+
+def build_preflight_check_catalog(registry: list[str], fixup_registry: list[dict[str, Any]]) -> dict[str, Any]:
     overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
     overlay_ids = unique_sorted(overlay.get("checks", {}).keys())
     missing = sorted(set(registry) - set(overlay_ids))
@@ -137,13 +289,28 @@ def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
         if extra:
             problems.append("catalog without registry: " + ", ".join(extra))
         raise ValueError("; ".join(problems))
-    required = {"measures", "limitations", "coverage"}
+    required = {"measures", "limitations", "coverage", "parameters", "severity", "evidence", "fixups"}
+    known_fields = parse_profile_check_field_names()
+    known_fixups = set(preflight_fixup_ids(fixup_registry))
     for check_id, entry in overlay["checks"].items():
         absent = sorted(required - set(entry))
         if absent:
             raise ValueError(f"catalog entry '{check_id}' missing {', '.join(absent)}")
         if entry["coverage"] not in {"covered", "partial", "not_covered"}:
             raise ValueError(f"catalog entry '{check_id}' has invalid coverage")
+        validate_check_parameters(check_id, entry["parameters"], known_fields)
+        validate_check_severity(check_id, entry["severity"])
+        validate_check_evidence(check_id, entry["evidence"])
+        validate_check_fixups(check_id, entry["fixups"], known_fixups)
+    unassigned_fixups = sorted(
+        fixup_id
+        for fixup_id in known_fixups
+        if not any(fixup_id in entry["fixups"] for entry in overlay["checks"].values())
+    )
+    if unassigned_fixups:
+        raise ValueError(
+            "registered preflight fixups that no catalog entry claims: " + ", ".join(unassigned_fixups)
+        )
     return {
         "format_version": 1,
         "generated_by": "scripts/generate-architecture-catalogs.py",
@@ -154,7 +321,159 @@ def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
         "checks": overlay["checks"],
         "not_covered": overlay["not_covered"],
         "registry": registry,
+        "fixup_registry": sorted(known_fixups),
     }
+
+
+def build_preflight_backlog(
+    overlay: dict[str, Any],
+    registry: list[str],
+    fixup_registry: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate the prioritised coverage backlog and emit it as its own artifact.
+
+    Every gap row is cross-referenced: ``closed_by`` is the literal ``unfiled``,
+    a GitHub issue number the overlay recorded from ``gh issue view``, or a
+    registered check id. Nothing here is inferred -- an unverified issue number
+    fails the build, and a state that disagrees with the recorded issue state
+    fails the build, so the backlog cannot rot into a wish list.
+    """
+    issues = overlay.get("github_issues")
+    if not isinstance(issues, dict) or not issues:
+        raise ValueError("preflight catalog overlay is missing github_issues")
+    verified: dict[str, dict[str, Any]] = {}
+    for reference, entry in issues.items():
+        if not isinstance(reference, str) or not GITHUB_ISSUE_REF.fullmatch(reference):
+            raise ValueError(f"github_issues key '{reference}' is not a '#<number>' reference")
+        if not isinstance(entry, dict):
+            raise ValueError(f"github_issues entry '{reference}' must be an object")
+        absent = sorted({"number", "title", "state", "milestone"} - set(entry))
+        if absent:
+            raise ValueError(f"github_issues entry '{reference}' missing {', '.join(absent)}")
+        if entry["number"] != int(reference[1:]):
+            raise ValueError(f"github_issues entry '{reference}' records a different number")
+        if entry["state"] not in {"OPEN", "CLOSED"}:
+            raise ValueError(f"github_issues entry '{reference}' must record the GitHub state verbatim")
+        if not isinstance(entry["title"], str) or not entry["title"].strip():
+            raise ValueError(f"github_issues entry '{reference}' needs a title")
+        verified[reference] = entry
+
+    rows = overlay.get("backlog")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("preflight coverage backlog is empty")
+    known_families = set(overlay["gwg_families"])
+    known_checks = set(registry)
+    not_covered = overlay["not_covered"]
+    seen_ids: set[str] = set()
+    parsed: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("preflight coverage backlog rows must be objects")
+        absent = sorted(set(PREFLIGHT_BACKLOG_FIELDS) - set(row))
+        extra = sorted(set(row) - set(PREFLIGHT_BACKLOG_FIELDS))
+        if absent or extra:
+            raise ValueError(
+                "preflight coverage backlog row must carry exactly " + ", ".join(PREFLIGHT_BACKLOG_FIELDS)
+            )
+        identifier = row["id"]
+        if not isinstance(identifier, str) or not CHECK_ID.fullmatch(identifier):
+            raise ValueError(f"preflight coverage backlog row id '{identifier}' is invalid")
+        if identifier in seen_ids:
+            raise ValueError(f"preflight coverage backlog has a duplicate id: {identifier}")
+        seen_ids.add(identifier)
+        if row["priority"] not in PREFLIGHT_BACKLOG_PRIORITIES:
+            raise ValueError(f"backlog row '{identifier}' has invalid priority '{row['priority']}'")
+        state = row["state"]
+        if state not in PREFLIGHT_BACKLOG_STATES:
+            raise ValueError(f"backlog row '{identifier}' has invalid state '{state}'")
+        gap = row["gap"]
+        if not isinstance(gap, str) or not gap.strip():
+            raise ValueError(f"backlog row '{identifier}' needs a gap description")
+        families = row["families"]
+        if not isinstance(families, list) or not families:
+            raise ValueError(f"backlog row '{identifier}' needs at least one family")
+        unknown = sorted(family for family in families if family not in known_families)
+        if unknown:
+            raise ValueError(f"backlog row '{identifier}' names unknown families: {', '.join(unknown)}")
+        if len(set(families)) != len(families):
+            raise ValueError(f"backlog row '{identifier}' repeats a family")
+        closed_by = row["closed_by"]
+        if closed_by == PREFLIGHT_BACKLOG_UNFILED:
+            if state != "open":
+                raise ValueError(f"backlog row '{identifier}' is unfiled but its state is '{state}'")
+        elif isinstance(closed_by, str) and GITHUB_ISSUE_REF.fullmatch(closed_by):
+            if closed_by not in verified:
+                raise ValueError(
+                    f"backlog row '{identifier}' references unverified issue {closed_by}; "
+                    "confirm it with 'gh issue view' and record it in github_issues first"
+                )
+            if state == "landed":
+                raise ValueError(f"backlog row '{identifier}' is landed by a check, not by {closed_by}")
+            expected = "open" if verified[closed_by]["state"] == "OPEN" else "closed"
+            if state != expected:
+                raise ValueError(
+                    f"backlog row '{identifier}' state '{state}' disagrees with {closed_by} "
+                    f"({verified[closed_by]['state']})"
+                )
+        elif isinstance(closed_by, str) and closed_by in known_checks:
+            if state != "landed":
+                raise ValueError(f"backlog row '{identifier}' names check '{closed_by}' but is not landed")
+        else:
+            raise ValueError(
+                f"backlog row '{identifier}' closed_by must be '{PREFLIGHT_BACKLOG_UNFILED}', "
+                "a verified '#<issue>' or a registered check id"
+            )
+        parsed.append(
+            {
+                "id": identifier,
+                "priority": row["priority"],
+                "gap": gap,
+                "families": families,
+                "state": state,
+                "closed_by": closed_by,
+            }
+        )
+
+    for uncovered in not_covered:
+        if not any(row["priority"] == "P1" and uncovered in row["gap"] for row in parsed):
+            raise ValueError(f"uncovered class is missing from the backlog: {uncovered}")
+    for row in parsed:
+        if row["priority"] == "P1" and not any(uncovered in row["gap"] for uncovered in not_covered):
+            raise ValueError(f"P1 backlog row '{row['id']}' does not name a not_covered class")
+
+    referenced: set[str] = set()
+    for row in parsed:
+        if GITHUB_ISSUE_REF.fullmatch(row["closed_by"]):
+            referenced.add(row["closed_by"])
+        referenced.update(re.findall(GITHUB_ISSUE_REF, row["gap"]))
+    unused = sorted(reference for reference in verified if reference not in referenced)
+    if unused:
+        raise ValueError("github_issues entries cited by no backlog row: " + ", ".join(unused))
+    unverified = sorted(reference for reference in referenced if reference not in verified)
+    if unverified:
+        raise ValueError("backlog rows cite issues with no verified record: " + ", ".join(unverified))
+
+    priority_rule = overlay.get("backlog_priority_rule")
+    state_rule = overlay.get("backlog_state_rule")
+    for name, rule in (("backlog_priority_rule", priority_rule), ("backlog_state_rule", state_rule)):
+        if not isinstance(rule, str) or not rule.strip():
+            raise ValueError(f"preflight catalog overlay needs a non-empty {name}")
+
+    parsed.sort(key=lambda row: (row["priority"], row["id"]))
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "priority_rule": priority_rule,
+        "state_rule": state_rule,
+        "families": overlay["gwg_families"],
+        "fixup_registry": preflight_fixup_ids(fixup_registry),
+        "not_covered": not_covered,
+        "github_issues": verified,
+        "rows": parsed,
+    }
+
 
 
 SAVE_POLICY_MODES = {
@@ -615,6 +934,7 @@ def build_catalog() -> dict[str, Any]:
         "version_policy": parse_version_policy(),
         "preflight_checks": registry,
         "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
+        "preflight_coverage_backlog": "docs/generated/preflight-coverage-backlog.json",
         "registered_operations": [
             {"id": operation["id"], "implementation": operation["implementation"]}
             for operation in repair_registry
@@ -652,7 +972,14 @@ def serialized_catalog() -> str:
 
 def serialized_preflight_catalog() -> str:
     registry = parse_preflight_checks()
-    return json.dumps(build_preflight_check_catalog(registry), indent=2, sort_keys=True) + "\n"
+    return json.dumps(build_preflight_check_catalog(registry, parse_repair_operations()), indent=2, sort_keys=True) + "\n"
+
+
+def serialized_preflight_backlog() -> str:
+    overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
+    registry = parse_preflight_checks()
+    backlog = build_preflight_backlog(overlay, registry, parse_repair_operations())
+    return json.dumps(backlog, indent=2, sort_keys=True) + "\n"
 
 
 def serialized_correction_catalog() -> str:
@@ -695,6 +1022,7 @@ def main() -> int:
     try:
         expected = serialized_catalog()
         expected_preflight = serialized_preflight_catalog()
+        expected_backlog = serialized_preflight_backlog()
         expected_correction = serialized_correction_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
@@ -704,11 +1032,13 @@ def main() -> int:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
         PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
+        PREFLIGHT_BACKLOG_PATH.write_text(expected_backlog, encoding="utf-8", newline="\n")
         CORRECTION_CATALOG_PATH.write_text(expected_correction, encoding="utf-8", newline="\n")
         return 0
     return (
         check_generated(CATALOG_PATH, expected, "architecture catalog")
         or check_generated(PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog")
+        or check_generated(PREFLIGHT_BACKLOG_PATH, expected_backlog, "preflight coverage backlog")
         or check_generated(CORRECTION_CATALOG_PATH, expected_correction, "correction operation catalog")
     )
 

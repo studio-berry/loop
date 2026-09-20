@@ -1,0 +1,402 @@
+{
+  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+  ],
+  "fixup_registry": [
+    "add-bleed",
+    "downsample-images",
+    "rgb-to-cmyk"
+  ],
+  "format_version": 1,
+  "generated_by": "scripts/generate-architecture-catalogs.py",
+  "github_issues": {
+    "#12": {
+      "milestone": "0.0.1",
+      "number": 12,
+      "state": "CLOSED",
+      "title": "Validate output-intent and ICC-profile presence, identity, and color-space consistency"
+    },
+    "#124": {
+      "milestone": null,
+      "number": 124,
+      "state": "CLOSED",
+      "title": "Detect hidden, invisible, and off-page content in preflight"
+    },
+    "#130": {
+      "milestone": null,
+      "number": 130,
+      "state": "CLOSED",
+      "title": "Detect corrupt fonts, not just embedded/unembedded status"
+    },
+    "#131": {
+      "milestone": null,
+      "number": 131,
+      "state": "CLOSED",
+      "title": "Extend thin-part detection beyond simple strokes (expand #23)"
+    },
+    "#47": {
+      "milestone": null,
+      "number": 47,
+      "state": "OPEN",
+      "title": "[Residual] Tier-2 bleed raster golden corpus + strip calibration"
+    },
+    "#49": {
+      "milestone": "0.8.0",
+      "number": 49,
+      "state": "OPEN",
+      "title": "[0.8.0] Overprint-correct rendering in standard and advanced renderers"
+    },
+    "#600": {
+      "milestone": null,
+      "number": 600,
+      "state": "OPEN",
+      "title": "Ink Manager: separation management and spot-color library"
+    },
+    "#603": {
+      "milestone": null,
+      "number": 603,
+      "state": "OPEN",
+      "title": "Imposition: n-up, gang-up, booklets, creep, and sheet furniture"
+    },
+    "#604": {
+      "milestone": null,
+      "number": 604,
+      "state": "OPEN",
+      "title": "Packaging production semantics: ISO 19593 Processing Steps, dielines, varnish/foil/white, barcode validation"
+    },
+    "#605": {
+      "milestone": null,
+      "number": 605,
+      "state": "OPEN",
+      "title": "PDF/VT variable-data production: understanding, validation, and preservation"
+    },
+    "#628": {
+      "milestone": "0.3.0",
+      "number": 628,
+      "state": "CLOSED",
+      "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)"
+    },
+    "#70": {
+      "milestone": null,
+      "number": 70,
+      "state": "CLOSED",
+      "title": "Traverse nested Form XObjects, inherited resources, and appearance streams for embedded fonts"
+    }
+  },
+  "matrix_id": "loop-gwg-pdfx-v1",
+  "not_covered": [
+    "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
+    "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+    "DeviceN ink-limit per named colorant beyond inventory",
+    "Barcode / slug / Braille content validation",
+    "Multi-page imposition and reader-spread checks"
+  ],
+  "priority_rule": "P1 - no registered check inspects the defect class at all (a matrix not_covered entry), so a clean run is silent about it; P2 - a registered check inspects the class but its named limitation can suppress or misclassify a finding on defective content, which would be a false clean pass; P3 - a registered check inspects the class and the named limitation only narrows reported detail or fails closed as incomplete, so it cannot turn a defect into a silent pass.",
+  "rows": [
+    {
+      "closed_by": "#604",
+      "families": [
+        "packaging",
+        "sheetfed-offset",
+        "newspaper"
+      ],
+      "gap": "Barcode / slug / Braille content validation",
+      "id": "barcode-slug-braille",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "#600",
+      "families": [
+        "packaging",
+        "sheetfed-offset",
+        "web-offset",
+        "newspaper"
+      ],
+      "gap": "DeviceN ink-limit per named colorant beyond inventory",
+      "id": "devicen-per-colorant-ink-limit",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "packaging"
+      ],
+      "gap": "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
+      "id": "gwg-2022-2024-certificates",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "#603",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "newspaper"
+      ],
+      "gap": "Multi-page imposition and reader-spread checks",
+      "id": "imposition-and-reader-spreads",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "#605",
+      "families": [
+        "web-offset",
+        "newspaper",
+        "digital"
+      ],
+      "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/VT variable-data streams are neither understood, validated, nor preserved",
+      "id": "pdfvt-variable-data",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/X-5 (X-5n/X-5g) and PDF/A-3 output are neither validated nor produced",
+      "id": "pdfx5-pdfa3-output",
+      "priority": "P1",
+      "state": "open"
+    },
+    {
+      "closed_by": "#47",
+      "families": [
+        "sheetfed-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+      "id": "bleed-raster-strip-depth",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "packaging",
+        "newspaper",
+        "digital"
+      ],
+      "gap": "an ICC-based color space is classified by its alternate, so a page whose ICC space resolves to an allowed alternate can pass while the painted space is disallowed",
+      "id": "color-mode-icc-alternate",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "font-integrity",
+      "families": [
+        "sheetfed-offset",
+        "digital"
+      ],
+      "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as #130)",
+      "id": "corrupt-embedded-fonts",
+      "priority": "P2",
+      "state": "landed"
+    },
+    {
+      "closed_by": "#628",
+      "families": [
+        "packaging"
+      ],
+      "gap": "a DeviceN dieline is described by a multi-colorant separation, so the Separation-only processing-step collector can miss the die entirely and the packaging job passes clean",
+      "id": "devicen-dieline-detection",
+      "priority": "P2",
+      "state": "closed"
+    },
+    {
+      "closed_by": "#604",
+      "families": [
+        "packaging"
+      ],
+      "gap": "processing-steps and dieline detect cutting-die presence but not die geometry, so a geometrically wrong dieline passes clean",
+      "id": "dieline-geometry",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "digital"
+      ],
+      "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+      "id": "font-glyph-coverage",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "thin-strokes",
+      "families": [
+        "sheetfed-offset",
+        "packaging"
+      ],
+      "gap": "stroke widths below a job threshold, including zero-width hairlines, were unchecked; thin-strokes now measures them",
+      "id": "hairline-and-thin-stroke-widths",
+      "priority": "P2",
+      "state": "landed"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "packaging"
+      ],
+      "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+      "id": "hidden-layers-ocmd",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "newspaper"
+      ],
+      "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+      "id": "ink-coverage-raster-tac",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "packaging"
+      ],
+      "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as #124)",
+      "id": "invisible-content-breadth",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "embedded-fonts",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "packaging",
+        "newspaper",
+        "digital"
+      ],
+      "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as #70)",
+      "id": "nested-font-resources",
+      "priority": "P2",
+      "state": "landed"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset"
+      ],
+      "gap": "obscured-content is a bounding-box heuristic rather than a RIP occlusion model, so covered content can pass clean",
+      "id": "obscured-content-occlusion",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "digital"
+      ],
+      "gap": "off-page-content compares painted bounds before clipping, so a clipped mark can be a false negative or a false positive",
+      "id": "off-page-content-clipping",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "output-intent",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as #12)",
+      "id": "output-intent-identity",
+      "priority": "P2",
+      "state": "landed"
+    },
+    {
+      "closed_by": "thin-parts",
+      "families": [
+        "packaging"
+      ],
+      "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as #131)",
+      "id": "thin-filled-parts",
+      "priority": "P2",
+      "state": "landed"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "sheetfed-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "transparency-risk does not flatten and does not simulate overprint-plus-transparency interaction as a RIP does, so a press-only interaction passes clean",
+      "id": "transparency-rip-interaction",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "#49",
+      "families": [
+        "sheetfed-offset",
+        "packaging"
+      ],
+      "gap": "white-overprint reads page-view overprint state rather than the Output Preview or transparency renderer, so a renderer-dependent white overprint passes clean",
+      "id": "white-overprint-renderer",
+      "priority": "P2",
+      "state": "open"
+    },
+    {
+      "closed_by": "content-bleed",
+      "families": [
+        "sheetfed-offset",
+        "web-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "the bleed check measures and rewrites page boxes only and synthesizes no artwork bleed; artwork bleed itself is measured by content-bleed",
+      "id": "bleed-box-rewrite-only",
+      "priority": "P3",
+      "state": "landed"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "packaging",
+        "sheetfed-offset"
+      ],
+      "gap": "color-inventory is bounded by probe_dpi and is a spot, separation, and rich-black inventory rather than a named-ink dictionary, so small tints are inventoried incompletely",
+      "id": "color-inventory-probe-depth",
+      "priority": "P3",
+      "state": "open"
+    },
+    {
+      "closed_by": "unfiled",
+      "families": [
+        "packaging"
+      ],
+      "gap": "thin-parts reports a page as check-incomplete when the mask exceeds max_raster_pixels instead of passing it, so the shortfall is an incomplete inspection rather than a silent pass",
+      "id": "thin-parts-raster-budget",
+      "priority": "P3",
+      "state": "open"
+    }
+  ],
+  "state_rule": "open - the gap is still present; landed - a registered check now covers the class and closed_by names that check id; closed - the filed issue that tracked the gap is closed."
+}
