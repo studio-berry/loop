@@ -105,6 +105,12 @@ add_library(LoopLibInteraction STATIC
     sources/actionlistrunsubmitter.h
     sources/repairparameterschema.cpp
     sources/repairparameterschema.h
+    sources/preflightprofilecatalog.cpp
+    sources/preflightprofilecatalog.h
+    sources/preflightrunsubmitter.cpp
+    sources/preflightrunsubmitter.h
+    sources/shellinspectordispatch.cpp
+    sources/shellinspectordispatch.h
     sources/inspectormodel.cpp
     sources/inspectormodel.h
     sources/previewstatemodel.cpp

@@ -1,6 +1,6 @@
 // MIT License
-#include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentsearch.h"
 #include "pdfdocumentsession.h"
 #include "pdfprocessingbudget.h"
@@ -22,17 +22,9 @@ namespace
 
 pdf::PDFDocument searchableDocument()
 {
-    pdf::PDFDocumentBuilder builder;
-    builder.createDocument();
-    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 400, 400));
-    pdf::PDFPageContentStreamBuilder streamBuilder(&builder);
-    if (QPainter* painter = streamBuilder.begin(page))
-    {
-        painter->setPen(Qt::black);
-        painter->drawText(QPointF(50, 100), QStringLiteral("needle text"));
-        streamBuilder.end(painter);
-    }
-    return builder.build();
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    const QString fixturePath = QString(LOOP_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/font-embedded.pdf");
+    return reader.readFromFile(fixturePath);
 }
 
 pdf::PDFDocumentContext* contextForDocument(pdf::PDFDocument document)
@@ -64,12 +56,12 @@ void DocumentSearchTest::searchUsesFreshBudgetAfterSessionElapsed()
     }
     QVERIFY(sessionElapsedFailed);
 
-    const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("needle"));
+    const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("embedded"));
     QVERIFY(result.admitted);
     QVERIFY(result.completed);
     QVERIFY(!result.budgetExceeded);
     QCOMPARE(result.matches.size(), 1);
-    QCOMPARE(result.matches.first().matched, QStringLiteral("needle"));
+    QCOMPARE(result.matches.first().matched, QStringLiteral("embedded"));
 }
 
 void DocumentSearchTest::searchReportsIncompleteWhenOperationBudgetExhausted()
@@ -82,7 +74,7 @@ void DocumentSearchTest::searchReportsIncompleteWhenOperationBudgetExhausted()
     limits.maxRenderOperations = 0;
     session->setProcessingLimits(limits);
 
-    const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("needle"));
+    const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("embedded"));
     // Core returns before the admission check when the budget stops the search, so
     // the result is neither admitted nor completed; QuickDocumentModelTest covers
     // the same contract from the Quick side.

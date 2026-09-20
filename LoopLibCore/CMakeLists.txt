@@ -72,6 +72,10 @@ add_library(LoopLibCore SHARED
     sources/pdfimagedownsamplefixup.h
     sources/pdfrgbtocmykfixup.cpp
     sources/pdfrgbtocmykfixup.h
+    sources/pdfrgbtocmykhelpers.cpp
+    sources/pdfrgbtocmykhelpers.h
+    sources/pdfrgbtocmykimagefixup.cpp
+    sources/pdfrgbtocmykimagefixup.h
     sources/pdfpagemasterexport.cpp
     sources/pdfpagemasterexport.h
     sources/pdfbleedmarginprobe.cpp

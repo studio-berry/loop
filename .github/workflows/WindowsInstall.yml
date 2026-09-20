@@ -246,12 +246,20 @@ jobs:
       - name: Find VC Redistributable Directories
         shell: pwsh
         run: |
-          # Define the base path to the VC redistributable directories
-          $basePath = "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC"
+          # Blacksmith runners install Build Tools under Program Files (x86); GitHub-hosted
+          # windows-2022 images use the full VS install under Program Files.
+          $basePaths = @(
+            "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC",
+            "C:\Program Files (x86)\Microsoft Visual Studio\2022\*\VC\Redist\MSVC"
+          )
           $arch = "x64"
 
           # Find directories that match the pattern for VC redistributables
-          $redistDirs = Get-ChildItem -Path $basePath -Recurse -Directory -Filter "Microsoft.VC*.CRT" | Where-Object { $_.FullName -notmatch "debug_nonredist" -and $_.FullName -match "\\$arch\\" -and $_.FullName -notmatch "onecore" }
+          $redistDirs = foreach ($basePath in $basePaths) {
+            if (-not (Test-Path $basePath)) { continue }
+            Get-ChildItem -Path $basePath -Recurse -Directory -Filter "Microsoft.VC*.CRT" |
+              Where-Object { $_.FullName -notmatch "debug_nonredist" -and $_.FullName -match "\\$arch\\" -and $_.FullName -notmatch "onecore" }
+          }
 
           # Extract the toolset version from the directory names
           if ($redistDirs) {
