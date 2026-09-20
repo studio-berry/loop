@@ -52,6 +52,15 @@ presentation states:
 The ordinary preflight result remains separate from certification. A clean current run is not the
 same thing as an issued certificate.
 
+## Portable handoff
+
+Certified state is internal to Loop. To hand one certified revision to a customer, a press, or an
+auditor, export it as a portable bundle with `PdfTool export-evidence-bundle` and verify it offline
+with `PdfTool verify-evidence-bundle`; see
+[`PREFLIGHT_EVIDENCE_BUNDLE.md`](PREFLIGHT_EVIDENCE_BUNDLE.md). The bundle copies the certificate
+rather than replacing it: `verify-certificate` remains the check against live Loop state, and the
+certified revision inside Loop remains canonical.
+
 ## Storage and trust limits
 
 Audit and certificate provenance use the append-only `PDFOperationHistoryEvent` chain in

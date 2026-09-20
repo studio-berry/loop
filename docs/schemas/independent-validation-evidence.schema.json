@@ -44,6 +44,26 @@
         "additionalProperties": false
       }
     },
+    "bundle": {
+      "description": "Third-party consumption of a portable proof-of-preflight bundle (docs/PREFLIGHT_EVIDENCE_BUNDLE.md).",
+      "type": "object",
+      "required": ["path", "status", "members_verified", "input_matches_manifest"],
+      "properties": {
+        "path": { "type": "string" },
+        "status": { "enum": ["passed", "rejected", "incomplete"] },
+        "reason_code": { "type": "string" },
+        "manifest_schema": { "type": ["string", "null"] },
+        "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "document_revision_digest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "members_verified": { "type": "integer", "minimum": 0 },
+        "declared_members": { "type": "array", "items": { "type": "string" } },
+        "missing_members": { "type": "array", "items": { "type": "string" } },
+        "undeclared_members": { "type": "array", "items": { "type": "string" } },
+        "mismatched_members": { "type": "array", "items": { "type": "string" } },
+        "input_matches_manifest": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "platform": {
       "type": "object",
       "required": ["system", "release", "machine"],

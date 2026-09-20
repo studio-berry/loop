@@ -246,7 +246,8 @@ PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
     descriptor.capabilities = describeCapabilities(getOptionsFlags());
 
     if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
-        command == QStringLiteral("capabilities") || command == QStringLiteral("schema"))
+        command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
+        command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
     {
         descriptor.outputFormats = { QStringLiteral("json") };
     }
@@ -578,6 +579,14 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("enc-owner-password"), { QStringLiteral("--enc-owner-password") }, QStringLiteral("owner-password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("enc-permissions"), { QStringLiteral("--enc-permissions") }, QStringLiteral("permissions"), PDFToolValueType::Integer);
     }
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("directory"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("report"), { QStringLiteral("--report") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("certificate"), { QStringLiteral("--certificate") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("sign-off"), { QStringLiteral("--sign-off") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("artifact"), { QStringLiteral("--artifact") }, QStringLiteral("file"), PDFToolValueType::Path);
+    }
 
     std::sort(options.begin(), options.end(), [](const auto& left, const auto& right)
               { return left.id < right.id; });
@@ -591,6 +600,11 @@ QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositiona
     {
         appendPositional(positionals, { QStringLiteral("certificate"), PDFToolValueType::Path, true, false });
         appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
+        return positionals;
+    }
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        appendPositional(positionals, { QStringLiteral("bundle"), PDFToolValueType::Path, true, false });
         return positionals;
     }
     if (optionFlags.testFlag(OpenDocument))
@@ -680,6 +694,8 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
     add(SchemaDiagnostics, QStringLiteral("schema.diagnostics"));
     add(VerifyPreflightCertificate, QStringLiteral("preflight.certificate.verify"));
+    add(EvidenceBundleExport, QStringLiteral("evidence-bundle.export"));
+    add(EvidenceBundleVerify, QStringLiteral("evidence-bundle.verify"));
     add(ActionList, QStringLiteral("action-list.execute"));
     capabilities.sort();
     return capabilities;
@@ -908,6 +924,20 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addPositionalArgument("certificate", "Certified-preflight JSON file.");
         parser->addPositionalArgument("document", "PDF document named by the certificate.");
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Bundle output directory (created, or refused when not empty)."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report"), QStringLiteral("Canonical preflight report JSON for the document revision."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("certificate"), QStringLiteral("Retained certified-preflight JSON, when the revision is certified."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("sign-off"), QStringLiteral("Governed sign-off record for a published correction."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("artifact"), QStringLiteral("Corrected output artifact whose identity the bundle declares."));
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        parser->addPositionalArgument("bundle", "Portable proof-of-preflight bundle directory.");
     }
 
     if (optionFlags.testFlag(Diagnostics))
@@ -1144,7 +1174,8 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             const QString command = getStandardString(Command);
             if (command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
-                command == QStringLiteral("capabilities") || command == QStringLiteral("schema"))
+                command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
+                command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
             }
@@ -1442,6 +1473,20 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     {
         options.preflightCertificatePath = positionalArguments.value(0);
         options.document = positionalArguments.value(1);
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        options.evidenceBundleOutputDirectory = parser->value("output");
+        options.evidenceBundleReportPath = parser->value("report");
+        options.evidenceBundleCertificatePath = parser->value("certificate");
+        options.evidenceBundleSignOffPath = parser->value("sign-off");
+        options.evidenceBundleArtifactPath = parser->value("artifact");
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        options.evidenceBundlePath = positionalArguments.value(0);
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
