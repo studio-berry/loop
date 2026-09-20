@@ -285,6 +285,8 @@ add_library(LoopLibCore SHARED
     sources/pdfoperationhistorystore.cpp
     sources/pdfsavepolicy.h
     sources/pdfsavepolicy.cpp
+    sources/pdfrecoverymanager.h
+    sources/pdfrecoverymanager.cpp
     fonts.qrc
 )
 
