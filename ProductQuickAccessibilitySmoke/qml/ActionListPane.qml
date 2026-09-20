@@ -13,11 +13,23 @@ Pane {
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
     readonly property bool busy: host && ["validating", "planning", "running"].indexOf(host.actionListStateName) >= 0
 
+    // Governed-correction lifecycle (#586). The state, its shape, its colour and its
+    // accessible name come from LoopLibQuick through EditorHost; this pane renders them and
+    // routes the operator's own review decision back through the host.
+    readonly property string lifecycleState: host ? host.fixLifecycleStateName : "idle"
+    readonly property var planIdentity: host ? host.fixPlanIdentity : null
+    readonly property var preview: host ? host.fixPreview : null
+    readonly property var recheck: host ? host.fixRecheck : null
+    readonly property var signOff: host ? host.fixSignOff : null
+    readonly property string rollbackId: pendingRollbackId
+
+    property string pendingRollbackId: ""
+
     padding: 8
 
     Accessible.role: Accessible.Grouping
-    Accessible.name: qsTr("Action List")
-    Accessible.description: qsTr("Validate, plan, and execute reusable repair recipes against the open document.")
+    Accessible.name: qsTr("Fix")
+    Accessible.description: qsTr("Plan, review, approve and execute a governed correction, then read its recheck, sign-off and rollback evidence.")
 
     FileDialog {
         id: importDialog
@@ -46,6 +58,252 @@ Pane {
                 ? host.actionList.operatorSummary
                 : qsTr("Action List status: %1").arg(host.actionListStateName)) : ""
             Accessible.name: qsTr("Action List status")
+        }
+
+        StateBadge {
+            objectName: "fixLifecycleBadge"
+            Layout.fillWidth: true
+            visual: root.host ? root.host.fixLifecycleVisual : null
+            stateColor: root.host ? root.host.fixLifecycleColor : "transparent"
+            labelText: root.host ? root.host.fixLifecycleSummary : ""
+            badgePrefix: "fixLifecycle"
+        }
+
+        Label {
+            objectName: "fixPlanIdentityLabel"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            visible: root.planIdentity !== null && root.planIdentity.planDigest.length > 0
+            text: root.planIdentity === null ? "" : qsTr("Plan %1 for revision %2 · source %3 · recipe %4 · review %5 · plan matches this revision: %6")
+                .arg(String(root.planIdentity.planDigest).substring(0, 12))
+                .arg(String(root.planIdentity.plannedRevision).substring(0, 8))
+                .arg(String(root.planIdentity.sourceSha256).substring(0, 12))
+                .arg(root.planIdentity.recipeId)
+                .arg(root.planIdentity.reviewDecision)
+                .arg(root.planIdentity.planIsCurrent ? qsTr("yes") : qsTr("no"))
+            Accessible.name: qsTr("Correction plan identity")
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+
+            Button {
+                objectName: "fixApprovePlanButton"
+                text: qsTr("Approve plan")
+                enabled: root.host !== null && root.lifecycleState === "preview-ready"
+                onClicked: if (root.host) root.host.approveActionListPlan()
+                Accessible.name: qsTr("Approve the planned correction")
+                Accessible.description: qsTr("Binds the approval to this plan digest and revision.")
+            }
+
+            Button {
+                objectName: "fixRejectPlanButton"
+                text: qsTr("Reject plan")
+                enabled: root.host !== null && ["preview-ready", "approved"].indexOf(root.lifecycleState) >= 0
+                onClicked: if (root.host) root.host.rejectActionListPlan()
+                Accessible.name: qsTr("Reject the planned correction")
+            }
+
+            Button {
+                objectName: "fixExecutePlanButton"
+                text: qsTr("Execute approved plan")
+                enabled: root.host !== null && root.host.fixExecutionArmed
+                onClicked: if (root.host) root.host.executeApprovedActionListPlan()
+                Accessible.name: qsTr("Execute the approved correction plan")
+            }
+
+            Button {
+                objectName: "fixReplanButton"
+                text: qsTr("Replan")
+                enabled: root.host !== null && root.lifecycleState !== "idle"
+                onClicked: if (root.host) root.host.replanActionList()
+                Accessible.name: qsTr("Discard the plan and start again")
+            }
+
+            Button {
+                objectName: "fixOpenPreviewButton"
+                text: qsTr("Production preview")
+                enabled: root.host !== null
+                onClicked: if (root.host) root.host.setWorkspace(EditorHost.ProductionPreview)
+                Accessible.name: qsTr("Open the Production Preview workspace")
+            }
+        }
+
+        GroupBox {
+            objectName: "fixPreviewGroup"
+            Layout.fillWidth: true
+            title: qsTr("Preview")
+            Accessible.name: qsTr("Correction preview")
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 3
+
+                Label {
+                    objectName: "fixPreviewSummary"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: {
+                        if (!root.preview || !root.preview.available)
+                            return qsTr("No preview yet. Plan the recipe to produce one.")
+                        return qsTr("Technical %1 · visual %2 · %3 page(s) changed · source %4 → candidate %5")
+                            .arg(root.preview.technicalStatus)
+                            .arg(root.preview.visualStatus)
+                            .arg(root.preview.changedPageCount)
+                            .arg(String(root.preview.sourceSha256).substring(0, 12))
+                            .arg(String(root.preview.candidateSha256).substring(0, 12))
+                    }
+                    Accessible.name: qsTr("Preview summary")
+                }
+
+                Label {
+                    objectName: "fixPreviewIncomplete"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    visible: root.preview !== null && root.preview.available && root.preview.incomplete
+                    text: qsTr("The preview is incomplete. It is not approval evidence.")
+                    Accessible.name: qsTr("Preview incomplete")
+                }
+            }
+        }
+
+        GroupBox {
+            objectName: "fixRecheckGroup"
+            Layout.fillWidth: true
+            title: qsTr("Recheck")
+            Accessible.name: qsTr("Correction recheck")
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 3
+
+                Label {
+                    objectName: "fixRecheckSummary"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: {
+                        if (!root.recheck || !root.recheck.available)
+                            return qsTr("No recheck has run for this revision.")
+                        return qsTr("Run status %1 · postflight %2 · inspection complete: %3 · cleared %4 · remaining %5 · introduced %6 · not fully rechecked %7")
+                            .arg(root.recheck.status)
+                            .arg(root.recheck.pass ? qsTr("passed") : qsTr("not passed"))
+                            .arg(root.recheck.verdictState === "" ? qsTr("not reduced") : root.recheck.verdictState)
+                            .arg(root.recheck.resolved.length)
+                            .arg(root.recheck.unchanged.length)
+                            .arg(root.recheck.introduced.length)
+                            .arg(root.recheck.incomplete.length)
+                    }
+                    Accessible.name: qsTr("Recheck summary")
+                }
+
+                Label {
+                    objectName: "fixRecheckIntroduced"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    visible: root.recheck !== null && root.recheck.hasIntroducedFindings
+                    text: qsTr("The fix introduced findings. Publication was refused.")
+                    Accessible.name: qsTr("Introduced findings")
+                }
+            }
+        }
+
+        GroupBox {
+            objectName: "fixSignOffGroup"
+            Layout.fillWidth: true
+            title: qsTr("Sign off")
+            Accessible.name: qsTr("Publication sign-off")
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 3
+
+                Label {
+                    objectName: "fixSignOffSummary"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: {
+                        if (!root.signOff)
+                            return ""
+                        return qsTr("Publication sign-off: %1 · plan %2 · published %3 · certified preflight: %4")
+                            .arg(root.signOff.status)
+                            .arg(String(root.signOff.planDigest).substring(0, 12))
+                            .arg(String(root.signOff.publishedSha256).substring(0, 12))
+                            .arg(root.signOff.certificateStateName)
+                    }
+                    Accessible.name: qsTr("Publication sign-off summary")
+                    Accessible.description: root.signOff ? root.signOff.certificateSummary : ""
+                }
+            }
+        }
+
+        GroupBox {
+            objectName: "fixRollbackGroup"
+            Layout.fillWidth: true
+            title: qsTr("Recorded revisions")
+            Accessible.name: qsTr("Rollback to a recorded revision")
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 3
+
+                Label {
+                    objectName: "fixRollbackSummary"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.host ? root.host.fixRollbackSummary : ""
+                    Accessible.name: qsTr("Rollback availability")
+                }
+
+                Repeater {
+                    model: root.host ? root.host.fixRollbackPoints : []
+
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Revision %1 · %2 · %3 bytes")
+                                .arg(String(modelData.documentRevisionDigest).substring(0, 12))
+                                .arg(modelData.operationId)
+                                .arg(modelData.artifactBytes)
+                            Accessible.name: qsTr("Recorded revision %1")
+                                .arg(String(modelData.documentRevisionDigest).substring(0, 12))
+                        }
+
+                        Button {
+                            text: qsTr("Return to this revision")
+                            enabled: root.host !== null && root.host.fixRollbackAvailable
+                            onClicked: {
+                                root.pendingRollbackId = modelData.rollbackId
+                                rollbackConfirm.open()
+                            }
+                            Accessible.name: qsTr("Return to recorded revision %1")
+                                .arg(String(modelData.documentRevisionDigest).substring(0, 12))
+                        }
+                    }
+                }
+            }
+        }
+
+        Dialog {
+            id: rollbackConfirm
+            objectName: "fixRollbackConfirmDialog"
+            title: qsTr("Return to a recorded revision")
+            modal: true
+            anchors.centerIn: parent
+            standardButtons: Dialog.Ok | Dialog.Cancel
+            Accessible.name: qsTr("Confirm returning to a recorded revision")
+
+            Label {
+                width: 320
+                wrapMode: Text.WordWrap
+                text: qsTr("A new revision is written next to the document and a rolled-back event is appended. Existing history entries are kept and the open document is not overwritten.")
+            }
+
+            onAccepted: if (root.host) root.host.requestFixRollback(root.pendingRollbackId)
+            onRejected: root.pendingRollbackId = ""
         }
 
         RowLayout {
@@ -208,7 +466,7 @@ Pane {
 
             Button {
                 objectName: "confirmActionListButton"
-                text: qsTr("Confirm and Run")
+                text: qsTr("Approve and run")
                 enabled: root.host && host.actionListStateName === "planned" && !root.busy
                 onClicked: root.host.confirmActionListPlan()
                 Accessible.name: qsTr("Confirm Action List plan and run")
@@ -279,12 +537,14 @@ Pane {
             Accessible.description: qsTr("Planned or executed steps with distinct status, diagnostics, and affected scope.")
 
             delegate: ItemDelegate {
+                id: stepRow
                 width: stepsView.width
                 text: "%1 — %2 (%3 ms)".arg(model.stepId, model.statusName, model.durationMs)
                 Accessible.role: Accessible.ListItem
                 Accessible.name: text
                 Accessible.description: qsTr("Operation %1. Parameters %2. Diagnostics %3.")
                     .arg(model.operationId).arg(model.resolvedParameters).arg(JSON.stringify(model.diagnostics))
+                onClicked: if (root.host) root.host.inspectActionListStep(stepRow.index)
 
                 contentItem: ColumnLayout {
                     spacing: 4

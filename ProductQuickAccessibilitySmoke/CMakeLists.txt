@@ -32,6 +32,10 @@ qt_add_qml_module(ProductQuickAccessibilitySmoke
         qml/DocumentPane.qml
         qml/CanvasPane.qml
         qml/WorkspacePlaceholderPane.qml
+        qml/StateBadge.qml
+        qml/InspectPane.qml
+        qml/ProductionPreviewPane.qml
+        qml/PagesProductionPane.qml
         qml/ShellToolBar.qml
         qml/ShellMenuBar.qml
         qml/MenuModel.qml

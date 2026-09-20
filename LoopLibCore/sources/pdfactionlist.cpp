@@ -50,7 +50,17 @@ bool hasPreflightProfile(const PDFActionListExecutionOptions& options)
 
 QString sourceSha256ForActionList(const PDFDocument& source)
 {
-    if (!source.getSourceDataHash().isEmpty())
+    // A document with no source bytes and no pages is not a source: serializing it would
+    // dereference storage that was never initialized. A parsed document always carries its
+    // source bytes, so only the degenerate case is refused, and the plan reports the missing
+    // source identity instead of crashing.
+    const bool hasSourceBytes = !source.getSourceDataHash().isEmpty();
+    if (!source.getCatalog() || (!hasSourceBytes && source.getCatalog()->getPageCount() <= 0))
+    {
+        return {};
+    }
+
+    if (hasSourceBytes)
     {
         return QString::fromLatin1(source.getSourceDataHash().toHex());
     }

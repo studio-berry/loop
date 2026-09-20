@@ -65,6 +65,30 @@ discard a report, or detach a report from its document revision. The shell owns
 navigation and context selection; Core and PdfTool remain the semantic owners
 of PDF operations.
 
+### Workspace surfaces
+
+Every enabled destination resolves to a real surface; the placeholder pane is
+kept only for the disabled Compare destination, whose entry the shell refuses.
+Production Preview, Pages / Production, Inspect and the governed-correction Fix
+route are described in [`WORKSPACE_SURFACES_586.md`](WORKSPACE_SURFACES_586.md),
+together with the Fix lifecycle's ten states and the identity each affordance is
+bound to.
+
+`EditorHost` exposes those surfaces as read-only projections -
+`fixLifecycleStateName`/`fixLifecycleVisual`/`fixLifecycleColor`,
+`fixPlanIdentity`, `fixPreview`, `fixRecheck`, `fixSignOff`, `fixRollbackPoints`
+and `previewIdentity`/`previewStaleReason` - and QML renders them. A pane derives
+no state, keeps no second copy of an identity, and calls no mutator, writer,
+artifact store or `PDFRepairTransaction::apply()`; `check_preflight_truth_source.py`
+enforces that over the whole GUI layer, and new panes join its scan
+automatically. The one presentation state the shell owns is the operator's own
+review decision for the plan on screen, bound to the plan digest it reviewed;
+the approval that authorises a publication remains Core's plan-bound approval.
+
+A surface that cannot describe the open revision says so instead of presenting
+itself as current: `previewStaleReason` names the reason, and the Fix lifecycle
+reports `stale` after a revision change, where execution cannot be armed.
+
 ## State and status
 
 The shell keeps document, production, and preflight state distinct. The status bar makes these states visible without opening a dialog.

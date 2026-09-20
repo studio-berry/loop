@@ -469,6 +469,8 @@ QString InspectorModel::selectionKindName(SelectionKind kind)
             return QStringLiteral("finding");
         case SelectionKind::Separation:
             return QStringLiteral("separation");
+        case SelectionKind::Operation:
+            return QStringLiteral("operation");
     }
     Q_UNREACHABLE_RETURN(QStringLiteral("empty-canvas"));
 }

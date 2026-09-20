@@ -50,6 +50,7 @@
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
+#include "pdfoperationhistory.h"
 
 #include <QColor>
 #include <QObject>
@@ -57,6 +58,7 @@
 #include <QJsonObject>
 #include <QPointer>
 #include <QStyleHints>
+#include <QVariantList>
 #include <QVariantMap>
 
 #include <memory>
@@ -136,6 +138,26 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString documentShellStatus READ documentShellStatus NOTIFY presentationChanged)
     Q_PROPERTY(QString productionStateName READ productionStateName NOTIFY presentationChanged)
     Q_PROPERTY(bool allowDeveloperDiagnostics READ allowDeveloperDiagnostics CONSTANT)
+
+    // ---- Workspace surfaces (#586) -------------------------------------------------
+    // Every property below is a read-only projection of what Core, PdfTool or the
+    // shell's own run already decided. QML renders these; it derives no state and
+    // calls no mutator, writer, artifact store or PDFRepairTransaction::apply().
+    Q_PROPERTY(QObject* production READ production CONSTANT)
+    Q_PROPERTY(QString fixLifecycleStateName READ fixLifecycleStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap fixLifecycleVisual READ fixLifecycleVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor fixLifecycleColor READ fixLifecycleColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString fixLifecycleSummary READ fixLifecycleSummary NOTIFY presentationChanged)
+    Q_PROPERTY(bool fixExecutionArmed READ fixExecutionArmed NOTIFY presentationChanged)
+    Q_PROPERTY(bool fixRollbackAvailable READ fixRollbackAvailable NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap fixPlanIdentity READ fixPlanIdentity NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap fixPreview READ fixPreview NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap fixRecheck READ fixRecheck NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap fixSignOff READ fixSignOff NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList fixRollbackPoints READ fixRollbackPoints NOTIFY presentationChanged)
+    Q_PROPERTY(QString fixRollbackSummary READ fixRollbackSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap previewIdentity READ previewIdentity NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewStaleReason READ previewStaleReason NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -218,6 +240,52 @@ public:
     QString productionStateName() const;
     bool allowDeveloperDiagnostics() const;
 
+    /// Production / plate model for the Pages and Production Preview surfaces.
+    QObject* production() { return &m_production; }
+
+    /// Operator lifecycle of the governed-correction route (#586):
+    /// `idle`, `planned`, `preview-ready`, `approved`, `executing`, `succeeded`,
+    /// `stale`, `rejected`, `cancelled`, `failed`. It is a projection of the run the
+    /// shell already owns (`ActionListController`) plus the operator's own review
+    /// decision, never a second approval authority: the publication approval is Core's
+    /// plan-bound approval from `ActionListRunSubmitter`.
+    QString fixLifecycleStateName() const;
+    QVariantMap fixLifecycleVisual() const;
+    QColor fixLifecycleColor() const;
+    QString fixLifecycleSummary() const;
+
+    /// True when the reviewed plan digest is approved for the current revision, which is
+    /// the only condition under which the shell will execute it.
+    bool fixExecutionArmed() const;
+
+    /// True when the open document has recorded rollback points the operator may return to.
+    bool fixRollbackAvailable() const;
+
+    /// Exact identities every Fix affordance is bound to: document key/revision, source
+    /// digest, recipe hash, plan digest, effective profile digest and the review decision.
+    QVariantMap fixPlanIdentity() const;
+
+    /// Technical/visual preview of the planned or executed candidate, carrying source and
+    /// candidate digests, the plan digest and its incomplete/fidelity state.
+    QVariantMap fixPreview() const;
+
+    /// Recheck evidence after a run: postflight outcome and the finding delta.
+    QVariantMap fixRecheck() const;
+
+    /// Publication sign-off: Core's governed status plus the certified-preflight state.
+    QVariantMap fixSignOff() const;
+
+    /// Recorded rollback points for the open document (read-only).
+    QVariantList fixRollbackPoints() const;
+
+    /// Why the rollback affordance is enabled or unavailable, in the operator's words.
+    QString fixRollbackSummary() const;
+
+    /// Identity of the production preview currently on screen. `previewIdentity.stale`
+    /// and `previewStaleReason` say whether it still describes the open revision.
+    QVariantMap previewIdentity() const;
+    QString previewStaleReason() const;
+
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
     /// content, or none is known yet. Separate from the document-wide
@@ -265,6 +333,26 @@ public:
     Q_INVOKABLE void discardActionListPlan();
     Q_INVOKABLE QVariantMap repairParameterSchemaForOperation(const QString& operationId) const;
 
+    // ---- Governed-correction review intents (#586) --------------------------------
+    /// The operator's review of the planned correction. Approving binds the decision to
+    /// the exact plan digest for the current revision and arms execution; a plan whose
+    /// revision or digest moved is never armed. Rejecting records the decision and leaves
+    /// the plan visible for inspection; replanning clears both.
+    Q_INVOKABLE bool approveActionListPlan();
+    Q_INVOKABLE bool rejectActionListPlan();
+    Q_INVOKABLE bool executeApprovedActionListPlan();
+    Q_INVOKABLE void replanActionList();
+
+    /// Selects a planned or executed step so the Inspect workspace shows that
+    /// operation's typed facts (identity, target, parameters, impact, save policy,
+    /// unresolved risk, approval state, output identity, provenance).
+    Q_INVOKABLE bool inspectActionListStep(int stepIndex);
+
+    /// Returns the open document to a recorded rollback point. Core writes a new
+    /// revision and appends a rolled-back event; existing history is never rewritten.
+    Q_INVOKABLE bool requestFixRollback(const QString& rollbackId);
+    Q_INVOKABLE void refreshFixRollbackPoints();
+
     /// Toggles the current page between the fast approximate render and the
     /// authoritative overprint-accurate one. Re-renders only that page;
     /// the document stays open.
@@ -272,6 +360,14 @@ public:
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
+
+    /// Selects a recipe that runs `operationId` and routes to the Fix workspace, so the
+    /// Inspect workspace's "plan a fix for this finding" intent lands somewhere that can
+    /// actually plan it. Nothing is planned, approved or executed here.
+    Q_INVOKABLE bool selectActionListRecipeForOperation(const QString& operationId);
+
+    /// The Inspect workspace's corrective intent: selects and binds, then stops.
+    void onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent);
     /// Compare remains a visible but disabled destination until its product
     /// decision is approved. This check is shared by QML and C++ callers so a
     /// non-QML caller cannot bypass the shell routing policy.
@@ -368,6 +464,18 @@ private:
     void applyEmptyCanvasInspectorSelection();
     void setInspectionMode(QString mode);
 
+    /// Operator review of the planned correction (#586). `fixPlanIsCurrent()` is the only
+    /// authority on whether the reviewed plan still describes the open revision.
+    QString fixCurrentPlanDigest() const;
+    bool fixPlanIsCurrent() const;
+    /// True when the operator had a plan for a different revision than the one now open.
+    bool fixPlannedPlanIsSuperseded() const;
+    void clearFixReview();
+    pdf::PDFActionListExecutionResult fixRunResult() const;
+    QVariantMap fixPreviewFromResult() const;
+    QList<pdf::PDFRollbackPoint> documentRollbackPoints() const;
+    void refreshFixRollbackPointsFromHistory();
+
     std::unique_ptr<DocumentViewSession> m_session;
     std::unique_ptr<pdfinteraction::FindingCanvasNavigator> m_findingNavigator;
     pdfinteraction::PreflightController m_preflight;
@@ -420,6 +528,26 @@ private:
     QString m_inspectionMode = QStringLiteral("page");
     QString m_preflightCertificateStateName = QStringLiteral("not-certified");
     QString m_preflightCertificateSummary = QStringLiteral("No certified preflight is recorded for this document.");
+
+    /// Review decision for the governed-correction route (#586). The digest records which
+    /// plan the operator reviewed, so a replan or a revision change cannot inherit it.
+    enum class FixReviewDecision
+    {
+        None,
+        Approved,
+        Rejected
+    };
+    FixReviewDecision m_fixReviewDecision = FixReviewDecision::None;
+    QString m_fixReviewedPlanDigest;
+
+    /// The plan the operator last had, and the document revision it was produced for. The
+    /// reviewed digest and every Fix affordance are bound to them, so nothing can be presented
+    /// as current evidence for a revision it does not describe. They outlive the run controller
+    /// so a superseded plan is reported as `stale` rather than silently disappearing.
+    QString m_fixPlannedDocumentRevision;
+    QString m_fixPlannedPlanDigest;
+    QVariantList m_fixRollbackPoints;
+    QString m_fixRollbackSummary;
 };
 
 #endif   // EDITORHOST_H

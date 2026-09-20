@@ -49,6 +49,10 @@ qt_add_qml_module(LoopEditor
         qml/ActionListPane.qml
         qml/InspectorPane.qml
         qml/WorkspacePlaceholderPane.qml
+        qml/StateBadge.qml
+        qml/InspectPane.qml
+        qml/ProductionPreviewPane.qml
+        qml/PagesProductionPane.qml
         qml/ShellToolBar.qml
         qml/ShellMenuBar.qml
         qml/MenuModel.qml

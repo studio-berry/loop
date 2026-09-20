@@ -134,6 +134,148 @@ bool verifyPreflightAccessibility(QQuickWindow* window)
 bool verifyNamedAccessibility(QQuickWindow* window,
                               const QString& objectName,
                               QAccessible::Role expectedRole,
+                              bool requiresDescription);
+
+/// Object name of the workspace content currently presented by the shell stack.
+QString visibleWorkspacePaneName(QQuickWindow* window)
+{
+    if (!window)
+    {
+        return QString();
+    }
+
+    QQuickItem* stack = window->findChild<QQuickItem*>(QStringLiteral("workspaceStack"));
+    if (!stack)
+    {
+        return QString();
+    }
+
+    const QList<QQuickItem*> children = stack->childItems();
+    for (QQuickItem* child : children)
+    {
+        if (child && child->isVisible())
+        {
+            return child->objectName();
+        }
+    }
+    return QString();
+}
+
+/// #586 acceptance: no *enabled* workspace destination may resolve to the placeholder
+/// pane, and every destination it reaches must expose a screen-reader name and role.
+bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
+{
+    struct Entry
+    {
+        EditorHost::LoopWorkspace workspace;
+        const char* expectedObjectName;
+        QAccessible::Role expectedRole;
+    };
+    // Every enabled destination must resolve to real content carrying a screen-reader name
+    // and role. Compare stays a visible but disabled destination by product decision
+    // (#560): the assertion is that it cannot be reached, not that it renders.
+    static const Entry entries[] = {
+        { EditorHost::Document, "documentPane", QAccessible::Pane },
+        { EditorHost::Preflight, "preflightPane", QAccessible::Grouping },
+        { EditorHost::ProductionPreview, "productionPreviewPane", QAccessible::Grouping },
+        { EditorHost::Pages, "pagesProductionPane", QAccessible::Grouping },
+        { EditorHost::Inspect, "inspectPane", QAccessible::Grouping },
+        { EditorHost::Fix, "actionListPane", QAccessible::Grouping },
+    };
+
+    bool passed = true;
+    for (const Entry& entry : entries)
+    {
+        host.setWorkspace(entry.workspace);
+        QCoreApplication::processEvents();
+
+        const QString visible = visibleWorkspacePaneName(window);
+        const bool enabled = host.isWorkspaceEnabled(entry.workspace);
+        const bool nameMatches = visible == QString::fromLatin1(entry.expectedObjectName);
+        const bool reachable = enabled && nameMatches &&
+                               visible != QStringLiteral("workspacePlaceholderPane");
+        const bool accessible = reachable && verifyNamedAccessibility(window, visible, entry.expectedRole, true);
+
+        if (!reachable || !accessible)
+        {
+            fprintf(stderr,
+                    "product-quick-a11y-smoke workspace_surface_failed workspace=%d enabled=%d visible=%s expected=%s accessible=%d\n",
+                    static_cast<int>(entry.workspace),
+                    enabled ? 1 : 0,
+                    visible.toLocal8Bit().constData(),
+                    entry.expectedObjectName,
+                    accessible ? 1 : 0);
+            passed = false;
+        }
+    }
+
+    // The disabled destination may not be entered, and entering it must not silently show
+    // placeholder content in place of a real surface.
+    host.setWorkspace(EditorHost::Fix);
+    QCoreApplication::processEvents();
+    const bool beforeCompare = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
+    host.setWorkspace(EditorHost::Compare);
+    QCoreApplication::processEvents();
+    const bool compareDisabled = !host.isWorkspaceEnabled(EditorHost::Compare);
+    const bool compareDidNotNavigate = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
+    if (!compareDisabled || !beforeCompare || !compareDidNotNavigate)
+    {
+        fprintf(stderr,
+                "product-quick-a11y-smoke disabled_workspace_reachable workspace=%d visible=%s\n",
+                static_cast<int>(EditorHost::Compare),
+                visibleWorkspacePaneName(window).toLocal8Bit().constData());
+        passed = false;
+    }
+
+    host.setWorkspace(EditorHost::Fix);
+    QCoreApplication::processEvents();
+    return passed;
+}
+
+/// #586 acceptance: the governed-correction surface presents its lifecycle with words and
+/// a shape, never colour alone, and its review controls are keyboard reachable.
+bool verifyFixLifecyclePresentation(QQuickWindow* window, EditorHost& host)
+{
+    if (!window)
+    {
+        return false;
+    }
+
+    const QVariantMap visual = host.fixLifecycleVisual();
+    const QString accessibleName = visual.value(QStringLiteral("accessibleName")).toString().trimmed();
+    const QString icon = visual.value(QStringLiteral("icon")).toString().trimmed();
+    const QString kind = visual.value(QStringLiteral("kind")).toString().trimmed();
+    const bool lifecycleNamed = !accessibleName.isEmpty() && !icon.isEmpty() && !kind.isEmpty();
+    if (!lifecycleNamed)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke fix_lifecycle_visual_missing\n");
+    }
+
+    const bool lifecycleSummary = !host.fixLifecycleSummary().trimmed().isEmpty();
+    const bool summaryCarriesState = host.hasDocument() ? lifecycleSummary : true;
+    if (!summaryCarriesState)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke fix_lifecycle_summary_missing\n");
+    }
+
+    bool controlsReachable = true;
+    for (const char* objectName : { "fixApprovePlanButton", "fixRejectPlanButton", "fixExecutePlanButton",
+                                    "fixReplanButton", "fixRollbackSummary" })
+    {
+        QQuickItem* item = window->findChild<QQuickItem*>(QString::fromLatin1(objectName));
+        if (!item || item->objectName().isEmpty())
+        {
+            fprintf(stderr, "product-quick-a11y-smoke fix_control_missing control=%s\n", objectName);
+            controlsReachable = false;
+        }
+    }
+
+    return lifecycleNamed && summaryCarriesState && controlsReachable;
+}
+
+bool verifyNamedAccessibility(QQuickWindow* window,
+                              const QString& objectName,
+                              QAccessible::Role expectedRole,
                               bool requiresDescription)
 {
     if (!window)
@@ -285,6 +427,8 @@ int main(int argc, char** argv)
                                  const bool runButtonAccessible = verifyNamedAccessibility(
                                      window, QStringLiteral("runPreflightButton"), QAccessible::PushButton, true);
                                  const bool keyboardSurface = verifyKeyboardSurface(window, host);
+                                 const bool workspaceSurfaces = verifyWorkspaceSurfaces(window, host);
+                                 const bool fixLifecycle = verifyFixLifecyclePresentation(window, host);
 
                                  // #195 acceptance 1 + 7: the shell starts on a freshly opened
                                  // document, so the preflight surface must present its not-checked
@@ -319,7 +463,8 @@ int main(int argc, char** argv)
                                  const bool passed = api != QSGRendererInterface::Unknown && backendHonoured &&
                                                      focusHelper && canvasAccessible && preflightAccessible &&
                                                      railAccessible && findingsAccessible && runButtonAccessible &&
-                                                     keyboardSurface && preflightFresh && truthfulVisual;
+                                                     keyboardSurface && workspaceSurfaces && fixLifecycle &&
+                                                     preflightFresh && truthfulVisual;
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);

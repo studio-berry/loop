@@ -109,10 +109,12 @@ bool ActionListCatalog::loadRecipeFile(const QString& sourcePath, ActionListReci
     }
 
     pdf::PDFActionListExecutionResult planned;
-    if (const pdf::PDFOperationResult planResult = pdf::PDFActionListExecutor().plan(entry->actionList, pdf::PDFDocument(), options, &planned); planResult)
-    {
-        entry->recipeHash = planned.recipeHash;
-    }
+    pdf::PDFActionListExecutor().plan(entry->actionList, pdf::PDFDocument(), options, &planned);
+    // `recipeHash` covers the recipe itself, and the executor sets it before it needs a source
+    // identity. A probe plan against an empty document therefore still identifies the recipe -
+    // it is the document-bound plan digest that only a real run can produce. Leaving the hash
+    // empty here would make every recipe permanently un-plannable in the shell.
+    entry->recipeHash = planned.recipeHash;
     entry->diagnostic.clear();
     return true;
 }

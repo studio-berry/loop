@@ -44,6 +44,7 @@
 
 #include "pdfdocumentsession.h"
 #include "pdfdocumentwriter.h"
+#include "pdfartifactstore.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
@@ -380,6 +381,10 @@ EditorHost::EditorHost(QObject* parent) :
                     setInspectionMode(QStringLiteral("page"));
                 } });
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_inspector,
+            &pdfinteraction::InspectorModel::correctiveOperationRequested,
+            this,
+            &EditorHost::onCorrectiveOperationRequested);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_production, &pdfinteraction::ProductionModel::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_documentModel, &QuickDocumentModel::searchChanged, this, [this]
@@ -546,6 +551,477 @@ QString EditorHost::documentShellStatus() const
 {
     return QString::fromLatin1(
         pdfinteraction::getShellDocumentStatusName(m_session->facade().shellDocumentStatus()));
+}
+
+// ---------------------------------------------------------------------------
+// Workspace surfaces (#586)
+//
+// Everything below projects state Core, PdfTool or the shell's own run already
+// decided, so the QML panes render identities and wording instead of deriving
+// them. The one thing the shell owns here is the operator's own review decision
+// (approved/rejected) for the plan it is showing - never the publication
+// approval, which stays Core's plan-bound approval in the run.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+QVariantMap fixStateVisualMap(const pdfquick::tokens::LoopStateVisual& visual)
+{
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    result.insert(QStringLiteral("accessibleName"), visual.accessibleName);
+    return result;
+}
+
+/// Recorded rollback points for a document's history sidecar, or nothing when there is no
+/// history or it cannot be read. Read-only: the shell never rewrites history.
+QList<pdf::PDFRollbackPoint> rollbackPointsForDocument(const QString& documentPath)
+{
+    if (documentPath.isEmpty())
+    {
+        return {};
+    }
+
+    const QString historyDirectory =
+        QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    if (!QFileInfo::exists(historyPath))
+    {
+        return {};
+    }
+
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString error;
+    if (!history.open(&error))
+    {
+        return {};
+    }
+    return history.rollbackPoints(&error);
+}
+}   // namespace
+
+QString EditorHost::fixCurrentPlanDigest() const
+{
+    const QString planned = m_actionListController.planDigest();
+    if (!planned.isEmpty())
+    {
+        return planned;
+    }
+    // A finished run keeps its digest in the result, so a review decision can never be
+    // inherited by a plan the operator did not review. A plan the controller has since
+    // discarded is still named here so the surface can show what went stale.
+    const QString resultDigest = m_actionListController.result().planDigest;
+    return resultDigest.isEmpty() ? m_fixPlannedPlanDigest : resultDigest;
+}
+
+bool EditorHost::fixPlannedPlanIsSuperseded() const
+{
+    return !m_fixPlannedPlanDigest.isEmpty() && !m_fixPlannedDocumentRevision.isEmpty() &&
+           hasDocument() &&
+           m_fixPlannedDocumentRevision != m_session->facade().currentRevision().toString();
+}
+
+bool EditorHost::fixPlanIsCurrent() const
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return false;
+    }
+    return !m_fixPlannedDocumentRevision.isEmpty() &&
+           m_fixPlannedDocumentRevision == m_session->facade().currentRevision().toString();
+}
+
+pdf::PDFActionListExecutionResult EditorHost::fixRunResult() const
+{
+    return m_actionListController.result();
+}
+
+bool EditorHost::fixExecutionArmed() const
+{
+    return fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
+}
+
+QString EditorHost::fixLifecycleStateName() const
+{
+    using ControllerState = pdfinteraction::ActionListController::State;
+    const ControllerState state = m_actionListController.state();
+
+    switch (state)
+    {
+        case ControllerState::Running:
+            return QStringLiteral("executing");
+        case ControllerState::Failed:
+            return QStringLiteral("failed");
+        case ControllerState::Cancelled:
+            return QStringLiteral("cancelled");
+        case ControllerState::Validating:
+        case ControllerState::Planning:
+            return QStringLiteral("planned");
+        case ControllerState::Succeeded:
+            return QStringLiteral("succeeded");
+        case ControllerState::Planned:
+            break;
+        case ControllerState::Idle:
+            // A plan the operator had for an earlier revision is stale, not absent: the
+            // surface has to say which revision its evidence belongs to.
+            return fixPlannedPlanIsSuperseded() ? QStringLiteral("stale") : QStringLiteral("idle");
+    }
+
+    if (!fixPlanIsCurrent())
+    {
+        return QStringLiteral("stale");
+    }
+    if (m_fixReviewedPlanDigest == fixCurrentPlanDigest())
+    {
+        if (m_fixReviewDecision == FixReviewDecision::Approved)
+        {
+            return QStringLiteral("approved");
+        }
+        if (m_fixReviewDecision == FixReviewDecision::Rejected)
+        {
+            return QStringLiteral("rejected");
+        }
+    }
+    return QStringLiteral("preview-ready");
+}
+
+QVariantMap EditorHost::fixLifecycleVisual() const
+{
+    return fixStateVisualMap(
+        pdfquick::tokens::resolveFixLifecycleStateVisual(fixLifecycleStateName()));
+}
+
+QColor EditorHost::fixLifecycleColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolveFixLifecycleStateVisual(fixLifecycleStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::fixLifecycleSummary() const
+{
+    const QString state = fixLifecycleStateName();
+
+    if (!hasDocument())
+    {
+        return tr("Open a document to plan a correction.");
+    }
+    if (state == QLatin1String("idle"))
+    {
+        return tr("No correction is planned for this document.");
+    }
+    if (state == QLatin1String("planned"))
+    {
+        return m_actionListController.operatorSummary();
+    }
+    if (state == QLatin1String("preview-ready"))
+    {
+        return tr("The plan and its preview are bound to revision %1. Approve it to execute, "
+                  "or reject it and plan again.")
+            .arg(m_fixPlannedDocumentRevision.left(12));
+    }
+    if (state == QLatin1String("approved"))
+    {
+        return tr("The approved plan is bound to revision %1 and is ready to execute.")
+            .arg(m_fixPlannedDocumentRevision.left(12));
+    }
+    if (state == QLatin1String("rejected"))
+    {
+        return tr("The operator rejected this plan. Plan again to continue.");
+    }
+    if (state == QLatin1String("stale"))
+    {
+        return tr("This plan belongs to a different document revision (%1). Plan again before executing.")
+            .arg(m_fixPlannedDocumentRevision.left(12));
+    }
+    if (state == QLatin1String("executing"))
+    {
+        return m_actionListController.operatorSummary();
+    }
+    if (state == QLatin1String("failed"))
+    {
+        return m_actionListController.operatorSummary();
+    }
+    if (state == QLatin1String("cancelled"))
+    {
+        return tr("The run was cancelled. Nothing was published for this revision.");
+    }
+    return tr("The correction was rechecked and published as new revision %1.")
+        .arg(m_actionListController.result().planDigest.left(12));
+}
+
+QVariantMap EditorHost::fixPlanIdentity() const
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+    QVariantMap identity;
+    identity.insert(QStringLiteral("documentKey"),
+                    m_session->revisionSource() ? m_session->revisionSource()->documentKey() : QString());
+    identity.insert(QStringLiteral("documentRevision"),
+                    hasDocument() ? m_session->facade().currentRevision().toString() : QString());
+    identity.insert(QStringLiteral("plannedRevision"), m_fixPlannedDocumentRevision);
+    identity.insert(QStringLiteral("planIsCurrent"), fixPlanIsCurrent());
+    identity.insert(QStringLiteral("lifecycleStateName"), fixLifecycleStateName());
+    identity.insert(QStringLiteral("stateVisual"), fixLifecycleVisual());
+    identity.insert(QStringLiteral("sourceSha256"), result.sourceSha256);
+    identity.insert(QStringLiteral("planDigest"), fixCurrentPlanDigest());
+    identity.insert(QStringLiteral("recipeId"), m_actionListController.recipeId());
+    identity.insert(QStringLiteral("recipeHash"), result.recipeHash);
+    identity.insert(
+        QStringLiteral("effectiveProfileDigest"),
+        result.governed.value(QStringLiteral("effective_profile_digest")).toString(result.governed.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("effective_profile_digest")).toString()));
+    identity.insert(QStringLiteral("reviewedPlanDigest"), m_fixReviewedPlanDigest);
+    identity.insert(QStringLiteral("reviewDecision"),
+                    m_fixReviewDecision == FixReviewDecision::Approved
+                        ? QStringLiteral("approved")
+                        : (m_fixReviewDecision == FixReviewDecision::Rejected ? QStringLiteral("rejected")
+                                                                              : QStringLiteral("none")));
+    identity.insert(QStringLiteral("executionArmed"), fixExecutionArmed());
+    return identity;
+}
+
+QVariantMap EditorHost::fixPreview() const
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+
+    QVariantMap preview;
+    preview.insert(QStringLiteral("available"), false);
+    preview.insert(QStringLiteral("sourceSha256"), result.sourceSha256);
+    preview.insert(QStringLiteral("planDigest"), fixCurrentPlanDigest());
+    preview.insert(QStringLiteral("plannedRevision"), m_fixPlannedDocumentRevision);
+    preview.insert(QStringLiteral("planIsCurrent"), fixPlanIsCurrent());
+    preview.insert(QStringLiteral("pageFidelityIsExact"), pageFidelityIsExact());
+    preview.insert(QStringLiteral("pageFidelityReason"), pageFidelityReason());
+    preview.insert(QStringLiteral("pageFidelityIsAuthoritative"), pageFidelityIsAuthoritative());
+
+    QVariantList steps;
+    QString candidateSha256;
+    QString technicalStatus;
+    QString visualStatus;
+    bool incomplete = false;
+    int changedPages = 0;
+    QVariantList changedPageList;
+    for (const pdf::PDFActionListStepResult& step : result.steps)
+    {
+        const QJsonObject technical = step.repairResult.value(QStringLiteral("technical_preview")).toObject();
+        const QJsonObject visual = step.repairResult.value(QStringLiteral("visual_preview")).toObject();
+        if (technical.isEmpty() && visual.isEmpty())
+        {
+            continue;
+        }
+
+        QVariantMap stepPreview;
+        stepPreview.insert(QStringLiteral("stepId"), step.stepId);
+        stepPreview.insert(QStringLiteral("operation"), step.operationId);
+        stepPreview.insert(QStringLiteral("status"), pdfActionListStepStatusName(step.status));
+        stepPreview.insert(QStringLiteral("technicalStatus"), technical.value(QStringLiteral("status")).toString());
+        stepPreview.insert(QStringLiteral("visualStatus"), visual.value(QStringLiteral("status")).toString());
+        stepPreview.insert(QStringLiteral("candidateSha256"),
+                           technical.value(QStringLiteral("candidate_sha256"))
+                               .toString(visual.value(QStringLiteral("candidate_sha256")).toString()));
+        stepPreview.insert(QStringLiteral("technical"), technical.toVariantMap());
+        stepPreview.insert(QStringLiteral("visual"), visual.toVariantMap());
+        steps.append(stepPreview);
+
+        if (candidateSha256.isEmpty())
+        {
+            candidateSha256 = stepPreview.value(QStringLiteral("candidateSha256")).toString();
+            technicalStatus = stepPreview.value(QStringLiteral("technicalStatus")).toString();
+            visualStatus = stepPreview.value(QStringLiteral("visualStatus")).toString();
+        }
+        // A preview that reports anything other than a completion is incomplete evidence and
+        // must never read as current approval evidence.
+        const QString stepTechnical = technical.value(QStringLiteral("status")).toString();
+        const QString stepVisual = visual.value(QStringLiteral("status")).toString();
+        if (!stepTechnical.startsWith(QLatin1String("complete")) ||
+            !stepVisual.startsWith(QLatin1String("complete")))
+        {
+            incomplete = true;
+        }
+
+        for (const QJsonValue& page : visual.value(QStringLiteral("pages")).toArray())
+        {
+            const QJsonObject pageObject = page.toObject();
+            const int changed = pageObject.value(QStringLiteral("changed_pixel_count")).toInt();
+            if (changed <= 0)
+            {
+                continue;
+            }
+            ++changedPages;
+            QVariantMap pageEntry;
+            pageEntry.insert(QStringLiteral("pageIndex"), pageObject.value(QStringLiteral("page_index")).toInt());
+            pageEntry.insert(QStringLiteral("changedPixelCount"), changed);
+            pageEntry.insert(QStringLiteral("unexpectedChangedPixelCount"),
+                             pageObject.value(QStringLiteral("unexpected_changed_pixel_count")).toInt());
+            changedPageList.append(pageEntry);
+        }
+    }
+
+    preview.insert(QStringLiteral("available"), !steps.isEmpty());
+    preview.insert(QStringLiteral("candidateSha256"), candidateSha256);
+    preview.insert(QStringLiteral("technicalStatus"), technicalStatus);
+    preview.insert(QStringLiteral("visualStatus"), visualStatus);
+    preview.insert(QStringLiteral("incomplete"), incomplete);
+    preview.insert(QStringLiteral("changedPageCount"), changedPages);
+    preview.insert(QStringLiteral("changedPages"), changedPageList);
+    preview.insert(QStringLiteral("steps"), steps);
+    return preview;
+}
+
+QVariantMap EditorHost::fixRecheck() const
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+
+    QVariantMap recheck;
+    recheck.insert(QStringLiteral("available"), !result.postflight.isEmpty());
+    recheck.insert(QStringLiteral("status"), m_actionListController.resultStatus());
+    recheck.insert(QStringLiteral("postflight"), result.postflight.toVariantMap());
+    recheck.insert(QStringLiteral("pass"), result.postflight.value(QStringLiteral("pass")).toBool());
+    // The verdict Core reduced, never a completeness flag the surface could judge for itself.
+    const QJsonObject postflightVerdict = result.postflight.value(QStringLiteral("verdict")).toObject();
+    recheck.insert(QStringLiteral("verdictState"), postflightVerdict.value(QStringLiteral("state")).toString());
+    recheck.insert(QStringLiteral("verdictSummary"),
+                   postflightVerdict.value(QStringLiteral("operator_summary")).toString());
+
+    QVariantList resolved;
+    QVariantList unchanged;
+    QVariantList introduced;
+    QVariantList incomplete;
+    bool compared = false;
+    for (const pdf::PDFActionListStepResult& step : result.steps)
+    {
+        const QJsonObject delta = step.repairResult.value(QStringLiteral("finding_delta")).toObject();
+        if (delta.isEmpty())
+        {
+            continue;
+        }
+        compared = compared || delta.value(QStringLiteral("compared")).toBool();
+        for (const QJsonValue& finding : delta.value(QStringLiteral("resolved")).toArray())
+        {
+            resolved.append(finding.toString());
+        }
+        for (const QJsonValue& finding : delta.value(QStringLiteral("unchanged")).toArray())
+        {
+            unchanged.append(finding.toString());
+        }
+        for (const QJsonValue& finding : delta.value(QStringLiteral("introduced")).toArray())
+        {
+            introduced.append(finding.toString());
+        }
+        for (const QJsonValue& finding : delta.value(QStringLiteral("incomplete")).toArray())
+        {
+            incomplete.append(finding.toString());
+        }
+    }
+    recheck.insert(QStringLiteral("compared"), compared);
+    recheck.insert(QStringLiteral("resolved"), resolved);
+    recheck.insert(QStringLiteral("unchanged"), unchanged);
+    recheck.insert(QStringLiteral("introduced"), introduced);
+    recheck.insert(QStringLiteral("incomplete"), incomplete);
+    recheck.insert(QStringLiteral("hasIntroducedFindings"), !introduced.isEmpty());
+    recheck.insert(QStringLiteral("hasIncompleteFindings"), !incomplete.isEmpty());
+    return recheck;
+}
+
+QVariantMap EditorHost::fixSignOff() const
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+
+    QVariantMap signOff;
+    signOff.insert(QStringLiteral("status"), m_actionListController.governedStatus());
+    signOff.insert(QStringLiteral("governed"), result.governed.toVariantMap());
+    signOff.insert(QStringLiteral("planDigest"),
+                   result.governed.value(QStringLiteral("plan_digest"))
+                       .toString(result.governed.value(QStringLiteral("sign_off"))
+                                     .toObject()
+                                     .value(QStringLiteral("plan_digest"))
+                                     .toString()));
+    signOff.insert(QStringLiteral("publishedSha256"),
+                   result.governed.value(QStringLiteral("candidate_sha256"))
+                       .toString(result.governed.value(QStringLiteral("sign_off"))
+                                     .toObject()
+                                     .value(QStringLiteral("published_sha256"))
+                                     .toString()));
+    signOff.insert(QStringLiteral("certificateStateName"), m_preflightCertificateStateName);
+    signOff.insert(QStringLiteral("certificateStateVisual"), preflightCertificateStateVisual());
+    signOff.insert(QStringLiteral("certificateSummary"), m_preflightCertificateSummary);
+    signOff.insert(QStringLiteral("summary"), m_actionListController.governedStatus());
+    return signOff;
+}
+
+bool EditorHost::fixRollbackAvailable() const
+{
+    return hasDocument() && !m_fixRollbackPoints.isEmpty() &&
+           documentShellStatus() != QLatin1String("MODIFIED");
+}
+
+QVariantList EditorHost::fixRollbackPoints() const
+{
+    return m_fixRollbackPoints;
+}
+
+QString EditorHost::fixRollbackSummary() const
+{
+    if (!hasDocument())
+    {
+        return tr("Open a document to return to a recorded revision.");
+    }
+    if (documentShellStatus() == QLatin1String("MODIFIED"))
+    {
+        return tr("Save the document before returning to a recorded revision.");
+    }
+    if (m_fixRollbackPoints.isEmpty())
+    {
+        return tr("No recorded revisions are available for this document.");
+    }
+    return tr("%1 recorded revisions are available. Returning to one writes a new revision and "
+              "keeps every existing history entry.")
+        .arg(m_fixRollbackPoints.size());
+}
+
+QVariantMap EditorHost::previewIdentity() const
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+
+    QVariantMap identity;
+    identity.insert(QStringLiteral("documentKey"),
+                    m_session->revisionSource() ? m_session->revisionSource()->documentKey() : QString());
+    identity.insert(QStringLiteral("documentRevision"),
+                    hasDocument() ? m_session->facade().currentRevision().toString() : QString());
+    identity.insert(QStringLiteral("previewMode"), inspectionMode());
+    identity.insert(QStringLiteral("previewSummary"), previewSummary());
+    identity.insert(QStringLiteral("previewDetail"),
+                    m_preview.detail().isEmpty() ? QString() : m_preview.detail());
+    identity.insert(QStringLiteral("profileIdentity"), m_preview.profileIdentity());
+    identity.insert(QStringLiteral("planDigest"), fixCurrentPlanDigest());
+    identity.insert(QStringLiteral("sourceSha256"), result.sourceSha256);
+    identity.insert(QStringLiteral("candidateSha256"),
+                    fixPreview().value(QStringLiteral("candidateSha256")));
+    identity.insert(QStringLiteral("stale"), !previewStaleReason().isEmpty());
+    identity.insert(QStringLiteral("staleReason"), previewStaleReason());
+    identity.insert(QStringLiteral("productionStateName"), productionStateName());
+    return identity;
+}
+
+QString EditorHost::previewStaleReason() const
+{
+    if (!hasDocument())
+    {
+        return QString();
+    }
+    if (!m_preview.isCurrent(m_session->revisionSource() ? m_session->revisionSource()->documentKey() : QString(),
+                             m_session->facade().currentRevision().toString()))
+    {
+        return tr("The production preview was produced for an earlier revision and is not current.");
+    }
+    if (!fixCurrentPlanDigest().isEmpty() && !fixPlanIsCurrent())
+    {
+        return tr("The preview belongs to a plan for an earlier document revision.");
+    }
+    return QString();
 }
 
 QString EditorHost::productionStateName() const
@@ -1672,9 +2148,346 @@ bool EditorHost::confirmActionListPlan()
     return runActionList();
 }
 
+void EditorHost::clearFixReview()
+{
+    m_fixReviewDecision = FixReviewDecision::None;
+    m_fixReviewedPlanDigest.clear();
+}
+
+bool EditorHost::approveActionListPlan()
+{
+    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
+        !fixPlanIsCurrent())
+    {
+        return false;
+    }
+
+    m_fixReviewDecision = FixReviewDecision::Approved;
+    m_fixReviewedPlanDigest = fixCurrentPlanDigest();
+    announceDocumentState(tr("Correction plan approved for revision %1.")
+                              .arg(m_fixPlannedDocumentRevision.left(12)));
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::rejectActionListPlan()
+{
+    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned)
+    {
+        return false;
+    }
+
+    m_fixReviewDecision = FixReviewDecision::Rejected;
+    m_fixReviewedPlanDigest = fixCurrentPlanDigest();
+    announceDocumentState(tr("Correction plan rejected. Plan again to continue."));
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::executeApprovedActionListPlan()
+{
+    if (!fixExecutionArmed())
+    {
+        return false;
+    }
+    return runActionList();
+}
+
+bool EditorHost::selectActionListRecipeForOperation(const QString& operationId)
+{
+    if (operationId.isEmpty())
+    {
+        return false;
+    }
+
+    for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
+    {
+        const bool offersOperation = std::any_of(
+            recipe.actionList.steps.cbegin(),
+            recipe.actionList.steps.cend(),
+            [&operationId](const pdf::PDFActionListStep& step)
+            { return step.operationId == operationId; });
+        if (!offersOperation)
+        {
+            continue;
+        }
+
+        m_selectedActionListRecipeId = recipe.id;
+        syncActionListDraft();
+        m_actionListController.markRecipeStale();
+        Q_EMIT actionListRecipesChanged();
+        bumpPresentation();
+        announceDocumentState(
+            tr("Recipe '%1' runs %2. Validate and plan it in the Fix workspace.").arg(recipe.name, operationId));
+        return true;
+    }
+
+    return false;
+}
+
+void EditorHost::onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent)
+{
+    setWorkspace(LoopWorkspace::Fix);
+
+    if (intent.operationId.isEmpty())
+    {
+        return;
+    }
+
+    // The finding's parameters become the recipe's bindings; everything else - validate, plan,
+    // review, approve - stays with the operator in the Fix workspace.
+    m_actionListBindings = intent.parameters;
+    if (selectActionListRecipeForOperation(intent.operationId))
+    {
+        return;
+    }
+
+    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the correction.")
+                              .arg(intent.operationId));
+}
+
+void EditorHost::replanActionList()
+{
+    m_actionListController.discardPlan();
+    clearFixReview();
+    m_fixPlannedDocumentRevision.clear();
+    m_fixPlannedPlanDigest.clear();
+    bumpPresentation();
+}
+
+bool EditorHost::inspectActionListStep(int stepIndex)
+{
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+    if (stepIndex < 0 || stepIndex >= result.steps.size())
+    {
+        return false;
+    }
+
+    const pdf::PDFActionListStepResult& step = result.steps.at(stepIndex);
+    const QJsonObject plan = step.plan;
+    const QJsonObject savePolicy = plan.value(QStringLiteral("save_policy")).toObject();
+
+    QStringList targets;
+    for (const QJsonValue& target : plan.value(QStringLiteral("targets")).toArray())
+    {
+        targets.append(target.toObject().value(QStringLiteral("path")).toString());
+    }
+    QStringList domains;
+    for (const QJsonValue& domain : plan.value(QStringLiteral("domains")).toArray())
+    {
+        domains.append(domain.toString());
+    }
+    QStringList unsupported;
+    for (const QJsonValue& reason : plan.value(QStringLiteral("unsupported_reasons")).toArray())
+    {
+        unsupported.append(reason.toString());
+    }
+
+    const QJsonObject output = step.repairResult.value(QStringLiteral("output")).toObject();
+    const QJsonObject delta = step.repairResult.value(QStringLiteral("finding_delta")).toObject();
+
+    pdfinteraction::InspectorModel::Selection selection;
+    selection.documentKey = m_session->revisionSource() ? m_session->revisionSource()->documentKey() : QString();
+    selection.documentRevision =
+        hasDocument() ? m_session->facade().currentRevision().toString() : QString();
+    selection.selectionId = QStringLiteral("operation:%1").arg(step.stepId);
+    selection.title = tr("Correction step %1").arg(step.stepId);
+    selection.kind = pdfinteraction::InspectorModel::SelectionKind::Operation;
+    selection.properties = {
+        { QStringLiteral("operation"), tr("Operation"), step.operationId },
+        { QStringLiteral("operation-version"),
+          tr("Operation version"),
+          QString::number(plan.value(QStringLiteral("version")).toInt(1)) },
+        { QStringLiteral("step"), tr("Step"), step.stepId },
+        { QStringLiteral("status"), tr("Step status"), pdfActionListStepStatusName(step.status) },
+        { QStringLiteral("target"), tr("Target"), targets.isEmpty() ? tr("whole document") : targets.join(QStringLiteral(", ")) },
+        { QStringLiteral("parameters"),
+          tr("Parameters"),
+          QString::fromUtf8(QJsonDocument(step.resolvedParameters).toJson(QJsonDocument::Compact)) },
+        { QStringLiteral("impact"), tr("Impact class"),
+          domains.isEmpty() ? tr("unclassified") : domains.join(QStringLiteral(", ")) },
+        { QStringLiteral("risk"), tr("Risk"), plan.value(QStringLiteral("risk")).toString(tr("unknown")) },
+        { QStringLiteral("save-policy"), tr("Save policy"),
+          savePolicy.value(QStringLiteral("mode")).toString(tr("unknown")) },
+        { QStringLiteral("save-policy-rationale"),
+          tr("Save policy rationale"),
+          savePolicy.value(QStringLiteral("rationale")).toString() },
+        { QStringLiteral("requires-postflight"),
+          tr("Requires postflight"),
+          plan.value(QStringLiteral("requires_postflight")).toBool() ? tr("yes") : tr("no") },
+        { QStringLiteral("unresolved-risk"), tr("Unresolved risk"),
+          unsupported.isEmpty() ? plan.value(QStringLiteral("warnings")).toArray().isEmpty() ? tr("none reported") : tr("warnings reported")
+                                : unsupported.join(QStringLiteral(", ")) },
+        { QStringLiteral("approval"), tr("Approval state"),
+          tr("%1 (plan %2)").arg(m_actionListController.governedStatus(), m_fixReviewedPlanDigest.isEmpty() ? tr("not reviewed") : (m_fixReviewDecision == FixReviewDecision::Approved ? tr("approved by the operator") : tr("rejected by the operator"))) },
+        { QStringLiteral("output"), tr("Output identity"),
+          output.value(QStringLiteral("sha256")).toString(tr("not published")) },
+        { QStringLiteral("cleared"), tr("Findings cleared"),
+          QString::number(delta.value(QStringLiteral("resolved")).toArray().size()) },
+        { QStringLiteral("introduced"), tr("Findings introduced"),
+          QString::number(delta.value(QStringLiteral("introduced")).toArray().size()) },
+        { QStringLiteral("recipe"), tr("Recipe"), result.actionListId },
+        { QStringLiteral("recipe-hash"), tr("Recipe hash"), result.recipeHash },
+        { QStringLiteral("plan-digest"), tr("Plan digest"), fixCurrentPlanDigest() },
+        { QStringLiteral("source-sha256"), tr("Source digest"), result.sourceSha256 },
+        { QStringLiteral("plan-is-current"), tr("Plan matches this revision"),
+          fixPlanIsCurrent() ? tr("yes") : tr("no") },
+    };
+
+    const bool current = m_inspector.setSelection(selection);
+    setInspectionMode(QStringLiteral("operation"));
+    bumpPresentation();
+    return current;
+}
+
+void EditorHost::refreshFixRollbackPoints()
+{
+    refreshFixRollbackPointsFromHistory();
+    bumpPresentation();
+}
+
+void EditorHost::refreshFixRollbackPointsFromHistory()
+{
+    m_fixRollbackPoints.clear();
+
+    if (!hasDocument())
+    {
+        m_fixRollbackSummary = fixRollbackSummary();
+        return;
+    }
+
+    const QList<pdf::PDFRollbackPoint> points = documentRollbackPoints();
+    for (const pdf::PDFRollbackPoint& point : points)
+    {
+        // Core returns to a revision only when it is the accepted output of a recorded
+        // execution, so an evicted artifact or the as-received input (kept as a protected
+        // retention point rather than a selectable revision) is never offered as one.
+        if (point.artifactEvicted || point.isOriginalInput)
+        {
+            continue;
+        }
+        QVariantMap entry;
+        entry.insert(QStringLiteral("rollbackId"), point.rollbackId);
+        entry.insert(QStringLiteral("documentRevisionDigest"), point.documentRevisionDigest);
+        entry.insert(QStringLiteral("createdUtc"), point.createdAtUtc.toString(Qt::ISODateWithMs));
+        entry.insert(QStringLiteral("operationId"), point.operationId);
+        entry.insert(QStringLiteral("artifactBytes"), point.artifactBytes);
+        entry.insert(QStringLiteral("isOriginalInput"), point.isOriginalInput);
+        entry.insert(QStringLiteral("approvedOutput"), point.approvedOutput);
+        entry.insert(QStringLiteral("planSummary"), point.planSummary.left(160));
+        m_fixRollbackPoints.append(entry);
+    }
+    m_fixRollbackSummary = fixRollbackSummary();
+}
+
+QList<pdf::PDFRollbackPoint> EditorHost::documentRollbackPoints() const
+{
+    if (!hasDocument() || !m_session->facade().source().isValid())
+    {
+        return {};
+    }
+    return rollbackPointsForDocument(m_session->facade().source().path);
+}
+
+bool EditorHost::requestFixRollback(const QString& rollbackId)
+{
+    if (!fixRollbackAvailable() || rollbackId.isEmpty())
+    {
+        return false;
+    }
+
+    const QString documentPath = m_session->facade().source().path;
+    if (documentPath.isEmpty())
+    {
+        return false;
+    }
+
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
+    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+    QString error;
+    if (!history.open(&error))
+    {
+        announceDocumentState(tr("Recorded revisions are unavailable: %1").arg(error));
+        return false;
+    }
+
+    const QList<pdf::PDFRollbackPoint> points = history.rollbackPoints(&error);
+    const auto point = std::find_if(points.cbegin(), points.cend(),
+                                    [&rollbackId](const pdf::PDFRollbackPoint& candidate)
+                                    { return candidate.rollbackId == rollbackId; });
+    if (point == points.cend())
+    {
+        announceDocumentState(tr("That recorded revision is no longer available."));
+        return false;
+    }
+
+    // The request names the revision the document is currently on, taken from the bytes the
+    // shell has open, so a rollback can never be applied to a document it does not describe.
+    QFile currentFile(documentPath);
+    if (!currentFile.open(QIODevice::ReadOnly))
+    {
+        announceDocumentState(tr("The open document could not be read for the rollback request."));
+        return false;
+    }
+    const QByteArray currentBytes = currentFile.readAll();
+    currentFile.close();
+    const QString currentDigest =
+        QString::fromLatin1(QCryptographicHash::hash(currentBytes, QCryptographicHash::Sha256).toHex());
+
+    QUuid targetExecutionId;
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
+    const auto event = std::find_if(events.cbegin(), events.cend(),
+                                    [&point](const pdf::PDFOperationHistoryEvent& candidate)
+                                    { return candidate.entryId == point->auditEventId; });
+    if (event == events.cend())
+    {
+        announceDocumentState(tr("The recorded revision has no audit event and cannot be returned to."));
+        return false;
+    }
+    targetExecutionId = event->executionId;
+
+    pdf::PDFRollbackRequest request;
+    request.currentArtifactSha256 = currentDigest;
+    request.targetArtifactSha256 = point->documentRevisionDigest;
+    request.targetExecutionId = targetExecutionId;
+    request.reason = tr("The operator returned the document to a recorded revision.");
+    request.approval.kind = pdf::PDFApprovalKind::Human;
+    request.approval.actorId = QStringLiteral("Editor");
+    request.approval.decision = QStringLiteral("approve");
+    request.approval.policyId = QStringLiteral("desktop-rollback");
+    request.approval.rationale = request.reason;
+    request.approval.evidenceSha256 = point->documentRevisionDigest;
+    request.approval.decisionReference =
+        QStringLiteral("editor-rollback:%1").arg(point->documentRevisionDigest);
+    request.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    // A new sibling file, never the open document: returning to a revision must not
+    // overwrite what the operator has on screen.
+    const QFileInfo documentInfo(documentPath);
+    const QString destination =
+        documentInfo.absoluteDir().filePath(QStringLiteral("%1-rollback-%2.pdf")
+                                                .arg(documentInfo.completeBaseName(),
+                                                     point->documentRevisionDigest.left(8)));
+
+    pdf::PDFArtifactStore artifacts(historyDirectory);
+    if (const pdf::PDFOperationResult rollback = history.rollbackTo(request, artifacts, destination); !rollback)
+    {
+        announceDocumentState(tr("The document was not rolled back: %1").arg(rollback.getErrorMessage()));
+        return false;
+    }
+
+    announceDocumentState(tr("Returned to revision %1 as %2.")
+                              .arg(point->documentRevisionDigest.left(12), QFileInfo(destination).fileName()));
+    openFileUrl(QUrl::fromLocalFile(destination));
+    refreshFixRollbackPoints();
+    return true;
+}
+
 void EditorHost::discardActionListPlan()
 {
     m_actionListController.discardPlan();
+    clearFixReview();
+    m_fixPlannedDocumentRevision.clear();
     bumpPresentation();
 }
 
@@ -2456,6 +3269,11 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
                 if (m_acceptActionListResults)
                 {
                     m_actionListController.acceptPlan(snapshot.jobId, snapshot.documentRevision, outcome->executionResult);
+                    // The plan belongs to the revision it was produced for, so a review decision
+                    // can never transfer to a newer revision.
+                    m_fixPlannedDocumentRevision = snapshot.documentRevision;
+                    m_fixPlannedPlanDigest = outcome->executionResult.planDigest;
+                    clearFixReview();
                 }
             }
             else if (state == pdfinteraction::ActionListController::State::Running)
@@ -2587,6 +3405,11 @@ void EditorHost::syncRevisionModels()
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
     m_production.setCurrentRevision(documentKey, documentRevision);
+    // A review decision belongs to the revision it was made for and never survives a revision
+    // change as current evidence. The plan itself is remembered so a superseded one is reported
+    // as stale instead of silently vanishing.
+    clearFixReview();
+    refreshFixRollbackPointsFromHistory();
     refreshPreflightCertificateState();
 
     if (hasDocument())
