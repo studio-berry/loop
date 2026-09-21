@@ -726,10 +726,9 @@ void RepairOperationTest::findingDelta_partialPageAndMissingStatusNeverFalseReso
     afterStatus.status = QStringLiteral("ok");
     after.checkStatuses = { afterStatus };
     after.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
-        { QStringLiteral("full"), false },
-        { QStringLiteral("check_ids"), QJsonArray{ finding.checkId } },
-        { QStringLiteral("pages"), QJsonArray{ 0 } }
-    });
+                                                                   { QStringLiteral("full"), false },
+                                                                   { QStringLiteral("check_ids"), QJsonArray{ finding.checkId } },
+                                                                   { QStringLiteral("pages"), QJsonArray{ 0 } } });
     const pdf::PDFRepairFindingDelta omittedPage = pdf::computeFindingDelta(before, after);
     QVERIFY(omittedPage.resolvedFindingIds.isEmpty());
     QCOMPARE(omittedPage.unchangedFindingIds, QStringList{ finding.stableId() });
@@ -749,9 +748,8 @@ void RepairOperationTest::findingDelta_partialPageAndMissingStatusNeverFalseReso
 
     after.checkStatuses = { afterStatus };
     after.coverageScope.insert(QStringLiteral("revalidation"), QJsonObject{
-        { QStringLiteral("full"), false },
-        { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("embedded-fonts") } }
-    });
+                                                                   { QStringLiteral("full"), false },
+                                                                   { QStringLiteral("check_ids"), QJsonArray{ QStringLiteral("embedded-fonts") } } });
     const pdf::PDFRepairFindingDelta omittedCheck = pdf::computeFindingDelta(before, after);
     QVERIFY(omittedCheck.resolvedFindingIds.isEmpty());
     QCOMPARE(omittedCheck.unchangedFindingIds, QStringList{ finding.stableId() });

@@ -119,15 +119,15 @@ pdf::PreflightResult budgetExceededResult()
     result.pass = true;
     result.inspectionComplete = false;
     result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("ink-coverage"),
-                                                          QStringLiteral("incomplete"),
-                                                          QStringLiteral("budget-exceeded"),
-                                                          QJsonObject{},
-                                                          QStringList{},
-                                                          QStringLiteral("raster-pixels"),
-                                                          QStringLiteral("raster-tile"),
-                                                          100,
-                                                          101,
-                                                          QStringLiteral("page 1") });
+                                                           QStringLiteral("incomplete"),
+                                                           QStringLiteral("budget-exceeded"),
+                                                           QJsonObject{},
+                                                           QStringList{},
+                                                           QStringLiteral("raster-pixels"),
+                                                           QStringLiteral("raster-tile"),
+                                                           100,
+                                                           101,
+                                                           QStringLiteral("page 1") });
     return result;
 }
 
@@ -179,15 +179,15 @@ void PreflightVerdictTest::budgetExceededWithoutFindings_isIncomplete()
     pdf::PreflightResult result;
     result.inspectionComplete = false;
     result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("ink-coverage"),
-                                                          QStringLiteral("incomplete"),
-                                                          QStringLiteral("budget-exceeded"),
-                                                          QJsonObject{},
-                                                          QStringList{},
-                                                          QStringLiteral("raster-pixels"),
-                                                          QStringLiteral("raster-tile"),
-                                                          100,
-                                                          101,
-                                                          QStringLiteral("page 1") });
+                                                           QStringLiteral("incomplete"),
+                                                           QStringLiteral("budget-exceeded"),
+                                                           QJsonObject{},
+                                                           QStringList{},
+                                                           QStringLiteral("raster-pixels"),
+                                                           QStringLiteral("raster-tile"),
+                                                           100,
+                                                           101,
+                                                           QStringLiteral("page 1") });
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -314,15 +314,15 @@ void PreflightVerdictTest::cancellationMarkedIncomplete_isNotPass()
     pdf::PreflightResult result;
     result.inspectionComplete = false;
     result.checkStatuses.append(pdf::PreflightCheckStatus{ QStringLiteral("image-resolution"),
-                                                          QStringLiteral("incomplete"),
-                                                          QStringLiteral("cancelled"),
-                                                          QJsonObject{},
-                                                          QStringList{},
-                                                          QString(),
-                                                          QString(),
-                                                          0,
-                                                          0,
-                                                          QStringLiteral("operator cancel") });
+                                                           QStringLiteral("incomplete"),
+                                                           QStringLiteral("cancelled"),
+                                                           QJsonObject{},
+                                                           QStringList{},
+                                                           QString(),
+                                                           QString(),
+                                                           0,
+                                                           0,
+                                                           QStringLiteral("operator cancel") });
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -542,7 +542,7 @@ void PreflightVerdictTest::auditRun_preservesEffectiveRestrictions()
     result.profileIdentity.insert(QStringLiteral("effective_digest"), profileDigest);
     result.coverageScope.insert(QStringLiteral("scope_restrictions"),
                                 QJsonObject{ { QStringLiteral("pages"), QJsonArray{ 2 } },
-                                               { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } });
+                                             { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } });
     result.checkStatuses.append(makeCheckStatus(QStringLiteral("image-resolution"), QStringLiteral("ok")));
 
     const QJsonObject summary = pdf::preflightAuditReportSummary(result, documentPath);

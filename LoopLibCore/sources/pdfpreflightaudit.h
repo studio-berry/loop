@@ -31,7 +31,7 @@ namespace pdf
 /// into the retained report payload shared by PdfTool, Editor, and certificate
 /// verification.
 LOOPLIBCORESHARED_EXPORT QJsonObject preflightAuditReportSummary(const PreflightResult& result,
-                                                                  const QString& documentPath = QString());
+                                                                 const QString& documentPath = QString());
 
 /// Appends one completed preflight act to the canonical operation-history
 /// chain. The document bytes are retained as an immutable artifact outside the

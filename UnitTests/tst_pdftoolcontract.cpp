@@ -427,9 +427,7 @@ void PdfToolContractTest::preflightRestrictedAuditBindsEffectiveScope()
         { QStringLiteral("restrictions"), QJsonObject{
                                               { QStringLiteral("pages"), QStringLiteral("1") },
                                               { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
-                                        { QStringLiteral("min_dpi"), 300 } } } }
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } }
     };
     const QByteArray profileBytes = QJsonDocument(profile).toJson();
     QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
@@ -458,10 +456,8 @@ void PdfToolContractTest::preflightRestrictedAuditBindsEffectiveScope()
     const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
     QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
     const auto finishedIt = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
-                                         {
-                                             return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
-                                                    event.status == pdf::PDFOperationHistoryStatus::Accepted;
-                                         });
+                                         { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                                  event.status == pdf::PDFOperationHistoryStatus::Accepted; });
     QVERIFY(finishedIt != events.cend());
     QCOMPARE(finishedIt->effectiveProfileDigest, report.value(QStringLiteral("effective_profile_digest")).toString());
     QCOMPARE(finishedIt->resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
