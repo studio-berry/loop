@@ -20,12 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// NOT COMPILED: this file specifies the source-identity and policy-clamp
-// behaviour of the Editor recovery service, which does not exist in this tree
-// (deleted with the Widgets libraries in 2a19e2c1) and is registered in no
-// CMake target. Keep it as the specification; restore it together with
-// LoopEditor's recovery manager. See docs/EDITOR_RECOVERY.md.
-
 #include "pdfrecoverymanager.h"
 
 #include <QFile>
@@ -52,38 +46,37 @@ void RecoveryTest::sourceIdentityDetectsReplacement()
     QVERIFY(file.write("first revision") > 0);
     file.close();
 
-    const pdfviewer::RecoverySourceIdentity original = pdfviewer::PDFRecoveryManager::inspectSource(path);
+    const pdf::RecoverySourceIdentity original = pdf::inspectRecoverySource(path);
     QVERIFY(original.isValid());
     QVERIFY(!original.pathHash.contains(QStringLiteral("source.pdf")));
-    QCOMPARE(pdfviewer::PDFRecoveryManager::classifySource(original, original, true),
-             pdfviewer::RecoverySourceStatus::Unchanged);
+    QCOMPARE(pdf::classifyRecoverySource(original, original, true),
+             pdf::RecoverySourceStatus::Unchanged);
 
     QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
     QVERIFY(file.write("replacement revision with different bytes") > 0);
     file.close();
-    const pdfviewer::RecoverySourceIdentity replacement = pdfviewer::PDFRecoveryManager::inspectSource(path);
-    QCOMPARE(pdfviewer::PDFRecoveryManager::classifySource(original, replacement, true),
-             pdfviewer::RecoverySourceStatus::Changed);
-    QCOMPARE(pdfviewer::PDFRecoveryManager::classifySource(original, {}, false),
-             pdfviewer::RecoverySourceStatus::Missing);
+    const pdf::RecoverySourceIdentity replacement = pdf::inspectRecoverySource(path);
+    QCOMPARE(pdf::classifyRecoverySource(original, replacement, true),
+             pdf::RecoverySourceStatus::Changed);
+    QCOMPARE(pdf::classifyRecoverySource(original, {}, false),
+             pdf::RecoverySourceStatus::Missing);
 }
 
 void RecoveryTest::policyClampsUnsafeValues()
 {
-    pdfviewer::PDFRecoveryManager manager;
-    pdfviewer::RecoveryPolicy policy;
+    pdf::RecoveryPolicy policy;
     policy.intervalSeconds = 0;
     policy.debounceSeconds = -1;
     policy.maxBytes = 0;
     policy.maxSessions = 0;
     policy.maxAgeDays = 0;
-    manager.setPolicy(policy);
+    const pdf::RecoveryPolicy clamped = pdf::clampRecoveryPolicy(policy);
 
-    QVERIFY(manager.policy().intervalSeconds >= 1);
-    QVERIFY(manager.policy().debounceSeconds >= 0);
-    QVERIFY(manager.policy().maxBytes >= 1);
-    QVERIFY(manager.policy().maxSessions >= 1);
-    QVERIFY(manager.policy().maxAgeDays >= 1);
+    QVERIFY(clamped.intervalSeconds >= 1);
+    QVERIFY(clamped.debounceSeconds >= 0);
+    QVERIFY(clamped.maxBytes >= 1);
+    QVERIFY(clamped.maxSessions >= 1);
+    QVERIFY(clamped.maxAgeDays >= 1);
 }
 
 QTEST_APPLESS_MAIN(RecoveryTest)

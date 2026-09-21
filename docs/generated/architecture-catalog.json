@@ -459,6 +459,7 @@
     "UnitTestsQuickAccessibility",
     "UnitTestsQuickCanvas",
     "UnitTestsQuickDocumentModel",
+    "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",
     "UnitTestsRepairOperation",

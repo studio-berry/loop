@@ -1086,6 +1086,21 @@ set_target_properties(UnitTestsWorkloadEnvelope PROPERTIES
 )
 add_test(UnitTestsWorkloadEnvelope "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsWorkloadEnvelope")
 
+# The recovery value-level surface is pure QtCore, so unlike every other target
+# here this one links no Gui, and its slots run app-less (no QApplication and no
+# event loop) under QTEST_APPLESS_MAIN.
+add_executable(UnitTestsRecovery
+    tst_recoverytest.cpp
+)
+target_link_libraries(UnitTestsRecovery PRIVATE LoopLibCore Qt6::Core Qt6::Test)
+set_target_properties(UnitTestsRecovery PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsRecovery "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsRecovery")
+
 # windeployqt copies Core/Gui/etc. but not Qt Test; all UnitTests* targets share one output dir.
 if(WIN32)
     add_custom_command(TARGET UnitTests POST_BUILD
