@@ -220,10 +220,12 @@ file. A run where some files succeed and some fail reports `partial-output`.
 `--console-format json` and `--console-format=json` are detected from the raw
 command line before parsing, so that malformed command lines still return a
 valid JSON error envelope when JSON was requested. The `preflight`, `ocr`,
-`capabilities`, and `schema` commands default to JSON because their contracts
+`capabilities`, `schema`, `verify-certificate`, `export-evidence-bundle`, and
+`verify-evidence-bundle` commands default to JSON because their contracts
 are machine-readable; malformed invocations of those commands therefore also
 return the envelope. Supplying a different console format to `preflight`,
-`ocr`, `capabilities`, or `schema` is an invalid invocation.
+`ocr`, `capabilities`, `schema`, `export-evidence-bundle`, or
+`verify-evidence-bundle` is an invalid invocation.
 
 ## Unknown command
 
@@ -239,6 +241,8 @@ process must no longer appear successful.
 | `diff` | Difference report | `1 findings` |
 | `verify-signatures`, `verify-redaction` | Verification report | `1 findings` |
 | `preflight` | `{ "report": <existing preflight report> }` | `1 findings` |
+| `export-evidence-bundle` | `{ "manifest": <bundle manifest>, "bundle_directory": <path>, "member_count": <n> }` | `1 findings` when the bundle is refused |
+| `verify-evidence-bundle` | `{ "verification": <bundle verification record> }` | `1 findings` when the bundle does not verify |
 | `ocr` | `{ "report": <existing OCR report> }` | `5 partial-output` |
 | `schema` | `{ "matrix": <compatibility matrix> }` or the artifact diagnostic (below) | `1 findings` when the artifact is incompatible |
 | `render`, `separate`, image/attachment extraction | Summary + `outputs[]` | `5 partial-output` |

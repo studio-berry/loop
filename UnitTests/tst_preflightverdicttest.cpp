@@ -24,6 +24,7 @@
 #include "pdfpreflightaudit.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightcertificate.h"
+#include "pdfpreflightevidencebundle.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfrepairoperation.h"
@@ -87,6 +88,10 @@ private slots:
     void certificate_roundTripsAndDetectsTampering();
     void certificate_detectsStaleDecision();
     void certificate_bindsRestrictionDigest();
+    void evidenceBundle_bindsIdentitiesAndVerifiesOffline();
+    void evidenceBundle_bindsGovernedSignOff();
+    void evidenceBundle_detectsTamperedMembers();
+    void evidenceBundle_carriesNoRawPaths();
 };
 
 namespace
@@ -155,6 +160,619 @@ public:
 };
 
 }   // namespace
+
+namespace
+{
+
+QString sha256Hex(const QByteArray& bytes)
+{
+    return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+}
+
+/// One certified revision with a path-bearing report, a warning whose message
+/// names a path, a retained rollback point, and a verified three-event chain.
+struct BundleFixture
+{
+    QByteArray document;
+    QJsonObject report;
+    pdf::PreflightCertificate certificate;
+    pdf::PreflightEvidenceBundleRequest request;
+
+    pdf::PreflightEvidenceBundle bundle;
+};
+
+bool buildBundleFixture(const QString& documentPath, BundleFixture& fixture, QString& error)
+{
+    fixture = {};
+    fixture.document = QByteArrayLiteral("certified bundle revision");
+    const QString documentDigest = sha256Hex(fixture.document);
+    const QString profileDigest(64, QLatin1Char('b'));
+    const QString artifactDigest(64, QLatin1Char('d'));
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.profileName = QStringLiteral("Bundle fixture");
+    result.profileIdentity = QJsonObject{ { QStringLiteral("id"), QStringLiteral("bundle-fixture") },
+                                          { QStringLiteral("version"), QStringLiteral("1.0.0") },
+                                          { QStringLiteral("provisional"), false },
+                                          { QStringLiteral("digest"), profileDigest },
+                                          { QStringLiteral("source_path"), documentPath } };
+    result.coverageScope = QJsonObject{
+        { QStringLiteral("claim"), QStringLiteral("Loop does not claim formal GWG conformance.") },
+        { QStringLiteral("enabled_checks"), QJsonArray{ QStringLiteral("bleed") } }
+    };
+    result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
+
+    pdf::PreflightFinding warning;
+    warning.scope = QStringLiteral("document");
+    warning.type = QStringLiteral("image-resolution");
+    warning.severity = QStringLiteral("warning");
+    warning.checkId = QStringLiteral("image-resolution");
+    warning.message = QStringLiteral("Low resolution image retained; see %1").arg(documentPath);
+    result.warnings.append(warning);
+
+    {
+        pdf::PreflightDecision decision;
+        decision.findingId = QStringLiteral("image-resolution");
+        decision.kind = pdf::PreflightDecisionKind::Accept;
+        decision.justification = QStringLiteral("Accepted for this run: job ticket at %1").arg(documentPath);
+        decision.operatorIdentity = QStringLiteral("operator");
+        decision.timestampUtc = QDateTime::currentDateTimeUtc();
+        decision.documentRevisionDigest = documentDigest;
+        decision.effectiveProfileDigest = profileDigest;
+        result.decisions.append(decision);
+    }
+
+    fixture.report = result.toJson(documentPath);
+
+    pdf::PDFOperationHistoryEvent opened;
+    opened.sequence = 1;
+    opened.entryId = QUuid::createUuid();
+    opened.executionId = QUuid::createUuid();
+    opened.kind = pdf::PDFOperationHistoryEventKind::DocumentOpened;
+    opened.status = pdf::PDFOperationHistoryStatus::Running;
+    opened.operatorIdentity = QStringLiteral("operator");
+    opened.documentRevisionDigest = documentDigest;
+    opened.effectiveProfileDigest = profileDigest;
+    opened.createdUtc = QDateTime::currentDateTimeUtc();
+    opened.eventHash = pdf::computeOperationHistoryEventHash(opened, {});
+
+    pdf::PDFOperationHistoryEvent preflight;
+    preflight.sequence = 2;
+    preflight.entryId = QUuid::createUuid();
+    preflight.executionId = opened.executionId;
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.status = pdf::PDFOperationHistoryStatus::Accepted;
+    preflight.operatorIdentity = QStringLiteral("operator");
+    preflight.documentRevisionDigest = documentDigest;
+    preflight.effectiveProfileDigest = profileDigest;
+    preflight.resultSummary = pdf::redactSensitiveJson(fixture.report).toObject();
+    preflight.previousEventHash = opened.eventHash;
+    preflight.createdUtc = QDateTime::currentDateTimeUtc();
+    preflight.eventHash = pdf::computeOperationHistoryEventHash(preflight, preflight.previousEventHash);
+
+    const QList<pdf::PDFOperationHistoryEvent> preflightChain{ opened, preflight };
+
+    if (!pdf::issuePreflightCertificate(result,
+                                        fixture.report,
+                                        fixture.document,
+                                        preflightChain,
+                                        QStringLiteral("operator"),
+                                        fixture.certificate,
+                                        error))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryEvent issuance;
+    issuance.sequence = 3;
+    issuance.entryId = QUuid::createUuid();
+    issuance.executionId = opened.executionId;
+    issuance.kind = pdf::PDFOperationHistoryEventKind::CertificateIssued;
+    issuance.status = pdf::PDFOperationHistoryStatus::Running;
+    issuance.operatorIdentity = QStringLiteral("PdfTool");
+    issuance.documentRevisionDigest = documentDigest;
+    issuance.effectiveProfileDigest = profileDigest;
+    issuance.approval.decisionReference = fixture.certificate.certificateId;
+    issuance.resultSummary = QJsonObject{
+        { QStringLiteral("certificate_id"), fixture.certificate.certificateId },
+        { QStringLiteral("report_digest"), fixture.certificate.reportDigest }
+    };
+    issuance.previousEventHash = preflight.eventHash;
+    issuance.createdUtc = QDateTime::currentDateTimeUtc();
+    issuance.eventHash = pdf::computeOperationHistoryEventHash(issuance, issuance.previousEventHash);
+
+    pdf::PDFRollbackPoint rollback;
+    rollback.rollbackId = QStringLiteral("rollback-1");
+    rollback.auditEventId = preflight.entryId;
+    rollback.documentRevisionDigest = documentDigest;
+    rollback.createdAtUtc = QDateTime::currentDateTimeUtc();
+    rollback.artifactPath = QStringLiteral("C:/jobs/acme/.loop-history/artifacts/dd/%1").arg(artifactDigest);
+    rollback.artifactBytes = fixture.document.size();
+    rollback.operationId = QStringLiteral("preflight");
+    rollback.planSummary = QStringLiteral("Retained revision of %1").arg(documentPath);
+    rollback.isOriginalInput = true;
+
+    fixture.request.documentBytes = fixture.document;
+    fixture.request.report = fixture.report;
+    fixture.request.decisions = result.decisions;
+    fixture.request.certificate = fixture.certificate;
+    fixture.request.history = QList<pdf::PDFOperationHistoryEvent>{ opened, preflight, issuance };
+    fixture.request.rollbackPoints = QList<pdf::PDFRollbackPoint>{ rollback };
+    fixture.request.producer = QStringLiteral("UnitTests");
+
+    return pdf::buildPreflightEvidenceBundle(fixture.request, fixture.bundle, error);
+}
+
+QString bundleFindings(const pdf::PreflightEvidenceBundleVerification& verification)
+{
+    QStringList lines;
+    for (const pdf::PreflightEvidenceBundleFinding& finding : verification.findings)
+    {
+        lines.append(QStringLiteral("%1 [%2] %3").arg(finding.code, finding.member, finding.message));
+    }
+    return QStringLiteral("%1 :: %2").arg(verification.summary, lines.join(QStringLiteral(" | ")));
+}
+
+bool hasFinding(const pdf::PreflightEvidenceBundleVerification& verification,
+                const QString& code,
+                const QString& member = QString())
+{
+    for (const pdf::PreflightEvidenceBundleFinding& finding : verification.findings)
+    {
+        if (finding.code == code && (member.isEmpty() || finding.member == member))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool copyBundle(const QString& source, const QString& target)
+{
+    QDir targetDir(target);
+    if (!QDir().mkpath(target))
+    {
+        return false;
+    }
+    for (const QString& name : QDir(source).entryList(QDir::Files | QDir::NoDotAndDotDot, QDir::Name))
+    {
+        if (!QFile::copy(QDir(source).filePath(name), targetDir.filePath(name)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool rewriteMember(const QString& directory, const QString& name, const QByteArray& content)
+{
+    QFile file(QDir(directory).filePath(name));
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        return false;
+    }
+    return file.write(content) == content.size();
+}
+
+QByteArray readMember(const QString& directory, const QString& name)
+{
+    QFile file(QDir(directory).filePath(name));
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    return file.readAll();
+}
+
+/// True when any object in the document carries the key, at any depth.
+bool containsKey(const QJsonValue& value, const QString& key)
+{
+    if (value.isObject())
+    {
+        const QJsonObject object = value.toObject();
+        if (object.contains(key))
+        {
+            return true;
+        }
+        for (auto it = object.constBegin(); it != object.constEnd(); ++it)
+        {
+            if (containsKey(it.value(), key))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (value.isArray())
+    {
+        for (const QJsonValue& item : value.toArray())
+        {
+            if (containsKey(item, key))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+}   // namespace
+
+void PreflightVerdictTest::evidenceBundle_bindsIdentitiesAndVerifiesOffline()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+    QVERIFY(error.isEmpty());
+
+    const QString bundleDirectory = temporary.filePath(QStringLiteral("bundle"));
+    QVERIFY2(pdf::writePreflightEvidenceBundle(fixture.bundle, bundleDirectory, error), qPrintable(error));
+
+    const pdf::PreflightEvidenceBundleVerification verification =
+        pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error);
+    QVERIFY2(verification.valid, qPrintable(bundleFindings(verification)));
+    QCOMPARE(verification.membersChecked, 4);
+
+    // The manifest carries the effective profile, the coverage scope and the
+    // revision digest, so a reader without Loop does not have to trust the
+    // report to find them.
+    const QJsonObject manifest = fixture.bundle.manifest;
+    QCOMPARE(manifest.value(QStringLiteral("schema")).toString(),
+             pdf::preflightEvidenceBundleSchemaKind());
+    QCOMPARE(manifest.value(QStringLiteral("document")).toObject().value(QStringLiteral("revision_digest")).toString(),
+             sha256Hex(fixture.document));
+    QCOMPARE(manifest.value(QStringLiteral("document")).toObject().value(QStringLiteral("byte_count")).toInt(),
+             fixture.document.size());
+    QCOMPARE(manifest.value(QStringLiteral("document")).toObject().value(QStringLiteral("source_path_included")).toBool(true),
+             false);
+    QCOMPARE(manifest.value(QStringLiteral("effective_profile")).toObject().value(QStringLiteral("digest")).toString(),
+             fixture.certificate.effectiveProfileDigest);
+    QCOMPARE(manifest.value(QStringLiteral("coverage_scope")).toObject(),
+             fixture.report.value(QStringLiteral("coverage_scope")).toObject());
+    QVERIFY(!manifest.value(QStringLiteral("coverage_scope")).toObject().isEmpty());
+    QCOMPARE(manifest.value(QStringLiteral("authority")).toObject().value(QStringLiteral("canonical_state")).toString(),
+             QStringLiteral("internal"));
+    QCOMPARE(manifest.value(QStringLiteral("certificate")).toObject().value(QStringLiteral("certificate_id")).toString(),
+             fixture.certificate.certificateId);
+    QCOMPARE(manifest.value(QStringLiteral("report")).toObject().value(QStringLiteral("certificate_binding")).toString(),
+             QStringLiteral("path-omitted"));
+    QCOMPARE(manifest.value(QStringLiteral("decisions")).toArray().size(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("history")).toObject().value(QStringLiteral("event_count")).toInt(), 3);
+    QCOMPARE(manifest.value(QStringLiteral("members")).toArray().size(), 4);
+
+    // A certificate that does not bind the supplied report is refused rather
+    // than shipped with an unprovable binding.
+    const pdf::PreflightEvidenceBundleRequest request = fixture.request;
+    pdf::PreflightEvidenceBundleRequest unbound = request;
+    QJsonObject mutatedReport = unbound.report;
+    mutatedReport.insert(QStringLiteral("verdict_comment"), QStringLiteral("edited after certification"));
+    unbound.report = mutatedReport;
+    pdf::PreflightEvidenceBundle refused;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(unbound, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("does not bind")), qPrintable(error));
+
+    // The certificate's issuance point is inside the exported slice even though
+    // the canonical chain continues past it: the exported head is the later
+    // CertificateIssued event, and the certificate's head is present as an event.
+    const QString historyHead =
+        manifest.value(QStringLiteral("history")).toObject().value(QStringLiteral("head_event_id")).toString();
+    QVERIFY(!historyHead.isEmpty());
+    QVERIFY(historyHead != fixture.certificate.auditChainHeadEventId);
+    const pdf::PreflightEvidenceBundleMember* historyMember =
+        fixture.bundle.findMember(pdf::preflightEvidenceBundleHistoryMember());
+    QVERIFY(historyMember != nullptr);
+    QVERIFY(historyMember->content.contains(fixture.certificate.auditChainHeadEventId.toUtf8()));
+
+    // Rollback references are digest-addressed.
+    const QJsonObject rollback =
+        manifest.value(QStringLiteral("rollback_references")).toArray().first().toObject();
+    QCOMPARE(rollback.value(QStringLiteral("artifact_sha256")).toString(), QString(64, QLatin1Char('d')));
+    QVERIFY(!rollback.contains(QStringLiteral("artifact_path")));
+
+    // The exported chain is path-redacted, and the manifest says so together
+    // with a digest over the canonical chain.
+    const QJsonObject history = manifest.value(QStringLiteral("history")).toObject();
+    QCOMPARE(history.value(QStringLiteral("chain_mode")).toString(), QStringLiteral("path-redacted"));
+    QVERIFY(!history.value(QStringLiteral("canonical_chain_digest")).toString().isEmpty());
+}
+
+void PreflightVerdictTest::evidenceBundle_bindsGovernedSignOff()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+
+    const QString publishedDigest(64, QLatin1Char('a'));
+    const QString candidateDigest(64, QLatin1Char('c'));
+    const QString approvalActor = QStringLiteral("operator");
+
+    pdf::PDFApprovalRecord approval;
+    approval.kind = pdf::PDFApprovalKind::Human;
+    approval.actorId = approvalActor;
+    approval.decision = QStringLiteral("publish");
+    approval.rationale = QStringLiteral("Signed off after revalidation; sheet at %1").arg(documentPath);
+    approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    const QJsonObject signOff{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), QString(64, QLatin1Char('e')) },
+        { QStringLiteral("source_sha256"), sha256Hex(fixture.document) },
+        { QStringLiteral("candidate_sha256"), candidateDigest },
+        { QStringLiteral("published_sha256"), publishedDigest },
+        { QStringLiteral("revalidation_report_sha256"), QString(64, QLatin1Char('f')) },
+        { QStringLiteral("effective_profile_digest"), fixture.certificate.effectiveProfileDigest },
+        { QStringLiteral("approval"), approval.toJson() }
+    };
+
+    pdf::PreflightEvidenceBundleRequest request = fixture.request;
+    request.signOff = signOff;
+    request.output = pdf::PreflightEvidenceBundleOutput{ publishedDigest, 4096 };
+
+    pdf::PreflightEvidenceBundle bundle;
+    QVERIFY2(pdf::buildPreflightEvidenceBundle(request, bundle, error), qPrintable(error));
+
+    const QString bundleDirectory = temporary.filePath(QStringLiteral("signed-bundle"));
+    QVERIFY2(pdf::writePreflightEvidenceBundle(bundle, bundleDirectory, error), qPrintable(error));
+    const pdf::PreflightEvidenceBundleVerification verification =
+        pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error);
+    QVERIFY2(verification.valid, qPrintable(bundleFindings(verification)));
+    QCOMPARE(verification.membersChecked, 5);
+
+    const QJsonObject manifest = bundle.manifest;
+    QCOMPARE(manifest.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("published_sha256")).toString(),
+             publishedDigest);
+    QCOMPARE(manifest.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("effective_profile_digest")).toString(),
+             fixture.certificate.effectiveProfileDigest);
+    QCOMPARE(manifest.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString(),
+             publishedDigest);
+    QCOMPARE(manifest.value(QStringLiteral("output")).toObject().value(QStringLiteral("byte_count")).toInt(), 4096);
+
+    // The approval travels with its actor and timestamp, and its free-form
+    // rationale is path-redacted like every other member.
+    const QJsonArray approvals = manifest.value(QStringLiteral("approvals")).toArray();
+    QCOMPARE(approvals.size(), 1);
+    const QJsonObject exportedApproval = approvals.last().toObject();
+    QCOMPARE(exportedApproval.value(QStringLiteral("actor_id")).toString(), approvalActor);
+    QVERIFY(!exportedApproval.value(QStringLiteral("decided_utc")).toString().isEmpty());
+    QVERIFY(exportedApproval.value(QStringLiteral("rationale")).toString().contains(pdf::preflightEvidenceBundlePathPlaceholder()));
+
+    // The sign-off record is bound to the exact accepted identities, so a source,
+    // profile, or publication the manifest does not describe is refused.
+    pdf::PreflightEvidenceBundle refused;
+    pdf::PreflightEvidenceBundleRequest wrongSource = request;
+    QJsonObject wrongSourceSignOff = signOff;
+    wrongSourceSignOff.insert(QStringLiteral("source_sha256"), QString(64, QLatin1Char('9')));
+    wrongSource.signOff = wrongSourceSignOff;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongSource, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("source revision")), qPrintable(error));
+
+    pdf::PreflightEvidenceBundleRequest wrongOutput = request;
+    wrongOutput.output = pdf::PreflightEvidenceBundleOutput{ candidateDigest, 4096 };
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongOutput, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("sign-off published")), qPrintable(error));
+
+    pdf::PreflightEvidenceBundleRequest wrongProfile = request;
+    QJsonObject wrongProfileSignOff = signOff;
+    wrongProfileSignOff.insert(QStringLiteral("effective_profile_digest"), QString(64, QLatin1Char('7')));
+    wrongProfile.signOff = wrongProfileSignOff;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(wrongProfile, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("effective profile")), qPrintable(error));
+
+    // Tampering with the exported sign-off member is still attributable.
+    QVERIFY(rewriteMember(bundleDirectory,
+                          pdf::preflightEvidenceBundleSignOffMember(),
+                          QByteArrayLiteral("{}")));
+    const pdf::PreflightEvidenceBundleVerification tampered =
+        pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error);
+    QVERIFY(!tampered.valid);
+    QVERIFY2(hasFinding(tampered,
+                        QStringLiteral("member.size-mismatch"),
+                        pdf::preflightEvidenceBundleSignOffMember()),
+             qPrintable(bundleFindings(tampered)));
+}
+
+void PreflightVerdictTest::evidenceBundle_detectsTamperedMembers()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+    const QString pristine = temporary.filePath(QStringLiteral("pristine"));
+    QVERIFY(pdf::writePreflightEvidenceBundle(fixture.bundle, pristine, error));
+    QVERIFY(pdf::verifyPreflightEvidenceBundle(pristine, &error).valid);
+
+    int caseIndex = 0;
+    const auto nextCopy = [&](const QString& label) -> QString
+    {
+        const QString target = temporary.filePath(QStringLiteral("case-%1-%2").arg(++caseIndex).arg(label));
+        return copyBundle(pristine, target) ? target : QString();
+    };
+
+    // A same-size edit of any member is a digest mismatch naming that member.
+    {
+        const QString directory = nextCopy(QStringLiteral("report-edit"));
+
+        QVERIFY(!directory.isEmpty());
+        QByteArray content = readMember(directory, QStringLiteral("report.json"));
+        QVERIFY(!content.isEmpty());
+        content[content.size() / 2] = content.at(content.size() / 2) == 'x' ? 'y' : 'x';
+        QVERIFY(rewriteMember(directory, QStringLiteral("report.json"), content));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("member.digest-mismatch"), QStringLiteral("report.json")),
+                 qPrintable(bundleFindings(verification)));
+    }
+
+    // Tampering with the exported chain is a chain break, not just a digest
+    // mismatch: the finding names the member and the sequence.
+    {
+        const QString directory = nextCopy(QStringLiteral("history-status"));
+
+        QVERIFY(!directory.isEmpty());
+        QJsonObject history = QJsonDocument::fromJson(readMember(directory, QStringLiteral("history.json"))).object();
+        QJsonArray events = history.value(QStringLiteral("events")).toArray();
+        QJsonObject last = events.last().toObject();
+        last.insert(QStringLiteral("status"), QStringLiteral("accepted"));
+        events.replace(events.size() - 1, last);
+        history.insert(QStringLiteral("events"), events);
+        QVERIFY(rewriteMember(directory, QStringLiteral("history.json"),
+                              QJsonDocument(history).toJson(QJsonDocument::Indented)));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("history.chain-broken"), QStringLiteral("history.json")),
+                 qPrintable(bundleFindings(verification)));
+    }
+
+    // A missing member is attributable to the member.
+    {
+        const QString directory = nextCopy(QStringLiteral("missing-certificate"));
+
+        QVERIFY(!directory.isEmpty());
+        QVERIFY(QFile::remove(QDir(directory).filePath(QStringLiteral("certificate.json"))));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("member.missing"), QStringLiteral("certificate.json")),
+                 qPrintable(bundleFindings(verification)));
+    }
+
+    // Content outside the declared set is refused by name.
+    {
+        const QString directory = nextCopy(QStringLiteral("undeclared"));
+
+        QVERIFY(!directory.isEmpty());
+        QVERIFY(rewriteMember(directory, QStringLiteral("notes.json"), QByteArrayLiteral("{}")));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("member.undeclared"), QStringLiteral("notes.json")),
+                 qPrintable(bundleFindings(verification)));
+    }
+
+    // A manifest whose declared revision or coverage scope disagrees with the
+    // report is refused, even though every member hash still matches.
+    {
+        const QString directory = nextCopy(QStringLiteral("manifest-revision"));
+
+        QVERIFY(!directory.isEmpty());
+        QJsonObject manifest =
+            QJsonDocument::fromJson(readMember(directory, QStringLiteral("manifest.json"))).object();
+        QJsonObject document = manifest.value(QStringLiteral("document")).toObject();
+        document.insert(QStringLiteral("revision_digest"), QString(64, QLatin1Char('e')));
+        manifest.insert(QStringLiteral("document"), document);
+        QVERIFY(rewriteMember(directory, QStringLiteral("manifest.json"),
+                              QJsonDocument(manifest).toJson(QJsonDocument::Indented)));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("bundle.document-digest-mismatch")),
+                 qPrintable(bundleFindings(verification)));
+    }
+    {
+        const QString directory = nextCopy(QStringLiteral("manifest-scope"));
+
+        QVERIFY(!directory.isEmpty());
+        QJsonObject manifest =
+            QJsonDocument::fromJson(readMember(directory, QStringLiteral("manifest.json"))).object();
+        manifest.insert(QStringLiteral("coverage_scope"),
+                        QJsonObject{ { QStringLiteral("claim"), QStringLiteral("Loop claims full GWG conformance.") } });
+        QVERIFY(rewriteMember(directory, QStringLiteral("manifest.json"),
+                              QJsonDocument(manifest).toJson(QJsonDocument::Indented)));
+        const pdf::PreflightEvidenceBundleVerification verification =
+            pdf::verifyPreflightEvidenceBundle(directory, &error);
+        QVERIFY(!verification.valid);
+        QVERIFY2(hasFinding(verification, QStringLiteral("bundle.coverage-scope-mismatch")),
+                 qPrintable(bundleFindings(verification)));
+    }
+}
+
+void PreflightVerdictTest::evidenceBundle_carriesNoRawPaths()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+
+    // Non-vacuity: the inputs really do carry the path.
+    QCOMPARE(fixture.report.value(QStringLiteral("pdf")).toString(), documentPath);
+    QVERIFY(fixture.request.rollbackPoints.first().artifactPath.startsWith(QStringLiteral("C:/jobs")));
+    QVERIFY(fixture.request.rollbackPoints.first().planSummary.contains(documentPath));
+    QVERIFY(fixture.report.value(QStringLiteral("warnings")).toArray().first().toObject().value(QStringLiteral("message")).toString().contains(documentPath));
+    QCOMPARE(fixture.request.report.value(QStringLiteral("profile_identity")).toObject().value(QStringLiteral("source_path")).toString(),
+             documentPath);
+
+    const QString bundleDirectory = temporary.filePath(QStringLiteral("bundle"));
+    QVERIFY2(pdf::writePreflightEvidenceBundle(fixture.bundle, bundleDirectory, error), qPrintable(error));
+    QVERIFY(pdf::verifyPreflightEvidenceBundle(bundleDirectory, &error).valid);
+
+    const QByteArray reportMember = readMember(bundleDirectory, pdf::preflightEvidenceBundleReportMember());
+    const QByteArray manifestMember = readMember(bundleDirectory, pdf::preflightEvidenceBundleManifestMember());
+    const QByteArray historyMember = readMember(bundleDirectory, pdf::preflightEvidenceBundleHistoryMember());
+    const QByteArray rollbackMember = readMember(bundleDirectory, pdf::preflightEvidenceBundleRollbackMember());
+    const QByteArray certificateMember = readMember(bundleDirectory, pdf::preflightEvidenceBundleCertificateMember());
+    for (const QByteArray& member : { reportMember, manifestMember, historyMember, rollbackMember, certificateMember })
+    {
+        QVERIFY(!member.isEmpty());
+    }
+
+    const QStringList forbidden{ documentPath,
+                                 QDir::toNativeSeparators(documentPath),
+                                 temporary.path(),
+                                 QDir::toNativeSeparators(temporary.path()),
+                                 QStringLiteral("C:/jobs"),
+                                 QStringLiteral("C:\\jobs"),
+                                 QStringLiteral("artwork.pdf") };
+    const QList<QPair<QString, QByteArray>> members{
+        { pdf::preflightEvidenceBundleReportMember(), reportMember },
+        { pdf::preflightEvidenceBundleManifestMember(), manifestMember },
+        { pdf::preflightEvidenceBundleHistoryMember(), historyMember },
+        { pdf::preflightEvidenceBundleRollbackMember(), rollbackMember },
+        { pdf::preflightEvidenceBundleCertificateMember(), certificateMember }
+    };
+    for (const auto& member : members)
+    {
+        for (const QString& needle : forbidden)
+        {
+            QVERIFY2(!member.second.contains(needle.toUtf8()),
+                     qPrintable(QStringLiteral("bundle member '%1' carries '%2'").arg(member.first, needle)));
+        }
+    }
+
+    // The redaction is real: the placeholder is present where the inputs had a
+    // path, and the path-bearing keys are gone rather than blanked.
+    QVERIFY(reportMember.contains(pdf::preflightEvidenceBundlePathPlaceholder().toUtf8()));
+    const QJsonObject report = QJsonDocument::fromJson(reportMember).object();
+    QVERIFY(!containsKey(report, QStringLiteral("pdf")));
+    QVERIFY(!containsKey(report, QStringLiteral("source_path")));
+    QVERIFY(!containsKey(QJsonDocument::fromJson(rollbackMember).object(), QStringLiteral("artifactPath")));
+    QVERIFY(!containsKey(QJsonDocument::fromJson(historyMember).object(), QStringLiteral("storageToken")));
+
+    // The rollback reference keeps the content digest the path named.
+    const QJsonObject rollback =
+        QJsonDocument::fromJson(rollbackMember).object().value(QStringLiteral("references")).toArray().first().toObject();
+    QCOMPARE(rollback.value(QStringLiteral("artifact_sha256")).toString(), QString(64, QLatin1Char('d')));
+    QVERIFY(rollback.value(QStringLiteral("plan_summary")).toString().contains(pdf::preflightEvidenceBundlePathPlaceholder()));
+}
 
 void PreflightVerdictTest::emptyCompleteInspection_isPass()
 {

@@ -1,0 +1,4 @@
+Category: added
+Audience: operators, integrators, auditors
+Breaking-Change: no
+Summary: Add `PdfTool export-evidence-bundle` / `verify-evidence-bundle` and the `pdf::PreflightEvidenceBundle` Core surface: a portable, integrity-manifested proof-of-preflight and sign-off bundle for one document revision, with an offline verifier that reports attributable findings per member and per chain link. The manifest carries the effective profile, the coverage scope actually evaluated, and the document revision digest; every member is path-redacted (no raw file paths, no store tokens) and the exported operation-history slice is re-hashed over the redacted copy with the canonical chain digest recorded alongside and the certificate's issuance event bound by id. The bundle is explicitly not a second source of truth. `scripts/qualification/run_independent_validators.py --evidence-bundle` consumes a bundle and binds the validator run to its declared revision digest.

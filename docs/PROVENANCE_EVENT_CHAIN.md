@@ -50,6 +50,18 @@ The operation-history unit suite separately proves that editing or deleting a
 middle record compromises verification and that rollback appends forward
 without removing prior events.
 
+## Portable export of the chain
+
+`PdfTool export-evidence-bundle` copies the complete chain for a revision into a bundle member
+([`PREFLIGHT_EVIDENCE_BUNDLE.md`](PREFLIGHT_EVIDENCE_BUNDLE.md)). The chain hashes the report payload
+as persisted, and that payload names the source path, so the exported slice cannot carry the
+canonical per-event hashes: the exporter redacts paths first and recomputes `previousEventHash` /
+`eventHash` over the redacted copy. The manifest records `chain_mode: "path-redacted"`, the head
+event id and hash, and `canonical_chain_digest` — a digest over the canonical
+`(sequence, entryId, eventHash)` triples — so an auditor holding the sidecar can bind the exported
+slice to it. Offline verification proves the exported chain is internally consistent and unchanged
+since export; it does not re-derive the canonical hashes, and the bundle is not a second ledger.
+
 ## Invariants
 
 - Undo/redo is ephemeral editing convenience. Rollback restores a retained

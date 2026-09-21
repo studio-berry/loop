@@ -122,6 +122,8 @@ add_library(LoopLibCore SHARED
     sources/pdfpreflightaudit.h
     sources/pdfpreflightcertificate.cpp
     sources/pdfpreflightcertificate.h
+    sources/pdfpreflightevidencebundle.cpp
+    sources/pdfpreflightevidencebundle.h
     sources/preflightprofileresolver.cpp
     sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h

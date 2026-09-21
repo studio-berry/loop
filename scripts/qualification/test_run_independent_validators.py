@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -76,6 +77,79 @@ class IndependentValidatorTest(unittest.TestCase):
         with mock.patch.object(validators, "which", return_value=None):
             evidence = validators.run(self.input_path, ["structural", "standards"], 1000)
         json.dumps(evidence)
+
+    def _write_bundle(self, digest: str, member_bytes: bytes = b'{"report": "fixture"}') -> Path:
+        bundle = Path(self.tempdir.name) / "bundle"
+        bundle.mkdir()
+        (bundle / "report.json").write_bytes(member_bytes)
+        manifest = {
+            "schema": validators.BUNDLE_SCHEMA,
+            "schema_version": validators.BUNDLE_SCHEMA_VERSION,
+            "document": {"revision_digest": digest, "byte_count": 18, "source_path_included": False},
+            "members": [
+                {
+                    "name": "report.json",
+                    "media_type": "application/json",
+                    "sha256": hashlib.sha256(member_bytes).hexdigest(),
+                    "byte_count": len(member_bytes),
+                }
+            ],
+        }
+        (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        return bundle
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_bundle_must_verify_and_match_the_candidate(self, _which: mock.Mock) -> None:
+        _size, digest = validators._input_identity(self.input_path)
+        bundle = self._write_bundle(digest)
+        evidence = validators.run(self.input_path, ["structural"], 1000, None, bundle)
+        self.assertEqual(evidence["bundle"]["status"], "passed")
+        self.assertEqual(evidence["bundle"]["members_verified"], 1)
+        self.assertTrue(evidence["bundle"]["input_matches_manifest"])
+        # The validators themselves are still missing on this host, so the lane
+        # stays incomplete rather than reporting a pass.
+        self.assertEqual(evidence["status"], "incomplete")
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_bundle_member_tampering_is_rejected(self, _which: mock.Mock) -> None:
+        _size, digest = validators._input_identity(self.input_path)
+        bundle = self._write_bundle(digest)
+        (bundle / "report.json").write_bytes(b'{"report": "tampered"}')
+        evidence = validators.run(self.input_path, ["structural"], 1000, None, bundle)
+        self.assertEqual(evidence["bundle"]["status"], "rejected")
+        self.assertEqual(evidence["bundle"]["reason_code"], "member-digest-mismatch")
+        self.assertEqual(evidence["status"], "rejected")
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_bundle_content_outside_the_declared_set_is_rejected(self, _which: mock.Mock) -> None:
+        _size, digest = validators._input_identity(self.input_path)
+        bundle = self._write_bundle(digest)
+        (bundle / "notes.json").write_text("{}", encoding="utf-8")
+        evidence = validators.run(self.input_path, ["structural"], 1000, None, bundle)
+        self.assertEqual(evidence["bundle"]["status"], "rejected")
+        self.assertEqual(evidence["bundle"]["reason_code"], "member-undeclared")
+        self.assertEqual(evidence["bundle"]["undeclared_members"], ["notes.json"])
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_bundle_for_a_different_revision_is_rejected(self, _which: mock.Mock) -> None:
+        bundle = self._write_bundle("f" * 64)
+        evidence = validators.run(self.input_path, ["structural"], 1000, None, bundle)
+        self.assertEqual(evidence["bundle"]["status"], "rejected")
+        self.assertEqual(evidence["bundle"]["reason_code"], "input-does-not-match-manifest")
+        self.assertFalse(evidence["bundle"]["input_matches_manifest"])
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_missing_bundle_is_incomplete_not_a_pass(self, _which: mock.Mock) -> None:
+        evidence = validators.run(self.input_path, ["structural"], 1000, None,
+                                  Path(self.tempdir.name) / "absent")
+        self.assertEqual(evidence["bundle"]["status"], "incomplete")
+        self.assertEqual(evidence["bundle"]["reason_code"], "bundle-not-found")
+        self.assertEqual(evidence["status"], "incomplete")
+
+    @mock.patch.object(validators, "which", return_value=None)
+    def test_evidence_without_a_bundle_carries_no_bundle_block(self, _which: mock.Mock) -> None:
+        evidence = validators.run(self.input_path, ["structural"], 1000)
+        self.assertNotIn("bundle", evidence)
 
 
 if __name__ == "__main__":

@@ -277,6 +277,14 @@ struct PDFToolOptions
     QString preflightProfileForkId;
     QString preflightProfileForkVersion;
 
+    // For options 'EvidenceBundleExport' / 'EvidenceBundleVerify'
+    QString evidenceBundlePath;
+    QString evidenceBundleOutputDirectory;
+    QString evidenceBundleReportPath;
+    QString evidenceBundleCertificatePath;
+    QString evidenceBundleSignOffPath;
+    QString evidenceBundleArtifactPath;
+
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
 
@@ -419,6 +427,8 @@ public:
         PreflightProfileManage = 0x10000000000ULL,   ///< Loop preflight profile import/export/fork
         SchemaDiagnostics = 0x20000000000ULL,   ///< Schema kind/version compatibility diagnostics
         VerifyPreflightCertificate = 0x40000000000ULL,   ///< Verify a certified preflight JSON
+        EvidenceBundleExport = 0x80000000000ULL,   ///< Export a portable proof-of-preflight bundle
+        EvidenceBundleVerify = 0x100000000000ULL,   ///< Verify a portable proof-of-preflight bundle
     };
     Q_DECLARE_FLAGS(Options, Option)
 
