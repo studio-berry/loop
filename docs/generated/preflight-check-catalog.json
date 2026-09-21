@@ -877,6 +877,7 @@
       ]
     },
     "thin-parts": {
+      "corpus_gap": "No corpus fixture produces a thin-parts finding: thin-parts-fill reports check-incomplete because its mask exceeds max_raster_pixels, and the class is followed by the thin-parts-raster-budget backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",

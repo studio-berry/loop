@@ -23,8 +23,10 @@ CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
 PREFLIGHT_BACKLOG_PATH = ROOT / "docs" / "generated" / "preflight-coverage-backlog.json"
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
-CORPUS_MANIFEST_PATH = ROOT / "loop-preflight" / "testdata" / "fixtures" / "manifest.json"
-CORPUS_SNAPSHOT_DIR = ROOT / "loop-preflight" / "testdata" / "snapshots"
+CORPUS_MANIFEST_REL = "loop-preflight/testdata/fixtures/manifest.json"
+CORPUS_SNAPSHOT_DIR_REL = "loop-preflight/testdata/snapshots"
+CORPUS_MANIFEST_PATH = ROOT / CORPUS_MANIFEST_REL
+CORPUS_SNAPSHOT_DIR = ROOT / CORPUS_SNAPSHOT_DIR_REL
 PREFLIGHT_CORPUS_COVERAGE_PATH = ROOT / "docs" / "generated" / "preflight-corpus-coverage.json"
 CORRECTION_CATALOG_PATH = ROOT / "docs" / "generated" / "correction-operation-catalog.json"
 CORRECTION_OVERLAY_PATH = ROOT / "docs" / "correction-operation-catalog-overlay.json"
@@ -517,11 +519,17 @@ def build_preflight_backlog(
     }
 
 
+CORPUS_INSPECTION_FAILURE_TYPES = {"check-incomplete", "evidence-incomplete"}
+CORPUS_UNINSPECTED_STATUSES = {"incomplete", "not_inspected", "skipped", "not_applicable"}
+
 CORPUS_COVERAGE_DEFINITION = (
     "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot "
-    "carries at least one finding in errors[] or warnings[] whose check_id is the row. A check that "
-    "is merely enabled, that reports incomplete or skipped inspection, or that the fixture's profile "
-    "disables does not count as exercising its row."
+    "carries at least one finding in errors[] or warnings[] whose check_id is the row and whose type "
+    f"is not an inspection-failure type ({', '.join(sorted(CORPUS_INSPECTION_FAILURE_TYPES))}). "
+    "A check that is merely enabled, that reports incomplete, skipped, non-inspected or "
+    "non-applicable inspection, or that the fixture's profile disables does not count as exercising "
+    "its row; those fixtures are listed in uninspected_fixtures. A finding that reports an inspection "
+    "failure is not evidence that the check detects the defect."
 )
 
 
@@ -559,16 +567,19 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
     hole rather than stopping at the first.
     """
     overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
-    # Registry/overlay drift is build_preflight_check_catalog's job; this reads the rows it validates.
     rows = overlay["checks"]
+    missing_rows = sorted(set(registry) - set(rows))
+    if missing_rows:
+        raise ValueError("catalog overlay has no row for: " + ", ".join(missing_rows))
     manifest, snapshots = load_corpus_snapshots()
     finding_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
-    incomplete_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
+    uninspected_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
     clean_fixtures: dict[str, int] = {check_id: 0 for check_id in registry}
     unattributed_findings = 0
     for entry in manifest:
         fixture = entry["id"]
         report = snapshots[fixture]
+        finding_checks: set[str] = set()
         for finding in list(report.get("errors") or []) + list(report.get("warnings") or []):
             check_id = finding.get("check_id")
             if check_id is None:
@@ -577,20 +588,26 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
                 continue
             if check_id not in finding_fixtures:
                 raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
-            finding_fixtures[check_id].add(fixture)
+            if finding.get("type") in CORPUS_INSPECTION_FAILURE_TYPES:
+                uninspected_fixtures[check_id].add(fixture)
+            else:
+                finding_fixtures[check_id].add(fixture)
+                finding_checks.add(check_id)
         for status in report.get("checks") or []:
             check_id = status.get("id")
             if check_id not in finding_fixtures:
                 raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
-            if status.get("status") == "incomplete":
-                incomplete_fixtures[check_id].add(fixture)
-            elif status.get("status") == "ok":
+            if status.get("status") in CORPUS_UNINSPECTED_STATUSES:
+                uninspected_fixtures[check_id].add(fixture)
+            elif status.get("status") == "ok" and check_id not in finding_checks:
                 clean_fixtures[check_id] += 1
+    gap_reasons: dict[str, str | None] = {}
     errors: list[str] = []
     for check_id in registry:
         coverage = rows[check_id]["coverage"]
         reason = rows[check_id].get("corpus_gap")
         has_reason = isinstance(reason, str) and bool(reason.strip())
+        gap_reasons[check_id] = reason if has_reason else None
         exercised = bool(finding_fixtures[check_id])
         if coverage == "covered" and not exercised:
             errors.append(f"covered check '{check_id}' has no corpus fixture exercising it")
@@ -614,23 +631,22 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
         "claim": overlay["claim"],
         "matrix_id": overlay["matrix_id"],
         "definition": CORPUS_COVERAGE_DEFINITION,
-        "manifest": CORPUS_MANIFEST_PATH.relative_to(ROOT).as_posix(),
-        "snapshot_dir": CORPUS_SNAPSHOT_DIR.relative_to(ROOT).as_posix(),
+        "manifest": CORPUS_MANIFEST_REL,
+        "snapshot_dir": CORPUS_SNAPSHOT_DIR_REL,
         "source_fixtures": len(manifest),
         "unattributed_findings": unattributed_findings,
         "corpus_gaps": sorted(check_id for check_id in registry if not finding_fixtures[check_id]),
         "rows": {
             check_id: {
                 "coverage": rows[check_id]["coverage"],
-                "corpus_gap": rows[check_id].get("corpus_gap"),
+                "corpus_gap": gap_reasons[check_id],
                 "finding_fixtures": sorted(finding_fixtures[check_id]),
-                "incomplete_fixtures": sorted(incomplete_fixtures[check_id]),
-                "clean_fixtures": clean_fixtures[check_id],
+                "uninspected_fixtures": sorted(uninspected_fixtures[check_id]),
+                "clean_fixture_count": clean_fixtures[check_id],
             }
             for check_id in registry
         },
     }
-
 
 
 SAVE_POLICY_MODES = {

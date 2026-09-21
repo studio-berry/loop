@@ -5,8 +5,12 @@ Mirrors scripts/ci/test_preflight_check_catalog.py. The map is a generated
 artifact that claims which golden-corpus fixtures exercise which catalog row, so
 every rule that claim rests on is asserted to fail closed: a fixture without a
 snapshot, a snapshot without a fixture, a snapshot naming an unregistered check,
-a `covered` row with no exercising fixture, and a row with no exercising fixture
-and no hand-written reason.
+a `covered` row with no exercising fixture, a row with no exercising fixture and
+no hand-written reason, a stale reason on an exercised row, an overlay with no
+row for a registered check, and a matrix id that disagrees with the engine's.
+Two tests pin the other half of the claim: a finding that reports an inspection
+failure, and a status that reports no inspection, must not read as exercising a
+row.
 """
 
 from __future__ import annotations
@@ -38,6 +42,7 @@ REVIEWED_CORPUS_GAPS = [
     "obscured-content",
     "off-page-content",
     "processing-steps",
+    "thin-parts",
 ]
 
 
@@ -216,6 +221,89 @@ class PreflightCorpusCoverageTest(unittest.TestCase):
             with self.assertRaisesRegex(
                 ValueError,
                 "covered check 'trim' has no corpus fixture exercising it",
+            ):
+                self.map()
+
+    def test_inspection_failure_findings_do_not_exercise_a_row(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots(exclude="trim")
+        manifest.append(
+            {
+                "id": "trim-mask-overflow",
+                "pdf": "trim-mask-overflow.pdf",
+                "profile": "profiles/loop-default.json",
+                "expect": {"pass": False, "check_ids": ["trim"]},
+            }
+        )
+        snapshots["trim-mask-overflow"] = {
+            "schema_version": 4,
+            "pass": False,
+            "checks": [{"id": "trim", "status": "incomplete"}],
+            "errors": [],
+            "warnings": [{"check_id": "trim", "type": "check-incomplete", "severity": "info"}],
+        }
+        with patched_corpus(manifest, snapshots, synthetic_overlay({})):
+            with self.assertRaisesRegex(
+                ValueError,
+                "covered check 'trim' has no corpus fixture exercising it",
+            ):
+                self.map()
+
+    def test_uninspected_status_does_not_exercise_a_row(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots(exclude="trim")
+        manifest.append(
+            {
+                "id": "trim-skipped",
+                "pdf": "trim-skipped.pdf",
+                "profile": "profiles/loop-default.json",
+                "expect": {"pass": False, "check_ids": []},
+            }
+        )
+        snapshots["trim-skipped"] = {
+            "schema_version": 4,
+            "pass": False,
+            "checks": [{"id": "trim", "status": "skipped"}],
+            "errors": [],
+            "warnings": [],
+        }
+        with patched_corpus(manifest, snapshots, synthetic_overlay({})):
+            with self.assertRaisesRegex(
+                ValueError,
+                "covered check 'trim' has no corpus fixture exercising it",
+            ):
+                self.map()
+
+    def test_uninspected_fixtures_are_recorded_apart_from_findings(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots()
+        snapshots["exercises-ink-coverage"]["checks"] = [{"id": "ink-coverage", "status": "incomplete"}]
+        snapshots["exercises-ink-coverage"]["errors"] = []
+        snapshots["exercises-ink-coverage"]["warnings"] = [
+            {"check_id": "ink-coverage", "type": "check-incomplete", "severity": "info"}
+        ]
+        overlay = synthetic_overlay({"ink-coverage": "inspection did not complete"})
+        with patched_corpus(manifest, snapshots, overlay):
+            coverage = self.map()
+        self.assertEqual(coverage["rows"]["ink-coverage"]["finding_fixtures"], [])
+        self.assertEqual(
+            coverage["rows"]["ink-coverage"]["uninspected_fixtures"], ["exercises-ink-coverage"]
+        )
+        self.assertEqual(coverage["corpus_gaps"], ["ink-coverage"])
+
+    def test_overlay_without_a_row_for_a_registered_check_fails(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots()
+        overlay = synthetic_overlay({})
+        overlay["checks"].pop("trim")
+        with patched_corpus(manifest, snapshots, overlay):
+            with self.assertRaisesRegex(ValueError, "catalog overlay has no row for: trim"):
+                self.map()
+
+    def test_engine_matrix_id_drift_fails(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots()
+        overlay = synthetic_overlay({})
+        overlay["matrix_id"] = "loop-gwg-pdfx-v9"
+        with patched_corpus(manifest, snapshots, overlay):
+            with self.assertRaisesRegex(
+                ValueError,
+                "stamps matrix_id 'loop-gwg-pdfx-v1' but the overlay publishes 'loop-gwg-pdfx-v9'",
             ):
                 self.map()
 
