@@ -384,6 +384,10 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
         add(QStringLiteral("checks"), { QStringLiteral("--checks") }, QStringLiteral("ids"), PDFToolValueType::Csv);
     }
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
+    }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -889,6 +893,11 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("param"), QStringLiteral("Profile variable binding as key=value; may be repeated. Overrides job-spec and profile defaults."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("checks"), QStringLiteral("Comma-separated preflight check ids for targeted revalidation; default runs all enabled checks."));
+    }
+
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report-file"), QStringLiteral("Write the preflight report JSON this run is certified over to this file."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1467,6 +1476,11 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
                 checkId = checkId.trimmed();
             }
         }
+    }
+
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        options.preflightReportPath = parser->value("report-file");
     }
 
     if (optionFlags.testFlag(VerifyPreflightCertificate))

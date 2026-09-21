@@ -30,9 +30,11 @@
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfoperationimpact.h"
+#include "pdfartifactidentity.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationcontrol.h"
 #include "pdfoperationhistorystore.h"
+#include "pdfsafefilewriter.h"
 #include "pdftoolcancel.h"
 
 #include <QCoreApplication>
@@ -270,6 +272,41 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          QStringLiteral("cli.invalid-arguments"),
                          PDFToolTranslationContext::tr("No document specified."));
         return PDFToolExitCode::InputError;
+    }
+
+    QStringList plannedOutputs;
+    if (!options.preflightReportPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightReportPath);
+    }
+    if (!options.preflightCertificateOutputPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightCertificateOutputPath);
+    }
+    if (!options.preflightDecisionsExportPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightDecisionsExportPath);
+    }
+    if (!plannedOutputs.isEmpty())
+    {
+        QStringList aliasCheckPaths = plannedOutputs;
+        aliasCheckPaths.prepend(options.document);
+        const QList<pdf::PDFOutputConflict> conflicts =
+            pdf::PDFSafeFileWriter::findOutputConflicts(aliasCheckPaths, false);
+        for (const pdf::PDFOutputConflict& conflict : conflicts)
+        {
+            if (conflict.code != QStringLiteral("output.duplicate-planned-path"))
+            {
+                continue;
+            }
+
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             conflict.code,
+                             PDFToolTranslationContext::tr("Output '%1' is planned more than once.").arg(conflict.path),
+                             QJsonObject{ { QStringLiteral("path"), conflict.path } });
+            return PDFToolExitCode::InvalidInvocation;
+        }
     }
 
     QList<pdf::PreflightDecision> decisions;
@@ -603,6 +640,35 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         return PDFToolExitCode::ProcessingFailure;
     }
 
+    if (!options.preflightReportPath.isEmpty())
+    {
+        // Write the retained form of the report. Certification and the audit chain
+        // hash the redacted summary, so this file is the payload a handoff consumer
+        // can bind to the certificate's report digest; the envelope keeps reporting
+        // the run's own view.
+        const QJsonObject retainedReport = pdf::redactSensitiveJson(auditSummary).toObject();
+        const QByteArray reportBytes = QJsonDocument(retainedReport).toJson(QJsonDocument::Indented);
+        QSaveFile reportFile(options.preflightReportPath);
+        if (!reportFile.open(QIODevice::WriteOnly) || reportFile.write(reportBytes) != reportBytes.size() ||
+            !reportFile.commit())
+        {
+            reportFile.cancelWriting();
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.write-failed"),
+                             PDFToolTranslationContext::tr("Could not write the preflight report '%1': %2")
+                                 .arg(options.preflightReportPath, reportFile.errorString()));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("report"),
+                                                  options.preflightReportPath,
+                                                  QStringLiteral("written") });
+        }
+    }
+
     if (!options.preflightCertificateOutputPath.isEmpty())
     {
         const QString historyDirectory = QFileInfo(options.document).absoluteFilePath() + QStringLiteral(".loop-history");
@@ -699,7 +765,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PreflightProfile | PageSelector;
+    return ConsoleFormat | OpenDocument | PreflightProfile | PreflightReportFile | PageSelector;
 }
 
 }   // namespace pdftool

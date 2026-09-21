@@ -273,6 +273,7 @@ struct PDFToolOptions
     QStringList preflightCheckFilter;
     QString preflightProfileOutputPath;
     QString preflightCertificateOutputPath;
+    QString preflightReportPath;
     QString preflightCertificatePath;
     QString preflightProfileForkId;
     QString preflightProfileForkVersion;
@@ -429,6 +430,7 @@ public:
         VerifyPreflightCertificate = 0x40000000000ULL,   ///< Verify a certified preflight JSON
         EvidenceBundleExport = 0x80000000000ULL,   ///< Export a portable proof-of-preflight bundle
         EvidenceBundleVerify = 0x100000000000ULL,   ///< Verify a portable proof-of-preflight bundle
+        PreflightReportFile = 0x200000000000ULL,   ///< Preflight --report-file output path
     };
     Q_DECLARE_FLAGS(Options, Option)
 
