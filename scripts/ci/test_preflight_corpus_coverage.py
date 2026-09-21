@@ -161,6 +161,25 @@ class PreflightCorpusCoverageTest(unittest.TestCase):
             ):
                 self.map()
 
+    def test_blank_corpus_gap_on_an_exercised_row_fails(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots()
+        overlay = synthetic_overlay({})
+        overlay["checks"]["bleed"]["corpus_gap"] = ""
+        with patched_corpus(manifest, snapshots, overlay):
+            with self.assertRaisesRegex(
+                ValueError,
+                "check 'bleed' has corpus fixtures but a recorded corpus_gap reason",
+            ):
+                self.map()
+
+    def test_malformed_corpus_gap_on_an_unexercised_row_fails(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots(exclude="dieline")
+        overlay = synthetic_overlay({})
+        overlay["checks"]["dieline"]["corpus_gap"] = 165
+        with patched_corpus(manifest, snapshots, overlay):
+            with self.assertRaisesRegex(ValueError, "check 'dieline' has a malformed corpus_gap reason"):
+                self.map()
+
     def test_fixture_without_a_committed_snapshot_fails(self) -> None:
         manifest, snapshots = synthetic_manifest_and_snapshots()
         manifest.append(
@@ -271,6 +290,90 @@ class PreflightCorpusCoverageTest(unittest.TestCase):
                 "covered check 'trim' has no corpus fixture exercising it",
             ):
                 self.map()
+
+    def test_substantive_finding_with_uninspected_status_does_not_exercise_a_row(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots(exclude="trim")
+        manifest.append(
+            {
+                "id": "trim-skipped-with-finding",
+                "pdf": "trim-skipped-with-finding.pdf",
+                "profile": "profiles/loop-default.json",
+                "expect": {"pass": False, "check_ids": ["trim"]},
+            }
+        )
+        snapshots["trim-skipped-with-finding"] = {
+            "schema_version": 4,
+            "pass": False,
+            "checks": [{"id": "trim", "status": "skipped"}],
+            "errors": [{"check_id": "trim", "type": "trim", "severity": "error"}],
+            "warnings": [],
+        }
+        with patched_corpus(manifest, snapshots, synthetic_overlay({})):
+            with self.assertRaisesRegex(
+                ValueError,
+                "covered check 'trim' has no corpus fixture exercising it",
+            ):
+                self.map()
+
+    def test_aborted_check_findings_do_not_exercise_a_row(self) -> None:
+        for finding_type in ("check-error", "budget-exceeded"):
+            with self.subTest(finding_type=finding_type):
+                manifest, snapshots = synthetic_manifest_and_snapshots(exclude="trim")
+                manifest.append(
+                    {
+                        "id": f"trim-{finding_type}",
+                        "pdf": f"trim-{finding_type}.pdf",
+                        "profile": "profiles/loop-default.json",
+                        "expect": {"pass": False, "check_ids": ["trim"]},
+                    }
+                )
+                snapshots[f"trim-{finding_type}"] = {
+                    "schema_version": 4,
+                    "pass": False,
+                    "checks": [{"id": "trim", "status": "incomplete"}],
+                    "errors": [],
+                    "warnings": [
+                        {
+                            "check_id": "trim",
+                            "type": finding_type,
+                            "severity": "info",
+                        }
+                    ],
+                }
+                with patched_corpus(manifest, snapshots, synthetic_overlay({})):
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "covered check 'trim' has no corpus fixture exercising it",
+                    ):
+                        self.map()
+
+    def test_informational_findings_with_ok_status_are_not_clean(self) -> None:
+        manifest, snapshots = synthetic_manifest_and_snapshots(exclude="trim")
+        manifest.append(
+            {
+                "id": "trim-informational",
+                "pdf": "trim-informational.pdf",
+                "profile": "profiles/loop-default.json",
+                "expect": {"pass": True, "check_ids": ["trim"]},
+            }
+        )
+        snapshots["trim-informational"] = {
+            "schema_version": 4,
+            "pass": True,
+            "checks": [{"id": "trim", "status": "ok"}],
+            "errors": [],
+            "warnings": [
+                {
+                    "check_id": "trim",
+                    "type": "trim-note",
+                    "severity": "info",
+                }
+            ],
+        }
+        with patched_corpus(manifest, snapshots, synthetic_overlay({})):
+            coverage = self.map()
+        self.assertEqual(coverage["rows"]["trim"]["clean_fixture_count"], 0)
+        self.assertIn("trim-informational", coverage["rows"]["trim"]["finding_fixtures"])
 
     def test_uninspected_fixtures_are_recorded_apart_from_findings(self) -> None:
         manifest, snapshots = synthetic_manifest_and_snapshots()

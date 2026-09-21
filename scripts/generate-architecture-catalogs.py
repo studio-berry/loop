@@ -519,7 +519,12 @@ def build_preflight_backlog(
     }
 
 
-CORPUS_INSPECTION_FAILURE_TYPES = {"check-incomplete", "evidence-incomplete"}
+CORPUS_INSPECTION_FAILURE_TYPES = {
+    "budget-exceeded",
+    "check-error",
+    "check-incomplete",
+    "evidence-incomplete",
+}
 CORPUS_UNINSPECTED_STATUSES = {"incomplete", "not_inspected", "skipped", "not_applicable"}
 
 CORPUS_COVERAGE_DEFINITION = (
@@ -579,7 +584,13 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
     for entry in manifest:
         fixture = entry["id"]
         report = snapshots[fixture]
-        finding_checks: set[str] = set()
+        statuses: dict[str, str | None] = {}
+        for status in report.get("checks") or []:
+            check_id = status.get("id")
+            if check_id not in finding_fixtures:
+                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
+            statuses[check_id] = status.get("status")
+        findings_for_check: dict[str, list[dict[str, Any]]] = {check_id: [] for check_id in registry}
         for finding in list(report.get("errors") or []) + list(report.get("warnings") or []):
             check_id = finding.get("check_id")
             if check_id is None:
@@ -588,34 +599,44 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
                 continue
             if check_id not in finding_fixtures:
                 raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
-            if finding.get("type") in CORPUS_INSPECTION_FAILURE_TYPES:
+            findings_for_check[check_id].append(finding)
+        for check_id in registry:
+            check_status = statuses.get(check_id)
+            check_findings = findings_for_check[check_id]
+            if check_status in CORPUS_UNINSPECTED_STATUSES:
                 uninspected_fixtures[check_id].add(fixture)
-            else:
+            if any(finding.get("type") in CORPUS_INSPECTION_FAILURE_TYPES for finding in check_findings):
+                uninspected_fixtures[check_id].add(fixture)
+            substantive_findings = [
+                finding
+                for finding in check_findings
+                if finding.get("type") not in CORPUS_INSPECTION_FAILURE_TYPES
+            ]
+            if substantive_findings and check_status not in CORPUS_UNINSPECTED_STATUSES:
                 finding_fixtures[check_id].add(fixture)
-                finding_checks.add(check_id)
-        for status in report.get("checks") or []:
-            check_id = status.get("id")
-            if check_id not in finding_fixtures:
-                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
-            if status.get("status") in CORPUS_UNINSPECTED_STATUSES:
-                uninspected_fixtures[check_id].add(fixture)
-            elif status.get("status") == "ok" and check_id not in finding_checks:
+            if check_status == "ok" and not check_findings:
                 clean_fixtures[check_id] += 1
     gap_reasons: dict[str, str | None] = {}
     errors: list[str] = []
     for check_id in registry:
-        coverage = rows[check_id]["coverage"]
-        reason = rows[check_id].get("corpus_gap")
-        has_reason = isinstance(reason, str) and bool(reason.strip())
-        gap_reasons[check_id] = reason if has_reason else None
+        row = rows[check_id]
+        coverage = row["coverage"]
+        corpus_gap_present = "corpus_gap" in row
+        reason = row.get("corpus_gap")
+        has_valid_reason = isinstance(reason, str) and bool(reason.strip())
+        gap_reasons[check_id] = reason if has_valid_reason else None
         exercised = bool(finding_fixtures[check_id])
         if coverage == "covered" and not exercised:
             errors.append(f"covered check '{check_id}' has no corpus fixture exercising it")
-        elif not exercised and not has_reason:
-            errors.append(
-                f"check '{check_id}' has no corpus fixture and no recorded corpus_gap reason"
-            )
-        if exercised and has_reason:
+        elif not exercised:
+            if not has_valid_reason:
+                if corpus_gap_present and not has_valid_reason:
+                    errors.append(f"check '{check_id}' has a malformed corpus_gap reason")
+                else:
+                    errors.append(
+                        f"check '{check_id}' has no corpus fixture and no recorded corpus_gap reason"
+                    )
+        if exercised and corpus_gap_present:
             errors.append(f"check '{check_id}' has corpus fixtures but a recorded corpus_gap reason")
     engine_matrix_id = parse_engine_matrix_id()
     if engine_matrix_id != overlay["matrix_id"]:
