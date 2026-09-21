@@ -302,6 +302,7 @@
     },
     "standards_matrix": "docs/PDFX_POLICY_MATRIX.md"
   },
+  "preflight_coverage_backlog": "docs/generated/preflight-coverage-backlog.json",
   "registered_operations": [
     {
       "id": "add-bleed",

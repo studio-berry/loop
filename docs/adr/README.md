@@ -34,7 +34,8 @@ targets, or branch names. Regenerate and commit:
 | Artifact | Contents |
 |----------|----------|
 | [`generated/architecture-catalog.json`](../generated/architecture-catalog.json) | Branch policy, workflow branches, preflight check IDs, repair operations, schema versions/kinds, architecture invariants, CMake test targets |
-| [`generated/preflight-check-catalog.json`](../generated/preflight-check-catalog.json) | Per-check measures, limitations, and GWG/PDF-X coverage overlay |
+| [`generated/preflight-check-catalog.json`](../generated/preflight-check-catalog.json) | Per-check measures, limitations, parameters and ranges, severity model, evidence fields, applicable fixups, and GWG/PDF-X coverage overlay |
+| [`generated/preflight-coverage-backlog.json`](../generated/preflight-coverage-backlog.json) | Prioritised coverage backlog: gap, process families, state, and the verified issue or check that closes each row |
 | [`generated/correction-operation-catalog.json`](../generated/correction-operation-catalog.json) | Per-operation save policy, impact, surface parity, and correction limitations |
 
 ```bash
