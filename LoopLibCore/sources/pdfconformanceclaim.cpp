@@ -24,6 +24,7 @@
 
 #include <QSet>
 
+#include <algorithm>
 #include <iterator>
 
 namespace pdf
@@ -144,14 +145,9 @@ QList<QByteArray> xmpValues(const QByteArray& lower, const QByteArray& key)
 
 bool declaresPdfaPart3(const QByteArray& lower)
 {
-    for (const QByteArray& value : xmpValues(lower, QByteArrayLiteral("pdfaid:part")))
-    {
-        if (value == QByteArrayLiteral("3"))
-        {
-            return true;
-        }
-    }
-    return false;
+    const QList<QByteArray> values = xmpValues(lower, QByteArrayLiteral("pdfaid:part"));
+    return std::any_of(values.cbegin(), values.cend(), [](const QByteArray& value)
+                       { return value == QByteArrayLiteral("3"); });
 }
 
 bool declaresBarePdfx5WithConformance(const QByteArray& lower, const QByteArray& conformance)
@@ -170,14 +166,9 @@ bool declaresBarePdfx5WithConformance(const QByteArray& lower, const QByteArray&
         return false;
     }
 
-    for (const QByteArray& value : xmpValues(lower, QByteArrayLiteral("gts_pdfxconformance")))
-    {
-        if (value == conformance)
-        {
-            return true;
-        }
-    }
-    return false;
+    const QList<QByteArray> values = xmpValues(lower, QByteArrayLiteral("gts_pdfxconformance"));
+    return std::any_of(values.cbegin(), values.cend(), [&conformance](const QByteArray& value)
+                       { return value == conformance; });
 }
 
 }   // namespace
