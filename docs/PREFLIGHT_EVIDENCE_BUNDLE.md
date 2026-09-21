@@ -141,7 +141,7 @@ belongs to:
 
 ## Independent validation
 
-`scripts/qualification/run_independent_validators.py --bundle <dir>` consumes a bundle as
+`scripts/qualification/run_independent_validators.py --evidence-bundle <dir>` consumes a bundle as
 described in [`INDEPENDENT_VALIDATION.md`](INDEPENDENT_VALIDATION.md): it requires the
 bundle to verify, binds the validator run to the manifest's document revision digest, and
 records the bundle's identity in the evidence record.
