@@ -566,10 +566,12 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
     """Record, per catalog row, the corpus fixtures whose reports exercise it.
 
     ``coverage: covered`` is a claim about what the check catches, so it must be
-    backed by a fixture that produces one of the check's findings. A row with no
-    such fixture carries a hand-written ``corpus_gap`` reason in the overlay
-    instead of reading as proven. Failures are collected so one run names every
-    hole rather than stopping at the first.
+    backed by a fixture that produced one of the check's findings. A finding whose
+    type reports an inspection failure is the check reporting on itself rather
+    than on the document, and does not count. A row with no such fixture carries a
+    hand-written ``corpus_gap`` reason in the overlay instead of reading as
+    proven. Failures are collected so one run names every hole rather than
+    stopping at the first.
     """
     overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
     rows = overlay["checks"]
@@ -616,7 +618,6 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
                 finding_fixtures[check_id].add(fixture)
             if check_status == "ok" and not check_findings:
                 clean_fixtures[check_id] += 1
-    gap_reasons: dict[str, str | None] = {}
     errors: list[str] = []
     for check_id in registry:
         row = rows[check_id]
@@ -624,7 +625,6 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
         corpus_gap_present = "corpus_gap" in row
         reason = row.get("corpus_gap")
         has_valid_reason = isinstance(reason, str) and bool(reason.strip())
-        gap_reasons[check_id] = reason if has_valid_reason else None
         exercised = bool(finding_fixtures[check_id])
         if coverage == "covered" and not exercised:
             errors.append(f"covered check '{check_id}' has no corpus fixture exercising it")
@@ -660,7 +660,7 @@ def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
         "rows": {
             check_id: {
                 "coverage": rows[check_id]["coverage"],
-                "corpus_gap": gap_reasons[check_id],
+                "corpus_gap": rows[check_id].get("corpus_gap"),
                 "finding_fixtures": sorted(finding_fixtures[check_id]),
                 "uninspected_fixtures": sorted(uninspected_fixtures[check_id]),
                 "clean_fixture_count": clean_fixtures[check_id],

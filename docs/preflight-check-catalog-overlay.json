@@ -982,7 +982,7 @@
   "thin-parts": {
    "measures": "Thin filled parts and optional clipped/negative/annotation classes.",
    "limitations": "Raster budget can skip a page as incomplete rather than pass.",
-   "corpus_gap": "No corpus fixture produces a thin-parts finding: thin-parts-fill reports check-incomplete because its mask exceeds max_raster_pixels, and the class is followed by the thin-parts-raster-budget backlog row.",
+   "corpus_gap": "No corpus fixture produces a thin-parts finding: thin-parts-fill measures 0.24 pt against the 0.25 pt threshold at probe_dpi 600, inside the 0.12 pt measurement precision, so the check reports check-incomplete with reason measurement-near-threshold instead of a finding; the class is followed by the thin-parts-raster-budget backlog row.",
    "coverage": "partial",
    "families": [
     "packaging"

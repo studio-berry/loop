@@ -73,17 +73,19 @@ the two is generated and published rather than assumed:
 > A matrix row is exercised by a corpus fixture when that fixture's committed
 > report snapshot carries at least one finding in `errors[]` or `warnings[]`
 > whose `check_id` is the row and whose type is not an inspection-failure type
-> (`check-incomplete`, `evidence-incomplete`). A check that is merely enabled,
-> that reports incomplete, skipped, non-inspected or non-applicable inspection,
-> or that the fixture's profile disables does not count as exercising its row.
-> A finding that reports an inspection failure is not evidence that the check
-> detects the defect.
+> (`budget-exceeded`, `check-error`, `check-incomplete`, `evidence-incomplete`).
+> A check that is merely enabled, that reports incomplete, skipped, non-inspected
+> or non-applicable inspection, or that the fixture's profile disables does not
+> count as exercising its row; those fixtures are listed in
+> `uninspected_fixtures`. A finding that reports an inspection failure is not
+> evidence that the check detects the defect.
 
 A finding is the check reporting on the document. An inspection failure is the
 check reporting on itself, and it must not read as coverage. `thin-parts-fill`
-exists to exercise `thin-parts`, and it reports `check-incomplete` because the
-mask exceeds `max_raster_pixels`, so `thin-parts` is recorded as a corpus gap
-rather than as covered.
+exists to exercise `thin-parts`, and it reports `check-incomplete` because its
+0.24 pt measurement sits inside the 0.12 pt raster pixel (at `probe_dpi` 600) of
+the 0.25 pt threshold, so `thin-parts` is recorded as a corpus gap rather than as
+covered.
 
 Regenerate after adding or removing a fixture, or after a check's findings change
 (which is also when the snapshot is rewritten):
@@ -94,11 +96,14 @@ python3 scripts/generate-architecture-catalogs.py --check
 ```
 
 `--check` fails when a `covered` row has no exercising fixture, when a row with
-no exercising fixture carries no `corpus_gap` reason, when a row with fixtures
-still carries a stale reason, when a fixture has no committed snapshot or a
-snapshot has no fixture, when a snapshot names an unregistered check, when the
-overlay has no row for a registered check, or when the engine's own coverage
-scope stamps a different `matrix_id` than the overlay publishes.
+no exercising fixture carries no `corpus_gap` reason, when a row carries a
+malformed or a stale reason, when a fixture has no committed snapshot, when a
+snapshot has no fixture, when a snapshot names an unregistered check, or when the
+engine's own coverage scope stamps a different `matrix_id` than the overlay
+publishes. Two neighbouring rules fail earlier in the same run: the catalog
+builder rejects a registered check whose overlay row is missing (`registered
+without catalog: <id>`), and the corpus loader rejects an empty manifest, an entry
+with no `id`, or a duplicate fixture id.
 
 `corpus_gaps` in the generated map is the register of rows the corpus does not
 exercise at all. A row is a limitation of the evidence, not necessarily of the
@@ -106,8 +111,10 @@ check. A check can be registered, enabled and correct while no fixture has ever
 produced one of its findings, and that is exactly what must not read as proven.
 Each row carries the two evidence sets and one count: `finding_fixtures`, the
 fixtures where the check reported on the document, `uninspected_fixtures`, the
-fixtures where it did not complete an inspection, and `clean_fixture_count`, how
-many fixtures it inspected and found nothing in.
+fixtures where it did not report on the document at all (incomplete, skipped,
+non-inspected or not-applicable inspection, scope exclusions included), and
+`clean_fixture_count`, how many fixtures it inspected with status `ok` and no
+attributed findings.
 
 ## Coverage backlog
 
