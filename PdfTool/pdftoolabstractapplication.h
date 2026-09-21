@@ -273,6 +273,7 @@ struct PDFToolOptions
     QStringList preflightCheckFilter;
     QString preflightProfileOutputPath;
     QString preflightCertificateOutputPath;
+    QString preflightReportPath;
     QString preflightCertificatePath;
     QString preflightProfileForkId;
     QString preflightProfileForkVersion;

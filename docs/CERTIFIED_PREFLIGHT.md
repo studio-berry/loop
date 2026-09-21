@@ -8,8 +8,13 @@ profile. The certificate is standalone JSON and certification never writes prove
 Run preflight with an output path:
 
 ```text
-PdfTool preflight --profile profile.json --certify certificate.json document.pdf
+PdfTool preflight --profile profile.json --report-file preflight-report.json --certify certificate.json document.pdf
 ```
+
+`--report-file` writes the report in its retained form: the same redacted payload the
+operation-history chain stores and a certificate hashes, so the file can be archived, handed on,
+and bound to `report_digest` without re-running Loop. It binds the revision by digest; its `pdf`
+entry records the path the run was invoked with.
 
 Certification fails closed. Loop refuses issuance when inspection is incomplete, any check was
 skipped or unsupported, any processing budget was exceeded, an error finding lacks an active

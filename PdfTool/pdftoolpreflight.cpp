@@ -30,6 +30,7 @@
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfoperationimpact.h"
+#include "pdfartifactidentity.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationcontrol.h"
 #include "pdfoperationhistorystore.h"
@@ -601,6 +602,35 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          QStringLiteral("history.write-failed"),
                          auditResult.getErrorMessage());
         return PDFToolExitCode::ProcessingFailure;
+    }
+
+    if (!options.preflightReportPath.isEmpty())
+    {
+        // Write the retained form of the report. Certification and the audit chain
+        // hash the redacted summary, so this file is the payload a handoff consumer
+        // can bind to the certificate's report digest; the envelope keeps reporting
+        // the run's own view.
+        const QJsonObject retainedReport = pdf::redactSensitiveJson(auditSummary).toObject();
+        const QByteArray reportBytes = QJsonDocument(retainedReport).toJson(QJsonDocument::Indented);
+        QSaveFile reportFile(options.preflightReportPath);
+        if (!reportFile.open(QIODevice::WriteOnly) || reportFile.write(reportBytes) != reportBytes.size() ||
+            !reportFile.commit())
+        {
+            reportFile.cancelWriting();
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.write-failed"),
+                             PDFToolTranslationContext::tr("Could not write the preflight report '%1': %2")
+                                 .arg(options.preflightReportPath, reportFile.errorString()));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("report"),
+                                                  options.preflightReportPath,
+                                                  QStringLiteral("written") });
+        }
     }
 
     if (!options.preflightCertificateOutputPath.isEmpty())

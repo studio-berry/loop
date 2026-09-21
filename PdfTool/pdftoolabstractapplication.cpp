@@ -373,6 +373,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("decisions"), { QStringLiteral("--decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("export-decisions"), { QStringLiteral("--export-decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("certify"), { QStringLiteral("--certify") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("require-signoff"), { QStringLiteral("--require-signoff") }, {}, PDFToolValueType::Boolean);
         add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -864,6 +865,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("export-decisions"), QStringLiteral("Write the normalized operator decision JSON after the run."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("certify"), QStringLiteral("Write a standalone certified-preflight JSON after a certifiable run."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report-file"), QStringLiteral("Write the preflight report JSON this run is certified over to this file."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("require-signoff"), QStringLiteral("Require an active accept, waive, or override decision for every error finding."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
@@ -1419,6 +1421,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightDecisionsPath = parser->value("decisions");
         options.preflightDecisionsExportPath = parser->value("export-decisions");
         options.preflightCertificateOutputPath = parser->value("certify");
+        options.preflightReportPath = parser->value("report-file");
         options.preflightRequireSignoff = parser->isSet("require-signoff");
         options.preflightClientId = parser->value("client");
         options.preflightProductId = parser->value("product");
