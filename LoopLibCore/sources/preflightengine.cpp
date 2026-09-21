@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfconformanceclaim.h"
 #include "pdfpreflightverdict.h"
 #include "pdfoperationcontrol.h"
 #include "pdfschemaversion.h"
@@ -5706,6 +5707,131 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
     }
 }
 
+void appendInfoConformanceKey(QByteArray* text, const PDFDocumentInfo* info, const char* key)
+{
+    if (!text || !info || !key)
+    {
+        return;
+    }
+
+    const auto it = info->extra.find(QByteArray(key));
+    if (it == info->extra.cend())
+    {
+        return;
+    }
+
+    const QString value = it->second.toString();
+    if (value.isEmpty())
+    {
+        return;
+    }
+
+    text->append('\n');
+    text->append(key);
+    text->append("=\"");
+    text->append(value.toUtf8());
+    text->append('"');
+}
+
+struct ConformanceIdentification
+{
+    QByteArray text;
+    bool metadataUnreadable = false;
+};
+
+ConformanceIdentification readConformanceIdentification(PDFDocumentSession* session)
+{
+    ConformanceIdentification identification;
+    PDFDocument* document = session ? session->getDocument() : nullptr;
+    const PDFCatalog* catalog = document ? document->getCatalog() : nullptr;
+    if (!document || !catalog)
+    {
+        return identification;
+    }
+
+    const PDFObject metadataObject = document->getObject(catalog->getMetadata());
+    if (metadataObject.isStream())
+    {
+        try
+        {
+            identification.text = document->getDecodedStream(metadataObject.getStream(), session->getProcessingBudget());
+        }
+        catch (const PDFException&)
+        {
+            identification.metadataUnreadable = true;
+        }
+    }
+
+    appendInfoConformanceKey(&identification.text, document->getInfo(), "GTS_PDFXVersion");
+    appendInfoConformanceKey(&identification.text, document->getInfo(), "GTS_PDFXConformance");
+    return identification;
+}
+
+void appendUnsupportedConformanceFinding(const PreflightCheckConfig& check,
+                                         const PDFConformanceClaim& claim,
+                                         QList<PreflightFinding>& warnings)
+{
+    const QString disposition = pdfConformanceClaimReportDisposition(claim);
+    PreflightFinding finding;
+    finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+    finding.type = QString(PDF_CONFORMANCE_CLAIM_UNSUPPORTED_TYPE);
+    // A declared level is outside Loop's validator. Keep the finding a warning
+    // so it is visible without becoming a content-defect failure.
+    finding.severity = QStringLiteral("warning");
+    finding.checkId = check.id;
+    finding.message = PDFTranslationContext::tr("Declared conformance level '%1' is not validated.").arg(QString(claim.levelId));
+    finding.evidence = QJsonObject{
+        { QStringLiteral("level_id"), QString(claim.levelId) },
+        { QStringLiteral("produced"), claim.produced },
+        { QStringLiteral("validated"), claim.validated },
+        { QStringLiteral("report_disposition"), disposition },
+        { QStringLiteral("backlog_row"), QString(claim.backlogRowId) },
+        { QStringLiteral("catalog_disposition"), QString(claim.catalogDisposition) }
+    };
+    warnings.push_back(finding);
+}
+
+void runConformanceClaimsCheck(PDFDocumentSession* session,
+                               const PreflightCheckConfig& check,
+                               QList<PreflightFinding>& errors,
+                               QList<PreflightFinding>& warnings)
+{
+    Q_UNUSED(errors);
+
+    const ConformanceIdentification identification = readConformanceIdentification(session);
+    const QStringList declared = parseDeclaredConformanceLevels(identification.text);
+    if (declared.isEmpty())
+    {
+        if (!identification.metadataUnreadable)
+        {
+            return;
+        }
+
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("check-incomplete");
+        finding.severity = QStringLiteral("warning");
+        finding.checkId = check.id;
+        finding.message = PDFTranslationContext::tr("Conformance metadata could not be read.");
+        finding.evidence = QJsonObject{
+            { QStringLiteral("reason"), QStringLiteral("metadata-undecodable") },
+            { QStringLiteral("report_disposition"), QStringLiteral("not_inspected") }
+        };
+        warnings.push_back(finding);
+        return;
+    }
+
+    for (const QString& levelId : declared)
+    {
+        const PDFConformanceClaim* claim = pdfConformanceClaimForLevel(levelId);
+        if (!claim)
+        {
+            continue;
+        }
+        appendUnsupportedConformanceFinding(check, *claim, warnings);
+    }
+}
+
 }   // namespace
 
 QJsonObject PreflightResult::toJson(const QString& pdfPath) const
@@ -6460,55 +6586,118 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
             result.warnings[index].restrictionScope = status.restrictionScope;
         }
 
-        const auto isCheckIncomplete = [](const PreflightFinding& finding)
+        if (check.id == QStringLiteral("conformance-claims"))
         {
-            return finding.type == QStringLiteral("check-incomplete");
-        };
-        const bool checkIncomplete = std::any_of(result.errors.cbegin() + errorsBefore,
-                                                 result.errors.cend(),
-                                                 isCheckIncomplete) ||
-                                     std::any_of(result.warnings.cbegin() + warningsBefore,
-                                                 result.warnings.cend(),
-                                                 isCheckIncomplete);
-        const bool checkFailed = result.errors.size() > errorsBefore;
-        const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
-                                             result.warnings.cend(),
-                                             [](const PreflightFinding& finding)
-                                             {
-                                                 return finding.severity == QStringLiteral("warning");
-                                             });
-        if (checkIncomplete)
-        {
-            status.status = QStringLiteral("skipped");
-            status.reason = QStringLiteral("inspection incomplete");
-            const auto recordIncompleteReason = [&status](const PreflightFinding& finding)
+            QStringList unsupportedLevels;
+            QString notInspectedReason;
+            const auto collectClaim = [&](const PreflightFinding& finding)
             {
-                if (finding.type == QStringLiteral("check-incomplete"))
+                if (finding.type == PDF_CONFORMANCE_CLAIM_UNSUPPORTED_TYPE)
                 {
-                    const QString reason = finding.evidence.value(QStringLiteral("reason")).toString();
-                    if (!reason.isEmpty())
+                    const QString levelId = finding.evidence.value(QStringLiteral("level_id")).toString();
+                    if (!levelId.isEmpty() && !unsupportedLevels.contains(levelId))
                     {
-                        status.reason = reason;
+                        unsupportedLevels.append(levelId);
                     }
                 }
+                else if (finding.type == QStringLiteral("check-incomplete") && notInspectedReason.isEmpty())
+                {
+                    const QString reason = finding.evidence.value(QStringLiteral("reason")).toString();
+                    notInspectedReason = reason.isEmpty() ? QStringLiteral("metadata-undecodable") : reason;
+                }
             };
-            std::for_each(result.errors.cbegin() + errorsBefore, result.errors.cend(), recordIncompleteReason);
-            std::for_each(result.warnings.cbegin() + warningsBefore, result.warnings.cend(), recordIncompleteReason);
-            result.inspectionComplete = false;
-        }
-        else if (checkFailed)
-        {
-            status.status = QStringLiteral("failed");
-        }
-        else if (checkWarned)
-        {
-            status.status = QStringLiteral("warning");
+            std::for_each(result.errors.cbegin() + errorsBefore, result.errors.cend(), collectClaim);
+            std::for_each(result.warnings.cbegin() + warningsBefore, result.warnings.cend(), collectClaim);
+
+            QStringList orderedLevels;
+            int claimCount = 0;
+            const PDFConformanceClaim* claims = pdfConformanceClaimRegistry(&claimCount);
+            for (int index = 0; index < claimCount; ++index)
+            {
+                const QString levelId = QString(claims[index].levelId);
+                if (unsupportedLevels.contains(levelId))
+                {
+                    orderedLevels.append(levelId);
+                }
+            }
+            for (const QString& levelId : unsupportedLevels)
+            {
+                if (!orderedLevels.contains(levelId))
+                {
+                    orderedLevels.append(levelId);
+                }
+            }
+
+            if (!orderedLevels.isEmpty())
+            {
+                status.status = QString(PDF_CONFORMANCE_CLAIM_STATUS_UNSUPPORTED);
+                status.reason = QStringLiteral("unsupported-conformance-level:%1").arg(orderedLevels.join(QLatin1Char(',')));
+                result.inspectionComplete = false;
+            }
+            else if (!notInspectedReason.isEmpty())
+            {
+                status.status = QStringLiteral("not_inspected");
+                status.reason = notInspectedReason;
+                result.inspectionComplete = false;
+            }
+            else
+            {
+                status.status = QStringLiteral("ok");
+            }
+            result.checkStatuses.push_back(status);
         }
         else
         {
-            status.status = QStringLiteral("ok");
+            const auto isCheckIncomplete = [](const PreflightFinding& finding)
+            {
+                return finding.type == QStringLiteral("check-incomplete");
+            };
+            const bool checkIncomplete = std::any_of(result.errors.cbegin() + errorsBefore,
+                                                     result.errors.cend(),
+                                                     isCheckIncomplete) ||
+                                         std::any_of(result.warnings.cbegin() + warningsBefore,
+                                                     result.warnings.cend(),
+                                                     isCheckIncomplete);
+            const bool checkFailed = result.errors.size() > errorsBefore;
+            const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
+                                                 result.warnings.cend(),
+                                                 [](const PreflightFinding& finding)
+                                                 {
+                                                     return finding.severity == QStringLiteral("warning");
+                                                 });
+            if (checkIncomplete)
+            {
+                status.status = QStringLiteral("skipped");
+                status.reason = QStringLiteral("inspection incomplete");
+                const auto recordIncompleteReason = [&status](const PreflightFinding& finding)
+                {
+                    if (finding.type == QStringLiteral("check-incomplete"))
+                    {
+                        const QString reason = finding.evidence.value(QStringLiteral("reason")).toString();
+                        if (!reason.isEmpty())
+                        {
+                            status.reason = reason;
+                        }
+                    }
+                };
+                std::for_each(result.errors.cbegin() + errorsBefore, result.errors.cend(), recordIncompleteReason);
+                std::for_each(result.warnings.cbegin() + warningsBefore, result.warnings.cend(), recordIncompleteReason);
+                result.inspectionComplete = false;
+            }
+            else if (checkFailed)
+            {
+                status.status = QStringLiteral("failed");
+            }
+            else if (checkWarned)
+            {
+                status.status = QStringLiteral("warning");
+            }
+            else
+            {
+                status.status = QStringLiteral("ok");
+            }
+            result.checkStatuses.push_back(status);
         }
-        result.checkStatuses.push_back(status);
     }
 
     if (profile.pdfx.has_value() && effectivePlan.full && !profile.restrictions.isUnrestricted())
@@ -7432,6 +7621,14 @@ void PreflightEngine::registerBuiltInChecks()
     {
         Q_UNUSED(session);
         evaluateWhiteOverprintFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions, check.id, session));
+    };
+
+    m_checks[QStringLiteral("conformance-claims")] = [](PDFDocumentSession* session,
+                                                        const PreflightCheckConfig& check,
+                                                        QList<PreflightFinding>& errors,
+                                                        QList<PreflightFinding>& warnings)
+    {
+        runConformanceClaimsCheck(session, check, errors, warnings);
     };
 }
 

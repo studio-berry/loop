@@ -101,6 +101,8 @@ no P1 row may invent a class the matrix does not list.
 and backlog tool. A report's `coverage_scope` object carries the same claim
 with the enabled check ids for that run.
 
-Uncovered classes currently include GWG 2022/2024 certificates, PDF/X-5,
-PDF/VT, PDF/A-3 conversion claims, per-named-colorant ink limits beyond
-inventory, barcode/slug/Braille validation, and imposition.
+Uncovered classes currently include GWG 2022/2024 certificates, PDF/VT
+variable-data streams, per-named-colorant ink limits beyond inventory,
+barcode/slug/Braille validation, and imposition. Declared PDF/X-5n, PDF/X-5g,
+and PDF/A-3 claims are reported unsupported by `conformance-claims` rather
+than left as a silent gap.

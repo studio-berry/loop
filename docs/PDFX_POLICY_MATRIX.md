@@ -51,3 +51,14 @@ over unrelated incomplete rules.
 
 The `pdfx` profile object and report field are additive. Profiles without
 `pdfx` retain the existing engine behavior and report shape.
+
+## Declared but unsupported
+
+Loop does not produce or validate PDF/X-5n, PDF/X-5g, or PDF/A-3. Core has no
+external-resource or n-colorant output-intent rules for those levels. The
+`conformance-claims` check parses a declaration from catalog metadata and the
+document-info `GTS_PDFXVersion` / `GTS_PDFXConformance` keys. A declared level
+is check status `unsupported` with reason
+`unsupported-conformance-level:<ids>`, and the run stays incomplete. A file
+that does not declare those levels gets no finding. PDF/VT remains a separate
+gap.

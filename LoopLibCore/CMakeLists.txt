@@ -112,6 +112,8 @@ add_library(LoopLibCore SHARED
     sources/pdfevidencegraph.h
     sources/pdfoperationimpact.cpp
     sources/pdfoperationimpact.h
+    sources/pdfconformanceclaim.cpp
+    sources/pdfconformanceclaim.h
     sources/preflightengine.cpp
     sources/preflightengine.h
     sources/preflightclirun.cpp

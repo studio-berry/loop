@@ -154,6 +154,44 @@
         }
       ]
     },
+    "conformance-claims": {
+      "coverage": "partial",
+      "evidence": [
+        "scope",
+        "type",
+        "severity",
+        "message",
+        "check_id",
+        "evidence.level_id",
+        "evidence.produced",
+        "evidence.validated",
+        "evidence.report_disposition",
+        "evidence.backlog_row",
+        "evidence.catalog_disposition",
+        "evidence.reason"
+      ],
+      "families": [
+        "sheetfed-offset",
+        "packaging",
+        "digital"
+      ],
+      "fixups": [],
+      "limitations": "Does not produce those files and does not evaluate their external-resource or n-colorant output-intent rules. A declared level is reported unsupported. PDF/VT is a separate gap.",
+      "measures": "Whether the document declares PDF/X-5n, PDF/X-5g, or PDF/A-3, which Loop does not validate.",
+      "parameters": [],
+      "severity": [
+        {
+          "condition": "the document declares pdfx-5n, pdfx-5g, or pdfa-3. The finding stays a warning so it is not a content-defect error; the check status is unsupported and the run is incomplete.",
+          "finding_type": "check-unsupported",
+          "severity": "warning"
+        },
+        {
+          "condition": "catalog metadata is present but cannot be decoded, and no level was declared in the document info keys. The check status is not_inspected.",
+          "finding_type": "check-incomplete",
+          "severity": "warning"
+        }
+      ]
+    },
     "content-bleed": {
       "coverage": "partial",
       "evidence": [
@@ -1189,7 +1227,7 @@
   "matrix_id": "loop-gwg-pdfx-v1",
   "not_covered": [
     "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
-    "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+    "PDF/VT variable-data streams are neither understood, validated, nor preserved",
     "DeviceN ink-limit per named colorant beyond inventory",
     "Barcode / slug / Braille content validation",
     "Multi-page imposition and reader-spread checks"
@@ -1203,6 +1241,7 @@
     "bleed",
     "color-inventory",
     "color-mode",
+    "conformance-claims",
     "content-bleed",
     "dieline",
     "embedded-fonts",
