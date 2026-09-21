@@ -261,6 +261,16 @@ def validate_check_evidence(check_id: str, evidence: Any) -> None:
         )
 
 
+def validate_check_families(check_id: str, families: Any, known_families: set[str]) -> None:
+    if not isinstance(families, list) or not families:
+        raise ValueError(f"catalog entry '{check_id}' needs at least one family")
+    unknown = sorted(family for family in families if family not in known_families)
+    if unknown:
+        raise ValueError(f"catalog entry '{check_id}' names unknown families: {', '.join(unknown)}")
+    if len(set(families)) != len(families):
+        raise ValueError(f"catalog entry '{check_id}' repeats a family")
+
+
 def validate_check_fixups(check_id: str, fixups: Any, known_fixups: set[str]) -> None:
     if not isinstance(fixups, list):
         raise ValueError(f"catalog entry '{check_id}' fixups must be an array")
@@ -289,8 +299,9 @@ def build_preflight_check_catalog(registry: list[str], fixup_registry: list[dict
         if extra:
             problems.append("catalog without registry: " + ", ".join(extra))
         raise ValueError("; ".join(problems))
-    required = {"measures", "limitations", "coverage", "parameters", "severity", "evidence", "fixups"}
+    required = {"measures", "limitations", "coverage", "families", "parameters", "severity", "evidence", "fixups"}
     known_fields = parse_profile_check_field_names()
+    known_families = set(overlay["gwg_families"])
     known_fixups = set(preflight_fixup_ids(fixup_registry))
     for check_id, entry in overlay["checks"].items():
         absent = sorted(required - set(entry))
@@ -298,6 +309,7 @@ def build_preflight_check_catalog(registry: list[str], fixup_registry: list[dict
             raise ValueError(f"catalog entry '{check_id}' missing {', '.join(absent)}")
         if entry["coverage"] not in {"covered", "partial", "not_covered"}:
             raise ValueError(f"catalog entry '{check_id}' has invalid coverage")
+        validate_check_families(check_id, entry["families"], known_families)
         validate_check_parameters(check_id, entry["parameters"], known_fields)
         validate_check_severity(check_id, entry["severity"])
         validate_check_evidence(check_id, entry["evidence"])

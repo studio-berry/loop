@@ -141,6 +141,18 @@ class PreflightCheckCatalogTest(unittest.TestCase):
             target="backlog",
         )
 
+    def test_unknown_check_family_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["checks"]["bleed"]["families"].append("screen-print"),
+            "names unknown families: screen-print",
+        )
+
+    def test_missing_check_families_field_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["checks"]["bleed"].pop("families"),
+            "catalog entry 'bleed' missing families",
+        )
+
     def test_unverified_issue_reference_fails(self) -> None:
         def invent(overlay: dict) -> None:
             for row in overlay["backlog"]:
