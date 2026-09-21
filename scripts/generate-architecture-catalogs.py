@@ -142,7 +142,7 @@ PREFLIGHT_FINDING_FIELDS = {
     "bbox",
     "evidence_ids",
 }
-PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "closed_by")
+PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "closed_by", "deferral")
 PREFLIGHT_BACKLOG_PRIORITIES = {"P1", "P2", "P3"}
 PREFLIGHT_BACKLOG_STATES = {"open", "landed", "closed"}
 PREFLIGHT_BACKLOG_UNFILED = "unfiled"
@@ -435,6 +435,16 @@ def build_preflight_backlog(
                 f"backlog row '{identifier}' closed_by must be '{PREFLIGHT_BACKLOG_UNFILED}', "
                 "a verified '#<issue>' or a registered check id"
             )
+        deferral = row["deferral"]
+        if deferral is not None and (not isinstance(deferral, str) or not deferral.strip()):
+            raise ValueError(f"backlog row '{identifier}' deferral must be null or a non-empty string")
+        if closed_by == PREFLIGHT_BACKLOG_UNFILED and deferral is None:
+            raise ValueError(
+                f"backlog row '{identifier}' is unfiled without a deferral reason: "
+                "state why it is not filed, or file it"
+            )
+        if closed_by != PREFLIGHT_BACKLOG_UNFILED and deferral is not None:
+            raise ValueError(f"backlog row '{identifier}' is filed but carries a deferral reason")
         parsed.append(
             {
                 "id": identifier,
@@ -443,6 +453,7 @@ def build_preflight_backlog(
                 "families": families,
                 "state": state,
                 "closed_by": closed_by,
+                "deferral": deferral,
             }
         )
 

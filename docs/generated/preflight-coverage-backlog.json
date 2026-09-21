@@ -112,6 +112,7 @@
   "rows": [
     {
       "closed_by": "#604",
+      "deferral": null,
       "families": [
         "packaging",
         "sheetfed-offset",
@@ -124,6 +125,7 @@
     },
     {
       "closed_by": "#600",
+      "deferral": null,
       "families": [
         "packaging",
         "sheetfed-offset",
@@ -137,6 +139,7 @@
     },
     {
       "closed_by": "#664",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
@@ -148,6 +151,7 @@
     },
     {
       "closed_by": "#603",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -160,6 +164,7 @@
     },
     {
       "closed_by": "#605",
+      "deferral": null,
       "families": [
         "web-offset",
         "newspaper",
@@ -172,6 +177,7 @@
     },
     {
       "closed_by": "#665",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
@@ -184,6 +190,7 @@
     },
     {
       "closed_by": "#47",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
@@ -196,6 +203,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture whose ICC space resolves to an allowed alternate, so the false pass is reproducible rather than argued.",
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -210,6 +218,7 @@
     },
     {
       "closed_by": "font-integrity",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
@@ -221,6 +230,7 @@
     },
     {
       "closed_by": "#628",
+      "deferral": null,
       "families": [
         "packaging"
       ],
@@ -231,6 +241,7 @@
     },
     {
       "closed_by": "#604",
+      "deferral": null,
       "families": [
         "packaging"
       ],
@@ -241,6 +252,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture with a parsable embedded program that is missing a used glyph.",
       "families": [
         "sheetfed-offset",
         "digital"
@@ -252,6 +264,7 @@
     },
     {
       "closed_by": "thin-strokes",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
@@ -263,6 +276,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture with an optional-content membership configuration that hides print content.",
       "families": [
         "packaging"
       ],
@@ -273,6 +287,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture with an isolated over-limit element below min_region_area_pct.",
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -285,6 +300,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture painting an invisible class outside text render mode 3 and zero-alpha graphics state.",
       "families": [
         "sheetfed-offset",
         "packaging"
@@ -296,6 +312,7 @@
     },
     {
       "closed_by": "embedded-fonts",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -310,6 +327,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture where a bounding-box heuristic cannot see the occlusion a RIP would.",
       "families": [
         "sheetfed-offset"
       ],
@@ -320,6 +338,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture whose clipped mark exposes the pre-clip bounds comparison.",
       "families": [
         "sheetfed-offset",
         "digital"
@@ -331,6 +350,7 @@
     },
     {
       "closed_by": "output-intent",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -344,6 +364,7 @@
     },
     {
       "closed_by": "thin-parts",
+      "deferral": null,
       "families": [
         "packaging"
       ],
@@ -354,6 +375,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Deferred: filing needs a fixture reproducing an overprint-plus-transparency interaction only a RIP flattens.",
       "families": [
         "sheetfed-offset",
         "packaging",
@@ -366,6 +388,7 @@
     },
     {
       "closed_by": "#49",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
@@ -377,6 +400,7 @@
     },
     {
       "closed_by": "content-bleed",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -390,6 +414,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Register-only: P3, the limitation narrows inventoried detail rather than turning a defect into a silent pass.",
       "families": [
         "packaging",
         "sheetfed-offset"
@@ -401,6 +426,7 @@
     },
     {
       "closed_by": "unfiled",
+      "deferral": "Register-only: P3, the shortfall fails closed as an incomplete inspection rather than passing silently.",
       "families": [
         "packaging"
       ],

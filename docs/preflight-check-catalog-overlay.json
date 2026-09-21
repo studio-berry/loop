@@ -1285,7 +1285,8 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#604"
+   "closed_by": "#604",
+   "deferral": null
   },
   {
    "id": "devicen-per-colorant-ink-limit",
@@ -1298,7 +1299,8 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#600"
+   "closed_by": "#600",
+   "deferral": null
   },
   {
    "id": "gwg-2022-2024-certificates",
@@ -1309,7 +1311,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "#664"
+   "closed_by": "#664",
+   "deferral": null
   },
   {
    "id": "imposition-and-reader-spreads",
@@ -1321,7 +1324,8 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#603"
+   "closed_by": "#603",
+   "deferral": null
   },
   {
    "id": "pdfvt-variable-data",
@@ -1333,7 +1337,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "#605"
+   "closed_by": "#605",
+   "deferral": null
   },
   {
    "id": "pdfx5-pdfa3-output",
@@ -1345,7 +1350,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "#665"
+   "closed_by": "#665",
+   "deferral": null
   },
   {
    "id": "bleed-raster-strip-depth",
@@ -1357,7 +1363,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "#47"
+   "closed_by": "#47",
+   "deferral": null
   },
   {
    "id": "color-mode-icc-alternate",
@@ -1371,7 +1378,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture whose ICC space resolves to an allowed alternate, so the false pass is reproducible rather than argued."
   },
   {
    "id": "dieline-geometry",
@@ -1381,7 +1389,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "#604"
+   "closed_by": "#604",
+   "deferral": null
   },
   {
    "id": "font-glyph-coverage",
@@ -1392,7 +1401,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture with a parsable embedded program that is missing a used glyph."
   },
   {
    "id": "hidden-layers-ocmd",
@@ -1402,7 +1412,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture with an optional-content membership configuration that hides print content."
   },
   {
    "id": "ink-coverage-raster-tac",
@@ -1414,7 +1425,8 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture with an isolated over-limit element below min_region_area_pct."
   },
   {
    "id": "invisible-content-breadth",
@@ -1425,7 +1437,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture painting an invisible class outside text render mode 3 and zero-alpha graphics state."
   },
   {
    "id": "obscured-content-occlusion",
@@ -1435,7 +1448,8 @@
     "sheetfed-offset"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture where a bounding-box heuristic cannot see the occlusion a RIP would."
   },
   {
    "id": "off-page-content-clipping",
@@ -1446,7 +1460,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture whose clipped mark exposes the pre-clip bounds comparison."
   },
   {
    "id": "transparency-rip-interaction",
@@ -1458,7 +1473,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Deferred: filing needs a fixture reproducing an overprint-plus-transparency interaction only a RIP flattens."
   },
   {
    "id": "white-overprint-renderer",
@@ -1469,7 +1485,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "#49"
+   "closed_by": "#49",
+   "deferral": null
   },
   {
    "id": "corrupt-embedded-fonts",
@@ -1480,7 +1497,8 @@
     "digital"
    ],
    "state": "landed",
-   "closed_by": "font-integrity"
+   "closed_by": "font-integrity",
+   "deferral": null
   },
   {
    "id": "devicen-dieline-detection",
@@ -1490,7 +1508,8 @@
     "packaging"
    ],
    "state": "closed",
-   "closed_by": "#628"
+   "closed_by": "#628",
+   "deferral": null
   },
   {
    "id": "hairline-and-thin-stroke-widths",
@@ -1501,7 +1520,8 @@
     "packaging"
    ],
    "state": "landed",
-   "closed_by": "thin-strokes"
+   "closed_by": "thin-strokes",
+   "deferral": null
   },
   {
    "id": "nested-font-resources",
@@ -1515,7 +1535,8 @@
     "digital"
    ],
    "state": "landed",
-   "closed_by": "embedded-fonts"
+   "closed_by": "embedded-fonts",
+   "deferral": null
   },
   {
    "id": "output-intent-identity",
@@ -1528,7 +1549,8 @@
     "digital"
    ],
    "state": "landed",
-   "closed_by": "output-intent"
+   "closed_by": "output-intent",
+   "deferral": null
   },
   {
    "id": "thin-filled-parts",
@@ -1538,7 +1560,8 @@
     "packaging"
    ],
    "state": "landed",
-   "closed_by": "thin-parts"
+   "closed_by": "thin-parts",
+   "deferral": null
   },
   {
    "id": "bleed-box-rewrite-only",
@@ -1551,7 +1574,8 @@
     "digital"
    ],
    "state": "landed",
-   "closed_by": "content-bleed"
+   "closed_by": "content-bleed",
+   "deferral": null
   },
   {
    "id": "color-inventory-probe-depth",
@@ -1562,7 +1586,8 @@
     "sheetfed-offset"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Register-only: P3, the limitation narrows inventoried detail rather than turning a defect into a silent pass."
   },
   {
    "id": "thin-parts-raster-budget",
@@ -1572,7 +1597,8 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "unfiled"
+   "closed_by": "unfiled",
+   "deferral": "Register-only: P3, the shortfall fails closed as an incomplete inspection rather than passing silently."
   }
  ],
  "not_covered": [
