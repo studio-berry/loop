@@ -23,6 +23,7 @@
 #include "loopstatevisual.h"
 #include "preflightengine.h"
 
+#include <QSet>
 #include <QtTest>
 
 #include <cmath>
@@ -35,6 +36,7 @@ using pdfquick::tokens::LoopStateVisual;
 using pdfquick::tokens::LoopTheme;
 using pdfquick::tokens::MinimumKeyboardTargetPx;
 using pdfquick::tokens::MinimumPointerTargetPx;
+using pdfquick::tokens::resolveFixLifecycleStateVisual;
 using pdfquick::tokens::resolveStateVisual;
 using pdfquick::tokens::SpaceL;
 using pdfquick::tokens::SpaceM;
@@ -227,6 +229,12 @@ private slots:
     void preflightStateVisualMapping();
     void preflightStateVisualNeverPassesWithoutAPass_data();
     void preflightStateVisualNeverPassesWithoutAPass();
+
+    void fixLifecycleMapping_data();
+    void fixLifecycleMapping();
+    void fixLifecycleStatesStayDistinctWithoutColour();
+    void fixLifecycleNeverClaimsAPass_data();
+    void fixLifecycleNeverClaimsAPass();
 };
 
 void LoopStateVisualTest::severityMapping_data()
@@ -629,10 +637,13 @@ void LoopStateVisualTest::preflightStateVisualMapping_data()
     QTest::newRow("not-checked") << QStringLiteral("not-checked") << StateKind::NotChecked;
     QTest::newRow("running") << QStringLiteral("running") << StateKind::Info;
     QTest::newRow("pass") << QStringLiteral("pass") << StateKind::Passed;
+    QTest::newRow("certified") << QStringLiteral("certified") << StateKind::Passed;
+    QTest::newRow("not-certified") << QStringLiteral("not-certified") << StateKind::NotChecked;
     QTest::newRow("findings") << QStringLiteral("findings") << StateKind::Error;
     QTest::newRow("fail") << QStringLiteral("fail") << StateKind::Error;
     QTest::newRow("incomplete") << QStringLiteral("incomplete") << StateKind::Incomplete;
     QTest::newRow("stale") << QStringLiteral("stale") << StateKind::Incomplete;
+    QTest::newRow("certificate-invalid") << QStringLiteral("certificate-invalid") << StateKind::Incomplete;
     QTest::newRow("cancelled") << QStringLiteral("cancelled") << StateKind::NotChecked;
     QTest::newRow("error") << QStringLiteral("error") << StateKind::Error;
     QTest::newRow("unknown") << QStringLiteral("something-new") << StateKind::NotChecked;
@@ -688,6 +699,106 @@ void LoopStateVisualTest::preflightStateVisualNeverPassesWithoutAPass()
     QVERIFY(visual.colorRole != ColorRole::Success);
     QVERIFY(visual.icon != StateIcon::Checkmark);
     QVERIFY(visual.accessibleName != QStringLiteral("Passed"));
+}
+
+
+void LoopStateVisualTest::fixLifecycleMapping_data()
+{
+    QTest::addColumn<QString>("stateName");
+    QTest::addColumn<StateKind>("expectedKind");
+    QTest::addColumn<ColorRole>("expectedRole");
+    QTest::addColumn<StateIcon>("expectedIcon");
+    QTest::addColumn<QString>("expectedName");
+
+    QTest::newRow("idle") << QStringLiteral("idle") << StateKind::NotChecked << ColorRole::StateNotChecked
+                          << StateIcon::Outline << QStringLiteral("No correction planned");
+    QTest::newRow("planned") << QStringLiteral("planned") << StateKind::Info << ColorRole::SeverityInfo
+                             << StateIcon::DashedSquare << QStringLiteral("Plan ready for review");
+    QTest::newRow("preview ready") << QStringLiteral("preview-ready") << StateKind::Info << ColorRole::SeverityInfo
+                                   << StateIcon::HalfFilled << QStringLiteral("Preview ready for review");
+    QTest::newRow("approved") << QStringLiteral("approved") << StateKind::Info << ColorRole::SeverityInfo
+                              << StateIcon::Checkmark << QStringLiteral("Plan approved, ready to execute");
+    QTest::newRow("executing") << QStringLiteral("executing") << StateKind::Info << ColorRole::SeverityInfo
+                               << StateIcon::Play << QStringLiteral("Executing the approved plan");
+    QTest::newRow("succeeded") << QStringLiteral("succeeded") << StateKind::Info << ColorRole::SeverityInfo
+                               << StateIcon::FilledSquare << QStringLiteral("Correction rechecked and published");
+    QTest::newRow("stale") << QStringLiteral("stale") << StateKind::Incomplete << ColorRole::StateIncomplete
+                           << StateIcon::Hatched << QStringLiteral("Plan or preview is stale for the current revision");
+    QTest::newRow("rejected") << QStringLiteral("rejected") << StateKind::Warning << ColorRole::SeverityWarning
+                              << StateIcon::Cross << QStringLiteral("Plan rejected by the operator");
+    QTest::newRow("cancelled") << QStringLiteral("cancelled") << StateKind::NotChecked << ColorRole::StateNotChecked
+                               << StateIcon::Slash << QStringLiteral("Correction cancelled");
+    QTest::newRow("failed") << QStringLiteral("failed") << StateKind::Error << ColorRole::SeverityError
+                            << StateIcon::FilledCircle << QStringLiteral("Correction failed");
+    QTest::newRow("unrecognised") << QStringLiteral("no-such-state") << StateKind::NotChecked
+                                  << ColorRole::StateNotChecked << StateIcon::Outline
+                                  << QStringLiteral("No correction planned");
+}
+
+void LoopStateVisualTest::fixLifecycleMapping()
+{
+    QFETCH(QString, stateName);
+    QFETCH(StateKind, expectedKind);
+    QFETCH(ColorRole, expectedRole);
+    QFETCH(StateIcon, expectedIcon);
+    QFETCH(QString, expectedName);
+
+    const LoopStateVisual visual = resolveFixLifecycleStateVisual(stateName);
+
+    QCOMPARE(visual.kind, expectedKind);
+    QCOMPARE(visual.colorRole, expectedRole);
+    QCOMPARE(visual.icon, expectedIcon);
+    QCOMPARE(visual.accessibleName, expectedName);
+}
+
+/// The states the governed-correction route promises to keep visibly and semantically distinct
+/// (#586): each carries its own shape and its own spoken name, so no two states are told apart
+/// by colour alone.
+void LoopStateVisualTest::fixLifecycleStatesStayDistinctWithoutColour()
+{
+    const QStringList states = { QStringLiteral("idle"), QStringLiteral("planned"),
+                                 QStringLiteral("preview-ready"), QStringLiteral("approved"),
+                                 QStringLiteral("executing"), QStringLiteral("succeeded"),
+                                 QStringLiteral("stale"), QStringLiteral("rejected"),
+                                 QStringLiteral("cancelled"), QStringLiteral("failed") };
+
+    QSet<int> icons;
+    QSet<QString> names;
+    for (const QString& state : states)
+    {
+        const LoopStateVisual visual = resolveFixLifecycleStateVisual(state);
+        icons.insert(static_cast<int>(visual.icon));
+        names.insert(visual.accessibleName);
+        QVERIFY2(!visual.accessibleName.trimmed().isEmpty(), qPrintable(state));
+    }
+
+    QCOMPARE(icons.size(), states.size());
+    QCOMPARE(names.size(), states.size());
+}
+
+void LoopStateVisualTest::fixLifecycleNeverClaimsAPass_data()
+{
+    QTest::addColumn<QString>("stateName");
+
+    for (const QString& state : { QStringLiteral("idle"), QStringLiteral("planned"), QStringLiteral("preview-ready"),
+                                  QStringLiteral("approved"), QStringLiteral("executing"), QStringLiteral("succeeded"),
+                                  QStringLiteral("stale"), QStringLiteral("rejected"), QStringLiteral("cancelled"),
+                                  QStringLiteral("failed"), QString() })
+    {
+        QTest::newRow(qPrintable(state.isEmpty() ? QStringLiteral("empty") : state)) << state;
+    }
+}
+
+void LoopStateVisualTest::fixLifecycleNeverClaimsAPass()
+{
+    QFETCH(QString, stateName);
+
+    const LoopStateVisual visual = resolveFixLifecycleStateVisual(stateName);
+
+    // A lifecycle state describes the operator's route, never a preflight verdict: only a real
+    // pass may look like one.
+    QVERIFY(visual.kind != StateKind::Passed);
+    QVERIFY(visual.colorRole != ColorRole::Success);
 }
 
 QTEST_APPLESS_MAIN(LoopStateVisualTest)

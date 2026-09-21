@@ -161,32 +161,20 @@ Item {
                     host: root.host
                 }
 
-                WorkspacePlaceholderPane {
+                ProductionPreviewPane {
                     host: root.host
-                    titleText: qsTr("Production Preview")
-                    descriptionText: qsTr("Soft proofing and output preview will appear here.")
-                    Accessible.name: qsTr("Production Preview workspace")
                 }
 
-                WorkspacePlaceholderPane {
+                PagesProductionPane {
                     host: root.host
-                    titleText: qsTr("Pages / Production")
-                    descriptionText: qsTr("Page assembly and production geometry will appear here.")
-                    Accessible.name: qsTr("Pages and Production workspace")
                 }
 
-                WorkspacePlaceholderPane {
+                InspectPane {
                     host: root.host
-                    titleText: qsTr("Inspect")
-                    descriptionText: qsTr("Dedicated inspection tools will appear here. Use the document inspector dock for contextual selection.")
-                    Accessible.name: qsTr("Inspect workspace")
                 }
 
-                WorkspacePlaceholderPane {
+                ActionListPane {
                     host: root.host
-                    titleText: qsTr("Fix")
-                    descriptionText: qsTr("Bounded corrective operations will appear here.")
-                    Accessible.name: qsTr("Fix workspace")
                 }
 
                 WorkspacePlaceholderPane {

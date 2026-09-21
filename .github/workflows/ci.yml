@@ -73,6 +73,12 @@ jobs:
         run: |
           python3 -m unittest scripts.ci.test_check_independent_validation_gate -q
           python3 scripts/ci/check_independent_validation_gate.py
+      - name: Verify correction-operation catalog (#588)
+        run: |
+          python3 scripts/ci/test_correction_operation_catalog.py
+          python3 scripts/generate-architecture-catalogs.py --check
+      - name: Verify preflight check catalog and coverage backlog (#165)
+        run: python3 scripts/ci/test_preflight_check_catalog.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
       - name: Verify Phase 5 Widgets evidence is current

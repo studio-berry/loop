@@ -140,6 +140,10 @@ Compatibility:
 - Unsupported **major** → fail closed
 - Compatible additive **minor** → preserve unknown fields where the matrix says `passthrough`
 - Migrations are pure, deterministic, tested, and provenance-visible when they rewrite bytes (`SchemaMigrated` event; never rewrite old events)
+- Any migration that rewrites bytes must append a `SchemaMigrated` event; the history
+  database upgrade path is the one such migration today and does it in the same
+  transaction as its DDL
+- `PdfTool schema` and `pdf::schemaCompatibilityDiagnostic()` report the same code and message
 
 ## Agent sessions (0.1.1)
 

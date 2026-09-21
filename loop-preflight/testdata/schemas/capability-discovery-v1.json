@@ -1,0 +1,9 @@
+{
+  "schema_kind": "capability-discovery",
+  "schema_version": 1,
+  "discovery_schema_version": 1,
+  "product": {
+    "name": "PdfTool",
+    "version": ""
+  }
+}

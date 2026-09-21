@@ -26,9 +26,11 @@
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
 #include "pdfartifactstore.h"
+#include "pdfgovernedexecution.h"
 #include "pdfoperationhistorystore.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfpreflightcertificate.h"
 #include "pdfsafefilewriter.h"
 
 #include <algorithm>
@@ -42,13 +44,16 @@
 #include <QJsonValue>
 #include <QTemporaryDir>
 
+#include <optional>
+
 namespace
 {
 
 void appendRepairHistoryFailed(pdf::PDFOperationHistoryStore& history,
                                const QUuid& executionId,
                                const QString& errorCode,
-                               const QString& message)
+                               const QString& message,
+                               const pdf::PDFApprovalRecord& approval)
 {
     pdf::PDFOperationHistoryEvent historyFailed;
     historyFailed.executionId = executionId;
@@ -57,6 +62,9 @@ void appendRepairHistoryFailed(pdf::PDFOperationHistoryStore& history,
         { QStringLiteral("error_code"), errorCode },
         { QStringLiteral("error"), message }
     };
+    historyFailed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    historyFailed.operatorIdentity = approval.actorId;
+    historyFailed.approval = approval;
     history.appendEvent(historyFailed);
 }
 
@@ -316,6 +324,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Findings;
     }
 
+    const QString sourceSha256 = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), sourceSha256, transaction.savePolicy());
+
     QJsonObject reportJson{
         { QStringLiteral("schema"), QStringLiteral("loop.repair-operation") },
         { QStringLiteral("schema_version"), 1 },
@@ -323,7 +334,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         { QStringLiteral("operation"), options.repairOperationId },
         { QStringLiteral("input"), QJsonObject{
                                        { QStringLiteral("path"), options.repairFiles.first() },
-                                       { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) } } },
+                                       { QStringLiteral("sha256"), sourceSha256 } } },
+        { QStringLiteral("plan_digest"), planDigest },
         { QStringLiteral("plans"), plansJson(transaction.plans()) },
         { QStringLiteral("results"), resultsJson(transaction.results()) }
     };
@@ -384,12 +396,20 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     pdf::PDFRepairDiffOptions diffOptions;
     diffOptions.renderDirectory = options.repairRenderDirectory;
     diffOptions.operationControl = &cancelControl;
-    diffOptions.renderVisualDiff = !pdf::repairPlansMutatePageContent(transaction.plans());
-    pdf::PDFRepairDiffReport diffReport;
-    if (const pdf::PDFOperationResult diffResult = transaction.compareCandidate(candidatePath, diffOptions, &diffReport); !diffResult)
+    pdf::PDFTechnicalPreview technicalPreview;
+    if (const pdf::PDFOperationResult technicalResult = pdf::buildTechnicalPreview(transaction, candidatePath, planDigest, &technicalPreview); !technicalResult)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-failed"), diffResult.getErrorMessage());
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-failed"), technicalResult.getErrorMessage());
         return PDFToolExitCode::ProcessingFailure;
+    }
+    pdf::PDFVisualPreview visualPreview;
+    if (pdf::repairPlansMutatePageContent(transaction.plans()))
+    {
+        if (const pdf::PDFOperationResult visualResult = pdf::buildVisualPreview(transaction, candidatePath, planDigest, diffOptions, &visualPreview); !visualResult)
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-failed"), visualResult.getErrorMessage());
+            return PDFToolExitCode::ProcessingFailure;
+        }
     }
 
     pdf::PDFDocument candidateDocument;
@@ -406,69 +426,88 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         }
     }
 
+    QJsonObject governedProfile;
     if (!options.preflightProfilePath.isEmpty())
     {
-        QJsonObject profile;
         QString profileError;
-        if (!pdf::PreflightEngine::loadProfile(options.preflightProfilePath, profile, profileError))
+        if (!pdf::PreflightEngine::loadProfile(options.preflightProfilePath, governedProfile, profileError))
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("preflight.profile-invalid"), profileError);
             return PDFToolExitCode::InvalidInvocation;
         }
-        pdf::PDFDocumentSession session(&candidateDocument);
-        const pdf::PreflightResult preflight = pdf::PreflightEngine(&session).run(profile);
-        const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(preflight);
-        reportJson.insert(QStringLiteral("postflight"), preflight.toJson(candidatePath));
-        if (verdict.state == pdf::PreflightVerdictState::Incomplete)
+        if (!transaction.postflightRequired())
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-            reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{ QStringLiteral("postflight-incomplete") });
-            if (!options.repairAllowIncomplete)
-            {
-                writeRepairReportIfRequested(options, reportJson);
-                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
-                                 PDFToolTranslationContext::tr("Postflight did not inspect the complete candidate."));
-                return PDFToolExitCode::PartialOutput;
-            }
-        }
-        if (verdict.state == pdf::PreflightVerdictState::Error)
-        {
-            reportJson.insert(QStringLiteral("status"), QStringLiteral("error"));
+            pdf::PDFRepairFindingDelta missingPostflight;
+            missingPostflight.incompleteFindingIds.append(QStringLiteral("postflight-not-required-by-plan"));
+            reportJson.insert(QStringLiteral("finding_delta"), missingPostflight.toJson());
             writeRepairReportIfRequested(options, reportJson);
-            return PDFToolExitCode::PreflightError;
-        }
-        if (verdict.state == pdf::PreflightVerdictState::Fail)
-        {
-            reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
-            writeRepairReportIfRequested(options, reportJson);
-            return PDFToolExitCode::Findings;
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
+                             PDFToolTranslationContext::tr("Repair publication requires a plan that declares postflight validation."));
+            return PDFToolExitCode::PartialOutput;
         }
     }
-    else
+
+    pdf::PreflightResult postflight;
+    const pdf::PDFOperationResult verified = transaction.validateCandidate(options.preflightProfilePath,
+                                                                           &postflight,
+                                                                           governedProfile);
+    reportJson.insert(QStringLiteral("results"), resultsJson(transaction.results()));
+    if (options.preflightProfilePath.isEmpty())
     {
         reportJson.insert(QStringLiteral("postflight"), QJsonObject{
                                                             { QStringLiteral("status"), QStringLiteral("not-run") },
                                                             { QStringLiteral("reason"), QStringLiteral("no-profile-supplied") } });
-        reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
+    }
+    else
+    {
+        reportJson.insert(QStringLiteral("postflight"), postflight.toJson(candidatePath));
+    }
+    const pdf::PreflightVerdict canonicalVerdict = pdf::reducePreflightVerdict(postflight);
+    // The canonical transaction validation is the only repair inspection; its
+    // per-result finding delta is reported here rather than from a second run.
+    pdf::PDFRepairFindingDelta automaticFindingDelta;
+    if (!transaction.results().isEmpty())
+    {
+        automaticFindingDelta = transaction.results().first().findingDelta;
+    }
+    reportJson.insert(QStringLiteral("finding_delta"), automaticFindingDelta.toJson());
+    reportJson.insert(QStringLiteral("postflight_verdict"), canonicalVerdict.toJson());
+    if (!verified || transaction.status() != pdf::PDFRepairStatus::Passed || !canonicalVerdict.isPass())
+    {
+        const pdf::PDFRepairStatus status = transaction.status();
+        const bool incomplete = status == pdf::PDFRepairStatus::Incomplete ||
+                                canonicalVerdict.state == pdf::PreflightVerdictState::Incomplete;
+        reportJson.insert(QStringLiteral("status"), incomplete ? QStringLiteral("incomplete") : QStringLiteral("failed"));
         writeRepairReportIfRequested(options, reportJson);
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
-                         PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
-        return PDFToolExitCode::PartialOutput;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.declared-validation-failed"),
+                         verified.getErrorMessage().isEmpty()
+                             ? PDFToolTranslationContext::tr("A declared repair validator did not complete; no output was committed.")
+                             : verified.getErrorMessage());
+        return incomplete ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Findings;
     }
 
-    reportJson.insert(QStringLiteral("diff"), diffReport.toJson());
-    if (diffReport.status == pdf::PDFRepairDiffStatus::Incomplete)
+    reportJson.insert(QStringLiteral("technical_preview"), technicalPreview.toJson());
+    reportJson.insert(QStringLiteral("visual_preview"), visualPreview.toJson());
+    const bool previewIncomplete = technicalPreview.status == pdf::PDFRepairDiffStatus::Incomplete ||
+                                   visualPreview.status == pdf::PDFRepairDiffStatus::Incomplete;
+    if (previewIncomplete)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-        if (!options.repairAllowIncomplete)
-        {
-            writeRepairReportIfRequested(options, reportJson);
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-incomplete"),
-                             PDFToolTranslationContext::tr("The repair preview is incomplete; no output was committed."));
-            return PDFToolExitCode::PartialOutput;
-        }
+        writeRepairReportIfRequested(options, reportJson);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-incomplete"),
+                         PDFToolTranslationContext::tr("The repair preview is incomplete; no output was committed."));
+        return PDFToolExitCode::PartialOutput;
     }
-    if (pdf::unexpectedChangeCount(diffReport) > 0)
+    const int unexpectedStructuralChanges = std::count_if(technicalPreview.structuralChanges.cbegin(),
+                                                          technicalPreview.structuralChanges.cend(),
+                                                          [](const pdf::PDFRepairStructuralChange& change)
+                                                          { return change.classification == pdf::PDFRepairChangeClass::Unexpected; });
+    const int unexpectedVisualPages = std::count_if(visualPreview.pages.cbegin(),
+                                                    visualPreview.pages.cend(),
+                                                    [](const pdf::PDFRepairPageVisualDiff& page)
+                                                    { return page.unexpectedChangedPixelCount > 0; });
+    if (unexpectedStructuralChanges > 0 || unexpectedVisualPages > 0)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
         writeRepairReportIfRequested(options, reportJson);
@@ -489,6 +528,50 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (pdf::PDFOperationControl::isOperationCancelled(&cancelControl))
     {
         return PDFToolExitCode::Cancelled;
+    }
+
+    const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+    pdf::PDFGovernedExecutionApproval governedApproval;
+    if (!options.repairApprovalFile.isEmpty())
+    {
+        QFile approvalFile(options.repairApprovalFile);
+        if (!approvalFile.open(QIODevice::ReadOnly))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-unreadable"),
+                             PDFToolTranslationContext::tr("Could not read the governed approval file."));
+            return PDFToolExitCode::InvalidInvocation;
+        }
+        const QJsonObject approvalObject = QJsonDocument::fromJson(approvalFile.readAll()).object();
+        QString approvalError;
+        governedApproval = pdf::PDFGovernedExecutionApproval::fromJson(approvalObject, &approvalError);
+        if (!governedApproval.isValid())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"), approvalError);
+            return PDFToolExitCode::InvalidInvocation;
+        }
+        if (const pdf::PDFOperationResult approvalValidation = pdf::validateGovernedApproval(governedApproval,
+                                                                                             planDigest,
+                                                                                             sourceSha256,
+                                                                                             candidateSha256);
+            !approvalValidation)
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"),
+                             approvalValidation.getErrorMessage());
+            return PDFToolExitCode::InvalidInvocation;
+        }
+    }
+    else
+    {
+        governedApproval.planDigest = planDigest;
+        governedApproval.sourceSha256 = sourceSha256;
+        governedApproval.candidateSha256 = candidateSha256;
+        governedApproval.approval.kind = pdf::PDFApprovalKind::Policy;
+        governedApproval.approval.actorId = QStringLiteral("PdfTool");
+        governedApproval.approval.decision = QStringLiteral("approve");
+        governedApproval.approval.policyId = QStringLiteral("preflight-profile");
+        governedApproval.approval.rationale = QStringLiteral("Repair candidate passed governed previews and postflight.");
+        governedApproval.approval.evidenceSha256 = planDigest;
+        governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
     }
 
     const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loop-history");
@@ -513,6 +596,37 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                          historyError.isEmpty() ? QStringLiteral("Could not register the repair history artifacts.") : historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
+    // A certificate lives in the certified document's own chain - the same chain
+    // verify-certificate reads - so the retained certificate is read from the input
+    // document's history and its invalidation is recorded there. The repair's own
+    // events belong to the output document's history, which never holds the
+    // certificate that the fix is superseding.
+    const QString certifiedHistoryDirectory =
+        QFileInfo(options.repairFiles.first()).absoluteFilePath() + QStringLiteral(".loop-history");
+    const bool certifiedHistoryIsOutput = certifiedHistoryDirectory == historyDirectory;
+    pdf::PDFOperationHistoryStore certifiedHistory(QDir(certifiedHistoryDirectory).filePath(QStringLiteral("history.sqlite3")));
+    pdf::PDFOperationHistoryStore& retainedHistory = certifiedHistoryIsOutput ? operationHistory : certifiedHistory;
+
+    QString retainedCertificateError;
+    const bool hasRetainedHistory = certifiedHistoryIsOutput || QFileInfo(retainedHistory.databasePath()).exists();
+    if (hasRetainedHistory && !certifiedHistoryIsOutput && !certifiedHistory.open(&retainedCertificateError))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.open-failed"), retainedCertificateError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+    const QList<pdf::PDFOperationHistoryEvent> priorHistory =
+        hasRetainedHistory ? retainedHistory.events(&retainedCertificateError)
+                           : QList<pdf::PDFOperationHistoryEvent>();
+    const std::optional<pdf::PreflightCertificate> priorCertificate =
+        retainedCertificateError.isEmpty()
+            ? pdf::latestPreflightCertificate(priorHistory, &retainedCertificateError)
+            : std::nullopt;
+    if (!retainedCertificateError.isEmpty())
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.read-failed"), retainedCertificateError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     pdf::PDFOperationHistoryExecution historyExecution;
     historyExecution.operationId = options.repairOperationId;
     historyExecution.operationVersion = 1;
@@ -529,8 +643,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     historyRunning.executionId = historyExecutionId;
     historyRunning.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyRunning.status = pdf::PDFOperationHistoryStatus::Running;
-    historyRunning.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    historyRunning.documentRevisionDigest = sourceSha256;
     historyRunning.operatorIdentity = QStringLiteral("PdfTool");
+    historyRunning.approval = governedApproval.approval;
     if (!operationHistory.appendEvent(historyRunning))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
@@ -538,14 +653,19 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
 
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
-        options.repairOutputDocument, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    const pdf::PDFOperationResult writeResult = pdf::publishGovernedArtifact(governedApproval,
+                                                                             planDigest,
+                                                                             sourceSha256,
+                                                                             candidateData,
+                                                                             options.repairOutputDocument,
+                                                                             pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
         appendRepairHistoryFailed(operationHistory,
                                   historyExecutionId,
                                   QStringLiteral("output.write-failed"),
-                                  writeResult.getErrorMessage());
+                                  writeResult.getErrorMessage(),
+                                  governedApproval.approval);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), writeResult.getErrorMessage(),
                          QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
@@ -557,12 +677,63 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         appendRepairHistoryFailed(operationHistory,
                                   historyExecutionId,
                                   QStringLiteral("repair.output-mismatch"),
-                                  PDFToolTranslationContext::tr("The committed output does not match the reviewed candidate."));
+                                  PDFToolTranslationContext::tr("The committed output does not match the reviewed candidate."),
+                                  governedApproval.approval);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.output-mismatch"),
                          PDFToolTranslationContext::tr("The committed output does not match the reviewed candidate."));
         return PDFToolExitCode::ProcessingFailure;
     }
     finalFile.close();
+
+    if (priorCertificate.has_value() &&
+        priorCertificate->documentRevisionDigest.compare(sourceSha256, Qt::CaseInsensitive) == 0 &&
+        candidateSha256.compare(sourceSha256, Qt::CaseInsensitive) != 0)
+    {
+        // The invalidation is evidence in the certified document's chain, so it needs
+        // its own execution there; the repair's execution belongs to the output chain.
+        pdf::PDFOperationHistoryExecution invalidationExecution;
+        invalidationExecution.operationId = options.repairOperationId;
+        invalidationExecution.operationVersion = 1;
+        invalidationExecution.input = historyInput.artifact;
+        invalidationExecution.parameters = QJsonObject{
+            { QStringLiteral("certificate_id"), priorCertificate->certificateId },
+            { QStringLiteral("superseded_revision_digest"), sourceSha256 },
+            { QStringLiteral("replacement_revision_digest"), candidateSha256 }
+        };
+        invalidationExecution.startedUtc = QDateTime::currentDateTimeUtc();
+        QUuid invalidationExecutionId;
+
+        pdf::PDFOperationHistoryEvent invalidated;
+        invalidated.kind = pdf::PDFOperationHistoryEventKind::CertificateInvalidated;
+        invalidated.status = pdf::PDFOperationHistoryStatus::Running;
+        invalidated.operatorIdentity = QStringLiteral("PdfTool");
+        invalidated.documentRevisionDigest = candidateSha256;
+        invalidated.effectiveProfileDigest = priorCertificate->effectiveProfileDigest;
+        invalidated.approval.decisionReference = priorCertificate->certificateId;
+        invalidated.resultSummary = QJsonObject{
+            { QStringLiteral("reason"), QStringLiteral("The certified document revision changed after a fix was applied.") },
+            { QStringLiteral("previous_document_revision_digest"), sourceSha256 },
+            { QStringLiteral("current_document_revision_digest"), candidateSha256 }
+        };
+
+        pdf::PDFOperationResult invalidationRecorded = retainedHistory.registerArtifact(historyInput.artifact);
+        if (invalidationRecorded)
+        {
+            invalidationRecorded = retainedHistory.beginExecution(invalidationExecution, &invalidationExecutionId);
+        }
+        if (invalidationRecorded)
+        {
+            invalidated.executionId = invalidationExecutionId;
+            invalidationRecorded = retainedHistory.appendEvent(invalidated);
+        }
+        if (!invalidationRecorded)
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
+                             QStringLiteral("The repair output was written, but certificate invalidation could not be persisted: ") + invalidationRecorded.getErrorMessage());
+            return PDFToolExitCode::ProcessingFailure;
+        }
+    }
+
     pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
                                        { return QString(); }, false, false);
     finalReader.readFromFile(options.repairOutputDocument);
@@ -571,17 +742,48 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         appendRepairHistoryFailed(operationHistory,
                                   historyExecutionId,
                                   QStringLiteral("repair.output-unreadable"),
-                                  PDFToolTranslationContext::tr("The committed repair output could not be reopened."));
+                                  PDFToolTranslationContext::tr("The committed repair output could not be reopened."),
+                                  governedApproval.approval);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.output-unreadable"),
                          PDFToolTranslationContext::tr("The committed repair output could not be reopened."),
                          QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
     }
-    const QString outputSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    pdf::PDFGovernedExecutionSignOff signOff;
+    if (const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(governedApproval,
+                                                                                        planDigest,
+                                                                                        sourceSha256,
+                                                                                        candidateSha256,
+                                                                                        options.repairOutputDocument,
+                                                                                        governedProfile,
+                                                                                        QStringLiteral("PdfTool"),
+                                                                                        QStringLiteral("repair-postflight"),
+                                                                                        &revalidation,
+                                                                                        &signOff);
+        !governedResult)
+    {
+        reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
+        reportJson.insert(QStringLiteral("revalidation"), revalidation.toJson());
+        writeRepairReportIfRequested(options, reportJson);
+        appendRepairHistoryFailed(operationHistory,
+                                  historyExecutionId,
+                                  QStringLiteral("repair.revalidation-failed"),
+                                  governedResult.getErrorMessage(),
+                                  governedApproval.approval);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.revalidation-failed"),
+                         governedResult.getErrorMessage(),
+                         QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     reportJson.insert(QStringLiteral("status"), QStringLiteral("passed"));
+    reportJson.insert(QStringLiteral("approval"), governedApproval.toJson());
+    reportJson.insert(QStringLiteral("revalidation"), revalidation.toJson());
+    reportJson.insert(QStringLiteral("sign_off"), signOff.toJson());
     reportJson.insert(QStringLiteral("output"), QJsonObject{
                                                     { QStringLiteral("path"), options.repairOutputDocument },
-                                                    { QStringLiteral("sha256"), outputSha256 } });
+                                                    { QStringLiteral("sha256"), candidateSha256 } });
     reportJson.insert(QStringLiteral("history"), QJsonObject{
                                                      { QStringLiteral("sidecar"), historyDirectory },
                                                      { QStringLiteral("database"), operationHistory.databasePath() } });
@@ -590,14 +792,13 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     historyAccepted.executionId = historyExecutionId;
     historyAccepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyAccepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    historyAccepted.operatorIdentity = signOff.approval.actorId;
+    historyAccepted.documentRevisionDigest = candidateSha256;
+    historyAccepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
     historyAccepted.output = historyOutput.artifact;
+    historyAccepted.reportArtifactSha256 = signOff.revalidationReportSha256;
     historyAccepted.resultSummary = reportJson;
-    historyAccepted.approval.kind = pdf::PDFApprovalKind::Policy;
-    historyAccepted.approval.actorId = QStringLiteral("PdfTool");
-    historyAccepted.approval.decision = QStringLiteral("approve");
-    historyAccepted.approval.policyId = QStringLiteral("preflight-profile");
-    historyAccepted.approval.rationale = QStringLiteral("Repair candidate passed postflight and diff validation.");
-    historyAccepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    historyAccepted.approval = signOff.approval;
     if (!operationHistory.appendEvent(historyAccepted))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),

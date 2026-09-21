@@ -24,6 +24,7 @@
 #define PDFACTIONLIST_H
 
 #include "pdfrepairoperation.h"
+#include "pdfobjectselector.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -62,6 +63,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStep
     QString id;
     QString operationId;
     QJsonObject parameters;
+    QJsonObject select;
     QJsonObject condition;
     PDFActionListFailurePolicy failurePolicy = PDFActionListFailurePolicy::Inherit;
 
@@ -92,6 +94,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListStepResult
     QJsonObject verdict;
     QJsonArray diagnostics;
     QJsonArray affectedScope;
+    QJsonObject selectionScope;
 
     QJsonObject toJson() const;
 };
@@ -105,13 +108,25 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
     QString actionListId;
     QString actionListSchema;
     QString recipeHash;
+    QString planDigest;
+    QString sourceSha256;
     QString status = QStringLiteral("planned");
     qint64 durationMs = 0;
     QJsonArray diagnostics;
+    QJsonObject postflight;
+    QJsonObject governed;
     QVector<PDFActionListStepResult> steps;
 
     QJsonObject toJson() const;
 };
+
+/// Returns the shared, surface-neutral digest for an Action List plan.
+/// Bindings and the effective preflight profile are part of the plan because
+/// either can change the candidate that is eligible for publication.
+LOOPLIBCORESHARED_EXPORT QString computeActionListPlanDigest(const PDFActionList& actionList,
+                                                             const QJsonObject& bindings,
+                                                             const QString& sourceSha256,
+                                                             const QJsonObject& effectiveProfile = {});
 
 struct PDFActionListExecutionOptions
 {
@@ -119,7 +134,18 @@ struct PDFActionListExecutionOptions
     QJsonObject bindings;
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
+    QString preflightProfilePath;
+    QJsonObject preflightProfile;
+    QJsonObject preflightProfileBindings;
+    bool requirePostflight = true;
+    PDFRevisionIdentity revision;
 };
+
+/// Surface adapters call this to bind the shared object-selector revision fence.
+LOOPLIBCORESHARED_EXPORT PDFActionListExecutionOptions makeActionListExecutionOptions(
+    const PDFDocument& document,
+    const QJsonObject& bindings = {},
+    const PDFOperationControl* operationControl = nullptr);
 
 /// Shared, deterministic orchestration for registered repair operations.
 /// Surface adapters supply presentation and input collection; they do not
@@ -128,6 +154,7 @@ class LOOPLIBCORESHARED_EXPORT PDFActionListExecutor
 {
 public:
     static QString schemaVersion();
+    static bool isSupportedSchema(const QString& schema);
 
     explicit PDFActionListExecutor(const PDFRepairRegistry& registry = PDFRepairRegistry::instance());
 

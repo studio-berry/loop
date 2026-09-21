@@ -28,9 +28,94 @@
 #include "preflightprofileresolver.h"
 
 #include <memory>
+#include <optional>
 
 namespace pdf
 {
+
+namespace
+{
+
+bool parsePreflightCliPages(const PreflightFileInspectionRequest& request,
+                            int pageCount,
+                            std::optional<QSet<int>>* selectedPages,
+                            QString* error)
+{
+    if (request.firstPage.isEmpty() && request.lastPage.isEmpty() && request.selectedPages.isEmpty())
+    {
+        *selectedPages = std::nullopt;
+        return true;
+    }
+    const auto parsePage = [](const QString& text, int fallback, int* value)
+    {
+        if (text.isEmpty())
+        {
+            *value = fallback;
+            return true;
+        }
+        bool valid = false;
+        const int parsed = text.toInt(&valid);
+        if (!valid || parsed < 1 || parsed > 100000)
+        {
+            return false;
+        }
+        *value = parsed;
+        return true;
+    };
+
+    int first = 1;
+    int last = pageCount;
+    if (!parsePage(request.firstPage, 1, &first) ||
+        !parsePage(request.lastPage, pageCount, &last) ||
+        (!request.lastPage.isEmpty() && last < first))
+    {
+        *error = QStringLiteral("Invalid preflight --page-first / --page-last range.");
+        return false;
+    }
+
+    QSet<int> explicitSelection;
+    if (!request.selectedPages.isEmpty())
+    {
+        for (const QString& rawPart : request.selectedPages.split(QLatin1Char(',')))
+        {
+            const QString part = rawPart.trimmed();
+            const int separator = part.indexOf(QLatin1Char('-'));
+            if (part.isEmpty() || (separator >= 0 && part.indexOf(QLatin1Char('-'), separator + 1) >= 0))
+            {
+                *error = QStringLiteral("Invalid preflight --page-select range.");
+                return false;
+            }
+            int rangeStart = 1;
+            int rangeEnd = pageCount;
+            const QString startText = separator >= 0 ? part.left(separator) : part;
+            const QString endText = separator >= 0 ? part.mid(separator + 1) : part;
+            if (!parsePage(startText, 1, &rangeStart) ||
+                !parsePage(endText, pageCount, &rangeEnd) ||
+                rangeEnd < rangeStart)
+            {
+                *error = QStringLiteral("Invalid preflight --page-select range.");
+                return false;
+            }
+            for (int page = rangeStart; page <= rangeEnd && page <= pageCount; ++page)
+            {
+                explicitSelection.insert(page - 1);
+            }
+        }
+    }
+
+    QSet<int> effective;
+    for (int page = first; page <= last && page <= pageCount; ++page)
+    {
+        if (request.selectedPages.isEmpty() || explicitSelection.contains(page - 1))
+        {
+            effective.insert(page - 1);
+        }
+    }
+    *selectedPages = effective;
+    return true;
+}
+
+}   // namespace
 
 PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectionRequest& request)
 {
@@ -68,7 +153,21 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
 
     if (!PDFOperationControl::isOperationCancelled(request.cancellation))
     {
-        outcome.report = engine.run(request.profile, request.jobSpec, request.cliBindings, request.plan);
+        std::optional<QSet<int>> selectedPages;
+        QString selectionError;
+        const int pageCount = document->getCatalog() ? int(document->getCatalog()->getPageCount()) : 0;
+        if (!parsePreflightCliPages(request, pageCount, &selectedPages, &selectionError))
+        {
+            outcome.report.profileName = request.profile.value(QStringLiteral("name")).toString();
+            outcome.report.inspectionComplete = false;
+            outcome.report.errorCode = QStringLiteral("unsupported-scope");
+            outcome.report.errorMessage = selectionError;
+            outcome.report.pass = false;
+        }
+        else
+        {
+            outcome.report = engine.run(request.profile, request.jobSpec, request.cliBindings, request.plan, selectedPages);
+        }
         outcome.inspectionRan = true;
     }
 
@@ -86,7 +185,10 @@ void finalizePreflightResult(PreflightResult& result,
 {
     result.profileResolution = profile.provenance();
     result.documentRevisionDigest = QString::fromLatin1(documentRevisionHash.toHex());
-    result.effectiveProfileDigest = QString::fromLatin1(profile.effectiveHash);
+    if (result.effectiveProfileDigest.isEmpty())
+    {
+        result.effectiveProfileDigest = QString::fromLatin1(profile.effectiveHash);
+    }
     result.pass = reducePreflightVerdict(result).isPass();
 }
 

@@ -48,25 +48,35 @@ SMOKE_MAIN = "ProductQuickAccessibilitySmoke/main.cpp"
 EXPECTED_GUI_SOURCES = frozenset(
     {
         "LoopEditor/editorhost.cpp",
+        "LoopEditor/qml/ActionListPane.qml",
         "LoopEditor/qml/CanvasPane.qml",
         "LoopEditor/qml/DocumentPane.qml",
+        "LoopEditor/qml/InspectPane.qml",
         "LoopEditor/qml/InspectorPane.qml",
         "LoopEditor/qml/Main.qml",
         "LoopEditor/qml/MenuModel.qml",
+        "LoopEditor/qml/PagesProductionPane.qml",
         "LoopEditor/qml/PreflightPane.qml",
+        "LoopEditor/qml/ProductionPreviewPane.qml",
         "LoopEditor/qml/ShellMenuBar.qml",
         "LoopEditor/qml/ShellToolBar.qml",
+        "LoopEditor/qml/StateBadge.qml",
         "LoopEditor/qml/Workspace.qml",
         "LoopEditor/qml/WorkspacePlaceholderPane.qml",
         "ProductQuickAccessibilitySmoke/main.cpp",
+        "ProductQuickAccessibilitySmoke/qml/ActionListPane.qml",
         "ProductQuickAccessibilitySmoke/qml/CanvasPane.qml",
         "ProductQuickAccessibilitySmoke/qml/DocumentPane.qml",
+        "ProductQuickAccessibilitySmoke/qml/InspectPane.qml",
         "ProductQuickAccessibilitySmoke/qml/InspectorPane.qml",
         "ProductQuickAccessibilitySmoke/qml/Main.qml",
         "ProductQuickAccessibilitySmoke/qml/MenuModel.qml",
+        "ProductQuickAccessibilitySmoke/qml/PagesProductionPane.qml",
         "ProductQuickAccessibilitySmoke/qml/PreflightPane.qml",
+        "ProductQuickAccessibilitySmoke/qml/ProductionPreviewPane.qml",
         "ProductQuickAccessibilitySmoke/qml/ShellMenuBar.qml",
         "ProductQuickAccessibilitySmoke/qml/ShellToolBar.qml",
+        "ProductQuickAccessibilitySmoke/qml/StateBadge.qml",
         "ProductQuickAccessibilitySmoke/qml/Workspace.qml",
         "ProductQuickAccessibilitySmoke/qml/WorkspacePlaceholderPane.qml",
     }
@@ -249,7 +259,7 @@ class PreflightTruthSourceTest(unittest.TestCase):
         up by discovery, which makes this assertion fail until the name is added
         to `EXPECTED_GUI_SOURCES` -- deliberate, so the new pane is placed in
         scope by a reviewer rather than arriving unnoticed, and the guard's CI
-        line moves from 22 files to 23.
+        line moves with it.
         """
         self.assertEqual(set(gui_sources()), set(EXPECTED_GUI_SOURCES))
 

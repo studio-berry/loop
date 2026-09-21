@@ -29,6 +29,8 @@
 #include <QJsonValue>
 #include <QString>
 
+#include <array>
+
 namespace pdf
 {
 
@@ -52,11 +54,32 @@ enum class PDFSchemaKind
     PreflightDecisions
 };
 
+/// Every kind the compatibility matrix must describe. Extend this with
+/// PDFSchemaKind; the coverage test fails when the two disagree.
+inline constexpr std::array<PDFSchemaKind, 15> AllSchemaKinds{
+    PDFSchemaKind::PreflightReport,
+    PDFSchemaKind::PreflightProfile,
+    PDFSchemaKind::EvidenceGraph,
+    PDFSchemaKind::OperationPlan,
+    PDFSchemaKind::OperationResult,
+    PDFSchemaKind::ProvenanceEvent,
+    PDFSchemaKind::Certificate,
+    PDFSchemaKind::CapabilityDiscovery,
+    PDFSchemaKind::PackageManifest,
+    PDFSchemaKind::ActionList,
+    PDFSchemaKind::PdfToolEnvelope,
+    PDFSchemaKind::OcrReport,
+    PDFSchemaKind::HistoryDb,
+    PDFSchemaKind::PageMasterManifest,
+    PDFSchemaKind::PreflightDecisions,
+};
+
 enum class PDFSchemaCompatibility
 {
     Compatible,
     UnsupportedMajor,
-    UnknownKind
+    UnknownKind,
+    Invalid
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFSchemaVersion
@@ -84,9 +107,32 @@ LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSche
 /// fails closed for known schema kinds; the resource-backed overload below is
 /// the production entry point.
 LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
-                                                                                    PDFSchemaVersion version,
-                                                                                    const QJsonObject& matrix);
+                                                                                   PDFSchemaVersion version,
+                                                                                   const QJsonObject& matrix);
+/// One stable, machine-readable compatibility diagnostic. `code` is the
+/// contract machine consumers branch on; `message` is human-oriented.
+struct LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibilityDiagnostic
+{
+    PDFSchemaCompatibility compatibility = PDFSchemaCompatibility::Invalid;
+    QString code;
+    QString message;
+    PDFSchemaKind kind = PDFSchemaKind::Unknown;
+    PDFSchemaVersion version;
+
+    bool isCompatible() const { return compatibility == PDFSchemaCompatibility::Compatible; }
+};
+
+LOOPLIBCORESHARED_EXPORT QString pdfSchemaCompatibilityToString(PDFSchemaCompatibility compatibility);
+LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibilityDiagnostic schemaCompatibilityDiagnostic(PDFSchemaKind kind,
+                                                                                        PDFSchemaVersion version);
+/// The compiled-in compatibility matrix. The CLI reports it verbatim so an
+/// operator can read the same authority Core enforces.
+LOOPLIBCORESHARED_EXPORT QJsonObject schemaCompatibilityMatrix();
 LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
+/// Reads the current version of one kind out of an explicit matrix. An absent
+/// entry yields an invalid version; callers must fail closed, never guess.
+LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersionWithMatrix(PDFSchemaKind kind,
+                                                                         const QJsonObject& matrix);
 LOOPLIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
 LOOPLIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
 LOOPLIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);

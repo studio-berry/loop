@@ -1,142 +1,1585 @@
 {
-  "format_version": 1,
-  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
-  "matrix_id": "loop-gwg-pdfx-v1",
-  "gwg_families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"],
-  "pdfx_targets": ["PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4"],
-  "checks": {
-    "bleed": {
-      "measures": "Whether required page bleed boxes exist and meet amount_pt.",
-      "limitations": "Does not generate artwork bleed; box rewrite only.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "digital"]
-    },
-    "content-bleed": {
-      "measures": "Whether painted content reaches the requested bleed margin.",
-      "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "packaging", "digital"]
-    },
-    "trim": {
-      "measures": "Trim box presence and optional expected size.",
-      "limitations": "Does not invent a trim from artwork.",
-      "coverage": "covered",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
-    },
-    "page-size": {
-      "measures": "Media/page size against expected width/height.",
-      "limitations": "Does not impose.",
-      "coverage": "covered",
-      "families": ["sheetfed-offset", "digital"]
-    },
-    "color-mode": {
-      "measures": "Whether page color spaces are in the allowed list.",
-      "limitations": "Does not convert color; ICC-based spaces are classified by the alternate.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
-    },
-    "color-inventory": {
-      "measures": "Spot, separation, and rich-black inventory.",
-      "limitations": "Probe DPI bounds small tints; not a GWG ink-name dictionary.",
-      "coverage": "partial",
-      "families": ["packaging", "sheetfed-offset"]
-    },
-    "output-intent": {
-      "measures": "Output intent presence, subtype, identifier, and ICC payload.",
-      "limitations": "Does not prove press calibration.",
-      "coverage": "covered",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "digital"]
-    },
-    "embedded-fonts": {
-      "measures": "Whether used fonts are embedded.",
-      "limitations": "Does not subset or repair; descriptor-less fonts are reported, not fixed.",
-      "coverage": "covered",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
-    },
-    "font-integrity": {
-      "measures": "Embedded font bytes that fail to parse or cmap.",
-      "limitations": "Not a full glyph-coverage audit.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "digital"]
-    },
-    "image-resolution": {
-      "measures": "Effective image DPI against min_dpi.",
-      "limitations": "Masks and patterns can be under-counted.",
-      "coverage": "covered",
-      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
-    },
-    "white-overprint": {
-      "measures": "White/knockout overprint flags on fills and strokes.",
-      "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "packaging"]
-    },
-    "transparency-risk": {
-      "measures": "Live transparency blend modes and blend-space mismatches.",
-      "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "packaging", "digital"]
-    },
-    "thin-strokes": {
-      "measures": "Hairline and below-threshold stroke widths.",
-      "limitations": "Effective width after CTM; does not inspect filled parts.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "packaging"]
-    },
-    "thin-parts": {
-      "measures": "Thin filled parts and optional clipped/negative/annotation classes.",
-      "limitations": "Raster budget can skip a page as incomplete rather than pass.",
-      "coverage": "partial",
-      "families": ["packaging"]
-    },
-    "ink-coverage": {
-      "measures": "Total area coverage against max_ink_pct.",
-      "limitations": "Raster probe; not a plate-ready separation TAC.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "web-offset", "newspaper"]
-    },
-    "processing-steps": {
-      "measures": "ISO 19593-1 processing-step presence such as cutting-die.",
-      "limitations": "Does not validate die geometry.",
-      "coverage": "partial",
-      "families": ["packaging"]
-    },
-    "dieline": {
-      "measures": "Alias of processing-steps for cutting-die workflows.",
-      "limitations": "Same as processing-steps.",
-      "coverage": "partial",
-      "families": ["packaging"]
-    },
-    "invisible-content": {
-      "measures": "Content marked invisible or outside view.",
-      "limitations": "Not a full GWG hidden-content suite.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "packaging"]
-    },
-    "hidden-layers": {
-      "measures": "Optional content groups that hide print content.",
-      "limitations": "Does not enumerate every OCMD combination.",
-      "coverage": "partial",
-      "families": ["packaging"]
-    },
-    "off-page-content": {
-      "measures": "Content whose bounds fall outside the page.",
-      "limitations": "Clipping can hide false positives and false negatives.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset", "digital"]
-    },
-    "obscured-content": {
-      "measures": "Content covered by later painting.",
-      "limitations": "Heuristic; not a RIP occlusion model.",
-      "coverage": "partial",
-      "families": ["sheetfed-offset"]
-    }
+ "format_version": 1,
+ "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+ "matrix_id": "loop-gwg-pdfx-v1",
+ "gwg_families": [
+  "sheetfed-offset",
+  "web-offset",
+  "packaging",
+  "newspaper",
+  "digital"
+ ],
+ "pdfx_targets": [
+  "PDF/X-1a:2001",
+  "PDF/X-3:2002",
+  "PDF/X-4"
+ ],
+ "backlog_priority_rule": "P1 - no registered check inspects the defect class at all (a matrix not_covered entry), so a clean run is silent about it; P2 - a registered check inspects the class but its named limitation can suppress or misclassify a finding on defective content, which would be a false clean pass; P3 - a registered check inspects the class and the named limitation only narrows reported detail or fails closed as incomplete, so it cannot turn a defect into a silent pass.",
+ "backlog_state_rule": "open - the gap is still present; landed - a registered check now covers the class and closed_by names that check id; closed - the filed issue that tracked the gap is closed.",
+ "github_issues": {
+  "#12": {
+   "number": 12,
+   "title": "Validate output-intent and ICC-profile presence, identity, and color-space consistency",
+   "state": "CLOSED",
+   "milestone": "0.0.1"
   },
-  "not_covered": [
-    "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
-    "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
-    "DeviceN ink-limit per named colorant beyond inventory",
-    "Barcode / slug / Braille content validation",
-    "Multi-page imposition and reader-spread checks"
-  ]
+  "#47": {
+   "number": 47,
+   "title": "[Residual] Tier-2 bleed raster golden corpus + strip calibration",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#49": {
+   "number": 49,
+   "title": "[0.8.0] Overprint-correct rendering in standard and advanced renderers",
+   "state": "OPEN",
+   "milestone": "0.8.0"
+  },
+  "#70": {
+   "number": 70,
+   "title": "Traverse nested Form XObjects, inherited resources, and appearance streams for embedded fonts",
+   "state": "CLOSED",
+   "milestone": null
+  },
+  "#124": {
+   "number": 124,
+   "title": "Detect hidden, invisible, and off-page content in preflight",
+   "state": "CLOSED",
+   "milestone": null
+  },
+  "#130": {
+   "number": 130,
+   "title": "Detect corrupt fonts, not just embedded/unembedded status",
+   "state": "CLOSED",
+   "milestone": null
+  },
+  "#131": {
+   "number": 131,
+   "title": "Extend thin-part detection beyond simple strokes (expand #23)",
+   "state": "CLOSED",
+   "milestone": null
+  },
+  "#600": {
+   "number": 600,
+   "title": "Ink Manager: separation management and spot-color library",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#603": {
+   "number": 603,
+   "title": "Imposition: n-up, gang-up, booklets, creep, and sheet furniture",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#604": {
+   "number": 604,
+   "title": "Packaging production semantics: ISO 19593 Processing Steps, dielines, varnish/foil/white, barcode validation",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#605": {
+   "number": 605,
+   "title": "PDF/VT variable-data production: understanding, validation, and preservation",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#628": {
+   "number": 628,
+   "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)",
+   "state": "CLOSED",
+   "milestone": "0.3.0"
+  },
+  "#664": {
+   "number": 664,
+   "title": "[0.3.0] No check inspects formal GWG 2022/2024 sheetfed or packaging conformance",
+   "state": "OPEN",
+   "milestone": null
+  },
+  "#665": {
+   "number": 665,
+   "title": "[0.3.0] No check validates or produces PDF/X-5 and PDF/A-3 output",
+   "state": "OPEN",
+   "milestone": null
+  }
+ },
+ "checks": {
+  "bleed": {
+   "measures": "Whether required page bleed boxes exist and meet amount_pt.",
+   "limitations": "Does not generate artwork bleed; box rewrite only.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Bleed or off-page length in points; 9 pt is one eighth of an inch."
+    },
+    {
+     "id": "tolerance_pt",
+     "type": "number",
+     "default": 1.0,
+     "range": ">= 0",
+     "meaning": "Slack allowed before a measured box is called a mismatch."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "bleed",
+     "severity": "error",
+     "condition": "a page BleedBox is missing or meets amount_pt minus tolerance_pt on fewer than four edges. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id"
+   ],
+   "fixups": [
+    "add-bleed"
+   ]
+  },
+  "color-inventory": {
+   "measures": "Spot, separation, and rich-black inventory.",
+   "limitations": "Probe DPI bounds small tints; not a GWG ink-name dictionary.",
+   "coverage": "partial",
+   "families": [
+    "packaging",
+    "sheetfed-offset"
+   ],
+   "parameters": [
+    {
+     "id": "probe_dpi",
+     "type": "integer",
+     "default": 150,
+     "range": "> 0 (integer)",
+     "meaning": "Resolution of the page probe that bounds which tints and rich-black areas are inventoried."
+    },
+    {
+     "id": "rich_black_k_percent",
+     "type": "number",
+     "default": 10.0,
+     "range": "0..100",
+     "meaning": "Minimum process-black percentage for a region to count as rich black."
+    },
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "spot-color",
+     "severity": "error",
+     "condition": "a spot colour is inventoried on the page. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "separation",
+     "severity": "error",
+     "condition": "an output separation, spot or process, is inventoried. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "rich-black",
+     "severity": "error",
+     "condition": "a rich-black region is inventoried above rich_black_k_percent. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": []
+  },
+  "color-mode": {
+   "measures": "Whether page color spaces are in the allowed list.",
+   "limitations": "Does not convert color; ICC-based spaces are classified by the alternate.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "allowed",
+     "type": "string-list",
+     "default": [],
+     "range": "non-empty subset of CMYK|RGB|Grayscale; required for color-mode",
+     "meaning": "Color modes that may be painted; an empty list makes the check return without inspecting."
+    },
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "color-mode",
+     "severity": "error",
+     "condition": "a page paints at least one color space outside the allowed list. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": [
+    "rgb-to-cmyk"
+   ]
+  },
+  "content-bleed": {
+   "measures": "Whether painted content reaches the requested bleed margin.",
+   "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Bleed or off-page length in points; 9 pt is one eighth of an inch."
+    },
+    {
+     "id": "probe_dpi",
+     "type": "integer",
+     "default": 150,
+     "range": "> 0",
+     "meaning": "Resolution of the bleed-margin strip raster; the confirm pass only runs when raster_confirm is true."
+    },
+    {
+     "id": "probe_threshold",
+     "type": "integer",
+     "default": 16,
+     "range": "0..255",
+     "meaning": "Pixel channel value that counts as ink in the strip raster."
+    },
+    {
+     "id": "raster_white_threshold",
+     "type": "number",
+     "default": 0.9975,
+     "range": "0..1",
+     "meaning": "Fraction of strip coverage that still counts as white."
+    },
+    {
+     "id": "raster_confirm",
+     "type": "boolean",
+     "default": false,
+     "range": "true|false",
+     "meaning": "Opt in to the strip raster confirm pass instead of the fast vector bounds pass."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "content-bleed",
+     "severity": "error",
+     "condition": "the fast bounds pass finds a bleed edge with no painted content. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "bleed-margin-empty",
+     "severity": "error",
+     "condition": "raster_confirm is true and a bleed edge strip carries no pixel above probe_threshold. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "needs-auto-bleed",
+     "severity": "info",
+     "condition": "always info: the page has a bleed gap and is a candidate for the add-bleed fixup."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id"
+   ],
+   "fixups": [
+    "add-bleed"
+   ]
+  },
+  "dieline": {
+   "measures": "Alias of processing-steps for cutting-die workflows.",
+   "limitations": "Same as processing-steps.",
+   "coverage": "partial",
+   "families": [
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "required",
+     "type": "boolean",
+     "default": true,
+     "range": "true|false",
+     "meaning": "When true, a cutting-die processing step must exist."
+    },
+    {
+     "id": "required_types",
+     "type": "string-list",
+     "default": [],
+     "range": "normalized ISO 19593-1 step names, for example cutting-die",
+     "meaning": "Processing step types that must each be detected."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "dieline-missing",
+     "severity": "error",
+     "condition": "required is true and neither an ISO 19593-1 cutting-die OCG nor a legacy dieline spot colour was detected. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "processing-step-missing",
+     "severity": "error",
+     "condition": "a required_types entry has no matching detected processing step. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "dieline-printing",
+     "severity": "error",
+     "condition": "a detected dieline step is still marked printable (shouldPrint). The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.step_type",
+    "evidence.detection_method",
+    "evidence.ocg_name",
+    "evidence.spot_color",
+    "evidence.required_type",
+    "evidence.is_separation"
+   ],
+   "fixups": []
+  },
+  "embedded-fonts": {
+   "measures": "Whether used fonts are embedded.",
+   "limitations": "Does not subset or repair; descriptor-less fonts are reported, not fixed.",
+   "coverage": "covered",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "embedded-fonts",
+     "severity": "error",
+     "condition": "a used font has no font descriptor or is not embedded on the page that uses it. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": []
+  },
+  "font-integrity": {
+   "measures": "Embedded font bytes that fail to parse or cmap.",
+   "limitations": "Not a full glyph-coverage audit.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "parameters": [],
+   "severity": [
+    {
+     "finding_type": "font-integrity",
+     "severity": "error",
+     "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error"
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence.font_resource",
+    "evidence.font_subtype",
+    "evidence.embedded",
+    "evidence.inspection_complete",
+    "evidence.defects"
+   ],
+   "fixups": []
+  },
+  "hidden-layers": {
+   "measures": "Optional content groups that hide print content.",
+   "limitations": "Does not enumerate every OCMD combination.",
+   "coverage": "partial",
+   "families": [
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Off-page tolerance in points added around the effective page box by the shared hidden-content scan; it only widens the off-page test."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "hidden-layers",
+     "severity": "error",
+     "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence.confidence",
+    "evidence.ocg_name"
+   ],
+   "fixups": []
+  },
+  "image-resolution": {
+   "measures": "Effective image DPI against min_dpi.",
+   "limitations": "Masks and patterns can be under-counted.",
+   "coverage": "covered",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "min_dpi",
+     "type": "integer",
+     "default": 0,
+     "range": "> 0; required for image-resolution",
+     "meaning": "Minimum effective image resolution; image-resolution rejects 0 or a negative value."
+    },
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "image-resolution",
+     "severity": "error",
+     "condition": "an image's effective DPI is below min_dpi. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": [
+    "downsample-images"
+   ]
+  },
+  "ink-coverage": {
+   "measures": "Total area coverage against max_ink_pct.",
+   "limitations": "Raster probe; not a plate-ready separation TAC.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "newspaper"
+   ],
+   "parameters": [
+    {
+     "id": "max_ink_pct",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0; required for ink-coverage",
+     "meaning": "Maximum total area coverage percentage; the profile must supply it because 0 is not usable."
+    },
+    {
+     "id": "probe_dpi",
+     "type": "integer",
+     "default": 150,
+     "range": "> 0 (integer)",
+     "meaning": "Resolution of the area-coverage raster."
+    },
+    {
+     "id": "min_region_area_pct",
+     "type": "number",
+     "default": 0.05,
+     "range": "0..100",
+     "meaning": "Smallest over-limit connected region, as a percentage of the page, that is reported."
+    },
+    {
+     "id": "max_regions_per_page",
+     "type": "integer",
+     "default": 20,
+     "range": ">= 0 (integer)",
+     "meaning": "Cap on over-limit regions reported per page; 0 suppresses region findings while still inspecting."
+    },
+    {
+     "id": "max_raster_pixels",
+     "type": "integer",
+     "default": 250000000,
+     "range": "> 0 (integer)",
+     "meaning": "Per-page pixel budget; exceeding it reports the page as incomplete instead of clean."
+    },
+    {
+     "id": "analysis_box",
+     "type": "string",
+     "default": "bleed",
+     "range": "bleed|trim|crop|media",
+     "meaning": "Production region analysed for total area coverage; bleed falls back to trim, crop, then media."
+    },
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "ink-coverage",
+     "severity": "error",
+     "condition": "a connected region exceeds max_ink_pct over more than min_region_area_pct of the page. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "the page raster exceeded max_raster_pixels, was unavailable, or reported non-exact fidelity, so the page is reported incomplete rather than clean."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.peak_ink_pct",
+    "evidence.max_ink_pct",
+    "evidence.area_mm2",
+    "evidence.analysis_box",
+    "evidence.region_rank",
+    "evidence.reason",
+    "evidence.budget_exceeded",
+    "evidence.max_raster_pixels"
+   ],
+   "fixups": []
+  },
+  "invisible-content": {
+   "measures": "Content marked invisible or outside view.",
+   "limitations": "Not a full GWG hidden-content suite.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Off-page tolerance in points added around the effective page box by the shared hidden-content scan; it only widens the off-page test."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "invisible-content",
+     "severity": "error",
+     "condition": "the page paints with text render mode 3, or a path is painted at zero fill/stroke alpha. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.confidence"
+   ],
+   "fixups": []
+  },
+  "obscured-content": {
+   "measures": "Content covered by later painting.",
+   "limitations": "Heuristic; not a RIP occlusion model.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Off-page tolerance in points added around the effective page box by the shared hidden-content scan; it only widens the off-page test."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "obscured-content",
+     "severity": "info",
+     "condition": "an earlier painted bounds is fully covered by later opaque paint; the scan is heuristic, so it is downgraded to info whenever the profile severity is error and otherwise keeps the profile severity."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.confidence"
+   ],
+   "fixups": []
+  },
+  "off-page-content": {
+   "measures": "Content whose bounds fall outside the page.",
+   "limitations": "Clipping can hide false positives and false negatives.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "amount_pt",
+     "type": "number",
+     "default": 9.0,
+     "range": ">= 0",
+     "meaning": "Off-page tolerance in points added around the effective page box by the shared hidden-content scan; it only widens the off-page test."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "off-page-content",
+     "severity": "error",
+     "condition": "a painted mark's bounds do not intersect the effective page box widened by amount_pt. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.confidence"
+   ],
+   "fixups": []
+  },
+  "output-intent": {
+   "measures": "Output intent presence, subtype, identifier, and ICC payload.",
+   "limitations": "Does not prove press calibration.",
+   "coverage": "covered",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "required",
+     "type": "boolean",
+     "default": true,
+     "range": "true|false",
+     "meaning": "When true, at least one output intent must be present."
+    },
+    {
+     "id": "allowed",
+     "type": "string-list",
+     "default": [],
+     "range": "subset of CMYK|RGB|Grayscale",
+     "meaning": "Color spaces the embedded ICC profile may resolve to (output-intent); optional."
+    },
+    {
+     "id": "allowed_identifiers",
+     "type": "string-list",
+     "default": [],
+     "range": "list of /OutputConditionIdentifier strings",
+     "meaning": "Allow-list of output-condition identifiers; optional."
+    },
+    {
+     "id": "allowed_subtypes",
+     "type": "string-list",
+     "default": [],
+     "range": "list of output-intent /S subtype names",
+     "meaning": "Allow-list of output-intent subtypes; optional."
+    },
+    {
+     "id": "allowed_profile_sha256",
+     "type": "string-list",
+     "default": [],
+     "range": "list of 64-hex SHA-256 digests",
+     "meaning": "Allow-list of decoded ICC payload digests; optional."
+    },
+    {
+     "id": "require_embedded_profile",
+     "type": "boolean",
+     "default": true,
+     "range": "true|false",
+     "meaning": "Require a decodable /DestOutputProfile ICC stream."
+    },
+    {
+     "id": "allow_multiple",
+     "type": "boolean",
+     "default": true,
+     "range": "true|false",
+     "meaning": "When false, more than one valid applicable output intent is a finding."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "output-intent-malformed",
+     "severity": "error",
+     "condition": "the catalog /OutputIntents array holds a non-dictionary or unresolved entry. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-missing",
+     "severity": "error",
+     "condition": "no output intent exists and required is true. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-subtype",
+     "severity": "error",
+     "condition": "an intent subtype is not in allowed_subtypes. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-identity",
+     "severity": "error",
+     "condition": "an intent has no identifier, or its identifier is not in allowed_identifiers. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-profile-missing",
+     "severity": "error",
+     "condition": "/DestOutputProfile is absent or not a stream while require_embedded_profile is true. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-profile-invalid",
+     "severity": "error",
+     "condition": "the ICC payload cannot be decoded, is not a valid ICC profile, or uses an unsupported color space. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-profile-identity",
+     "severity": "error",
+     "condition": "the ICC payload digest is not in allowed_profile_sha256. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-color-mismatch",
+     "severity": "error",
+     "condition": "the declared ProfileCS disagrees with the embedded ICC color space, or that space is not in allowed. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-ambiguous",
+     "severity": "error",
+     "condition": "more than one valid applicable intent exists while allow_multiple is false. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "output-intent-conflict",
+     "severity": "error",
+     "condition": "more than one valid intent resolves to conflicting color spaces. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "type",
+    "severity",
+    "message",
+    "check_id"
+   ],
+   "fixups": []
+  },
+  "page-size": {
+   "measures": "Media/page size against expected width/height.",
+   "limitations": "Does not impose.",
+   "coverage": "covered",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "expected_width_pt",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0 when supplied",
+     "meaning": "Expected width in points; with expected_height_pt it arms the size comparison (hasExpectedSize)."
+    },
+    {
+     "id": "expected_height_pt",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0 when supplied",
+     "meaning": "Expected height in points; with expected_width_pt it arms the size comparison (hasExpectedSize)."
+    },
+    {
+     "id": "tolerance_pt",
+     "type": "number",
+     "default": 1.0,
+     "range": ">= 0",
+     "meaning": "Slack allowed before a measured box is called a mismatch."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "page-size",
+     "severity": "error",
+     "condition": "expected_width_pt and expected_height_pt are both set and the MediaBox misses them by more than tolerance_pt. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id"
+   ],
+   "fixups": []
+  },
+  "processing-steps": {
+   "measures": "ISO 19593-1 processing-step presence such as cutting-die.",
+   "limitations": "Does not validate die geometry.",
+   "coverage": "partial",
+   "families": [
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "required",
+     "type": "boolean",
+     "default": true,
+     "range": "true|false",
+     "meaning": "When true, a cutting-die processing step must exist."
+    },
+    {
+     "id": "required_types",
+     "type": "string-list",
+     "default": [],
+     "range": "normalized ISO 19593-1 step names, for example cutting-die",
+     "meaning": "Processing step types that must each be detected."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "dieline-missing",
+     "severity": "error",
+     "condition": "required is true and neither an ISO 19593-1 cutting-die OCG nor a legacy dieline spot colour was detected. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "processing-step-missing",
+     "severity": "error",
+     "condition": "a required_types entry has no matching detected processing step. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "dieline-printing",
+     "severity": "error",
+     "condition": "a detected dieline step is still marked printable (shouldPrint). The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.step_type",
+    "evidence.detection_method",
+    "evidence.ocg_name",
+    "evidence.spot_color",
+    "evidence.required_type",
+    "evidence.is_separation"
+   ],
+   "fixups": []
+  },
+  "thin-parts": {
+   "measures": "Thin filled parts and optional clipped/negative/annotation classes.",
+   "limitations": "Raster budget can skip a page as incomplete rather than pass.",
+   "coverage": "partial",
+   "families": [
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "min_effective_width_pt",
+     "type": "number",
+     "default": 0.25,
+     "range": "> 0; required for thin-parts",
+     "meaning": "Minimum painted stroke or filled-part width in points."
+    },
+    {
+     "id": "zero_width_epsilon_pt",
+     "type": "number",
+     "default": 1e-06,
+     "range": ">= 0",
+     "meaning": "Declared widths at or below this value are hairlines."
+    },
+    {
+     "id": "classes",
+     "type": "string-list",
+     "default": [
+      "thin-stroke",
+      "thin-fill"
+     ],
+     "range": "subset of thin-stroke|thin-fill|thin-clipped-part|thin-negative-space|thin-annotation",
+     "meaning": "Object classes inspected; clipped parts, negative space, and annotation appearances are opt-in."
+    },
+    {
+     "id": "severity_by_class",
+     "type": "object",
+     "default": {},
+     "range": "keys are thin-parts classes, values are error|warning|info",
+     "meaning": "Per-class severity override; an absent class uses the check severity."
+    },
+    {
+     "id": "probe_dpi",
+     "type": "integer",
+     "default": 150,
+     "range": "> 0 (integer)",
+     "meaning": "Raster resolution used to measure a candidate part, which also sets the measurement precision 72/probe_dpi."
+    },
+    {
+     "id": "max_raster_pixels",
+     "type": "integer",
+     "default": 250000000,
+     "range": "> 0 (integer)",
+     "meaning": "Per-page mask pixel budget; exceeding it reports the page as incomplete rather than clean."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "thin-stroke",
+     "severity": "error",
+     "condition": "an inspected stroke-like part measures below min_effective_width_pt; severity_by_class['thin-stroke'] replaces the check severity when set."
+    },
+    {
+     "finding_type": "thin-fill",
+     "severity": "error",
+     "condition": "a filled part measures below min_effective_width_pt; severity_by_class['thin-fill'] replaces the check severity when set."
+    },
+    {
+     "finding_type": "thin-clipped-part",
+     "severity": "error",
+     "condition": "a clipped filled part measures below min_effective_width_pt and the class is opted in."
+    },
+    {
+     "finding_type": "thin-annotation",
+     "severity": "error",
+     "condition": "annotation appearance geometry measures below min_effective_width_pt and the class is opted in."
+    },
+    {
+     "finding_type": "thin-negative-space",
+     "severity": "error",
+     "condition": "the union of fill paths leaves a channel narrower than min_effective_width_pt and the class is opted in."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "a measurement lands within one raster pixel of min_effective_width_pt, so the class is reported incomplete instead of clean."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence.class",
+    "evidence.measuredWidthPt",
+    "evidence.measurementPrecisionPt",
+    "evidence.thresholdPt",
+    "evidence.reason"
+   ],
+   "fixups": []
+  },
+  "thin-strokes": {
+   "measures": "Hairline and below-threshold stroke widths.",
+   "limitations": "Effective width after CTM; does not inspect filled parts.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "min_effective_width_pt",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0; required for thin-strokes",
+     "meaning": "Minimum painted stroke width in points measured after the CTM."
+    },
+    {
+     "id": "zero_width_epsilon_pt",
+     "type": "number",
+     "default": 1e-06,
+     "range": ">= 0",
+     "meaning": "Declared widths at or below this value are hairlines."
+    },
+    {
+     "id": "hairline_severity",
+     "type": "string",
+     "default": null,
+     "range": "error|warning|info",
+     "meaning": "Severity override for hairline-stroke findings; empty falls back to the check severity."
+    },
+    {
+     "id": "thin_stroke_severity",
+     "type": "string",
+     "default": null,
+     "range": "error|warning|info",
+     "meaning": "Severity override for thin-stroke findings; empty falls back to the check severity."
+    },
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "hairline-stroke",
+     "severity": "error",
+     "condition": "a stroke is a hairline, meaning its declared width is at or below zero_width_epsilon_pt; hairline_severity replaces the check severity when set."
+    },
+    {
+     "finding_type": "thin-stroke",
+     "severity": "error",
+     "condition": "a stroke's effective width after the CTM is below min_effective_width_pt; thin_stroke_severity replaces the check severity when set."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": []
+  },
+  "transparency-risk": {
+   "measures": "Live transparency blend modes and blend-space mismatches.",
+   "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "transparency-blend-mode",
+     "severity": "error",
+     "condition": "a page has live transparency whose blend-mode configuration list is non-empty. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "transparency-blend-space",
+     "severity": "error",
+     "condition": "a page records one or more transparency blend-space mismatches. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": []
+  },
+  "trim": {
+   "measures": "Trim box presence and optional expected size.",
+   "limitations": "Does not invent a trim from artwork.",
+   "coverage": "covered",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "parameters": [
+    {
+     "id": "expected_width_pt",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0 when supplied",
+     "meaning": "Expected width in points; with expected_height_pt it arms the size comparison (hasExpectedSize)."
+    },
+    {
+     "id": "expected_height_pt",
+     "type": "number",
+     "default": 0.0,
+     "range": "> 0 when supplied",
+     "meaning": "Expected height in points; with expected_width_pt it arms the size comparison (hasExpectedSize)."
+    },
+    {
+     "id": "tolerance_pt",
+     "type": "number",
+     "default": 1.0,
+     "range": ">= 0",
+     "meaning": "Slack allowed before a measured box is called a mismatch."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "trim",
+     "severity": "error",
+     "condition": "expected_width_pt and expected_height_pt are both set and the TrimBox (trim, then crop, then media fallback) misses them by more than tolerance_pt. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "object_id",
+    "type",
+    "severity",
+    "message",
+    "bbox",
+    "check_id"
+   ],
+   "fixups": []
+  },
+  "white-overprint": {
+   "measures": "White/knockout overprint flags on fills and strokes.",
+   "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "parameters": [
+    {
+     "id": "restrictions",
+     "type": "object",
+     "default": {},
+     "range": "pages|page_box|regions|layers|object_classes",
+     "meaning": "Inspection scope; a check-level object can only narrow the profile scope."
+    }
+   ],
+   "severity": [
+    {
+     "finding_type": "white-overprint",
+     "severity": "error",
+     "condition": "a page paints white or near-white content with overprint set. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "page",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence_ids"
+   ],
+   "fixups": []
+  }
+ },
+ "backlog": [
+  {
+   "id": "barcode-slug-braille",
+   "priority": "P1",
+   "gap": "Barcode / slug / Braille content validation",
+   "families": [
+    "packaging",
+    "sheetfed-offset",
+    "newspaper"
+   ],
+   "state": "open",
+   "closed_by": "#604"
+  },
+  {
+   "id": "devicen-per-colorant-ink-limit",
+   "priority": "P1",
+   "gap": "DeviceN ink-limit per named colorant beyond inventory",
+   "families": [
+    "packaging",
+    "sheetfed-offset",
+    "web-offset",
+    "newspaper"
+   ],
+   "state": "open",
+   "closed_by": "#600"
+  },
+  {
+   "id": "gwg-2022-2024-certificates",
+   "priority": "P1",
+   "gap": "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "#664"
+  },
+  {
+   "id": "imposition-and-reader-spreads",
+   "priority": "P1",
+   "gap": "Multi-page imposition and reader-spread checks",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "newspaper"
+   ],
+   "state": "open",
+   "closed_by": "#603"
+  },
+  {
+   "id": "pdfvt-variable-data",
+   "priority": "P1",
+   "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/VT variable-data streams are neither understood, validated, nor preserved",
+   "families": [
+    "web-offset",
+    "newspaper",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "#605"
+  },
+  {
+   "id": "pdfx5-pdfa3-output",
+   "priority": "P1",
+   "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/X-5 (X-5n/X-5g) and PDF/A-3 output are neither validated nor produced",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "#665"
+  },
+  {
+   "id": "bleed-raster-strip-depth",
+   "priority": "P2",
+   "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "#47"
+  },
+  {
+   "id": "color-mode-icc-alternate",
+   "priority": "P2",
+   "gap": "an ICC-based color space is classified by its alternate, so a page whose ICC space resolves to an allowed alternate can pass while the painted space is disallowed",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "dieline-geometry",
+   "priority": "P2",
+   "gap": "processing-steps and dieline detect cutting-die presence but not die geometry, so a geometrically wrong dieline passes clean",
+   "families": [
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "#604"
+  },
+  {
+   "id": "font-glyph-coverage",
+   "priority": "P2",
+   "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "hidden-layers-ocmd",
+   "priority": "P2",
+   "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+   "families": [
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "ink-coverage-raster-tac",
+   "priority": "P2",
+   "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "newspaper"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "invisible-content-breadth",
+   "priority": "P2",
+   "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as #124)",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "obscured-content-occlusion",
+   "priority": "P2",
+   "gap": "obscured-content is a bounding-box heuristic rather than a RIP occlusion model, so covered content can pass clean",
+   "families": [
+    "sheetfed-offset"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "off-page-content-clipping",
+   "priority": "P2",
+   "gap": "off-page-content compares painted bounds before clipping, so a clipped mark can be a false negative or a false positive",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "transparency-rip-interaction",
+   "priority": "P2",
+   "gap": "transparency-risk does not flatten and does not simulate overprint-plus-transparency interaction as a RIP does, so a press-only interaction passes clean",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "white-overprint-renderer",
+   "priority": "P2",
+   "gap": "white-overprint reads page-view overprint state rather than the Output Preview or transparency renderer, so a renderer-dependent white overprint passes clean",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "#49"
+  },
+  {
+   "id": "corrupt-embedded-fonts",
+   "priority": "P2",
+   "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as #130)",
+   "families": [
+    "sheetfed-offset",
+    "digital"
+   ],
+   "state": "landed",
+   "closed_by": "font-integrity"
+  },
+  {
+   "id": "devicen-dieline-detection",
+   "priority": "P2",
+   "gap": "a DeviceN dieline is described by a multi-colorant separation, so the Separation-only processing-step collector can miss the die entirely and the packaging job passes clean",
+   "families": [
+    "packaging"
+   ],
+   "state": "closed",
+   "closed_by": "#628"
+  },
+  {
+   "id": "hairline-and-thin-stroke-widths",
+   "priority": "P2",
+   "gap": "stroke widths below a job threshold, including zero-width hairlines, were unchecked; thin-strokes now measures them",
+   "families": [
+    "sheetfed-offset",
+    "packaging"
+   ],
+   "state": "landed",
+   "closed_by": "thin-strokes"
+  },
+  {
+   "id": "nested-font-resources",
+   "priority": "P2",
+   "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as #70)",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "newspaper",
+    "digital"
+   ],
+   "state": "landed",
+   "closed_by": "embedded-fonts"
+  },
+  {
+   "id": "output-intent-identity",
+   "priority": "P2",
+   "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as #12)",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "digital"
+   ],
+   "state": "landed",
+   "closed_by": "output-intent"
+  },
+  {
+   "id": "thin-filled-parts",
+   "priority": "P2",
+   "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as #131)",
+   "families": [
+    "packaging"
+   ],
+   "state": "landed",
+   "closed_by": "thin-parts"
+  },
+  {
+   "id": "bleed-box-rewrite-only",
+   "priority": "P3",
+   "gap": "the bleed check measures and rewrites page boxes only and synthesizes no artwork bleed; artwork bleed itself is measured by content-bleed",
+   "families": [
+    "sheetfed-offset",
+    "web-offset",
+    "packaging",
+    "digital"
+   ],
+   "state": "landed",
+   "closed_by": "content-bleed"
+  },
+  {
+   "id": "color-inventory-probe-depth",
+   "priority": "P3",
+   "gap": "color-inventory is bounded by probe_dpi and is a spot, separation, and rich-black inventory rather than a named-ink dictionary, so small tints are inventoried incompletely",
+   "families": [
+    "packaging",
+    "sheetfed-offset"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  },
+  {
+   "id": "thin-parts-raster-budget",
+   "priority": "P3",
+   "gap": "thin-parts reports a page as check-incomplete when the mask exceeds max_raster_pixels instead of passing it, so the shortfall is an incomplete inspection rather than a silent pass",
+   "families": [
+    "packaging"
+   ],
+   "state": "open",
+   "closed_by": "unfiled"
+  }
+ ],
+ "not_covered": [
+  "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
+  "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+  "DeviceN ink-limit per named colorant beyond inventory",
+  "Barcode / slug / Braille content validation",
+  "Multi-page imposition and reader-spread checks"
+ ]
 }

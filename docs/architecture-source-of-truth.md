@@ -26,9 +26,15 @@ The generated
 current factual inventory of policy branches, workflow trigger branches,
 built-in preflight check IDs, registered repair operations, runtime/schema
 versions, numbered architecture invariants, and CMake test targets. Per-check
-measures, limitations, and standards coverage live in
-[`preflight-check-catalog.json`](generated/preflight-check-catalog.json).
-Regenerate it after changing one of its source files:
+measures, limitations, parameters and ranges, severity model, evidence fields,
+and applicable fixups live in
+[`preflight-check-catalog.json`](generated/preflight-check-catalog.json), and the
+prioritised gap register derived from its coverage overlay lives in
+[`preflight-coverage-backlog.json`](generated/preflight-coverage-backlog.json).
+Per-operation correction metadata — save policy, impact, surface parity, and
+limitations — lives in
+[`correction-operation-catalog.json`](generated/correction-operation-catalog.json).
+Regenerate after changing one of the source files:
 
 ```bash
 python3 scripts/generate-architecture-catalogs.py --write

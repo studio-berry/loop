@@ -197,6 +197,10 @@ void PreflightController::markStale(QString summary)
     }
 
     m_operatorSummary = std::move(summary);
+    if (m_hasResult)
+    {
+        m_retainedState = State::Stale;
+    }
     setState(State::Stale);
 }
 
@@ -208,6 +212,10 @@ void PreflightController::restoreRetainedState(State terminalState)
     // ("Preflight was cancelled." / "Preflight failed: ...") and made the
     // transition unobservable from stateChanged, which is that summary's notifier.
     // A retained result still wins, so the last good verdict stays on screen.
+    if (m_hasResult && m_retainedState == State::Stale)
+    {
+        m_operatorSummary = QStringLiteral("Previous preflight remains stale. %1").arg(m_operatorSummary);
+    }
     setState(m_hasResult ? m_retainedState : terminalState);
 }
 
@@ -242,7 +250,8 @@ QByteArray PreflightController::serializedReport(const QString& documentPath) co
 bool PreflightController::navigationFor(const QString& findingId,
                                         EvidenceNavigationRequest* request) const
 {
-    if (!request || m_state == State::Stale || m_state == State::Cancelled ||
+    if (!request || !m_hasResult ||
+        (m_state != State::Pass && m_state != State::Findings && m_state != State::Incomplete) ||
         !m_findings.containsCurrent(findingId, m_documentRevision))
     {
         return false;
@@ -279,7 +288,8 @@ bool PreflightController::navigationFor(const QString& findingId,
 
 QVector<FindingOverlay> PreflightController::overlaysForPage(int page) const
 {
-    if (m_state == State::Stale || m_state == State::Cancelled || m_state == State::NotChecked)
+    if (!m_hasResult ||
+        (m_state != State::Pass && m_state != State::Findings && m_state != State::Incomplete))
     {
         return {};
     }

@@ -1,0 +1,15 @@
+{
+  "schema": "loop-object-selector/1",
+  "predicate": {
+    "and": [
+      { "pages": "1" },
+      { "objectClass": "image" },
+      { "colorSpace": "DeviceRGB" },
+      { "maxEffectiveDpi": 250 },
+      { "not": { "layer": "DO NOT PRINT" } }
+    ]
+  },
+  "sets": {
+    "excludePrint": { "layer": "DO NOT PRINT" }
+  }
+}

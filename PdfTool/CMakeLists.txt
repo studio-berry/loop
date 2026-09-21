@@ -27,6 +27,8 @@ set(_loop_pdftool_sources
     pdftoolcapabilities.cpp
     pdftoolcapabilities.h
     pdftoolresult.cpp
+    pdftoolschema.cpp
+    pdftoolschema.h
     pdftoolattachments.cpp
     pdftoolcertstore.cpp
     pdftoolcolorprofiles.cpp
@@ -68,7 +70,13 @@ set(_loop_pdftool_sources
     pdftoolrgbtocmyk.h
     pdftoolpreflight.cpp
     pdftoolpreflight.h
+    pdftoolpreflightprofile.cpp
+    pdftoolpreflightprofile.h
     pdftoolpreflightchecks.h
+    pdftoolverifycertificate.cpp
+    pdftoolverifycertificate.h
+    pdftoolevidencebundle.cpp
+    pdftoolevidencebundle.h
     pdftoolocr.cpp
     pdftoolocr.h
     ocrsidecarclient.cpp

@@ -23,10 +23,18 @@
 #ifndef PDFPREFLIGHTVERDICT_H
 #define PDFPREFLIGHTVERDICT_H
 
+#include "pdfoperationimpact.h"
+#include "pdfutils.h"
 #include "preflightengine.h"
 
 namespace pdf
 {
+
+class PDFDocument;
+class PDFRepairOperation;
+struct PDFRepairFindingDelta;
+struct PDFRepairPlan;
+struct PDFRepairResult;
 
 enum class PreflightVerdictState
 {
@@ -68,6 +76,61 @@ LOOPLIBCORESHARED_EXPORT QString preflightGateFailureMessage(const QString& file
 /// The result's legacy pass field is deliberately ignored.
 LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
                                                                  const PreflightProfileData* effectiveProfile = nullptr);
+
+/// The single Core planner used by step postflight, check selection and impact
+/// qualification. An operation-wide/uncertain declaration cannot be narrowed
+/// by page-local repair targets.
+LOOPLIBCORESHARED_EXPORT PDFRevalidationPlan planRepairStepPreflight(
+    const PDFRepairOperation* operation,
+    const PDFDocument& document,
+    const QJsonObject& parameters,
+    const QStringList& enabledCheckIds,
+    const PDFRepairPlan& repairPlan);
+
+struct LOOPLIBCORESHARED_EXPORT MandatoryPostflightOptions
+{
+    bool allowIncomplete = false;
+    const PDFOperationControl* operationControl = nullptr;
+    const PDFRevalidationPlan* revalidationPlan = nullptr;
+    QJsonObject profileJson;
+    QJsonObject profileBindings;
+};
+
+/// Runs a full profile inspection on a serialized-and-reopened candidate. Fails
+/// closed unless \p options.allowIncomplete permits an incomplete verdict.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult runMandatoryPostflight(PDFDocument* document,
+                                                                   const QString& profilePath,
+                                                                   PreflightVerdict* verdictOut,
+                                                                   PreflightResult* resultOut = nullptr,
+                                                                   MandatoryPostflightOptions options = {});
+
+/// Computes a scoped finding delta for operator feedback during step execution.
+/// This is diagnostic-only and does not gate publication.
+LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeRepairStepFindingDelta(const PDFDocument& baselineDocument,
+                                                                             PDFDocument* afterDocument,
+                                                                             const PDFRepairPlan& plan,
+                                                                             const QString& profilePath,
+                                                                             MandatoryPostflightOptions options = {},
+                                                                             const PDFRepairOperation* operation = nullptr,
+                                                                             const QJsonObject& operationParameters = {});
+
+/// Executes declared repair validators (notably NormalPreflight) against the
+/// candidate and populates \p result verdict / validation records. When
+/// \p operation is supplied, NormalPreflight is scoped to that step's impact.
+/// This is the single governed publish gate for repair and Action List commit.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
+                                                                        const PDFRepairPlan& plan,
+                                                                        const QString& profilePath,
+                                                                        PDFRepairResult* result,
+                                                                        MandatoryPostflightOptions options = {},
+                                                                        const PDFRepairOperation* operation = nullptr,
+                                                                        const QJsonObject& operationParameters = {},
+                                                                        const PDFDocument* baselineDocument = nullptr,
+                                                                        PreflightResult* postflightOut = nullptr);
+
+/// Certificate issuance (#133) may proceed only on a PASS verdict against a
+/// non-provisional profile identity.
+LOOPLIBCORESHARED_EXPORT bool preflightAllowsCertification(const PreflightResult& result);
 
 }   // namespace pdf
 

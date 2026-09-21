@@ -490,6 +490,8 @@ void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
             pdf::PreflightCheckStatus status{ fixture.id,
                                               QStringLiteral("incomplete"),
                                               QStringLiteral("budget-exceeded"),
+                                              QJsonObject{},
+                                              QStringList{},
                                               fixture.budgetKind,
                                               fixture.budgetPool,
                                               static_cast<qint64>(detail.limit),

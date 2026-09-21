@@ -97,8 +97,18 @@ private slots:
     void preflight_gate_blocksFailedOutput();
     void preflight_sidecarWriteFailure_failsClosed();
     void preflight_finalSidecarWriteFailure_keepsPriorOutput();
+    void preflightGate_enablesRevalidationByDefault();
     void bleed_confirmationGate_blocksBeforeAssembly();
     void bleed_manifestReportsEligibility();
+    void batchFailure_outputThreeDestinationDirectoryMissing_marksOnlyItFailed();
+    void processKill_insideOutputStagingWindow_leavesNoFileAtFinalPathAndResumes();
+    void resume_retriesOutputRecordedFailedAndSkipsWrittenOne();
+    void resume_rewritesOutputRecordedWrittenWhoseFileIsMissing();
+    void resume_withoutAnyManifest_behavesAsFreshBatch();
+    void manifest_pathOccupiedByDirectory_failsClosedBeforeAnyOutputIsWritten();
+    void manifest_emptyOutputsArray_rejectsResume();
+    void manifest_twoBatchesShareDefaultNameInOneDirectory_aliased();
+    void manifest_successDefaultsToFirstOutputDirectorySchema3AllWritten();
 };
 
 namespace
@@ -197,6 +207,118 @@ bool anyOutputExists(const QStringList& paths)
         }
     }
     return false;
+}
+
+/// True when \p fileName reopens as a readable PDF holding \p expectedPageCount pages.
+/// The reader reports its own result, so the check stays meaningful in a Release build
+/// where the Q_ASSERT in readDocument() above compiles away.
+bool readsAsValidPdf(const QString& fileName, int expectedPageCount = 1)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    const pdf::PDFDocument document = reader.readFromFile(fileName);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK || document.getCatalog() == nullptr)
+    {
+        return false;
+    }
+    return document.getCatalog()->getPageCount() == expectedPageCount;
+}
+
+QString manifestStatusAt(const QJsonObject& manifest, int index)
+{
+    const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return {};
+    }
+    return outputs.at(index).toObject().value(QStringLiteral("status")).toString();
+}
+
+/// The manifest as it exists on disk, or an empty object when the file is missing or
+/// unparseable. This is the durable record a resuming run would see, which is not
+/// necessarily the copy the job handed back in its result.
+QJsonObject manifestOnDisk(const QString& manifestPath)
+{
+    QFile file(manifestPath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError)
+    {
+        return {};
+    }
+    return document.object();
+}
+
+/// Child-process harness for a kill inside one output's publishing window: after the
+/// output's bytes have been handed to the atomic writer and before the commit that would
+/// publish them at the final path. Both modes build the same five-output job, so `resume`
+/// carries the same export configuration digest as the run `kill` interrupted. `kill`
+/// arms beforeOutputCommit for the third output and leaves the process there without
+/// unwinding (no destructor runs, so nothing cleans up that window); `resume` re-runs the
+/// interrupted batch with resume enabled.
+int runStagingKillHarness(const QString& mode, const QString& directory)
+{
+    const bool killMode = mode == QStringLiteral("kill");
+    const bool resumeMode = mode == QStringLiteral("resume");
+    if (!killMode && !resumeMode)
+    {
+        return 2;
+    }
+
+    const QDir outputDirectory(directory);
+    pdf::PDFDocument source = buildFilledPage();
+    const auto page = documentPage(0, source);
+
+    pdf::PDFPageMasterExportJob job;
+    for (int index = 0; index < 5; ++index)
+    {
+        job.assembledDocuments.push_back({ page });
+        job.outputFileNames.push_back(outputDirectory.filePath(QStringLiteral("staging-%1.pdf").arg(index + 1)));
+    }
+    job.documents.emplace(0, std::move(source));
+    // A fixed source identity keeps the two harness invocations' digests identical,
+    // which is what makes the resume leg measure resume rather than rejection.
+    job.documentSourceIdentities.emplace(0,
+                                         testArtifactIdentity(QByteArrayLiteral("staging-window-source"),
+                                                              QStringLiteral("application/pdf"),
+                                                              QStringLiteral("staging-source.pdf")));
+    job.overwriteFiles = true;
+    job.resume = resumeMode;
+
+    const QString killPath = outputDirectory.filePath(QStringLiteral("staging-3.pdf"));
+    bool commitSeamFired = false;
+    if (killMode)
+    {
+        job.beforeOutputCommit = [&killPath, &commitSeamFired, &outputDirectory](const QString& outputPath)
+        {
+            if (outputPath != killPath)
+            {
+                return;
+            }
+
+            commitSeamFired = true;
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+            ::_exit(91);
+#else
+            std::quick_exit(91);
+#endif
+        };
+    }
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    if (killMode)
+    {
+        // Reaching here means the commit seam was armed and never fired, so the parent
+        // would be inspecting a directory state this scenario never produced. Report
+        // that loudly instead of exiting like a successful kill.
+        return commitSeamFired ? 92 : 93;
+    }
+    return result.success ? 0 : 1;
 }
 
 bool waitForExportFinishedBounded(QFutureWatcherBase* watcher, int timeoutMs)
@@ -1668,6 +1790,39 @@ void PageMasterExportTest::preflight_finalSidecarWriteFailure_keepsPriorOutput()
     QCOMPARE(kept.readAll(), priorBytes);
 }
 
+void PageMasterExportTest::preflightGate_enablesRevalidationByDefault()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    QVERIFY(QFile::exists(profilePath));
+    const QString outputPath = tempDir.filePath(QStringLiteral("revalidate-default.pdf"));
+    pdf::PDFDocument source = buildFilledPage(QRectF(0, 0, 180, 180));
+
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.hasPreflightGate = true;
+    job.preflightProfilePath = profilePath;
+    job.forcePreflight = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY2(result.success, qPrintable(result.errorMessage));
+    QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight.json")));
+    QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight-final.json")));
+    const QJsonObject outputEntry = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+    const QJsonObject finalReport =
+        outputEntry.value(QStringLiteral("preflight")).toObject().value(QStringLiteral("revalidation")).toObject();
+    QVERIFY(!finalReport.isEmpty());
+    const QJsonObject provenance = finalReport.value(QStringLiteral("revalidation")).toObject();
+    QCOMPARE(provenance.value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+    QVERIFY(!provenance.value(QStringLiteral("recomputed_check_ids")).toArray().isEmpty());
+    QVERIFY(provenance.value(QStringLiteral("reused_check_ids")).toArray().isEmpty());
+}
+
 void PageMasterExportTest::bleed_confirmationGate_blocksBeforeAssembly()
 {
     QTemporaryDir tempDir;
@@ -1732,6 +1887,498 @@ void PageMasterExportTest::bleed_manifestReportsEligibility()
     QCOMPARE(sufficientReport.value(QStringLiteral("status")).toString(), QStringLiteral("not-needed"));
 }
 
+/// Issue #44, case 1: a mid-batch failure whose cause is reachable in production - the
+/// destination directory of output 3 was never created - must record exactly that output
+/// as failed with a non-empty error, keep the two outputs already committed as valid
+/// PDFs on disk, and leave no file at the final path of outputs 3, 4 or 5.
+void PageMasterExportTest::batchFailure_outputThreeDestinationDirectoryMissing_marksOnlyItFailed()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString manifestPath = tempDir.filePath(QStringLiteral("batch.json"));
+    const QString missingDirectory = tempDir.filePath(QStringLiteral("never-created"));
+    QVERIFY(!QDir(missingDirectory).exists());
+
+    QStringList outputPaths;
+    for (int index = 0; index < 5; ++index)
+    {
+        outputPaths << (index == 2 ? QDir(missingDirectory).filePath(QStringLiteral("output-3.pdf"))
+                                   : tempDir.filePath(QStringLiteral("output-%1.pdf").arg(index + 1)));
+    }
+
+    pdf::PDFDocument source = buildFilledPage();
+    const auto page = documentPage(0, source);
+    pdf::PDFPageMasterExportJob job;
+    for (const QString& outputPath : outputPaths)
+    {
+        job.assembledDocuments.push_back({ page });
+        job.outputFileNames.push_back(outputPath);
+    }
+    job.documents.emplace(0, std::move(source));
+    job.overwriteFiles = true;
+    job.manifestPath = manifestPath;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+
+    QVERIFY(!result.success);
+    QVERIFY(!result.errorMessage.isEmpty());
+    QCOMPARE(result.writtenFiles.size(), 2);
+    QCOMPARE(result.writtenFiles.at(0), outputPaths.at(0));
+    QCOMPARE(result.writtenFiles.at(1), outputPaths.at(1));
+
+    const QJsonArray outputs = result.manifest.value(QStringLiteral("outputs")).toArray();
+    QCOMPARE(outputs.size(), 5);
+    QCOMPARE(manifestStatusAt(result.manifest, 0), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(result.manifest, 1), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(result.manifest, 2), QStringLiteral("failed"));
+    QCOMPARE(manifestStatusAt(result.manifest, 3), QStringLiteral("pending"));
+    QCOMPARE(manifestStatusAt(result.manifest, 4), QStringLiteral("pending"));
+    const QString failureError = outputs.at(2).toObject().value(QStringLiteral("error")).toString();
+    QVERIFY(!failureError.isEmpty());
+    // The failure names the output it could not publish, so the record is actionable.
+    QVERIFY(failureError.contains(QStringLiteral("output-3.pdf")));
+
+    // File-level observables: the two committed outputs reopen as PDFs, and nothing at
+    // all sits at the final path of the output that failed or of the two after it.
+    QVERIFY(readsAsValidPdf(outputPaths.at(0)));
+    QVERIFY(readsAsValidPdf(outputPaths.at(1)));
+    QVERIFY(!QFile::exists(outputPaths.at(2)));
+    QVERIFY(!QFile::exists(outputPaths.at(3)));
+    QVERIFY(!QFile::exists(outputPaths.at(4)));
+
+    // The durable record matches the returned one.
+    const QJsonObject onDisk = manifestOnDisk(manifestPath);
+    QCOMPARE(manifestStatusAt(onDisk, 2), QStringLiteral("failed"));
+    QCOMPARE(onDisk.value(QStringLiteral("outputs")).toArray().size(), 5);
+}
+
+/// Issue #44, case 2: a hard exit inside the output staging window - after the output's
+/// bytes are handed to the atomic writer, before the commit that publishes them - is the
+/// window the existing manifestPersist kill does not reach. On restart the manifest must
+/// exist and parse, outputs 1-2 must be committed PDFs, output 3 must not be written and
+/// must have no file at its final path, and the interrupted batch must still resume to a
+/// complete batch.
+void PageMasterExportTest::processKill_insideOutputStagingWindow_leavesNoFileAtFinalPathAndResumes()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QDir outputDirectory(tempDir.path());
+    QStringList outputPaths;
+    for (int index = 0; index < 5; ++index)
+    {
+        outputPaths << outputDirectory.filePath(QStringLiteral("staging-%1.pdf").arg(index + 1));
+    }
+    const QString manifestPath = outputDirectory.filePath(QStringLiteral(".loop-batch.json"));
+
+    QProcess killed;
+    killed.start(QCoreApplication::applicationFilePath(),
+                 { QStringLiteral("--pagemaster-staging-kill-harness"),
+                   QStringLiteral("kill"),
+                   tempDir.path() });
+    QVERIFY2(killed.waitForFinished(20000), qPrintable(killed.errorString()));
+    QCOMPARE(killed.exitStatus(), QProcess::NormalExit);
+    // 91 is the kill in the staging window; 92/93 mean the commit seam was armed and
+    // never fired, so this scenario measured nothing and must not read as a pass.
+    QCOMPARE(killed.exitCode(), 91);
+
+    QVERIFY(QFile::exists(manifestPath));
+    const QJsonObject killedManifest = manifestOnDisk(manifestPath);
+    QCOMPARE(killedManifest.value(QStringLiteral("schema_version")).toInt(-1), 3);
+    QCOMPARE(killedManifest.value(QStringLiteral("outputs")).toArray().size(), 5);
+    QCOMPARE(manifestStatusAt(killedManifest, 0), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(killedManifest, 1), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(killedManifest, 2), QStringLiteral("pending"));
+    QCOMPARE(manifestStatusAt(killedManifest, 3), QStringLiteral("pending"));
+    QCOMPARE(manifestStatusAt(killedManifest, 4), QStringLiteral("pending"));
+
+    // The promise a reader depends on: a complete PDF at every written final path, and
+    // no file at all at the final path of the output that was mid-publish.
+    QVERIFY(readsAsValidPdf(outputPaths.at(0)));
+    QVERIFY(readsAsValidPdf(outputPaths.at(1)));
+    QVERIFY(!QFile::exists(outputPaths.at(2)));
+    QVERIFY(!QFile::exists(outputPaths.at(3)));
+    QVERIFY(!QFile::exists(outputPaths.at(4)));
+
+    // Diagnostics only, never an assertion. Measured at the seam: the atomic writer's
+    // staging temp file for the interrupted output survives the hard exit, named
+    // `<final path>.XXXXXX` with six random alphanumerics (Qt's temporary-file template),
+    // and it holds zero bytes because the writer had not yet flushed the payload. Nothing
+    // is asserted about it here, and no directory listing is asserted either - the point
+    // being measured is that no file at all appears AT a final output path.
+    const QStringList expectedEntries{ outputPaths.at(0), outputPaths.at(1), manifestPath };
+    for (const QString& entry : outputDirectory.entryList(QDir::Files | QDir::Hidden))
+    {
+        const QString entryPath = outputDirectory.filePath(entry);
+        if (!expectedEntries.contains(entryPath))
+        {
+            qInfo().noquote() << "hard-exit residue:" << entry << QFileInfo(entryPath).size() << "bytes";
+        }
+    }
+
+    QProcess resumed;
+    resumed.start(QCoreApplication::applicationFilePath(),
+                  { QStringLiteral("--pagemaster-staging-kill-harness"),
+                    QStringLiteral("resume"),
+                    tempDir.path() });
+    QVERIFY2(resumed.waitForFinished(20000), qPrintable(resumed.errorString()));
+    QCOMPARE(resumed.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(resumed.exitCode(), 0);
+
+    for (const QString& outputPath : outputPaths)
+    {
+        QVERIFY2(readsAsValidPdf(outputPath), qPrintable(outputPath));
+    }
+
+    const QJsonObject resumedManifest = manifestOnDisk(manifestPath);
+    QCOMPARE(resumedManifest.value(QStringLiteral("outputs")).toArray().size(), 5);
+    for (int index = 0; index < 5; ++index)
+    {
+        QCOMPARE(manifestStatusAt(resumedManifest, index), QStringLiteral("written"));
+    }
+    // Resume continued the interrupted batch rather than starting a new one.
+    QCOMPARE(resumedManifest.value(QStringLiteral("batch_id")).toString(),
+             killedManifest.value(QStringLiteral("batch_id")).toString());
+}
+
+/// Issue #44, case 3a: an output the previous run recorded as failed is retried once its
+/// destination is viable, while an output whose manifest entry is already written is left
+/// where it is - proven by leaving it unwritable, which a re-write could not survive.
+void PageMasterExportTest::resume_retriesOutputRecordedFailedAndSkipsWrittenOne()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString manifestPath = tempDir.filePath(QStringLiteral("retry-manifest.json"));
+    const QString writtenPath = tempDir.filePath(QStringLiteral("retry-written.pdf"));
+    const QString blockedDirectory = tempDir.filePath(QStringLiteral("blocked"));
+    const QString blockedPath = QDir(blockedDirectory).filePath(QStringLiteral("retry-blocked.pdf"));
+    QVERIFY(!QDir(blockedDirectory).exists());
+
+    auto makeJob = [&]()
+    {
+        pdf::PDFDocument source = buildFilledPage(QRectF(0, 0, 260, 260));
+        pdf::PDFPageMasterExportJob job;
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.documents.emplace(0, std::move(source));
+        job.documentSourceIdentities.emplace(0,
+                                             testArtifactIdentity(QByteArrayLiteral("retry-source"),
+                                                                  QStringLiteral("application/pdf"),
+                                                                  QStringLiteral("retry-source.pdf")));
+        job.outputFileNames.push_back(writtenPath);
+        job.outputFileNames.push_back(blockedPath);
+        job.overwriteFiles = true;
+        job.manifestPath = manifestPath;
+        return job;
+    };
+
+    const pdf::PDFPageMasterExportResult interrupted = pdf::PDFPageMasterExport::run(makeJob());
+    QVERIFY(!interrupted.success);
+    QCOMPARE(manifestStatusAt(interrupted.manifest, 0), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(interrupted.manifest, 1), QStringLiteral("failed"));
+    QVERIFY(readsAsValidPdf(writtenPath));
+    QVERIFY(!QFile::exists(blockedPath));
+
+    QFile writtenFile(writtenPath);
+    QVERIFY(writtenFile.open(QIODevice::ReadOnly));
+    const QByteArray writtenBytes = writtenFile.readAll();
+    writtenFile.close();
+
+    // A committed output that a resuming run must not touch: replacing this file needs
+    // the write attribute, so a batch that rewrote it would fail instead of succeeding.
+    QVERIFY(QFile::setPermissions(writtenPath, QFile::ReadOwner | QFile::ReadUser));
+    {
+        // Measured, not assumed. A rewrite is refused while this attribute holds, which is
+        // what makes the resuming run's success evidence that it skipped the output
+        // rather than rewriting it with identical bytes.
+        QFile rewriteProbe(writtenPath);
+        QVERIFY2(!rewriteProbe.open(QIODevice::WriteOnly | QIODevice::Truncate),
+                 "the already-written output was still writable, so this slot could not tell a skip from a rewrite");
+    }
+    QVERIFY(QDir().mkpath(blockedDirectory));
+
+    pdf::PDFPageMasterExportJob resumeJob = makeJob();
+    resumeJob.resume = true;
+    const pdf::PDFPageMasterExportResult resumed = pdf::PDFPageMasterExport::run(std::move(resumeJob));
+
+    QVERIFY2(resumed.success, qPrintable(resumed.errorMessage));
+    QCOMPARE(manifestStatusAt(resumed.manifest, 0), QStringLiteral("written"));
+    QCOMPARE(manifestStatusAt(resumed.manifest, 1), QStringLiteral("written"));
+    QCOMPARE(resumed.writtenFiles.size(), 2);
+    // The retried output exists now, so it can only have been written by the second run.
+    QVERIFY(QFile::exists(blockedPath));
+    QVERIFY(readsAsValidPdf(blockedPath));
+
+    QFile keptFile(writtenPath);
+    QVERIFY(keptFile.open(QIODevice::ReadOnly));
+    QCOMPARE(keptFile.readAll(), writtenBytes);
+    keptFile.close();
+    QVERIFY(QFile::setPermissions(writtenPath, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadUser));
+}
+
+/// Issue #44, case 3b: a manifest entry that says written is not trusted on its own - if
+/// the file is gone from disk the output is produced again rather than assumed done.
+void PageMasterExportTest::resume_rewritesOutputRecordedWrittenWhoseFileIsMissing()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString manifestPath = tempDir.filePath(QStringLiteral("missing-file-manifest.json"));
+    const QString keptPath = tempDir.filePath(QStringLiteral("kept.pdf"));
+    const QString deletedPath = tempDir.filePath(QStringLiteral("deleted.pdf"));
+
+    auto makeJob = [&]()
+    {
+        pdf::PDFDocument source = buildFilledPage(QRectF(0, 0, 240, 240));
+        pdf::PDFPageMasterExportJob job;
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.documents.emplace(0, std::move(source));
+        job.documentSourceIdentities.emplace(0,
+                                             testArtifactIdentity(QByteArrayLiteral("missing-file-source"),
+                                                                  QStringLiteral("application/pdf"),
+                                                                  QStringLiteral("missing-file-source.pdf")));
+        job.outputFileNames.push_back(keptPath);
+        job.outputFileNames.push_back(deletedPath);
+        job.overwriteFiles = true;
+        job.manifestPath = manifestPath;
+        return job;
+    };
+
+    const pdf::PDFPageMasterExportResult first = pdf::PDFPageMasterExport::run(makeJob());
+    QVERIFY2(first.success, qPrintable(first.errorMessage));
+    QVERIFY(readsAsValidPdf(keptPath));
+    QVERIFY(readsAsValidPdf(deletedPath));
+
+    // The manifest still records this output as written; only the file is gone.
+    QCOMPARE(manifestStatusAt(manifestOnDisk(manifestPath), 1), QStringLiteral("written"));
+    QVERIFY(QFile::remove(deletedPath));
+    QVERIFY(!QFile::exists(deletedPath));
+
+    pdf::PDFPageMasterExportJob resumeJob = makeJob();
+    resumeJob.resume = true;
+    const pdf::PDFPageMasterExportResult resumed = pdf::PDFPageMasterExport::run(std::move(resumeJob));
+
+    QVERIFY2(resumed.success, qPrintable(resumed.errorMessage));
+    QCOMPARE(resumed.writtenFiles.size(), 2);
+    QCOMPARE(manifestStatusAt(resumed.manifest, 1), QStringLiteral("written"));
+    // It was deleted before the resume, so its presence now proves the re-run happened.
+    QVERIFY(QFile::exists(deletedPath));
+    QVERIFY(readsAsValidPdf(deletedPath));
+}
+
+/// Issue #44, case 3c: asking to resume with no manifest on disk proceeds as a fresh
+/// batch - new manifest, outputs written, no error - rather than failing.
+void PageMasterExportTest::resume_withoutAnyManifest_behavesAsFreshBatch()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QDir outputDirectory(tempDir.path());
+    const QString manifestPath = outputDirectory.filePath(QStringLiteral(".loop-batch.json"));
+    const QString outputPath = outputDirectory.filePath(QStringLiteral("no-manifest.pdf"));
+    QVERIFY(!QFile::exists(manifestPath));
+
+    pdf::PDFDocument source = buildFilledPage();
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.resume = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+
+    QVERIFY2(result.success, qPrintable(result.errorMessage));
+    QCOMPARE(result.manifestPath, manifestPath);
+    QVERIFY(readsAsValidPdf(outputPath));
+
+    const QJsonObject onDisk = manifestOnDisk(manifestPath);
+    QCOMPARE(onDisk.value(QStringLiteral("schema_version")).toInt(-1), 3);
+    QCOMPARE(onDisk.value(QStringLiteral("outputs")).toArray().size(), 1);
+    QCOMPARE(manifestStatusAt(onDisk, 0), QStringLiteral("written"));
+    QVERIFY(!onDisk.value(QStringLiteral("batch_id")).toString().isEmpty());
+}
+
+/// Issue #44, case 4a: a manifest path that cannot be read as a manifest refuses the
+/// batch before any output is written. What occupies the path here is a directory, which
+/// is the production-reachable way to make it unreadable without depending on filesystem
+/// permissions - the guard that fires is the planned-output conflict check, one step
+/// ahead of the manifest read whose parse branch manifest_corruptResumeFailsClosed covers.
+void PageMasterExportTest::manifest_pathOccupiedByDirectory_failsClosedBeforeAnyOutputIsWritten()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString manifestPath = tempDir.filePath(QStringLiteral(".loop-batch.json"));
+    QVERIFY(QDir().mkpath(manifestPath));
+    const QString outputPath = tempDir.filePath(QStringLiteral("unreadable-manifest.pdf"));
+
+    pdf::PDFDocument source = buildFilledPage();
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.resume = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+
+    QVERIFY(!result.success);
+    QVERIFY(!result.errorMessage.isEmpty());
+    QVERIFY(result.errorMessage.contains(QStringLiteral(".loop-batch.json")));
+    QVERIFY(!QFile::exists(outputPath));
+    // Fails closed: the unreadable manifest was neither replaced nor used.
+    QVERIFY(QFileInfo(manifestPath).isDir());
+}
+
+/// Issue #44, case 4b: a manifest whose outputs array is empty cannot describe this job,
+/// so resume is rejected, nothing is written, and the existing manifest is left alone
+/// rather than being replaced by a fresh one.
+void PageMasterExportTest::manifest_emptyOutputsArray_rejectsResume()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString manifestPath = tempDir.filePath(QStringLiteral(".loop-batch.json"));
+    const QString outputPath = tempDir.filePath(QStringLiteral("empty-outputs.pdf"));
+
+    const QJsonObject emptyOutputsManifest{
+        { QStringLiteral("schema_version"), 3 },
+        { QStringLiteral("batch_id"), QStringLiteral("empty-outputs-batch") },
+        { QStringLiteral("outputs"), QJsonArray() }
+    };
+    QFile manifestFile(manifestPath);
+    QVERIFY(manifestFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QVERIFY(manifestFile.write(QJsonDocument(emptyOutputsManifest).toJson(QJsonDocument::Compact)) > 0);
+    manifestFile.close();
+
+    pdf::PDFDocument source = buildFilledPage();
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.resume = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+
+    QVERIFY(!result.success);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive));
+    QVERIFY(!QFile::exists(outputPath));
+
+    const QJsonObject onDisk = manifestOnDisk(manifestPath);
+    QCOMPARE(onDisk.value(QStringLiteral("batch_id")).toString(), QStringLiteral("empty-outputs-batch"));
+    QVERIFY(onDisk.value(QStringLiteral("outputs")).toArray().isEmpty());
+}
+
+/// Issue #44, case 4c: the default manifest name is per directory, not per batch. Two
+/// batches exporting into one directory share it, and the observable outcome is
+/// aliasing - one manifest, describing the later batch, with the earlier batch's
+/// registration gone. Nothing here asserts that a lock exists, because none does.
+void PageMasterExportTest::manifest_twoBatchesShareDefaultNameInOneDirectory_aliased()
+{
+    auto runOneOutputBatch = [](const QDir& directory, const QString& fileName, bool overwrite)
+    {
+        pdf::PDFDocument source = buildFilledPage();
+        pdf::PDFPageMasterExportJob job;
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.documents.emplace(0, std::move(source));
+        job.outputFileNames.push_back(directory.filePath(fileName));
+        job.overwriteFiles = overwrite;
+        return pdf::PDFPageMasterExport::run(std::move(job));
+    };
+
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QDir sharedDirectory(tempDir.path());
+    const QString defaultManifestPath = sharedDirectory.filePath(QStringLiteral(".loop-batch.json"));
+
+    const pdf::PDFPageMasterExportResult batchA = runOneOutputBatch(sharedDirectory, QStringLiteral("batch-a.pdf"), true);
+    QVERIFY2(batchA.success, qPrintable(batchA.errorMessage));
+    QCOMPARE(batchA.manifestPath, defaultManifestPath);
+    const QString batchIdA = batchA.manifest.value(QStringLiteral("batch_id")).toString();
+    QVERIFY(!batchIdA.isEmpty());
+
+    const pdf::PDFPageMasterExportResult batchB = runOneOutputBatch(sharedDirectory, QStringLiteral("batch-b.pdf"), true);
+    QVERIFY2(batchB.success, qPrintable(batchB.errorMessage));
+    QCOMPARE(batchB.manifestPath, defaultManifestPath);
+
+    const QJsonObject aliasedManifest = manifestOnDisk(defaultManifestPath);
+    QCOMPARE(aliasedManifest.value(QStringLiteral("batch_id")).toString(),
+             batchB.manifest.value(QStringLiteral("batch_id")).toString());
+    QVERIFY(aliasedManifest.value(QStringLiteral("batch_id")).toString() != batchIdA);
+    QCOMPARE(aliasedManifest.value(QStringLiteral("outputs")).toArray().size(), 1);
+    QCOMPARE(manifestStatusAt(aliasedManifest, 0), QStringLiteral("written"));
+    // Both PDFs are on disk; only the later batch is registered anywhere.
+    QVERIFY(readsAsValidPdf(sharedDirectory.filePath(QStringLiteral("batch-a.pdf"))));
+    QVERIFY(readsAsValidPdf(sharedDirectory.filePath(QStringLiteral("batch-b.pdf"))));
+
+    // With overwriting disallowed, the first batch's manifest occupies the second
+    // batch's planned manifest path, so the second batch is refused before it writes.
+    QTemporaryDir guardedDir;
+    QVERIFY(guardedDir.isValid());
+    const QDir guardedDirectory(guardedDir.path());
+    const pdf::PDFPageMasterExportResult guardedA = runOneOutputBatch(guardedDirectory, QStringLiteral("batch-a.pdf"), true);
+    QVERIFY2(guardedA.success, qPrintable(guardedA.errorMessage));
+    const pdf::PDFPageMasterExportResult guardedB = runOneOutputBatch(guardedDirectory, QStringLiteral("batch-b.pdf"), false);
+    QVERIFY(!guardedB.success);
+    QVERIFY(guardedB.errorMessage.contains(QStringLiteral(".loop-batch.json")));
+    QVERIFY(!QFile::exists(guardedDirectory.filePath(QStringLiteral("batch-b.pdf"))));
+    QVERIFY(readsAsValidPdf(guardedDirectory.filePath(QStringLiteral("batch-a.pdf"))));
+}
+
+/// Issue #44, case 5: the success path is pinned - the manifest defaults to
+/// `.loop-batch.json` in the first output's directory, carries schema version 3, records
+/// every output as written, and is still there (with all three statuses) after the batch
+/// completes, since nothing deletes it or replaces it with a completion marker.
+void PageMasterExportTest::manifest_successDefaultsToFirstOutputDirectorySchema3AllWritten()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QDir outputDirectory(tempDir.path());
+    QStringList outputPaths;
+    for (int index = 0; index < 3; ++index)
+    {
+        outputPaths << outputDirectory.filePath(QStringLiteral("success-%1.pdf").arg(index + 1));
+    }
+    const QString defaultManifestPath = outputDirectory.filePath(QStringLiteral(".loop-batch.json"));
+
+    pdf::PDFDocument source = buildFilledPage();
+    const auto page = documentPage(0, source);
+    pdf::PDFPageMasterExportJob job;
+    for (const QString& outputPath : outputPaths)
+    {
+        job.assembledDocuments.push_back({ page });
+        job.outputFileNames.push_back(outputPath);
+    }
+    job.documents.emplace(0, std::move(source));
+    job.overwriteFiles = true;
+    // No manifestPath and no resume: the default name and location are the measurement.
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+
+    QVERIFY2(result.success, qPrintable(result.errorMessage));
+    QCOMPARE(result.manifestPath, defaultManifestPath);
+    QCOMPARE(result.manifestPath, tempDir.filePath(QStringLiteral(".loop-batch.json")));
+    QVERIFY(QFile::exists(defaultManifestPath));
+
+    const QJsonObject onDisk = manifestOnDisk(defaultManifestPath);
+    QCOMPARE(onDisk.value(QStringLiteral("schema_version")).toInt(-1), 3);
+    QCOMPARE(onDisk.value(QStringLiteral("outputs")).toArray().size(), 3);
+    QVERIFY(!onDisk.value(QStringLiteral("batch_id")).toString().isEmpty());
+    for (int index = 0; index < 3; ++index)
+    {
+        QCOMPARE(manifestStatusAt(onDisk, index), QStringLiteral("written"));
+        QCOMPARE(onDisk.value(QStringLiteral("outputs")).toArray().at(index).toObject().value(QStringLiteral("path")).toString(),
+                 outputPaths.at(index));
+        QVERIFY2(readsAsValidPdf(outputPaths.at(index)), qPrintable(outputPaths.at(index)));
+    }
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication application(argc, argv);
@@ -1739,6 +2386,10 @@ int main(int argc, char** argv)
     if (arguments.value(1) == QStringLiteral("--pagemaster-crash-harness"))
     {
         return runCrashHarness(arguments);
+    }
+    if (arguments.value(1) == QStringLiteral("--pagemaster-staging-kill-harness"))
+    {
+        return runStagingKillHarness(arguments.value(2), arguments.value(3));
     }
 
     PageMasterExportTest test;

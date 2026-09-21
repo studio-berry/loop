@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "pdfactionlist.h"
 #include "pdfschemaversion.h"
 
 #include <QFile>
@@ -41,12 +42,20 @@ private slots:
     void unsupportedMajorFailsClosed();
     void compatibilityResourceIsCwdIndependentAndMatchesEveryKind();
     void unavailableCompatibilityMatrixFailsClosed();
+    void currentVersionFailsClosedWithoutAMatrixEntry();
+    void everySchemaKindIsCoveredByTheCompatibilityMatrix();
+    void prepareFailsClosedWhenNeitherDocumentNorCallerIdentifiesTheKind();
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
-    void v2GoldenMigratesToV3Deterministically();
+    void v2GoldenMigratesToV4Deterministically();
+    void v3MigrationBackfillsStableFindingIds();
     void compatibleSchemaWithoutMigratorFailsClosed();
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
+    void everyJsonKindRoundTripsItsCurrentAndPreviousGolden();
+    void actionListV1MigratesToUsableV2WithoutChangingStepSemantics();
+    void newerMinorPassesThroughAndReportsTheDocumentVersion();
+    void compatibilityDiagnosticsAreStableAndDistinct();
 };
 
 void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
@@ -98,7 +107,7 @@ void SchemaEvolutionTest::unsupportedMajorFailsClosed()
              pdf::PDFSchemaCompatibility::UnsupportedMajor);
     QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::Unknown, { 1, 0 }),
              pdf::PDFSchemaCompatibility::UnknownKind);
-    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 3, 0 }),
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 4, 0 }),
              pdf::PDFSchemaCompatibility::Compatible);
 }
 
@@ -116,7 +125,7 @@ void SchemaEvolutionTest::compatibilityResourceIsCwdIndependentAndMatchesEveryKi
         const pdf::PDFSchemaKind kind = pdf::pdfSchemaKindFromString(kindName);
         QVERIFY2(kind != pdf::PDFSchemaKind::Unknown, qPrintable(kindName));
         const QJsonArray supported = kinds.value(kindName).toObject().value(QStringLiteral("supported_majors")).toArray();
-        for (const QJsonValue& major : { QJsonValue(1), QJsonValue(2), QJsonValue(3) })
+        for (const QJsonValue& major : { QJsonValue(1), QJsonValue(2), QJsonValue(3), QJsonValue(4) })
         {
             const bool expected = std::any_of(supported.cbegin(), supported.cend(), [&](const QJsonValue& value)
                                               { return value.toInt() == major.toInt(); });
@@ -167,19 +176,26 @@ void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()
     };
 
     bool opened = false;
-    const QJsonObject current = load(QStringLiteral("preflight-report-v3.json"), &opened);
-    QVERIFY2(opened, "preflight-report-v3.json");
+    const QJsonObject current = load(QStringLiteral("preflight-report-v4.json"), &opened);
+    QVERIFY2(opened, "preflight-report-v4.json");
     const pdf::PDFSchemaEnvelope currentEnvelope = pdf::readSchemaEnvelope(current);
     QCOMPARE(currentEnvelope.kind, pdf::PDFSchemaKind::PreflightReport);
-    QCOMPARE(int(currentEnvelope.version.major), 3);
+    QCOMPARE(int(currentEnvelope.version.major), 4);
     QCOMPARE(pdf::checkSchemaCompatibility(currentEnvelope.kind, currentEnvelope.version),
              pdf::PDFSchemaCompatibility::Compatible);
 
-    const QJsonObject previous = load(QStringLiteral("preflight-report-v2.json"), &opened);
-    QVERIFY2(opened, "preflight-report-v2.json");
+    const QJsonObject previous = load(QStringLiteral("preflight-report-v3.json"), &opened);
+    QVERIFY2(opened, "preflight-report-v3.json");
     const pdf::PDFSchemaEnvelope previousEnvelope = pdf::readSchemaEnvelope(previous);
-    QCOMPARE(int(previousEnvelope.version.major), 2);
+    QCOMPARE(int(previousEnvelope.version.major), 3);
     QCOMPARE(pdf::checkSchemaCompatibility(previousEnvelope.kind, previousEnvelope.version),
+             pdf::PDFSchemaCompatibility::Compatible);
+
+    const QJsonObject legacy = load(QStringLiteral("preflight-report-v2.json"), &opened);
+    QVERIFY2(opened, "preflight-report-v2.json");
+    const pdf::PDFSchemaEnvelope legacyEnvelope = pdf::readSchemaEnvelope(legacy);
+    QCOMPARE(int(legacyEnvelope.version.major), 2);
+    QCOMPARE(pdf::checkSchemaCompatibility(legacyEnvelope.kind, legacyEnvelope.version),
              pdf::PDFSchemaCompatibility::Compatible);
 
     const QJsonObject unsupported = load(QStringLiteral("unsupported-major.json"), &opened);
@@ -196,7 +212,7 @@ void SchemaEvolutionTest::migrateIsPure()
     QCOMPARE(migrated.value(QStringLiteral("extra")).toString(), QStringLiteral("keep"));
 }
 
-void SchemaEvolutionTest::v2GoldenMigratesToV3Deterministically()
+void SchemaEvolutionTest::v2GoldenMigratesToV4Deterministically()
 {
     QFile file(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json"));
     QVERIFY(file.open(QIODevice::ReadOnly));
@@ -204,14 +220,67 @@ void SchemaEvolutionTest::v2GoldenMigratesToV3Deterministically()
 
     const pdf::PDFSchemaMigrationResult first = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
     QVERIFY(first.migrated);
-    QCOMPARE(int(first.toVersion.major), 3);
-    QCOMPARE(first.document.value(QStringLiteral("schema_version")).toInt(), 3);
+    QCOMPARE(int(first.toVersion.major), 4);
+    QCOMPARE(first.document.value(QStringLiteral("schema_version")).toInt(), 4);
     QVERIFY(first.document.contains(QStringLiteral("verdict")));
     QVERIFY(first.document.value(QStringLiteral("inspection_complete")).toBool());
 
     const pdf::PDFSchemaMigrationResult second = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
     QCOMPARE(QJsonDocument(second.document).toJson(QJsonDocument::Compact),
              QJsonDocument(first.document).toJson(QJsonDocument::Compact));
+}
+
+void SchemaEvolutionTest::v3MigrationBackfillsStableFindingIds()
+{
+    const QJsonObject finding{
+        { QStringLiteral("scope"), QStringLiteral("object") },
+        { QStringLiteral("page"), 1 },
+        { QStringLiteral("object_id"), QStringLiteral("10 0 R") },
+        { QStringLiteral("type"), QStringLiteral("image-resolution") },
+        { QStringLiteral("severity"), QStringLiteral("error") },
+        { QStringLiteral("message"), QStringLiteral("localized text is not identity") },
+        { QStringLiteral("check_id"), QStringLiteral("image-resolution") }
+    };
+    QJsonObject source{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-report") },
+        { QStringLiteral("schema_version"), 3 },
+        { QStringLiteral("pass"), false },
+        { QStringLiteral("inspection_complete"), true },
+        { QStringLiteral("profile"), QStringLiteral("golden") },
+        { QStringLiteral("errors"), QJsonArray{ finding } },
+        { QStringLiteral("warnings"), QJsonArray{} },
+        { QStringLiteral("fixups_available"), QJsonArray{} },
+        { QStringLiteral("checks"), QJsonArray{} },
+        { QStringLiteral("verdict"), QJsonObject{
+                                         { QStringLiteral("state"), QStringLiteral("fail") },
+                                         { QStringLiteral("reason_code"), QStringLiteral("blocking-findings") },
+                                         { QStringLiteral("reason"), QStringLiteral("blocked") },
+                                         { QStringLiteral("blocking_finding_ids"), QJsonArray{} },
+                                         { QStringLiteral("waived_finding_ids"), QJsonArray{} } } }
+    };
+
+    const pdf::PDFSchemaMigrationResult first =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
+    QVERIFY(first.migrated);
+    QCOMPARE(first.toVersion.toString(), QStringLiteral("4.0"));
+    const QJsonObject migratedFinding =
+        first.document.value(QStringLiteral("errors")).toArray().first().toObject();
+    const QString findingId = migratedFinding.value(QStringLiteral("id")).toString();
+    QCOMPARE(findingId.size(), 16);
+    QCOMPARE(first.document.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("blocking_finding_ids")).toArray().first().toString(),
+             findingId);
+
+    QJsonObject localized = source;
+    QJsonArray localizedErrors = localized.value(QStringLiteral("errors")).toArray();
+    QJsonObject localizedFinding = localizedErrors.first().toObject();
+    localizedFinding.insert(QStringLiteral("message"), QStringLiteral("different locale"));
+    localizedFinding.insert(QStringLiteral("bbox"), QJsonArray{ 1, 2, 3, 4 });
+    localizedErrors[0] = localizedFinding;
+    localized.insert(QStringLiteral("errors"), localizedErrors);
+    const pdf::PDFSchemaMigrationResult second =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, localized);
+    QCOMPARE(second.document.value(QStringLiteral("errors")).toArray().first().toObject().value(QStringLiteral("id")).toString(),
+             findingId);
 }
 
 void SchemaEvolutionTest::compatibleSchemaWithoutMigratorFailsClosed()
@@ -229,10 +298,11 @@ void SchemaEvolutionTest::compatibleSchemaWithoutMigratorFailsClosed()
         pdf::prepareSchemaDocument(pdf::PDFSchemaKind::HistoryDb, document);
     QVERIFY(prepared.document.isEmpty());
     QVERIFY(!prepared.migrated);
-    const pdf::PDFSchemaVersion expectedFrom{ 2, 0 };
-    const pdf::PDFSchemaVersion expectedTo{ 3, 0 };
-    QCOMPARE(prepared.fromVersion, expectedFrom);
-    QCOMPARE(prepared.toVersion, expectedTo);
+    const pdf::PDFSchemaVersion expectedVersion{ 2, 0 };
+    QCOMPARE(prepared.fromVersion, expectedVersion);
+    // The document was not migrated, so it is still a 2.0 document -- the point
+    // of the slot: it must not be relabelled to the matrix target.
+    QCOMPARE(prepared.toVersion, expectedVersion);
 }
 
 void SchemaEvolutionTest::incompleteV2MigrationPreservesInspectionIncomplete()
@@ -270,6 +340,288 @@ void SchemaEvolutionTest::unknownFieldsSurviveOnCompatibleMinor()
     const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, document);
     QVERIFY(prepared.migrated);
     QCOMPARE(prepared.document.value(QStringLiteral("future_field")).toString(), QStringLiteral("preserved"));
+}
+
+void SchemaEvolutionTest::currentVersionFailsClosedWithoutAMatrixEntry()
+{
+    // No matrix entry means no known current version. A guessed default would
+    // silently relabel a document as current.
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, {}).isValid());
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, {}), pdf::PDFSchemaVersion{});
+
+    const QJsonObject matrix{ { QStringLiteral("kinds"),
+                                QJsonObject{ { QStringLiteral("preflight-report"),
+                                               QJsonObject{ { QStringLiteral("current"), QStringLiteral("3.0") },
+                                                            { QStringLiteral("supported_majors"), QJsonArray{ 3 } } } } } } };
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, matrix).toString(),
+             QStringLiteral("3.0"));
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::Certificate, matrix).isValid());
+
+    // An entry that exists but states no readable `current` is no more usable
+    // than an absent entry: deriving a major from `supported_majors` would
+    // invent the version the matrix declined to declare. A listed major is a
+    // compatibility statement, not the version the document should be at.
+    const QJsonObject majorsOnly{
+        { QStringLiteral("kinds"),
+          QJsonObject{ { QStringLiteral("preflight-report"),
+                         QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1, 2, 3 } } } } } }
+    };
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, majorsOnly).isValid());
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, majorsOnly),
+             pdf::PDFSchemaVersion{});
+
+    // The same entry with a readable `current` still yields it: failing closed
+    // must not stop the matrix from being read.
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, matrix).toString(),
+             QStringLiteral("3.0"));
+}
+
+void SchemaEvolutionTest::everySchemaKindIsCoveredByTheCompatibilityMatrix()
+{
+    QFile resource(QStringLiteral(":/loop/schema-compatibility.json"));
+    QVERIFY(resource.open(QIODevice::ReadOnly));
+    const QJsonObject matrix = QJsonDocument::fromJson(resource.readAll()).object();
+    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
+
+    // Compare the two key SETS, not their cardinality. A same-size swap of one
+    // kind for another keeps the counts equal, so a cardinality comparison
+    // passes while the matrix and the enumerator no longer describe the same
+    // kinds. Sorting both lists makes the comparison a set equality that still
+    // reports a readable diff on failure.
+    QStringList matrixKinds = kinds.keys();
+    QStringList enumeratedKinds;
+    for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
+    {
+        enumeratedKinds.append(pdf::pdfSchemaKindToString(kind));
+    }
+    matrixKinds.sort();
+    enumeratedKinds.sort();
+    QCOMPARE(matrixKinds, enumeratedKinds);
+
+    for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
+    {
+        const QString name = pdf::pdfSchemaKindToString(kind);
+        QVERIFY2(name != QStringLiteral("unknown"), qPrintable(name));
+
+        const QJsonObject entry = kinds.value(name).toObject();
+        QVERIFY2(!entry.isEmpty(), qPrintable(QStringLiteral("matrix is missing kind %1").arg(name)));
+
+        const pdf::PDFSchemaVersion current = pdf::currentSchemaVersion(kind);
+        QVERIFY2(current.isValid(), qPrintable(name));
+        QCOMPARE(current.toString(), entry.value(QStringLiteral("current")).toString());
+
+        bool supported = false;
+        for (const QJsonValue& major : entry.value(QStringLiteral("supported_majors")).toArray())
+        {
+            supported = supported || (major.toInt() == int(current.major));
+        }
+        QVERIFY2(supported, qPrintable(QStringLiteral("supported_majors of %1 omits its current major").arg(name)));
+
+        bool previousOk = false;
+        const pdf::PDFSchemaVersion previous =
+            pdf::PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("previous")), &previousOk);
+        QVERIFY2(previousOk && previous.major <= current.major,
+                 qPrintable(QStringLiteral("%1 declares no usable previous version").arg(name)));
+    }
+}
+
+void SchemaEvolutionTest::prepareFailsClosedWhenNeitherDocumentNorCallerIdentifiesTheKind()
+{
+    QJsonObject document{
+        { QStringLiteral("schema_version"), 3 },
+        { QStringLiteral("pass"), true },
+        { QStringLiteral("payload"), QStringLiteral("must-not-be-interpreted-as-a-report") },
+    };
+
+    const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::Unknown, document);
+    QVERIFY(prepared.document.isEmpty());
+    QVERIFY(!prepared.migrated);
+}
+
+namespace
+{
+
+/// SQLite carries its own migrations in PDFOperationHistoryStore and has no JSON
+/// golden; it is covered by UnitTestsOperationHistory instead.
+const QStringList& nonJsonSchemaKinds()
+{
+    static const QStringList kinds{ QStringLiteral("history-db") };
+    return kinds;
+}
+
+QString schemaGoldenPath(const QString& kindName, const QString& versionText)
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + kindName +
+           QStringLiteral("-v%1.json").arg(versionText.section(QLatin1Char('.'), 0, 0));
+}
+
+QJsonObject loadSchemaGolden(const QString& path, bool* opened)
+{
+    QFile file(path);
+    *opened = file.open(QIODevice::ReadOnly);
+    if (!*opened)
+    {
+        return QJsonObject();
+    }
+    return QJsonDocument::fromJson(file.readAll()).object();
+}
+
+}   // namespace
+
+void SchemaEvolutionTest::everyJsonKindRoundTripsItsCurrentAndPreviousGolden()
+{
+    QFile resource(QStringLiteral(":/loop/schema-compatibility.json"));
+    QVERIFY(resource.open(QIODevice::ReadOnly));
+    const QJsonObject kinds = QJsonDocument::fromJson(resource.readAll()).object().value(QStringLiteral("kinds")).toObject();
+
+    for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
+    {
+        const QString name = pdf::pdfSchemaKindToString(kind);
+        if (nonJsonSchemaKinds().contains(name))
+        {
+            continue;
+        }
+
+        const QJsonObject entry = kinds.value(name).toObject();
+        QVERIFY2(!entry.isEmpty(), qPrintable(name));
+
+        QStringList versions{ entry.value(QStringLiteral("current")).toString() };
+        const QString previous = entry.value(QStringLiteral("previous")).toString();
+        if (!previous.isEmpty() && !versions.contains(previous))
+        {
+            versions.append(previous);
+        }
+
+        for (const QString& versionText : versions)
+        {
+            const QString path = schemaGoldenPath(name, versionText);
+            bool opened = false;
+            const QJsonObject golden = loadSchemaGolden(path, &opened);
+            QVERIFY2(opened, qPrintable(QStringLiteral("missing golden %1").arg(path)));
+
+            const pdf::PDFSchemaEnvelope envelope = pdf::readSchemaEnvelope(golden);
+            QCOMPARE(envelope.kind, kind);
+            QVERIFY2(envelope.version.isValid(), qPrintable(path));
+            QCOMPARE(envelope.version.toString(), versionText);
+            QCOMPARE(pdf::checkSchemaCompatibility(envelope.kind, envelope.version),
+                     pdf::PDFSchemaCompatibility::Compatible);
+
+            // A golden at the current major is already at the target; an older
+            // golden migrates deterministically and keeps its own fields.
+            const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(kind, golden);
+            QVERIFY2(!prepared.document.isEmpty(), qPrintable(path));
+            if (envelope.version.major == pdf::currentSchemaVersion(kind).major)
+            {
+                QVERIFY2(!prepared.migrated, qPrintable(path));
+                QCOMPARE(prepared.document, golden);
+            }
+            else
+            {
+                QVERIFY2(prepared.migrated, qPrintable(path));
+                QCOMPARE(prepared.toVersion.toString(), pdf::currentSchemaVersion(kind).toString());
+            }
+
+            const pdf::PDFSchemaMigrationResult again = pdf::prepareSchemaDocument(kind, golden);
+            QCOMPARE(QJsonDocument(again.document).toJson(QJsonDocument::Compact),
+                     QJsonDocument(prepared.document).toJson(QJsonDocument::Compact));
+        }
+    }
+}
+
+void SchemaEvolutionTest::actionListV1MigratesToUsableV2WithoutChangingStepSemantics()
+{
+    bool opened = false;
+    const QJsonObject source = loadSchemaGolden(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/action-list-v1.json"), &opened);
+    QVERIFY(opened);
+    QCOMPARE(source.value(QStringLiteral("schema")).toString(), QStringLiteral("loop-action-list/1"));
+    const pdf::PDFSchemaMigrationResult migrated = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::ActionList, source);
+    QVERIFY(migrated.migrated);
+    QCOMPARE(migrated.toVersion.major, quint16(2));
+    QCOMPARE(migrated.document.value(QStringLiteral("schema")).toString(), QStringLiteral("loop-action-list/2"));
+    QCOMPARE(migrated.document.value(QStringLiteral("steps")), source.value(QStringLiteral("steps")));
+    QCOMPARE(migrated.document.value(QStringLiteral("id")), source.value(QStringLiteral("id")));
+    QCOMPARE(migrated.document.value(QStringLiteral("name")), source.value(QStringLiteral("name")));
+    const pdf::PDFSchemaMigrationResult repeated = pdf::prepareSchemaDocument(
+        pdf::PDFSchemaKind::ActionList, migrated.document);
+    QVERIFY(!repeated.migrated);
+    QCOMPARE(repeated.document, migrated.document);
+
+    pdf::PDFActionList recipe;
+    QVERIFY(pdf::PDFActionList::fromJson(migrated.document, &recipe));
+    QCOMPARE(recipe.steps.size(), 1);
+    QCOMPARE(recipe.steps.first().operationId, QStringLiteral("add-bleed"));
+    QCOMPARE(recipe.steps.first().parameters.value(QStringLiteral("bleed_mm")).toDouble(), 3.0);
+    QVERIFY(!pdf::prepareSchemaDocument(pdf::PDFSchemaKind::ActionList, QJsonObject{
+                                                                            { QStringLiteral("schema_kind"), QStringLiteral("action-list") },
+                                                                            { QStringLiteral("schema_version"), 99 } })
+                 .document.size());
+}
+
+void SchemaEvolutionTest::newerMinorPassesThroughAndReportsTheDocumentVersion()
+{
+    QJsonObject document{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-report") },
+        { QStringLiteral("schema_version"), QStringLiteral("4.1") },
+        { QStringLiteral("pass"), true },
+        { QStringLiteral("profile"), QStringLiteral("golden") },
+        { QStringLiteral("errors"), QJsonArray{} },
+        { QStringLiteral("warnings"), QJsonArray{} },
+        { QStringLiteral("fixups_available"), QJsonArray{} },
+        { QStringLiteral("future_additive_field"), QStringLiteral("preserved") },
+    };
+
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 4, 1 }),
+             pdf::PDFSchemaCompatibility::Compatible);
+
+    const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, document);
+    QVERIFY(!prepared.document.isEmpty());
+    QVERIFY(!prepared.migrated);
+    QCOMPARE(prepared.document.value(QStringLiteral("schema_version")).toString(), QStringLiteral("4.1"));
+    QCOMPARE(prepared.document.value(QStringLiteral("future_additive_field")).toString(), QStringLiteral("preserved"));
+    QCOMPARE(prepared.fromVersion.toString(), QStringLiteral("4.1"));
+    // A caller that is told "4.0" would believe it holds a target-version payload.
+    QCOMPARE(prepared.toVersion.toString(), QStringLiteral("4.1"));
+}
+
+void SchemaEvolutionTest::compatibilityDiagnosticsAreStableAndDistinct()
+{
+    const pdf::PDFSchemaCompatibilityDiagnostic compatible =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 4, 0 });
+    QCOMPARE(compatible.compatibility, pdf::PDFSchemaCompatibility::Compatible);
+    QCOMPARE(compatible.code, QStringLiteral("schema.compatible"));
+    QCOMPARE(compatible.message, QStringLiteral("Schema kind 'preflight-report' version 4.0 is supported."));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic unsupported =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 99, 0 });
+    QCOMPARE(unsupported.compatibility, pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QCOMPARE(unsupported.code, QStringLiteral("schema.unsupported-major"));
+    // Pinned verbatim: UnitTestsPdfToolContract asserts the same strings reach the CLI.
+    QCOMPARE(unsupported.message,
+             QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
+                            "this build supports major(s) 1, 2, 3, 4."));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic unknownKind =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::Unknown, { 1, 0 });
+    QCOMPARE(unknownKind.compatibility, pdf::PDFSchemaCompatibility::UnknownKind);
+    QCOMPARE(unknownKind.code, QStringLiteral("schema.unknown-kind"));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic invalid =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, {});
+    QCOMPARE(invalid.compatibility, pdf::PDFSchemaCompatibility::Invalid);
+    QCOMPARE(invalid.code, QStringLiteral("schema.invalid-version"));
+
+    // The compatibility check itself, not only the diagnostic wrapper: a
+    // malformed version is its own result, distinct from an unsupported major.
+    // (Moved here from Phase 1, which could not compile an Invalid expectation.)
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 0, 0 }),
+             pdf::PDFSchemaCompatibility::Invalid);
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 99, 0 }),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+
+    QCOMPARE(pdf::pdfSchemaCompatibilityToString(pdf::PDFSchemaCompatibility::UnsupportedMajor),
+             QStringLiteral("unsupported-major"));
+    QCOMPARE(pdf::pdfSchemaCompatibilityToString(pdf::PDFSchemaCompatibility::Invalid),
+             QStringLiteral("invalid"));
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)

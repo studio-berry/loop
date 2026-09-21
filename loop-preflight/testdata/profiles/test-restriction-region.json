@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "Loop Restriction - region",
+  "restrictions": {
+    "regions": [
+      {
+        "name": "barcode",
+        "rect_pt": [
+          0,
+          0,
+          30,
+          20
+        ],
+        "anchor": "trim",
+        "mode": "include"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "bleed",
+      "amount_pt": 9
+    }
+  ]
+}

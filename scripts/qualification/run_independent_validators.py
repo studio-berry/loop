@@ -18,6 +18,9 @@ from typing import Any
 SCHEMA = "loop.independent-validation-evidence"
 SCHEMA_VERSION = 1
 MAX_OUTPUT = 4096
+BUNDLE_SCHEMA = "loop.preflight-evidence-bundle"
+BUNDLE_SCHEMA_VERSION = 1
+BUNDLE_MANIFEST = "manifest.json"
 CLAIMS = {
     "structural": ("qpdf", ["--check", "{input}"]),
     "signature": ("pdfsig", ["{input}"]),
@@ -105,7 +108,8 @@ def _run_claim(claim: str, input_path: Path, timeout_ms: int) -> dict[str, Any]:
     return result
 
 
-def run(input_path: Path, claims: list[str], timeout_ms: int, candidate_sha: str | None = None) -> dict[str, Any]:
+def run(input_path: Path, claims: list[str], timeout_ms: int, candidate_sha: str | None = None,
+        bundle_path: Path | None = None) -> dict[str, Any]:
     size, digest = _input_identity(input_path)
     validators = [_run_claim(claim, input_path, timeout_ms) for claim in claims]
     statuses = {item["status"] for item in validators}
@@ -128,9 +132,120 @@ def run(input_path: Path, claims: list[str], timeout_ms: int, candidate_sha: str
             "machine": platform.machine(),
         },
     }
+    if bundle_path is not None:
+        evidence["bundle"] = verify_bundle(bundle_path, digest)
+        # A bundle that does not verify cannot be consumed, so it fails the lane
+        # closed the same way an incomplete or rejected validator does.
+        if evidence["bundle"]["status"] == "rejected":
+            evidence["status"] = "rejected"
+        elif evidence["bundle"]["status"] == "incomplete" and evidence["status"] == "passed":
+            evidence["status"] = "incomplete"
     if candidate_sha:
         evidence["candidate_sha"] = candidate_sha
     return evidence
+
+
+def verify_bundle(bundle_path: Path, input_digest: str) -> dict[str, Any]:
+    """Consume a portable proof-of-preflight bundle without Loop.
+
+    The bundle is verified from its own bytes: every declared member is hashed
+    and compared with the manifest, the directory may carry nothing the manifest
+    does not declare, and the manifest's document revision digest must be the
+    digest of the candidate the validators are about to run on. This is the
+    third-party reading of `docs/PREFLIGHT_EVIDENCE_BUNDLE.md`; Loop's own
+    `PdfTool verify-evidence-bundle` checks the identity chain inside the
+    bundle, which this consumer does not re-implement.
+    """
+    result: dict[str, Any] = {
+        "path": str(bundle_path),
+        "status": "incomplete",
+        "members_verified": 0,
+        "declared_members": [],
+        "missing_members": [],
+        "undeclared_members": [],
+        "input_matches_manifest": False,
+    }
+    manifest_path = bundle_path / BUNDLE_MANIFEST
+    if not bundle_path.is_dir():
+        result["reason_code"] = "bundle-not-found"
+        return result
+    if not manifest_path.is_file():
+        result["reason_code"] = "manifest-not-found"
+        return result
+
+    manifest_bytes = manifest_path.read_bytes()
+    result["manifest_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        result["status"] = "rejected"
+        result["reason_code"] = "manifest-unreadable"
+        return result
+    if not isinstance(manifest, dict):
+        result["status"] = "rejected"
+        result["reason_code"] = "manifest-unreadable"
+        return result
+
+    result["manifest_schema"] = manifest.get("schema")
+    if manifest.get("schema") != BUNDLE_SCHEMA or manifest.get("schema_version") != BUNDLE_SCHEMA_VERSION:
+        result["status"] = "rejected"
+        result["reason_code"] = "bundle-schema-unsupported"
+        return result
+
+    members = manifest.get("members")
+    if not isinstance(members, list) or not members:
+        result["status"] = "rejected"
+        result["reason_code"] = "manifest-members-missing"
+        return result
+
+    declared: set[str] = set()
+    mismatched: list[str] = []
+    for entry in members:
+        if not isinstance(entry, dict):
+            result["status"] = "rejected"
+            result["reason_code"] = "manifest-member-invalid"
+            return result
+        name = str(entry.get("name", ""))
+        declared.add(name)
+        result["declared_members"].append(name)
+        member_path = bundle_path / name
+        if not member_path.is_file():
+            result["missing_members"].append(name)
+            continue
+        content = member_path.read_bytes()
+        if hashlib.sha256(content).hexdigest() != str(entry.get("sha256", "")).lower():
+            mismatched.append(name)
+            continue
+        if entry.get("byte_count") is not None and int(entry["byte_count"]) != len(content):
+            mismatched.append(name)
+            continue
+        result["members_verified"] += 1
+
+    for present in sorted(path.name for path in bundle_path.iterdir() if path.is_file()):
+        if present != BUNDLE_MANIFEST and present not in declared:
+            result["undeclared_members"].append(present)
+
+    document = manifest.get("document")
+    declared_digest = document.get("revision_digest") if isinstance(document, dict) else None
+    result["document_revision_digest"] = declared_digest
+    result["input_matches_manifest"] = bool(declared_digest) and str(declared_digest).lower() == input_digest.lower()
+
+    if result["missing_members"]:
+        result["status"] = "rejected"
+        result["reason_code"] = "member-missing"
+    elif mismatched:
+        result["status"] = "rejected"
+        result["reason_code"] = "member-digest-mismatch"
+        result["mismatched_members"] = mismatched
+    elif result["undeclared_members"]:
+        result["status"] = "rejected"
+        result["reason_code"] = "member-undeclared"
+    elif not result["input_matches_manifest"]:
+        result["status"] = "rejected"
+        result["reason_code"] = "input-does-not-match-manifest"
+    else:
+        result["status"] = "passed"
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -140,11 +255,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--claim", action="append", choices=sorted(CLAIMS), required=True)
     parser.add_argument("--timeout-ms", type=int, default=120000)
     parser.add_argument("--candidate-sha")
+    parser.add_argument(
+        "--evidence-bundle",
+        type=Path,
+        help="Portable proof-of-preflight bundle to consume; the candidate must be its declared revision",
+    )
     args = parser.parse_args(argv)
     if not args.input.is_file():
         parser.error(f"input PDF does not exist: {args.input}")
 
-    evidence = run(args.input, args.claim, args.timeout_ms, args.candidate_sha)
+    evidence = run(args.input, args.claim, args.timeout_ms, args.candidate_sha, args.evidence_bundle)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(evidence, indent=2))
