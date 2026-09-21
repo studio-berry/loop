@@ -75,6 +75,8 @@ set(_loop_pdftool_sources
     pdftoolpreflightchecks.h
     pdftoolverifycertificate.cpp
     pdftoolverifycertificate.h
+    pdftoolevidencebundle.cpp
+    pdftoolevidencebundle.h
     pdftoolocr.cpp
     pdftoolocr.h
     ocrsidecarclient.cpp

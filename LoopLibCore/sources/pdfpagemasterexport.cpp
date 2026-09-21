@@ -1811,9 +1811,27 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         }
 
         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
-        const PDFOperationResult writeResult = PDFSafeFileWriter::writeData(
+        // Stage the exact bytes through the atomic writer, then hand control to the
+        // optional commit seam while the output's final path is still untouched. The
+        // staging write is mirrored from PDFSafeFileWriter::writeData() so a short write
+        // is still reported as failure rather than as a truncated output.
+        const auto stageOutput = [&job, &fileName, &candidateData](QIODevice* device) -> bool
+        {
+            const qint64 written = device->write(candidateData);
+            if (written != candidateData.size())
+            {
+                return false;
+            }
+
+            if (job.beforeOutputCommit)
+            {
+                job.beforeOutputCommit(fileName);
+            }
+            return true;
+        };
+        const PDFOperationResult writeResult = PDFSafeFileWriter::writeDevice(
             fileName,
-            candidateData,
+            stageOutput,
             job.overwriteFiles ? PDFSafeFileWriter::OverwritePolicy::Overwrite : PDFSafeFileWriter::OverwritePolicy::Fail);
         if (!writeResult)
         {
