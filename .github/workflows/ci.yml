@@ -79,6 +79,8 @@ jobs:
           python3 scripts/generate-architecture-catalogs.py --check
       - name: Verify preflight check catalog and coverage backlog (#165)
         run: python3 scripts/ci/test_preflight_check_catalog.py
+      - name: Verify preflight corpus coverage map (#165)
+        run: python3 scripts/ci/test_preflight_corpus_coverage.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
       - name: Verify Phase 5 Widgets evidence is current

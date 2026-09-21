@@ -1,8 +1,9 @@
 # Preflight check catalog, GWG / PDF/X coverage, and the coverage backlog
 
-Loop publishes a generated check catalog, a coverage matrix, and a prioritised
-coverage backlog so a clean preflight pass is read as **clean against this
-scope**, not as a Ghent Workgroup certificate.
+Loop publishes a generated check catalog, a coverage matrix, a prioritised
+coverage backlog, and the corpus-coverage map behind its `covered` rows, so a
+clean preflight pass is read as **clean against this scope**, not as a Ghent
+Workgroup certificate.
 
 ## Sources
 
@@ -10,6 +11,7 @@ scope**, not as a Ghent Workgroup certificate.
 - Overlay: [`docs/preflight-check-catalog-overlay.json`](preflight-check-catalog-overlay.json)
 - Generated catalog: [`docs/generated/preflight-check-catalog.json`](generated/preflight-check-catalog.json)
 - Generated backlog: [`docs/generated/preflight-coverage-backlog.json`](generated/preflight-coverage-backlog.json)
+- Generated corpus coverage: [`docs/generated/preflight-corpus-coverage.json`](generated/preflight-corpus-coverage.json)
 
 Regenerate after adding or renaming a check, or after triaging a coverage gap:
 
@@ -19,9 +21,10 @@ python3 scripts/generate-architecture-catalogs.py --check
 ```
 
 `--check` fails when a registered check has no overlay entry, an overlay entry
-names a check that is not registered, a row is missing a required field, or a
-backlog row is malformed. `scripts/ci/test_preflight_check_catalog.py` pins each
-of those failures.
+names a check that is not registered, a row is missing a required field, a
+backlog row is malformed, or a corpus claim has no fixture behind it.
+`scripts/ci/test_preflight_check_catalog.py` and
+`scripts/ci/test_preflight_corpus_coverage.py` pin each of those failures.
 
 ## Check rows
 
@@ -62,11 +65,45 @@ Each check is `covered`, `partial` (limitation named in the overlay), or
 packaging, newspaper, and digital printing groups, plus Loop's audited PDF/X
 targets. See also [`PDFX_POLICY_MATRIX.md`](PDFX_POLICY_MATRIX.md).
 
+## Corpus coverage
+
+The golden corpus is the only evidence behind a `covered` row, so the map between
+the two is generated and published rather than assumed:
+
+> A matrix row is exercised by a corpus fixture when that fixture's committed
+> report snapshot carries at least one finding in `errors[]` or `warnings[]`
+> whose `check_id` is the row. A check that is merely enabled, that reports
+> incomplete or skipped inspection, or that the fixture's profile disables does
+> not count as exercising its row.
+
+Regenerate after adding or removing a fixture, or after a check's findings change
+(which is also when the snapshot is rewritten):
+
+```text
+python3 scripts/generate-architecture-catalogs.py --write
+python3 scripts/generate-architecture-catalogs.py --check
+```
+
+`--check` fails when a `covered` row has no exercising fixture, when a row with
+no exercising fixture carries no `corpus_gap` reason, when a row with fixtures
+still carries a stale reason, when a fixture has no committed snapshot or a
+snapshot has no fixture, when a snapshot names an unregistered check, or when the
+engine's own coverage scope stamps a different `matrix_id` than the overlay
+publishes.
+
+`corpus_gaps` in the generated map is the register of rows the corpus does not
+exercise at all. A row is a limitation of the evidence, not necessarily of the
+check. A check can be registered, enabled and correct while no fixture has ever
+produced one of its findings, and that is exactly what must not read as proven.
+`clean_fixtures` records the fixtures where the check ran and produced nothing,
+and `incomplete_fixtures` the ones where it failed to inspect.
+
 ## Coverage backlog
 
 `backlog` in the overlay is the prioritised register of defect classes the
 matrix does not close, emitted to the generated backlog file. Each row carries
-exactly `id`, `priority`, `gap`, `families`, `state`, and `closed_by`.
+exactly `id`, `priority`, `gap`, `families`, `state`, `closed_by`, and
+`deferral`.
 
 The priority rule is stated once in the generated file (`priority_rule`):
 
@@ -94,6 +131,10 @@ no verified record, and it refuses a row whose `state` disagrees with the
 recorded issue state — so a closed issue forces a row to be re-triaged rather
 than left stale. Every `not_covered` class must appear in a P1 row's `gap`, and
 no P1 row may invent a class the matrix does not list.
+
+A row that is not filed carries a `deferral` reason instead, and the generator
+refuses both an unfiled row without one and a filed row that still carries one —
+so "not filed yet" is always a reviewed statement rather than an omission.
 
 ## Claim
 
