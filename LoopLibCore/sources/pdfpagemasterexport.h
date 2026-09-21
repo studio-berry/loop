@@ -149,6 +149,15 @@ struct LOOPLIBCORESHARED_EXPORT PDFPageMasterExportJob
     /// Optional deterministic manifest persistence seam for callers/tests. An empty
     /// function uses the normal atomic file writer.
     ManifestPersistFunction manifestPersist;
+
+    /// Optional seam called for one output while that output is being published: after
+    /// that output's bytes have been handed to the atomic writer and before the commit
+    /// that makes them visible at the final path. Measured at that instant: the writer's
+    /// temporary file for this output exists and still holds no bytes, and nothing is
+    /// visible at the final path. It is path-keyed - the manifest goes through the same
+    /// writer helper, so an ordinal write counter is not the output index. Empty in
+    /// production.
+    std::function<void(const QString& outputPath)> beforeOutputCommit;
 };
 
 /// Result of PDFPageMasterExport::run().
