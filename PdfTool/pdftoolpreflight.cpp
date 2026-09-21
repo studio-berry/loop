@@ -34,6 +34,7 @@
 #include "pdfartifactstore.h"
 #include "pdfoperationcontrol.h"
 #include "pdfoperationhistorystore.h"
+#include "pdfsafefilewriter.h"
 #include "pdftoolcancel.h"
 
 #include <QCoreApplication>
@@ -271,6 +272,41 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          QStringLiteral("cli.invalid-arguments"),
                          PDFToolTranslationContext::tr("No document specified."));
         return PDFToolExitCode::InputError;
+    }
+
+    QStringList plannedOutputs;
+    if (!options.preflightReportPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightReportPath);
+    }
+    if (!options.preflightCertificateOutputPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightCertificateOutputPath);
+    }
+    if (!options.preflightDecisionsExportPath.isEmpty())
+    {
+        plannedOutputs.append(options.preflightDecisionsExportPath);
+    }
+    if (!plannedOutputs.isEmpty())
+    {
+        QStringList aliasCheckPaths = plannedOutputs;
+        aliasCheckPaths.prepend(options.document);
+        const QList<pdf::PDFOutputConflict> conflicts =
+            pdf::PDFSafeFileWriter::findOutputConflicts(aliasCheckPaths, false);
+        for (const pdf::PDFOutputConflict& conflict : conflicts)
+        {
+            if (conflict.code != QStringLiteral("output.duplicate-planned-path"))
+            {
+                continue;
+            }
+
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             conflict.code,
+                             PDFToolTranslationContext::tr("Output '%1' is planned more than once.").arg(conflict.path),
+                             QJsonObject{ { QStringLiteral("path"), conflict.path } });
+            return PDFToolExitCode::InvalidInvocation;
+        }
     }
 
     QList<pdf::PreflightDecision> decisions;
@@ -729,7 +765,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PreflightProfile | PageSelector;
+    return ConsoleFormat | OpenDocument | PreflightProfile | PreflightReportFile | PageSelector;
 }
 
 }   // namespace pdftool

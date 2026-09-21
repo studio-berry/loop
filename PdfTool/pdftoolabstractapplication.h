@@ -420,6 +420,7 @@ public:
         PreflightProfileManage = 0x10000000000ULL,   ///< Loop preflight profile import/export/fork
         SchemaDiagnostics = 0x20000000000ULL,   ///< Schema kind/version compatibility diagnostics
         VerifyPreflightCertificate = 0x40000000000ULL,   ///< Verify a certified preflight JSON
+        PreflightReportFile = 0x80000000000ULL,   ///< Preflight --report-file output path
     };
     Q_DECLARE_FLAGS(Options, Option)
 
