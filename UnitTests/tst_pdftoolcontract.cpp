@@ -578,10 +578,10 @@ void PdfToolContractTest::preflightRejectsReportFileAliasingInput()
 void PdfToolContractTest::addBleedDoesNotAdvertiseReportFile()
 {
     const ToolRun capabilities = runPdfTool({ QStringLiteral("capabilities"),
-                                            QStringLiteral("--command"),
-                                            QStringLiteral("add-bleed"),
-                                            QStringLiteral("--console-format"),
-                                            QStringLiteral("json") });
+                                              QStringLiteral("--command"),
+                                              QStringLiteral("add-bleed"),
+                                              QStringLiteral("--console-format"),
+                                              QStringLiteral("json") });
     verifyEnvelope(capabilities, 0, QStringLiteral("capabilities"));
 
     const QJsonArray commands = capabilities.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray();
