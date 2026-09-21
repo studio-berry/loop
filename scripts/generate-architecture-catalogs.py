@@ -23,6 +23,9 @@ CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
 PREFLIGHT_BACKLOG_PATH = ROOT / "docs" / "generated" / "preflight-coverage-backlog.json"
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
+CORPUS_MANIFEST_PATH = ROOT / "loop-preflight" / "testdata" / "fixtures" / "manifest.json"
+CORPUS_SNAPSHOT_DIR = ROOT / "loop-preflight" / "testdata" / "snapshots"
+PREFLIGHT_CORPUS_COVERAGE_PATH = ROOT / "docs" / "generated" / "preflight-corpus-coverage.json"
 CORRECTION_CATALOG_PATH = ROOT / "docs" / "generated" / "correction-operation-catalog.json"
 CORRECTION_OVERLAY_PATH = ROOT / "docs" / "correction-operation-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
@@ -124,6 +127,22 @@ def parse_preflight_checks() -> list[str]:
     if not checks:
         raise ValueError("preflight check catalog is empty")
     return checks
+
+
+def parse_engine_matrix_id() -> str:
+    """The matrix id the engine stamps into every report's coverage_scope."""
+    source = read(ROOT / "LoopLibCore" / "sources" / "preflightengine.cpp")
+    match = re.search(
+        r"QJsonObject\s+preflightCoverageScopeFor\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("could not find PreflightEngine's coverage scope builder")
+    matrix = re.search(r'"matrix_id"\)\s*,\s*QStringLiteral\("([^"]+)"\)', match.group("body"))
+    if not matrix:
+        raise ValueError("the engine's coverage scope does not stamp a matrix_id")
+    return matrix.group(1)
 
 
 PREFLIGHT_CHECK_ENVELOPE_FIELDS = {"id", "severity", "enabled"}
@@ -495,6 +514,121 @@ def build_preflight_backlog(
         "not_covered": not_covered,
         "github_issues": verified,
         "rows": parsed,
+    }
+
+
+CORPUS_COVERAGE_DEFINITION = (
+    "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot "
+    "carries at least one finding in errors[] or warnings[] whose check_id is the row. A check that "
+    "is merely enabled, that reports incomplete or skipped inspection, or that the fixture's profile "
+    "disables does not count as exercising its row."
+)
+
+
+def load_corpus_snapshots() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Read the corpus manifest and every fixture's committed report snapshot."""
+    manifest = json.loads(read(CORPUS_MANIFEST_PATH))
+    if not isinstance(manifest, list) or not manifest:
+        raise ValueError("corpus manifest must be a non-empty array")
+    snapshots: dict[str, dict[str, Any]] = {}
+    for entry in manifest:
+        fixture = entry.get("id")
+        if not isinstance(fixture, str) or not fixture:
+            raise ValueError("corpus manifest entry has no id")
+        if fixture in snapshots:
+            raise ValueError(f"duplicate corpus fixture id: {fixture}")
+        path = CORPUS_SNAPSHOT_DIR / f"{fixture}.json"
+        if not path.exists():
+            raise ValueError(f"corpus fixture '{fixture}' has no committed snapshot")
+        snapshots[fixture] = json.loads(read(path))
+    orphans = sorted(
+        path.stem for path in CORPUS_SNAPSHOT_DIR.glob("*.json") if path.stem not in snapshots
+    )
+    if orphans:
+        raise ValueError("snapshots with no corpus manifest entry: " + ", ".join(orphans))
+    return sorted(manifest, key=lambda entry: entry["id"]), snapshots
+
+
+def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
+    """Record, per catalog row, the corpus fixtures whose reports exercise it.
+
+    ``coverage: covered`` is a claim about what the check catches, so it must be
+    backed by a fixture that produces one of the check's findings. A row with no
+    such fixture carries a hand-written ``corpus_gap`` reason in the overlay
+    instead of reading as proven. Failures are collected so one run names every
+    hole rather than stopping at the first.
+    """
+    overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
+    # Registry/overlay drift is build_preflight_check_catalog's job; this reads the rows it validates.
+    rows = overlay["checks"]
+    manifest, snapshots = load_corpus_snapshots()
+    finding_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
+    incomplete_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
+    clean_fixtures: dict[str, int] = {check_id: 0 for check_id in registry}
+    unattributed_findings = 0
+    for entry in manifest:
+        fixture = entry["id"]
+        report = snapshots[fixture]
+        for finding in list(report.get("errors") or []) + list(report.get("warnings") or []):
+            check_id = finding.get("check_id")
+            if check_id is None:
+                # Engine-level findings such as evidence-incomplete belong to no check row.
+                unattributed_findings += 1
+                continue
+            if check_id not in finding_fixtures:
+                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
+            finding_fixtures[check_id].add(fixture)
+        for status in report.get("checks") or []:
+            check_id = status.get("id")
+            if check_id not in finding_fixtures:
+                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
+            if status.get("status") == "incomplete":
+                incomplete_fixtures[check_id].add(fixture)
+            elif status.get("status") == "ok":
+                clean_fixtures[check_id] += 1
+    errors: list[str] = []
+    for check_id in registry:
+        coverage = rows[check_id]["coverage"]
+        reason = rows[check_id].get("corpus_gap")
+        has_reason = isinstance(reason, str) and bool(reason.strip())
+        exercised = bool(finding_fixtures[check_id])
+        if coverage == "covered" and not exercised:
+            errors.append(f"covered check '{check_id}' has no corpus fixture exercising it")
+        elif not exercised and not has_reason:
+            errors.append(
+                f"check '{check_id}' has no corpus fixture and no recorded corpus_gap reason"
+            )
+        if exercised and has_reason:
+            errors.append(f"check '{check_id}' has corpus fixtures but a recorded corpus_gap reason")
+    engine_matrix_id = parse_engine_matrix_id()
+    if engine_matrix_id != overlay["matrix_id"]:
+        errors.append(
+            f"the engine's coverage scope stamps matrix_id '{engine_matrix_id}' but the overlay "
+            f"publishes '{overlay['matrix_id']}'"
+        )
+    if errors:
+        raise ValueError("; ".join(errors))
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "definition": CORPUS_COVERAGE_DEFINITION,
+        "manifest": CORPUS_MANIFEST_PATH.relative_to(ROOT).as_posix(),
+        "snapshot_dir": CORPUS_SNAPSHOT_DIR.relative_to(ROOT).as_posix(),
+        "source_fixtures": len(manifest),
+        "unattributed_findings": unattributed_findings,
+        "corpus_gaps": sorted(check_id for check_id in registry if not finding_fixtures[check_id]),
+        "rows": {
+            check_id: {
+                "coverage": rows[check_id]["coverage"],
+                "corpus_gap": rows[check_id].get("corpus_gap"),
+                "finding_fixtures": sorted(finding_fixtures[check_id]),
+                "incomplete_fixtures": sorted(incomplete_fixtures[check_id]),
+                "clean_fixtures": clean_fixtures[check_id],
+            }
+            for check_id in registry
+        },
     }
 
 
@@ -958,6 +1092,7 @@ def build_catalog() -> dict[str, Any]:
         "preflight_checks": registry,
         "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
         "preflight_coverage_backlog": "docs/generated/preflight-coverage-backlog.json",
+        "preflight_corpus_coverage": "docs/generated/preflight-corpus-coverage.json",
         "registered_operations": [
             {"id": operation["id"], "implementation": operation["implementation"]}
             for operation in repair_registry
@@ -1005,6 +1140,12 @@ def serialized_preflight_backlog() -> str:
     return json.dumps(backlog, indent=2, sort_keys=True) + "\n"
 
 
+def serialized_preflight_corpus_coverage() -> str:
+    return json.dumps(
+        build_preflight_corpus_coverage(parse_preflight_checks()), indent=2, sort_keys=True
+    ) + "\n"
+
+
 def serialized_correction_catalog() -> str:
     registry = parse_repair_operations()
     return json.dumps(build_correction_operation_catalog(registry), indent=2, sort_keys=True) + "\n"
@@ -1046,6 +1187,7 @@ def main() -> int:
         expected = serialized_catalog()
         expected_preflight = serialized_preflight_catalog()
         expected_backlog = serialized_preflight_backlog()
+        expected_corpus = serialized_preflight_corpus_coverage()
         expected_correction = serialized_correction_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
@@ -1056,12 +1198,16 @@ def main() -> int:
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
         PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
         PREFLIGHT_BACKLOG_PATH.write_text(expected_backlog, encoding="utf-8", newline="\n")
+        PREFLIGHT_CORPUS_COVERAGE_PATH.write_text(expected_corpus, encoding="utf-8", newline="\n")
         CORRECTION_CATALOG_PATH.write_text(expected_correction, encoding="utf-8", newline="\n")
         return 0
     return (
         check_generated(CATALOG_PATH, expected, "architecture catalog")
         or check_generated(PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog")
         or check_generated(PREFLIGHT_BACKLOG_PATH, expected_backlog, "preflight coverage backlog")
+        or check_generated(
+            PREFLIGHT_CORPUS_COVERAGE_PATH, expected_corpus, "preflight corpus coverage"
+        )
         or check_generated(CORRECTION_CATALOG_PATH, expected_correction, "correction operation catalog")
     )
 

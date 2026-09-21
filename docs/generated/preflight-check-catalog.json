@@ -232,6 +232,7 @@
       ]
     },
     "dieline": {
+      "corpus_gap": "No corpus fixture carries a cutting-die processing step; the class is followed by the dieline-geometry backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -327,6 +328,7 @@
       ]
     },
     "font-integrity": {
+      "corpus_gap": "No corpus fixture carries a corrupt embedded font program; the class is followed by the font-glyph-coverage backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -359,6 +361,7 @@
       ]
     },
     "hidden-layers": {
+      "corpus_gap": "No corpus fixture carries optional content groups; the class is followed by the hidden-layers-ocmd backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -534,6 +537,7 @@
       ]
     },
     "invisible-content": {
+      "corpus_gap": "No corpus fixture carries invisible paint; the class is followed by the invisible-content-breadth backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -570,6 +574,7 @@
       ]
     },
     "obscured-content": {
+      "corpus_gap": "No corpus fixture carries content covered by later painting; the class is followed by the obscured-content-occlusion backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -605,6 +610,7 @@
       ]
     },
     "off-page-content": {
+      "corpus_gap": "No corpus fixture carries an object painted outside the page; the class is followed by the off-page-content-clipping backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",
@@ -813,6 +819,7 @@
       ]
     },
     "processing-steps": {
+      "corpus_gap": "No corpus fixture carries an ISO 19593-1 processing step; the class is followed by the dieline-geometry backlog row.",
       "coverage": "partial",
       "evidence": [
         "scope",

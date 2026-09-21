@@ -1,0 +1,254 @@
+{
+  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "corpus_gaps": [
+    "dieline",
+    "font-integrity",
+    "hidden-layers",
+    "invisible-content",
+    "obscured-content",
+    "off-page-content",
+    "processing-steps"
+  ],
+  "definition": "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot carries at least one finding in errors[] or warnings[] whose check_id is the row. A check that is merely enabled, that reports incomplete or skipped inspection, or that the fixture's profile disables does not count as exercising its row.",
+  "format_version": 1,
+  "generated_by": "scripts/generate-architecture-catalogs.py",
+  "manifest": "loop-preflight/testdata/fixtures/manifest.json",
+  "matrix_id": "loop-gwg-pdfx-v1",
+  "rows": {
+    "bleed": {
+      "clean_fixtures": 24,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "ai-art-hard-corners",
+        "ai-art-missing-bleed",
+        "ai-art-partial-bleed",
+        "ai-art-raster-trim-edge",
+        "bleed-missing"
+      ],
+      "incomplete_fixtures": []
+    },
+    "color-inventory": {
+      "clean_fixtures": 24,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "black-only",
+        "bleed-adequate",
+        "bleed-missing",
+        "cmy-rich-no-k",
+        "color-cmyk",
+        "color-inventory-spot",
+        "color-rgb",
+        "font-embedded",
+        "font-not-embedded",
+        "image-dpi-excessive",
+        "image-dpi-low",
+        "image-dpi-ok",
+        "overprint-cmyk-mode0-off",
+        "overprint-cmyk-mode0-on",
+        "overprint-cmyk-mode1-off",
+        "overprint-cmyk-mode1-on",
+        "overprint-group-stroke-off",
+        "overprint-group-stroke-on",
+        "overprint-multiply-off",
+        "overprint-separation-off",
+        "overprint-separation-on",
+        "overprint-white-off",
+        "overprint-white-on",
+        "rich-black"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    },
+    "color-mode": {
+      "clean_fixtures": 19,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "color-rgb"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    },
+    "content-bleed": {
+      "clean_fixtures": 1,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "ai-art-hard-corners",
+        "ai-art-missing-bleed",
+        "ai-art-partial-bleed",
+        "ai-art-raster-trim-edge",
+        "content-bleed-missing",
+        "content-bleed-raster-confirm",
+        "content-bleed-three-of-four"
+      ],
+      "incomplete_fixtures": []
+    },
+    "dieline": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries a cutting-die processing step; the class is followed by the dieline-geometry backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "embedded-fonts": {
+      "clean_fixtures": 19,
+      "corpus_gap": null,
+      "coverage": "covered",
+      "finding_fixtures": [
+        "font-not-embedded"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    },
+    "font-integrity": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries a corrupt embedded font program; the class is followed by the font-glyph-coverage backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "hidden-layers": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries optional content groups; the class is followed by the hidden-layers-ocmd backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "image-resolution": {
+      "clean_fixtures": 19,
+      "corpus_gap": null,
+      "coverage": "covered",
+      "finding_fixtures": [
+        "image-dpi-low"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    },
+    "ink-coverage": {
+      "clean_fixtures": 1,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "ink-coverage-over"
+      ],
+      "incomplete_fixtures": []
+    },
+    "invisible-content": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries invisible paint; the class is followed by the invisible-content-breadth backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "obscured-content": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries content covered by later painting; the class is followed by the obscured-content-occlusion backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "off-page-content": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries an object painted outside the page; the class is followed by the off-page-content-clipping backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "output-intent": {
+      "clean_fixtures": 1,
+      "corpus_gap": null,
+      "coverage": "covered",
+      "finding_fixtures": [
+        "output-intent-missing",
+        "output-intent-profile-invalid",
+        "output-intent-profile-missing",
+        "output-intent-rgb"
+      ],
+      "incomplete_fixtures": []
+    },
+    "page-size": {
+      "clean_fixtures": 22,
+      "corpus_gap": null,
+      "coverage": "covered",
+      "finding_fixtures": [
+        "trim-pagesize-mismatch"
+      ],
+      "incomplete_fixtures": []
+    },
+    "processing-steps": {
+      "clean_fixtures": 0,
+      "corpus_gap": "No corpus fixture carries an ISO 19593-1 processing step; the class is followed by the dieline-geometry backlog row.",
+      "coverage": "partial",
+      "finding_fixtures": [],
+      "incomplete_fixtures": []
+    },
+    "thin-parts": {
+      "clean_fixtures": 0,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "thin-parts-fill"
+      ],
+      "incomplete_fixtures": []
+    },
+    "thin-strokes": {
+      "clean_fixtures": 0,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "thin-strokes-hairline"
+      ],
+      "incomplete_fixtures": []
+    },
+    "transparency-risk": {
+      "clean_fixtures": 21,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "transparency-annotation-appearance",
+        "transparency-cmyk-group-rgb",
+        "transparency-cmyk-group-spot",
+        "transparency-hue",
+        "transparency-rgb-group-cmyk"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    },
+    "trim": {
+      "clean_fixtures": 22,
+      "corpus_gap": null,
+      "coverage": "covered",
+      "finding_fixtures": [
+        "trim-pagesize-mismatch"
+      ],
+      "incomplete_fixtures": []
+    },
+    "white-overprint": {
+      "clean_fixtures": 20,
+      "corpus_gap": null,
+      "coverage": "partial",
+      "finding_fixtures": [
+        "overprint-white-on",
+        "white-overprint",
+        "white-overprint-devicen",
+        "white-overprint-form",
+        "white-overprint-iccbased",
+        "white-overprint-separation"
+      ],
+      "incomplete_fixtures": [
+        "overprint-multiply-on"
+      ]
+    }
+  },
+  "snapshot_dir": "loop-preflight/testdata/snapshots",
+  "source_fixtures": 67,
+  "unattributed_findings": 1
+}

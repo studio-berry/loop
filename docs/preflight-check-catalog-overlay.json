@@ -337,6 +337,7 @@
   "dieline": {
    "measures": "Alias of processing-steps for cutting-die workflows.",
    "limitations": "Same as processing-steps.",
+   "corpus_gap": "No corpus fixture carries a cutting-die processing step; the class is followed by the dieline-geometry backlog row.",
    "coverage": "partial",
    "families": [
     "packaging"
@@ -432,6 +433,7 @@
   "font-integrity": {
    "measures": "Embedded font bytes that fail to parse or cmap.",
    "limitations": "Not a full glyph-coverage audit.",
+   "corpus_gap": "No corpus fixture carries a corrupt embedded font program; the class is followed by the font-glyph-coverage backlog row.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -464,6 +466,7 @@
   "hidden-layers": {
    "measures": "Optional content groups that hide print content.",
    "limitations": "Does not enumerate every OCMD combination.",
+   "corpus_gap": "No corpus fixture carries optional content groups; the class is followed by the hidden-layers-ocmd backlog row.",
    "coverage": "partial",
    "families": [
     "packaging"
@@ -639,6 +642,7 @@
   "invisible-content": {
    "measures": "Content marked invisible or outside view.",
    "limitations": "Not a full GWG hidden-content suite.",
+   "corpus_gap": "No corpus fixture carries invisible paint; the class is followed by the invisible-content-breadth backlog row.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -675,6 +679,7 @@
   "obscured-content": {
    "measures": "Content covered by later painting.",
    "limitations": "Heuristic; not a RIP occlusion model.",
+   "corpus_gap": "No corpus fixture carries content covered by later painting; the class is followed by the obscured-content-occlusion backlog row.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset"
@@ -710,6 +715,7 @@
   "off-page-content": {
    "measures": "Content whose bounds fall outside the page.",
    "limitations": "Clipping can hide false positives and false negatives.",
+   "corpus_gap": "No corpus fixture carries an object painted outside the page; the class is followed by the off-page-content-clipping backlog row.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -918,6 +924,7 @@
   "processing-steps": {
    "measures": "ISO 19593-1 processing-step presence such as cutting-die.",
    "limitations": "Does not validate die geometry.",
+   "corpus_gap": "No corpus fixture carries an ISO 19593-1 processing step; the class is followed by the dieline-geometry backlog row.",
    "coverage": "partial",
    "families": [
     "packaging"
