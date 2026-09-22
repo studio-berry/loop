@@ -184,6 +184,39 @@ class PreflightCheckCatalogTest(unittest.TestCase):
             target="backlog",
         )
 
+    def test_unfiled_backlog_row_without_a_deferral_reason_fails(self) -> None:
+        def strip(overlay: dict) -> None:
+            for row in overlay["backlog"]:
+                if row["closed_by"] == "unfiled":
+                    row["deferral"] = None
+                    break
+
+        self.assert_overlay_fails(
+            strip,
+            "is unfiled without a deferral reason",
+            target="backlog",
+        )
+
+    def test_filed_backlog_row_carrying_a_deferral_reason_fails(self) -> None:
+        def stamp(overlay: dict) -> None:
+            for row in overlay["backlog"]:
+                if row["closed_by"] != "unfiled":
+                    row["deferral"] = "deferred until the moon phase allows"
+                    break
+
+        self.assert_overlay_fails(
+            stamp,
+            "is filed but carries a deferral reason",
+            target="backlog",
+        )
+
+    def test_backlog_row_missing_the_deferral_field_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["backlog"][0].pop("deferral"),
+            "must carry exactly",
+            target="backlog",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

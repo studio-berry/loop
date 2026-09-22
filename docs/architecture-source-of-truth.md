@@ -31,6 +31,9 @@ and applicable fixups live in
 [`preflight-check-catalog.json`](generated/preflight-check-catalog.json), and the
 prioritised gap register derived from its coverage overlay lives in
 [`preflight-coverage-backlog.json`](generated/preflight-coverage-backlog.json).
+Which golden-corpus fixtures exercise each of those checks, and which none does,
+lives in
+[`preflight-corpus-coverage.json`](generated/preflight-corpus-coverage.json).
 Per-operation correction metadata — save policy, impact, surface parity, and
 limitations — lives in
 [`correction-operation-catalog.json`](generated/correction-operation-catalog.json).

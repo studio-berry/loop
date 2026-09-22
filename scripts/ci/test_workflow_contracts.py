@@ -32,6 +32,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("scripts/ci/test_check_loop_identity.py", workflow)
         self.assertIn("scripts/ci/check_loop_identity.py", workflow)
 
+    def test_source_integrity_runs_the_preflight_corpus_coverage_guard(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        job = workflow.split("  source_integrity:")[1].split("  agent-fast:")[0]
+        self.assertIn("python3 scripts/ci/test_preflight_corpus_coverage.py", job)
+
     def test_windows_installer_verifies_from_its_checkout_root(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn("working-directory: loop", workflow)
