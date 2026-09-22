@@ -390,7 +390,6 @@ migration:
     - UnitTestsFindingNavigation
     - UnitTestsGovernedExecution
     - UnitTestsImageDownsampleFixup
-    - UnitTestsImageDecodeGuard
     - UnitTestsObjectSelector
     - UnitTestsOcrPageGate
     - UnitTestsProductionGeometry
