@@ -94,6 +94,11 @@ set(_loop_pdftool_sources
     pdftoolrepair.h
     pdftoolactionlist.cpp
     pdftoolactionlist.h
+    pdftoolworker.cpp
+    pdftoolworker.h
+    pdfworkerclient.cpp
+    pdfworkerclient.h
+    pdfworkerprotocol.h
 )
 
 if(NOT LOOP_LOOP_DISTRIBUTION)
@@ -152,3 +157,28 @@ endif()
 if(LOOP_ENABLE_SENTRY)
     loop_deploy_sentry_crashpad(PdfTool)
 endif()
+
+# Isolated LoopLibCore worker for untrusted open/preflight (#618). Never deploy
+# Sentry or an out-of-process crash reporter into this target — a hostile PDF
+# crash must not produce a customer-content minidump (R-008).
+set(_loop_pdf_worker_sources
+    loop-pdf-worker-main.cpp
+    pdfworkerruntime.cpp
+    pdfworkerruntime.h
+    pdfworkersandbox.cpp
+    pdfworkersandbox.h
+    pdfworkerprotocol.h
+)
+add_executable(loop-pdf-worker ${_loop_pdf_worker_sources})
+target_link_libraries(loop-pdf-worker PRIVATE LoopLibCore Qt6::Core Qt6::Gui)
+if(UNIX AND NOT APPLE)
+    target_compile_definitions(loop-pdf-worker PRIVATE LOOP_PDF_WORKER_REQUIRE_SANDBOX=1)
+endif()
+set_target_properties(loop-pdf-worker PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+install(TARGETS loop-pdf-worker RUNTIME DESTINATION ${LOOP_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOOP_INSTALL_LIB_DIR})
+add_dependencies(PdfTool loop-pdf-worker)

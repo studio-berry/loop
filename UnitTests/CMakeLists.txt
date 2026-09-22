@@ -639,6 +639,23 @@ set_target_properties(UnitTestsPdfToolContract PROPERTIES
 )
 add_test(UnitTestsPdfToolContract "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPdfToolContract")
 
+add_executable(UnitTestsPdfWorkerIsolation
+    tst_pdfworkerisolation.cpp
+)
+target_link_libraries(UnitTestsPdfWorkerIsolation PRIVATE Qt6::Core Qt6::Test)
+add_dependencies(UnitTestsPdfWorkerIsolation PdfTool loop-pdf-worker)
+target_compile_definitions(UnitTestsPdfWorkerIsolation PRIVATE
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+    LOOP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+set_target_properties(UnitTestsPdfWorkerIsolation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPdfWorkerIsolation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPdfWorkerIsolation")
+
 add_executable(UnitTestsBleedMarginProbe
 	tst_bleedmarginprobetest.cpp
 )

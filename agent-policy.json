@@ -161,8 +161,8 @@
     },
     "pdftool": {
       "paths": ["PdfTool/**"],
-      "targets": ["PdfTool"],
-      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
+      "targets": ["PdfTool", "loop-pdf-worker"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli", "UnitTestsPdfWorkerIsolation"]
     },
     "preflight": {
       "paths": ["loop-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp", "LoopLibInteraction/sources/preflight*.cpp", "LoopLibInteraction/sources/preflight*.h"],
