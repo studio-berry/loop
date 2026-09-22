@@ -10,6 +10,15 @@ claims:
       - fixture:regression:search-budget-independence
       - packaging:linux-build
       - packaging:windows-build
+  - id: core-module
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: quick-module
+    evidence:
+      - unit:agent-policy:quick
   - id: architecture-contracts
     evidence:
       - unit:scripts/agent/test_architecture_contracts.py
@@ -25,4 +34,5 @@ claims:
       - sealed-eval:mixed-surface-holdout
 unresolved:
   - search-latency harness
+  - core:scripts/ci/check_independent_validation_gate.py
 sealed_output_approval: human

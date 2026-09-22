@@ -1,17 +1,9 @@
 id: search-budget-independence
 class: regression
 origin: UnitTests/tst_quickdocumentmodeltest.cpp
-expected_behavior: >-
-  Document search uses an operation-scoped PDFProcessingBudget. After the session
-  render-operation budget is exhausted, searches over content that charges three
-  render tokens still complete. A zero render-operation limit returns an incomplete,
-  non-admitted result whose errorMessage names render-operations. Do not replace
-  the render-charging fixture with an empty page.
+expected_behavior: Document search uses an operation-scoped PDFProcessingBudget. After the session render-operation budget is exhausted, searches over content that charges three render tokens still complete. A zero render-operation limit returns an incomplete, non-admitted result whose errorMessage names render-operations. Do not replace the render-charging fixture with an empty page.
 difficulty: medium
-why_it_exists: >-
-  Protects the #652 / #520 search-budget contract that UnitTestsQuickDocumentModel
-  and UnitTestsDocumentSearch execute. Empty-page fixtures cannot falsify session
-  counter reuse.
+why_it_exists: "Protects the #652 / #520 search-budget contract that UnitTestsQuickDocumentModel and UnitTestsDocumentSearch execute. Empty-page fixtures cannot falsify session counter reuse."
 metrics:
   - search-latency
 approval_required: true
