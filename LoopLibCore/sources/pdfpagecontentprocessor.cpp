@@ -24,6 +24,7 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdfimage.h"
+#include "pdfimagedecodeguard.h"
 #include "pdfpattern.h"
 #include "pdfexecutionpolicy.h"
 #include "pdfstreamfilters.h"
@@ -3163,10 +3164,24 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
         }
     }
 
-    PDFImage pdfImage = PDFImage::createImage(m_document, stream, qMove(colorSpace), false, m_graphicState.getRenderingIntent(), this);
+    PDFImage pdfImage = PDFImage::createImage(m_document, stream, qMove(colorSpace), false, m_graphicState.getRenderingIntent(), this, m_processingBudget);
 
     if (!performOriginalImagePainting(pdfImage, stream, reference))
     {
+        // Reserve declared output pixels before color-space rasterization. Codec
+        // paths that allocate inside createImage already reserved there.
+        if (m_processingBudget)
+        {
+            const PDFImageData& imageData = pdfImage.getImageData();
+            if (imageData.isValid())
+            {
+                const std::uint64_t pixels = static_cast<std::uint64_t>(imageData.getWidth()) *
+                                             static_cast<std::uint64_t>(imageData.getHeight());
+                PDFImageDecodeGuard::reserveRenderPixels(m_processingBudget, pixels,
+                                                         PDFTranslationContext::tr("decoded image"));
+            }
+        }
+
         QImage image = pdfImage.getImage(m_CMS, this, m_operationControl);
 
         if (!isProcessingCancelled())
@@ -3182,12 +3197,6 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
 
             if (!image.isNull())
             {
-                if (m_processingBudget)
-                {
-                    const uint64_t pixels = static_cast<uint64_t>(image.width()) * static_cast<uint64_t>(image.height());
-                    m_processingBudget->chargeRenderPixels(pixels, PDFTranslationContext::tr("decoded image"));
-                }
-
                 if (PDFImage::canBeConvertedToMonochromatic(image))
                 {
                     image.convertTo(QImage::Format_Mono);

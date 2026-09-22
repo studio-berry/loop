@@ -818,6 +818,20 @@ set_target_properties(UnitTestsContentProcessorLimits PROPERTIES
 )
 add_test(UnitTestsContentProcessorLimits "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsContentProcessorLimits")
 
+add_executable(UnitTestsImageDecodeGuard
+	tst_imagedecodeguardtest.cpp
+)
+
+target_link_libraries(UnitTestsImageDecodeGuard PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsImageDecodeGuard PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsImageDecodeGuard "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsImageDecodeGuard")
+
 add_executable(UnitTestsJbig2Decoder
 	tst_jbig2decodertest.cpp
 )
