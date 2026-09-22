@@ -32,6 +32,56 @@ significant_paths:
   - architecture/**
   - AGENTS.md
 subsystems:
+  - id: governed-execution
+    summary: Canonical JSON, preview/publish authority, destination binding, and durable completion.
+    owns_targets: true
+    paths:
+      - LoopLibCore/sources/pdfartifactidentity.cpp
+      - LoopLibCore/sources/pdfartifactidentity.h
+      - LoopLibCore/sources/pdfgovernedexecution.cpp
+      - LoopLibCore/sources/pdfgovernedexecution.h
+      - LoopLibCore/sources/pdfsavepolicy.cpp
+      - LoopLibCore/sources/pdfsavepolicy.h
+      - LoopLibCore/sources/pdfsafefilewriter.cpp
+      - LoopLibCore/sources/pdfsafefilewriter.h
+      - UnitTests/tst_governedexecutiontest.cpp
+      - UnitTests/testdata/canonical-json/**
+      - docs/CANONICAL_JSON.md
+      - docs/GOVERNED_EXECUTION.md
+      - docs/adr/adr-011-architecture-contracts-d1-d5.md
+      - scripts/ci/check_governed_parity.py
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsGovernedExecution
+        policy_module: core
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_check_governed_parity.py
+        executes: binding
+      - kind: fixture
+        bind: fixture
+        id: canonical-json-golden
+        fixture_class: regression
+        ref: UnitTests/testdata/fixture-classes/regression/canonical-json-golden.yaml
+        executes: binding
+      - kind: architecture
+        bind: policy
+        id: agent-policy:core
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: linux-build
+        ref: .github/workflows/reusable-linux.yml
+        contains: ctest
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-build
+        ref: .github/workflows/reusable-windows.yml
+        contains: ctest
+        executes: binding
   - id: bleed-fixup
     summary: Bleed fixup and UnitTestsBleedFixup.
     owns_targets: true
@@ -358,7 +408,7 @@ migration:
     - UnitTestsAuthorSettings
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
-    - UnitTestsGovernedExecution
+    - UnitTestsImageDecodeGuard
     - UnitTestsImageDownsampleFixup
     - UnitTestsObjectSelector
     - UnitTestsOcrPageGate

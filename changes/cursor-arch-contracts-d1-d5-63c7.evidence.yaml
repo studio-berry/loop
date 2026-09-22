@@ -1,0 +1,33 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: d1-canonical-json
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - fixture:regression:canonical-json-golden
+      - budget:canonical-json-digest-stability
+      - architecture:scripts/agent/check-architecture.py
+  - id: d2-preview-non-publishing
+    evidence:
+      - unit:UnitTestsGovernedExecution
+  - id: d3-destination-binding
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsRepairOperation
+      - unit:UnitTestsSafeFileWriter
+  - id: d4-durable-completion
+    evidence:
+      - unit:UnitTestsGovernedExecution
+  - id: d5-cross-surface-identity
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+  - id: packaging-bindings
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+unresolved:
+  - canonical-json-digest-stability harness artifact count
+  - d1-d5 static call-site architecture checkers
+  - UnitTestsBleedFixup writer-byte flake tracked in issue 656
+  - UnitTestsImageDecodeGuard deferred proof-lane migration
