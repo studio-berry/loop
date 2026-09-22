@@ -14,8 +14,8 @@
     },
     "schema_version": {
       "type": "integer",
-      "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
+      "enum": [1, 2, 3, 4],
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Version 4 requires stable content-addressed finding ids. Decisions, digests, profile identity, coverage scope, scope restrictions, variable bindings, and revalidation provenance are additive fields."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -98,6 +98,10 @@
       "description": "Operator decisions imported for, or recorded beside, this run. Decision state is derived against the current digests.",
       "items": { "$ref": "#/$defs/decision" }
     },
+    "revalidation": {
+      "$ref": "#/$defs/revalidation",
+      "description": "Evidence invalidation and reuse accounting for a post-operation run, including which checks and evidence were reused versus recomputed."
+    },
     "errors": {
       "type": "array",
       "description": "Failing findings with severity error (or mapped to error).",
@@ -128,7 +132,47 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema_version": { "const": 4 } },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "errors": { "items": { "$ref": "#/$defs/finding_v4" } },
+          "warnings": { "items": { "$ref": "#/$defs/finding_v4" } }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "revalidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reason"],
+      "properties": {
+        "full": { "type": "boolean" },
+        "mode": { "type": "string", "enum": ["full", "targeted"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "plan": { "type": "object", "additionalProperties": true },
+        "check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_check_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "reused_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "recomputed_evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "invalidated_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "recomputed_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "reusable_evidence_domains": { "$ref": "#/$defs/evidence_domain_list" },
+        "pages": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "uniqueItems": true },
+        "baseline_reused": { "type": "boolean" }
+      }
+    },
+    "evidence_domain_list": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["images", "colorants", "strokes", "overprint-transparency", "fonts"] },
+      "uniqueItems": true
+    },
     "verdict": {
       "type": "object",
       "additionalProperties": false,
@@ -271,6 +315,31 @@
       },
       "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
     },
+    "scope_restrictions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "page_box": { "enum": ["media", "crop", "trim", "bleed", "art"] },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "rect_pt", "anchor", "mode"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "rect_pt": { "$ref": "#/$defs/bbox" },
+              "anchor": { "enum": ["media", "crop", "trim", "bleed"] },
+              "mode": { "enum": ["include", "exclude"] }
+            }
+          }
+        },
+        "layers": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "object_classes": { "type": "array", "items": { "enum": ["text", "image", "vector", "annotation", "shading", "form"] }, "uniqueItems": true },
+        "unsupported_reason": { "type": "string" }
+      }
+    },
     "finding_v2": {
       "type": "object",
       "additionalProperties": false,
@@ -311,6 +380,7 @@
           "description": "Human-readable description for the report panel."
         },
         "bbox": { "$ref": "#/$defs/bbox" },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
         "check_id": {
           "type": "string",
           "description": "Optional profile check id that produced this finding."
@@ -330,6 +400,12 @@
         { "$ref": "#/$defs/finding_v2" }
       ]
     },
+    "finding_v4": {
+      "allOf": [
+        { "$ref": "#/$defs/finding_v2" },
+        { "required": ["id"] }
+      ]
+    },
     "check_status": {
       "type": "object",
       "additionalProperties": false,
@@ -342,8 +418,14 @@
         },
         "status": {
           "type": "string",
-          "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
+          "enum": ["ok", "warning", "failed", "skipped", "unsupported", "incomplete", "not_inspected", "not_applicable"],
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: intentionally not run, for example because it is disabled in the profile or outside a targeted revalidation plan. incomplete: required inspection evidence could not be collected, for example because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence. not_inspected: the check runner cannot honour the requested restriction dimension. not_applicable: the effective restriction scope selects no page or object for this check."
+        },
+        "scope_restrictions": { "$ref": "#/$defs/scope_restrictions" },
+        "diagnostics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Non-blocking diagnostics, including migration warnings for deprecated profile inputs."
         },
         "reason": {
           "type": "string",

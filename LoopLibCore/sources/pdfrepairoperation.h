@@ -49,6 +49,8 @@
 namespace pdf
 {
 
+struct PreflightResult;
+
 enum class PDFRepairStatus
 {
     Planned,
@@ -162,9 +164,21 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta
     QStringList unchangedFindingIds;
     QStringList introducedFindingIds;
     QStringList incompleteFindingIds;
+    /// Distinguishes a completed empty comparison from a never-run recheck.
+    bool compared = false;
+    /// Existing findings whose checks/pages were not reinspected in a
+    /// targeted run; they are carried forward, not asserted resolved.
+    QStringList carriedForwardFindingIds;
 
     QJsonObject toJson() const;
 };
+
+/// Compares two preflight runs using stable finding identities. Findings whose
+/// checks were intentionally outside a targeted revalidation remain unchanged;
+/// findings whose checks could not complete are classified as incomplete and
+/// are never reported as resolved.
+LOOPLIBCORESHARED_EXPORT PDFRepairFindingDelta computeFindingDelta(const PreflightResult& before,
+                                                                   const PreflightResult& after);
 
 struct LOOPLIBCORESHARED_EXPORT PDFRepairResult
 {
@@ -192,10 +206,11 @@ public:
     virtual PDFRepairDomains domains() const = 0;
     /// Declares the serialization and signature consequences of this operation.
     /// The conservative default prevents an unclassified operation from being
-    /// appended to a signed or revisioned source.
+    /// appended to a signed or revisioned source. A registered operation must
+    /// override this; the registry-wide test rejects the undeclared default.
     virtual PDFOperationSavePolicy savePolicy() const
     {
-        return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+        return PDFOperationSavePolicy::undeclared();
     }
     /// Unknown or incomplete impact forces full revalidation.
     virtual PDFOperationImpact impact() const
@@ -262,6 +277,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairTransactionOptions
     bool failOnIncompleteValidation = true;
     int maxOperations = 100;
     const PDFOperationControl* operationControl = nullptr;
+    /// The trusted input the caller received. When set, a candidate write to
+    /// this path is refused; an empty value only disables that path check, not
+    /// the policy check.
+    QString sourcePath;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFRepairTransaction
@@ -274,6 +293,12 @@ public:
                            const QJsonObject& parameters);
     PDFOperationResult analyze();
     PDFOperationResult apply();
+    /// Verifies declared validators on the isolated candidate, never on source
+    /// bytes. An unrun or incomplete validator cannot mark the repair Passed.
+    PDFOperationResult validateCandidate(const QString& profilePath,
+                                         PreflightResult* postflightOut = nullptr,
+                                         const QJsonObject& profileJson = {},
+                                         const QJsonObject& profileBindings = {});
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
                                           PDFDocument* reopenedCandidate,
@@ -282,10 +307,19 @@ public:
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
 
+    /// True when transaction policy requires the invoking surface to run
+    /// declared postflight validators before any candidate can be published.
+    bool postflightRequired() const;
+
     const PDFDocument* candidate() const;
     const QList<PDFRepairPlan>& plans() const { return m_plans; }
     const QList<PDFRepairResult>& results() const { return m_results; }
     PDFOperationSavePolicy savePolicy() const;
+    /// Declares the save policy the caller is asking for. Stricter than the
+    /// operation-declared policy is allowed; weaker is refused here, before any
+    /// analysis or mutation, so a surface cannot talk an operation out of its
+    /// persistence requirement.
+    PDFOperationResult setRequestedSavePolicy(const PDFOperationSavePolicy& policy);
     PDFRepairStatus status() const { return m_status; }
 
 private:
@@ -297,6 +331,10 @@ private:
 
     PDFRepairExpectedChanges expectedChanges() const;
     QVector<int> affectedPages() const;
+    /// The single refusal check shared by analyze(), apply() and
+    /// serializeCandidate(): a refused request stays refused for the life of
+    /// the transaction, so a caller cannot retry past it.
+    PDFOperationResult refuseWeakenedSavePolicy() const;
 
     const PDFDocument* m_source = nullptr;
     PDFRepairTransactionOptions m_options;
@@ -307,6 +345,9 @@ private:
     PDFRepairStatus m_status = PDFRepairStatus::Planned;
     bool m_analyzed = false;
     bool m_hasCandidate = false;
+    bool m_hasRequestedSavePolicy = false;
+    bool m_savePolicyRefused = false;
+    PDFOperationSavePolicy m_requestedSavePolicy;
 };
 
 QString pdfRepairStatusName(PDFRepairStatus status);

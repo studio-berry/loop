@@ -27,6 +27,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfoutputformatter.h"
+#include "pdfpreflightverdict.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -262,6 +263,20 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InvalidInvocation;
     }
 
+    // The operation, not the command, declares what may happen to the trusted
+    // input. A missing declaration must not delete the command, so the
+    // explicitly-undeclared policy still protects the input path.
+    const pdf::PDFRepairOperation* const declaredOperation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    const pdf::PDFOperationSavePolicy declaredPolicy = declaredOperation ? declaredOperation->savePolicy() : pdf::PDFOperationSavePolicy::undeclared();
+    if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                     options.document,
+                                                                     options.addBleedOutputDocument,
+                                                                     declaredPolicy);
+        refused != PDFToolExitCode::Success)
+    {
+        return refused;
+    }
+
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
@@ -312,6 +327,29 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Success;
     }
 
+    if (options.preflightProfilePath.isEmpty())
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
+                         PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
+        return PDFToolExitCode::PartialOutput;
+    }
+
+    pdf::PreflightVerdict postflightVerdict;
+    if (const pdf::PDFOperationResult postflight = pdf::runMandatoryPostflight(&document, options.preflightProfilePath, &postflightVerdict); !postflight)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-failed"),
+                         postflight.getErrorMessage());
+        if (postflightVerdict.state == pdf::PreflightVerdictState::Error)
+        {
+            return PDFToolExitCode::PreflightError;
+        }
+        if (postflightVerdict.state == pdf::PreflightVerdictState::Fail)
+        {
+            return PDFToolExitCode::Findings;
+        }
+        return PDFToolExitCode::PartialOutput;
+    }
+
     if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
@@ -359,7 +397,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite;
+    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite | PreflightProfile;
 }
 
 }   // namespace pdftool

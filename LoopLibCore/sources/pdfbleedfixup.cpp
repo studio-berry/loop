@@ -22,6 +22,7 @@
 
 #include "pdfbleedfixup.h"
 
+#include "pdfcatalog.h"
 #include "pdfcms.h"
 #include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
@@ -29,13 +30,17 @@
 #include "pdfoptionalcontent.h"
 #include "pdfpainter.h"
 #include "pdfprocessingbudget.h"
+#include "pdfstreamfilters.h"
 
 #include <QColor>
 #include <QPainter>
 #include <QtMath>
 
+#include <lcms2.h>
+
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <set>
 
 namespace pdf
@@ -224,6 +229,457 @@ QString sideName(PDFBleedFixupSide side)
     }
     return QStringLiteral("unknown");
 }
+
+struct CmykBleedOutputIntent
+{
+    PDFObjectReference profileReference;
+    QByteArray profileData;
+    QByteArray profileId;
+};
+
+PDFOperationResult detectCmykBleedOutputIntent(const PDFDocument* document,
+                                               PDFDocumentBuilder* builder,
+                                               std::optional<CmykBleedOutputIntent>* outIntent)
+{
+    if (outIntent)
+    {
+        *outIntent = std::nullopt;
+    }
+
+    if (!document || !builder)
+    {
+        return true;
+    }
+
+    QString profileDecodeError;
+
+    for (const PDFOutputIntent& outputIntent : document->getCatalog()->getOutputIntents())
+    {
+        const PDFObject profileObject = document->getObject(outputIntent.getOutputProfile());
+        if (!profileObject.isStream())
+        {
+            continue;
+        }
+
+        QByteArray profileData;
+        try
+        {
+            profileData = document->getDecodedStream(profileObject.getStream());
+        }
+        catch (const PDFException&)
+        {
+            const QString identifier = outputIntent.getOutputConditionIdentifier();
+            profileDecodeError = PDFTranslationContext::tr(
+                                     "Output intent '%1' has an ICC profile that could not be decoded.")
+                                     .arg(identifier.isEmpty() ? QStringLiteral("unknown") : identifier);
+            continue;
+        }
+
+        if (profileData.isEmpty())
+        {
+            continue;
+        }
+
+        cmsHPROFILE profile = cmsOpenProfileFromMem(profileData.constData(), profileData.size());
+        if (!profile)
+        {
+            continue;
+        }
+
+        const bool isCmyk = cmsGetColorSpace(profile) == cmsSigCmykData;
+        cmsCloseProfile(profile);
+        if (!isCmyk)
+        {
+            continue;
+        }
+
+        CmykBleedOutputIntent result;
+        result.profileData = profileData;
+        result.profileId = QByteArrayLiteral("loop-bleed-output-intent");
+
+        if (profileObject.isReference())
+        {
+            result.profileReference = profileObject.getReference();
+        }
+        else
+        {
+            PDFDictionary profileDictionary;
+            profileDictionary.addEntry(PDFInplaceOrMemoryString("N"), PDFObject::createInteger(4));
+            profileDictionary.addEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(profileData.size()));
+            profileDictionary.addEntry(PDFInplaceOrMemoryString("Filter"), PDFObject::createName("FlateDecode"));
+            QByteArray compressedProfile = PDFFlateDecodeFilter::compress(profileData);
+            profileDictionary.setEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(compressedProfile.size()));
+            result.profileReference = builder->addObject(
+                PDFObject::createStream(std::make_shared<PDFStream>(qMove(profileDictionary), qMove(compressedProfile))));
+        }
+
+        if (outIntent)
+        {
+            *outIntent = result;
+        }
+        return true;
+    }
+
+    if (!profileDecodeError.isEmpty())
+    {
+        return profileDecodeError;
+    }
+
+    return true;
+}
+
+PDFObject createCmykImageColorSpace(PDFObjectReference profileReference)
+{
+    auto colorSpace = std::make_shared<PDFArray>();
+    colorSpace->appendItem(PDFObject::createName("ICCBased"));
+    colorSpace->appendItem(PDFObject::createReference(profileReference));
+    return PDFObject::createArray(qMove(colorSpace));
+}
+
+PDFOperationResult convertRgb888ImageToCmykSamples(const QImage& rgb888Image,
+                                                   const PDFCMS* cms,
+                                                   const CmykBleedOutputIntent& intent,
+                                                   QByteArray* cmykSamples)
+{
+    if (!cms || !cmykSamples || rgb888Image.isNull())
+    {
+        return PDFTranslationContext::tr("CMYK bleed strip conversion failed.");
+    }
+
+    if (rgb888Image.format() != QImage::Format_RGB888)
+    {
+        return PDFTranslationContext::tr("CMYK bleed strip conversion requires RGB888 samples.");
+    }
+
+    const int width = rgb888Image.width();
+    const int height = rgb888Image.height();
+    if (width <= 0 || height <= 0)
+    {
+        return PDFTranslationContext::tr("CMYK bleed strip conversion requires a non-empty image.");
+    }
+
+    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (pixelCount > std::numeric_limits<size_t>::max() / 3 || pixelCount > std::numeric_limits<size_t>::max() / 4)
+    {
+        return PDFTranslationContext::tr("CMYK bleed strip image is too large to convert.");
+    }
+
+    std::vector<PDFColorComponent> input(pixelCount * 3);
+    std::vector<PDFColorComponent> output(pixelCount * 4);
+    for (int y = 0; y < height; ++y)
+    {
+        const uchar* scanline = rgb888Image.constScanLine(y);
+        for (int x = 0; x < width; ++x)
+        {
+            const size_t rgbIndex = (static_cast<size_t>(y) * width + x) * 3;
+            input[rgbIndex + 0] = scanline[x * 3 + 0] / 255.0f;
+            input[rgbIndex + 1] = scanline[x * 3 + 1] / 255.0f;
+            input[rgbIndex + 2] = scanline[x * 3 + 2] / 255.0f;
+        }
+    }
+
+    PDFCMS::ColorSpaceTransformParams params;
+    params.sourceType = PDFCMS::ColorSpaceType::DeviceRGB;
+    params.targetType = PDFCMS::ColorSpaceType::ICC;
+    params.targetIccId = intent.profileId;
+    params.targetIccData = intent.profileData;
+    params.input = PDFColorBuffer(input.data(), input.size());
+    params.output = PDFColorBuffer(output.data(), output.size());
+    params.intent = RenderingIntent::RelativeColorimetric;
+    if (!cms->transformColorSpace(params))
+    {
+        return PDFTranslationContext::tr("LittleCMS could not convert bleed strip samples to CMYK.");
+    }
+
+    cmykSamples->resize(static_cast<qsizetype>(pixelCount * 4));
+    for (size_t i = 0; i < output.size(); ++i)
+    {
+        const PDFColorComponent component = qBound<PDFColorComponent>(0.0f, output[i], 1.0f);
+        (*cmykSamples)[static_cast<qsizetype>(i)] = static_cast<char>(qRound(component * 255.0f));
+    }
+
+    return true;
+}
+
+PDFObjectReference createCmykBleedImageXObject(PDFDocumentBuilder* builder,
+                                               int width,
+                                               int height,
+                                               const QByteArray& cmykSamples,
+                                               PDFObjectReference profileReference)
+{
+    PDFArray decodeArray;
+    for (int i = 0; i < 4; ++i)
+    {
+        decodeArray.appendItem(PDFObject::createReal(0.0));
+        decodeArray.appendItem(PDFObject::createReal(1.0));
+    }
+
+    QByteArray compressedSamples = PDFFlateDecodeFilter::compress(cmykSamples);
+    PDFDictionary imageDictionary;
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Type"), PDFObject::createName("XObject"));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Subtype"), PDFObject::createName("Image"));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Width"), PDFObject::createInteger(width));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Height"), PDFObject::createInteger(height));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Predictor"), PDFObject::createInteger(1));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("ColorSpace"), createCmykImageColorSpace(profileReference));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("BitsPerComponent"), PDFObject::createInteger(8));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Decode"),
+                             PDFObject::createArray(std::make_shared<PDFArray>(qMove(decodeArray))));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Filter"), PDFObject::createName("FlateDecode"));
+    imageDictionary.addEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(compressedSamples.size()));
+    return builder->addObject(
+        PDFObject::createStream(std::make_shared<PDFStream>(qMove(imageDictionary), qMove(compressedSamples))));
+}
+
+QByteArray allocateBleedImageName(const PDFDocumentBuilder* builder,
+                                  PDFObjectReference pageReference,
+                                  const PDFDictionary& pendingXObjects)
+{
+    std::set<QByteArray> usedNames;
+    const PDFObject pageObject = builder->getObjectByReference(pageReference);
+    if (pageObject.isDictionary())
+    {
+        const PDFDictionary* pageDictionary = pageObject.getDictionary();
+        const PDFObject resourcesObject = builder->getObject(pageDictionary->get("Resources"));
+        if (resourcesObject.isDictionary())
+        {
+            const PDFDictionary* resourcesDictionary = resourcesObject.getDictionary();
+            const PDFObject xObjectObject = builder->getObject(resourcesDictionary->get("XObject"));
+            if (xObjectObject.isDictionary())
+            {
+                const PDFDictionary* xObjectDictionary = xObjectObject.getDictionary();
+                for (size_t i = 0; i < xObjectDictionary->getCount(); ++i)
+                {
+                    usedNames.insert(xObjectDictionary->getKey(i).getString());
+                }
+            }
+        }
+    }
+
+    for (size_t i = 0; i < pendingXObjects.getCount(); ++i)
+    {
+        usedNames.insert(pendingXObjects.getKey(i).getString());
+    }
+
+    int index = 0;
+    while (true)
+    {
+        const QByteArray candidate = QStringLiteral("Im%1").arg(++index).toLatin1();
+        if (!usedNames.count(candidate))
+        {
+            return candidate;
+        }
+    }
+}
+
+void appendBleedImageDraw(QByteArray& content, const QRectF& destRect, const QByteArray& xobjectName)
+{
+    content.append("q\n");
+    content.append(formatPDFNumber(destRect.width()).toLatin1());
+    content.append(" 0 0 ");
+    content.append(formatPDFNumber(-destRect.height()).toLatin1());
+    content.append(' ');
+    content.append(formatPDFNumber(destRect.left()).toLatin1());
+    content.append(' ');
+    content.append(formatPDFNumber(destRect.bottom()).toLatin1());
+    content.append(" cm\n/");
+    content.append(xobjectName);
+    content.append(" Do\nQ\n");
+}
+
+PDFObject removeDictionaryReferencesFromResources(PDFDocumentBuilder* builder, PDFObject resources)
+{
+    PDFObjectFactory resourcesBuilder;
+    resources = builder->getObject(resources);
+    if (resources.isDictionary())
+    {
+        resourcesBuilder.beginDictionary();
+        const PDFDictionary* resourcesDictionary = resources.getDictionary();
+        const size_t count = resourcesDictionary->getCount();
+        for (size_t i = 0; i < count; ++i)
+        {
+            PDFObject object = builder->getObject(resourcesDictionary->getValue(i));
+            if (object.isNull())
+            {
+                continue;
+            }
+
+            resourcesBuilder.beginDictionaryItem(resourcesDictionary->getKey(i).getString());
+            resourcesBuilder << object;
+            resourcesBuilder.endDictionaryItem();
+        }
+        resourcesBuilder.endDictionary();
+        resources = resourcesBuilder.takeObject();
+    }
+
+    return resources;
+}
+
+void mergeXObjectDictionary(PDFDictionary& target, const PDFDictionary& source)
+{
+    for (size_t i = 0; i < source.getCount(); ++i)
+    {
+        target.setEntry(source.getKey(i), PDFObject(source.getValue(i)));
+    }
+}
+
+PDFObject mergeBleedResources(PDFDocumentBuilder* builder, PDFObject oldResources, const PDFDictionary& newXObjects)
+{
+    PDFDictionary mergedXObjects;
+    oldResources = removeDictionaryReferencesFromResources(builder, oldResources);
+    oldResources = builder->getObject(oldResources);
+    if (oldResources.isDictionary())
+    {
+        const PDFObject existingXObjects = builder->getObject(oldResources.getDictionary()->get("XObject"));
+        if (existingXObjects.isDictionary())
+        {
+            mergedXObjects = *existingXObjects.getDictionary();
+        }
+    }
+    mergeXObjectDictionary(mergedXObjects, newXObjects);
+
+    PDFObjectFactory resourcesFactory;
+    resourcesFactory.beginDictionary();
+    if (oldResources.isDictionary())
+    {
+        const PDFDictionary* oldResourcesDictionary = oldResources.getDictionary();
+        const size_t count = oldResourcesDictionary->getCount();
+        for (size_t i = 0; i < count; ++i)
+        {
+            if (oldResourcesDictionary->getKey(i).getString() == QByteArrayLiteral("XObject"))
+            {
+                continue;
+            }
+
+            resourcesFactory.beginDictionaryItem(oldResourcesDictionary->getKey(i).getString());
+            resourcesFactory << builder->getObject(oldResourcesDictionary->getValue(i));
+            resourcesFactory.endDictionaryItem();
+        }
+    }
+
+    resourcesFactory.beginDictionaryItem("XObject");
+    resourcesFactory << PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(mergedXObjects)));
+    resourcesFactory.endDictionaryItem();
+    resourcesFactory.endDictionary();
+    return resourcesFactory.takeObject();
+}
+
+PDFOperationResult commitBleedStripContentPlaceBefore(PDFDocumentBuilder* builder,
+                                                      PDFObjectReference pageReference,
+                                                      QByteArray content,
+                                                      PDFDictionary xObjects)
+{
+    if (content.isEmpty())
+    {
+        return true;
+    }
+
+    PDFDictionary contentDictionary;
+    contentDictionary.addEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(content.size()));
+    const PDFObjectReference contentsReference = builder->addObject(
+        PDFObject::createStream(std::make_shared<PDFStream>(qMove(contentDictionary), qMove(content))));
+
+    std::vector<PDFObjectReference> contentReferences;
+    PDFObject pageObject = builder->getObjectByReference(pageReference);
+    PDFObject mergedResources;
+    if (pageObject.isDictionary())
+    {
+        const PDFDictionary* pageDictionary = pageObject.getDictionary();
+        const PDFObject& oldContents = pageDictionary->get("Contents");
+        const PDFObject& oldContentsObject = builder->getObject(oldContents);
+
+        if (oldContentsObject.isStream())
+        {
+            if (oldContents.isReference())
+            {
+                contentReferences.push_back(oldContents.getReference());
+            }
+        }
+        else if (oldContentsObject.isArray())
+        {
+            const PDFArray* contentsArray = oldContentsObject.getArray();
+            for (const PDFObject& object : *contentsArray)
+            {
+                if (object.isReference())
+                {
+                    contentReferences.push_back(object.getReference());
+                }
+            }
+        }
+
+        mergedResources = mergeBleedResources(builder, pageDictionary->get("Resources"), xObjects);
+    }
+    else
+    {
+        PDFDictionary resourcesDictionary;
+        resourcesDictionary.addEntry(PDFInplaceOrMemoryString("XObject"),
+                                     PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(xObjects))));
+        mergedResources = PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(resourcesDictionary)));
+    }
+
+    const PDFObjectReference resourcesReference = builder->addObject(qMove(mergedResources));
+
+    contentReferences.insert(contentReferences.begin(), contentsReference);
+
+    PDFObjectFactory pageUpdateFactory;
+    pageUpdateFactory.beginDictionary();
+    pageUpdateFactory.beginDictionaryItem("Contents");
+    pageUpdateFactory << contentReferences;
+    pageUpdateFactory.endDictionaryItem();
+    pageUpdateFactory.beginDictionaryItem("Resources");
+    pageUpdateFactory << resourcesReference;
+    pageUpdateFactory.endDictionaryItem();
+    pageUpdateFactory.endDictionary();
+    builder->mergeTo(pageReference, pageUpdateFactory.takeObject());
+    return true;
+}
+
+class BleedStripCmykAccumulator
+{
+public:
+    BleedStripCmykAccumulator(PDFDocumentBuilder* builder, PDFObjectReference pageReference) :
+        m_builder(builder),
+        m_pageReference(pageReference)
+    {
+    }
+
+    PDFOperationResult addStrip(const QImage& rgb888Strip,
+                                const QRectF& destRect,
+                                const PDFCMS* cms,
+                                const CmykBleedOutputIntent& intent)
+    {
+        QImage strip = rgb888Strip;
+        if (strip.format() != QImage::Format_RGB888)
+        {
+            strip = PDFBleedFixupMath::composeBleedStripRgb888(std::move(strip));
+        }
+
+        QByteArray cmykSamples;
+        const PDFOperationResult convertResult = convertRgb888ImageToCmykSamples(strip, cms, intent, &cmykSamples);
+        if (!convertResult)
+        {
+            return convertResult;
+        }
+
+        const QByteArray xobjectName = allocateBleedImageName(m_builder, m_pageReference, m_xObjects);
+        const PDFObjectReference imageReference = createCmykBleedImageXObject(
+            m_builder, strip.width(), strip.height(), cmykSamples, intent.profileReference);
+        m_xObjects.addEntry(PDFInplaceOrMemoryString(xobjectName), PDFObject::createReference(imageReference));
+        appendBleedImageDraw(m_content, destRect, xobjectName);
+        return true;
+    }
+
+    PDFOperationResult commitPlaceBefore()
+    {
+        return commitBleedStripContentPlaceBefore(m_builder, m_pageReference, std::move(m_content), std::move(m_xObjects));
+    }
+
+private:
+    PDFDocumentBuilder* m_builder = nullptr;
+    PDFObjectReference m_pageReference;
+    QByteArray m_content;
+    PDFDictionary m_xObjects;
+};
 
 }   // namespace
 
@@ -478,6 +934,28 @@ QRectF cornerStripDestRect(const QRectF& reference,
     return QRectF(x, y, horizontalDepthPt, verticalDepthPt);
 }
 
+QImage composeBleedStripRgb888(QImage strip)
+{
+    if (strip.isNull())
+    {
+        return strip;
+    }
+
+    if (strip.format() == QImage::Format_RGB888 && !strip.hasAlphaChannel())
+    {
+        return strip;
+    }
+
+    QImage composedImage(strip.size(), QImage::Format_RGB888);
+    composedImage.fill(Qt::white);
+
+    QPainter painter(&composedImage);
+    painter.drawImage(QPoint(0, 0), strip);
+    painter.end();
+
+    return composedImage;
+}
+
 QImage buildEdgeFillImage(const QImage& pageImage,
                           const QRect& sourcePx,
                           PDFBleedFixupSide side,
@@ -506,13 +984,14 @@ QImage buildEdgeFillImage(const QImage& pageImage,
         case PDFBleedFixupMode::Mirror:
         {
             const bool horizontal = (side == PDFBleedFixupSide::Left || side == PDFBleedFixupSide::Right);
-            return strip.flipped(horizontal ? Qt::Horizontal : Qt::Vertical);
+            return composeBleedStripRgb888(strip.flipped(horizontal ? Qt::Horizontal : Qt::Vertical));
         }
         case PDFBleedFixupMode::PixelRepeat:
         {
             if (side == PDFBleedFixupSide::Left || side == PDFBleedFixupSide::Right)
             {
-                QImage out(bleedDepthPx, strip.height(), QImage::Format_ARGB32_Premultiplied);
+                QImage out(bleedDepthPx, strip.height(), QImage::Format_RGB888);
+                out.fill(Qt::white);
                 const int srcX = (side == PDFBleedFixupSide::Left) ? 0 : (strip.width() - 1);
                 for (int x = 0; x < bleedDepthPx; ++x)
                 {
@@ -521,10 +1000,11 @@ QImage buildEdgeFillImage(const QImage& pageImage,
                         out.setPixel(x, y, strip.pixel(srcX, y));
                     }
                 }
-                return out;
+                return composeBleedStripRgb888(std::move(out));
             }
 
-            QImage out(strip.width(), bleedDepthPx, QImage::Format_ARGB32_Premultiplied);
+            QImage out(strip.width(), bleedDepthPx, QImage::Format_RGB888);
+            out.fill(Qt::white);
             // After page->device Y flip, page top maps near image y=0.
             const int edgeY = (side == PDFBleedFixupSide::Top) ? 0 : (strip.height() - 1);
             for (int y = 0; y < bleedDepthPx; ++y)
@@ -534,15 +1014,15 @@ QImage buildEdgeFillImage(const QImage& pageImage,
                     out.setPixel(x, y, strip.pixel(x, edgeY));
                 }
             }
-            return out;
+            return composeBleedStripRgb888(std::move(out));
         }
         case PDFBleedFixupMode::Stretch:
         {
             if (side == PDFBleedFixupSide::Left || side == PDFBleedFixupSide::Right)
             {
-                return strip.scaled(bleedDepthPx, strip.height(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
+                return composeBleedStripRgb888(strip.scaled(bleedDepthPx, strip.height(), Qt::IgnoreAspectRatio, Qt::FastTransformation));
             }
-            return strip.scaled(strip.width(), bleedDepthPx, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            return composeBleedStripRgb888(strip.scaled(strip.width(), bleedDepthPx, Qt::IgnoreAspectRatio, Qt::FastTransformation));
         }
     }
 
@@ -577,18 +1057,18 @@ QImage buildCornerFillImage(const QImage& pageImage,
     switch (mode)
     {
         case PDFBleedFixupMode::Mirror:
-            return strip.flipped(Qt::Horizontal | Qt::Vertical);
+            return composeBleedStripRgb888(strip.flipped(Qt::Horizontal | Qt::Vertical));
         case PDFBleedFixupMode::PixelRepeat:
         {
-            QImage out(destWidthPx, destHeightPx, QImage::Format_ARGB32_Premultiplied);
+            QImage out(destWidthPx, destHeightPx, QImage::Format_RGB888);
             const int srcX = (horizontal == PDFBleedFixupSide::Left) ? 0 : (strip.width() - 1);
             // After page->device Y flip, page top maps near image y=0.
             const int srcY = (vertical == PDFBleedFixupSide::Top) ? 0 : (strip.height() - 1);
             out.fill(QColor::fromRgba(strip.pixel(srcX, srcY)));
-            return out;
+            return composeBleedStripRgb888(std::move(out));
         }
         case PDFBleedFixupMode::Stretch:
-            return strip.scaled(destWidthPx, destHeightPx, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+            return composeBleedStripRgb888(strip.scaled(destWidthPx, destHeightPx, Qt::IgnoreAspectRatio, Qt::FastTransformation));
     }
 
     return QImage();
@@ -648,6 +1128,8 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
     PDFOptionalContentActivity optionalContentActivity(document, OCUsage::Export, nullptr);
     PDFCMSManager cmsManager(nullptr);
     cmsManager.setDocument(document);
+    PDFCMSSettings cmsSettings = cmsManager.getDefaultSettings();
+    cmsManager.setSettings(cmsSettings);
     PDFCMSPointer cms = cmsManager.getCurrentCMS();
     PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     PDFModifiedDocument md(document, &optionalContentActivity);
@@ -674,6 +1156,13 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
     PDFDocumentModifier modifier(document);
     PDFDocumentBuilder* builder = modifier.getBuilder();
     Q_ASSERT(builder);
+
+    std::optional<CmykBleedOutputIntent> cmykBleedIntent;
+    const PDFOperationResult outputIntentResult = detectCmykBleedOutputIntent(document, builder, &cmykBleedIntent);
+    if (!outputIntentResult)
+    {
+        return outputIntentResult;
+    }
 
     PDFModifiedDocument::ModificationFlags flags = PDFModifiedDocument::ModificationFlags(PDFModifiedDocument::Reset | PDFModifiedDocument::PreserveUndoRedo);
     bool isPageContentChanged = false;
@@ -891,13 +1380,19 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         }
         else if (!sidesToApply.empty())
         {
-            PDFPageContentStreamBuilder pageContentStreamBuilder(builder,
-                                                                 PDFContentStreamBuilder::CoordinateSystem::PDF,
-                                                                 PDFPageContentStreamBuilder::Mode::PlaceBefore);
-            QPainter* painter = pageContentStreamBuilder.begin(pageReference);
-            if (!painter)
+            BleedStripCmykAccumulator cmykStripAccumulator(builder, pageReference);
+            std::optional<PDFPageContentStreamBuilder> pageContentStreamBuilder;
+            QPainter* painter = nullptr;
+            if (!cmykBleedIntent.has_value())
             {
-                return PDFTranslationContext::tr("Failed to open content stream for page %1.").arg(pageIndex + 1);
+                pageContentStreamBuilder.emplace(builder,
+                                                 PDFContentStreamBuilder::CoordinateSystem::PDF,
+                                                 PDFPageContentStreamBuilder::Mode::PlaceBefore);
+                painter = pageContentStreamBuilder->begin(pageReference);
+                if (!painter)
+                {
+                    return PDFTranslationContext::tr("Failed to open content stream for page %1.").arg(pageIndex + 1);
+                }
             }
 
             for (const SideWork& work : sidesToApply)
@@ -922,7 +1417,19 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                     continue;
                 }
 
-                painter->drawImage(mapOutputRect(destPageRect), fill);
+                const QRectF outputDestRect = mapOutputRect(destPageRect);
+                if (cmykBleedIntent.has_value())
+                {
+                    const PDFOperationResult stripResult = cmykStripAccumulator.addStrip(fill, outputDestRect, cms.get(), *cmykBleedIntent);
+                    if (!stripResult)
+                    {
+                        return stripResult;
+                    }
+                }
+                else
+                {
+                    painter->drawImage(outputDestRect, fill);
+                }
                 pageReport.sidesApplied.append(work.side);
                 isPageContentChanged = true;
             }
@@ -991,11 +1498,34 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                     continue;
                 }
 
-                painter->drawImage(mapOutputRect(destPageRect), fill);
+                const QRectF outputDestRect = mapOutputRect(destPageRect);
+                if (cmykBleedIntent.has_value())
+                {
+                    const PDFOperationResult stripResult = cmykStripAccumulator.addStrip(fill, outputDestRect, cms.get(), *cmykBleedIntent);
+                    if (!stripResult)
+                    {
+                        return stripResult;
+                    }
+                }
+                else
+                {
+                    painter->drawImage(outputDestRect, fill);
+                }
                 isPageContentChanged = true;
             }
 
-            pageContentStreamBuilder.end(painter);
+            if (cmykBleedIntent.has_value())
+            {
+                const PDFOperationResult commitResult = cmykStripAccumulator.commitPlaceBefore();
+                if (!commitResult)
+                {
+                    return commitResult;
+                }
+            }
+            else
+            {
+                pageContentStreamBuilder->end(painter);
+            }
         }
 
         pageReports.append(pageReport);

@@ -208,6 +208,7 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     report.remove(QStringLiteral("coverage_scope"));
     report.remove(QStringLiteral("variable_bindings"));
     report.remove(QStringLiteral("decisions"));
+    report.remove(QStringLiteral("revalidation"));
     for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
     {
         QJsonArray findings = report.value(section).toArray();

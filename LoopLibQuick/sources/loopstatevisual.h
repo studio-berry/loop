@@ -59,7 +59,15 @@ enum class StateIcon
     Hatched,
     Outline,
     Checkmark,
-    BadgeOverlay
+    BadgeOverlay,
+
+    // Operator-lifecycle shapes (#586). Each governed-correction state carries a
+    // shape no other state uses, so the state is readable without colour.
+    DashedSquare,
+    HalfFilled,
+    Cross,
+    Slash,
+    Play
 };
 
 struct LoopStateVisual
@@ -98,6 +106,19 @@ LOOPLIBQUICK_EXPORT LoopStateVisual resolveStateVisual(const pdf::PreflightFindi
 /// unless Core reported a pass. Incomplete, stale, cancelled and unknown states all decline to
 /// look like one - use the operator summary for the words.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreflightStateVisual(const QString& stateName);
+
+/// Operator lifecycle of the governed-correction route (#586). `stateName` is
+/// `EditorHost::fixLifecycleStateName()`'s projection name: `idle`, `planned`,
+/// `preview-ready`, `approved`, `executing`, `succeeded`, `stale`, `rejected`,
+/// `cancelled`, `failed`.
+///
+/// The lifecycle is a rendering of what the shell knows - the run's own state, its plan
+/// digest, whether that plan still matches the document revision, and the operator's
+/// decision - never a second approval model. Only the shell's confirmed plan reaches
+/// `approved`; only a state where Core rechecked the published bytes reaches `succeeded`.
+/// `stale`, `rejected`, `cancelled` and unknown names decline to look like either, and
+/// every state carries a shape no other state uses, so the state survives without colour.
+LOOPLIBQUICK_EXPORT LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName);
 
 }   // namespace pdfquick::tokens
 

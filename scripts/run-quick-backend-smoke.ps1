@@ -16,6 +16,9 @@ param(
     [string]$ExpectedGraphicsApi = ""
 )
 
+. (Join-Path $PSScriptRoot "lib\loop-qt-runtime.ps1")
+$null = Add-LoopQtRuntimeToPath
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 

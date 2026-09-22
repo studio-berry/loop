@@ -41,31 +41,56 @@ namespace pdf
 namespace
 {
 
-PDFBleedFixupMode bleedMode(const QJsonObject& parameters)
+PDFOperationResult bleedModeOrError(const QJsonObject& parameters, PDFBleedFixupMode* modeOut)
 {
+    if (!modeOut)
+    {
+        return PDFOperationResult(QStringLiteral("Bleed mode output is null."));
+    }
     const QString mode = parameters.value(QStringLiteral("mode")).toString(QStringLiteral("mirror")).trimmed().toLower();
+    if (mode.isEmpty() || mode == QStringLiteral("mirror"))
+    {
+        *modeOut = PDFBleedFixupMode::Mirror;
+        return PDFOperationResult(true);
+    }
     if (mode == QStringLiteral("pixel-repeat") || mode == QStringLiteral("repeat"))
     {
-        return PDFBleedFixupMode::PixelRepeat;
+        *modeOut = PDFBleedFixupMode::PixelRepeat;
+        return PDFOperationResult(true);
     }
     if (mode == QStringLiteral("stretch"))
     {
-        return PDFBleedFixupMode::Stretch;
+        *modeOut = PDFBleedFixupMode::Stretch;
+        return PDFOperationResult(true);
     }
-    return PDFBleedFixupMode::Mirror;
+    return PDFOperationResult(QStringLiteral("Unknown bleed mode '%1'.").arg(mode));
 }
 
-PDFBleedFixupSettings bleedSettings(const QJsonObject& parameters, bool analyzeOnly)
+PDFOperationResult bleedSettingsOrError(const QJsonObject& parameters, bool analyzeOnly, PDFBleedFixupSettings* settings)
 {
-    PDFBleedFixupSettings settings;
-    settings.mode = bleedMode(parameters);
+    if (!settings)
+    {
+        return PDFOperationResult(QStringLiteral("Bleed settings output is null."));
+    }
+    PDFBleedFixupMode mode = PDFBleedFixupMode::Mirror;
+    const PDFOperationResult modeResult = bleedModeOrError(parameters, &mode);
+    if (!modeResult)
+    {
+        return modeResult;
+    }
+    settings->mode = mode;
     const double bleedMm = parameters.value(QStringLiteral("bleed_mm")).toDouble(3.0);
     const double safeBleedMm = std::isfinite(bleedMm) ? qBound(0.0, bleedMm, 1000.0) : 0.0;
-    settings.bleedMM = QMarginsF(safeBleedMm, safeBleedMm, safeBleedMm, safeBleedMm);
-    settings.pageRange = parameters.value(QStringLiteral("page_range")).toString(QStringLiteral("-"));
-    settings.force = parameters.value(QStringLiteral("force")).toBool(false);
-    settings.analyzeOnly = analyzeOnly;
-    return settings;
+    settings->bleedMM = QMarginsF(safeBleedMm, safeBleedMm, safeBleedMm, safeBleedMm);
+    settings->pageRange = parameters.value(QStringLiteral("page_range")).toString(QStringLiteral("-"));
+    settings->force = parameters.value(QStringLiteral("force")).toBool(false);
+    settings->skipIfAlreadyBleeding = parameters.value(QStringLiteral("skip_if_already_bleeding")).toBool(false);
+    if (settings->force)
+    {
+        settings->skipIfAlreadyBleeding = false;
+    }
+    settings->analyzeOnly = analyzeOnly;
+    return PDFOperationResult(true);
 }
 
 QJsonObject addBleedParameterSchema()
@@ -79,7 +104,8 @@ QJsonObject addBleedParameterSchema()
                                                                           { QStringLiteral("enum"), QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat"), QStringLiteral("stretch") } } } },
                                             { QStringLiteral("bleed_mm"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("number") }, { QStringLiteral("minimum"), 0.0 }, { QStringLiteral("maximum"), 1000.0 } } },
                                             { QStringLiteral("page_range"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
-                                            { QStringLiteral("force"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } } } }
+                                            { QStringLiteral("force"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+                                            { QStringLiteral("skip_if_already_bleeding"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } } } }
     };
 }
 
@@ -115,8 +141,12 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
-        declared.domains = PDFEvidenceDomain::Images;
-        declared.documentWide = true;
+        declared.declared = true;
+        declared.allPages = true;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Images) |
+                           PDFEvidenceDomain::Colorants |
+                           PDFEvidenceDomain::Strokes |
+                           PDFEvidenceDomain::OverprintTransparency;
         declared.impactComplete = true;
         return declared;
     }
@@ -141,10 +171,18 @@ public:
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::NormalPreflight };
 
+        PDFBleedFixupSettings settings;
+        const PDFOperationResult settingsResult = bleedSettingsOrError(parameters, true, &settings);
+        if (!settingsResult)
+        {
+            plan->unsupportedReasons.append(settingsResult.getErrorMessage());
+            return settingsResult;
+        }
+
         PDFDocument candidate = source;
         PDFBleedFixupReport report;
         const PDFOperationResult result = PDFBleedFixup::apply(&candidate,
-                                                               bleedSettings(parameters, true),
+                                                               settings,
                                                                &report);
         if (!result)
         {
@@ -162,9 +200,15 @@ public:
         {
             return PDFOperationResult(QStringLiteral("Bleed repair candidate or result is null."));
         }
+        PDFBleedFixupSettings settings;
+        const PDFOperationResult settingsResult = bleedSettingsOrError(plan.parameters, false, &settings);
+        if (!settingsResult)
+        {
+            return settingsResult;
+        }
         PDFBleedFixupReport report;
         const PDFOperationResult fixupResult = PDFBleedFixup::apply(candidate,
-                                                                    bleedSettings(plan.parameters, false),
+                                                                    settings,
                                                                     &report);
         if (!fixupResult)
         {
@@ -237,6 +281,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.domains.setFlag(PDFEvidenceDomain::Images);
         declared.domains.setFlag(PDFEvidenceDomain::Colorants);
         declared.fullRewrite = true;
@@ -368,6 +413,7 @@ public:
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
         declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Colorants) | PDFEvidenceDomain::Images;
         declared.documentWide = true;
         declared.impactComplete = true;
@@ -521,9 +567,12 @@ public:
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
     }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::fullRewrite(QStringLiteral("standard conversion removes prior content")); }
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;
+        declared.declared = true;
+        declared.domains = pdfEvidenceAllDomains();
         declared.documentWide = true;
         declared.fullRewrite = true;
         declared.impactComplete = false;
@@ -558,8 +607,7 @@ public:
         plan->expectedChanges.images = flattensTransparency(settings);
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::OutputIntent,
-                             PDFRepairValidatorKind::NormalPreflight,
-                             PDFRepairValidatorKind::Custom };
+                             PDFRepairValidatorKind::NormalPreflight };
         plan->warnings.append(QStringLiteral("An independent validator with a {input} argument is required before commit."));
 
         PDFStandardConversionReport report;

@@ -26,17 +26,20 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -44,14 +47,17 @@
 
 #include "documentviewsession.h"
 #include "editorhost.h"
-
 #include "loopstatevisual.h"
 #include "looptokens.h"
 
+#include "pdfapplicationidentity.h"
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfoperationhistorystore.h"
+#include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
+#include "preflightprofileresolver.h"
 
 #include "hittestsource.h"
 #include "inputintent.h"
@@ -236,7 +242,16 @@ private slots:
     void preflightRunsOffInteractiveThread();
     void preflightStateVisualIsNotCheckedBeforeARun();
     void exportedPreflightReportMatchesPdfToolForTheSameInputs();
+    void restrictedPreflightReportMatchesPdfTool();
+    void importValidProfileAddsDigest();
+    void importDigestMismatchProfileIsRejected();
+    void saveProfileForkRecordsDerivedFrom();
     void openLargeDocument();
+
+    // Workspace surfaces (#586).
+    void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
+    void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
+    void fixRollbackReturnsToARecordedRevision();
 };
 
 void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
@@ -266,6 +281,10 @@ void EditorHostTest::startsWithNoDocument()
     QVERIFY(defaultProfile.value(QStringLiteral("valid")).toBool());
     QVERIFY(!defaultProfile.value(QStringLiteral("digest")).toString().isEmpty());
     QVERIFY(defaultProfile.value(QStringLiteral("diagnostic")).toString().isEmpty());
+    QVERIFY(host.actionList());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("idle"));
+    QVERIFY(!host.repairOperations().isEmpty());
+    QVERIFY(!host.planActionList());
 }
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
@@ -347,6 +366,21 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
     QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
     QVERIFY(host.preflightStateName() != QStringLiteral("error"));
     QCOMPARE(host.preflight()->property("progress").toInt(), 100);
+
+    const QString historyPath =
+        QDir(QFileInfo(path).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::DocumentOpened; }));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                        { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                 event.status == pdf::PDFOperationHistoryStatus::Accepted; }));
+    QVERIFY(history.verify().verified);
 }
 
 void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
@@ -373,6 +407,8 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
     QVERIFY2(before.contains(QStringLiteral("kind")) && before.contains(QStringLiteral("colorRole")) && before.contains(QStringLiteral("icon")) && before.contains(QStringLiteral("accessibleName")),
              "the visual must carry the full canonical treatment for QML to render");
     QCOMPARE(before.value(QStringLiteral("accessibleName")).toString(), QStringLiteral("Not checked"));
+    QCOMPARE(host.preflightCertificateStateName(), QStringLiteral("not-certified"));
+    QCOMPARE(host.preflightCertificateStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("NotChecked"));
 
     // The colour is resolved from the visual's own colour role, never chosen by the QML child. It must
     // be a real colour and it must not be the pass colour.
@@ -521,6 +557,169 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
     }
 
     QCOMPARE(guiText, cliText);
+}
+
+void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    pdf::PDFSettings::setSettingsPath(temp.path());
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
+    const QString documentPath = QDir(preflightFixturesDir()).filePath(QStringLiteral("image-dpi-low.pdf"));
+    QVERIFY(QFile::exists(documentPath));
+    const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("loop-test-restricted-parity") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Restricted parity") },
+        { QStringLiteral("restrictions"), QJsonObject{
+                                              { QStringLiteral("pages"), QStringLiteral("1") },
+                                              { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } } });
+    const QString profilePath = temp.filePath(QStringLiteral("restricted-parity.json"));
+    QFile source(profilePath);
+    QVERIFY(source.open(QIODevice::WriteOnly));
+    const QByteArray bytes = QJsonDocument(profile).toJson();
+    QCOMPARE(source.write(bytes), bytes.size());
+    source.close();
+
+    QJsonObject cliReport;
+    int cliExit = -1;
+    runPdfToolPreflight(documentPath, profilePath, cliReport, cliExit);
+    QVERIFY(!cliReport.isEmpty());
+    const QJsonObject cliScope = cliReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject();
+    QCOMPARE(cliScope.value(QStringLiteral("pages")).toArray(), QJsonArray{ 1 });
+    QCOMPARE(cliScope.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
+
+    EditorHost host;
+    QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY(host.hasPreflightReport());
+
+    const QString exportedPath = temp.filePath(QStringLiteral("restricted-gui-report.json"));
+    QVERIFY(host.exportPreflightReportFileUrl(QUrl::fromLocalFile(exportedPath)));
+    QFile exported(exportedPath);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QJsonObject guiReport;
+    parsePreflightReport(exported.readAll(), QStringLiteral("restricted GUI report"), guiReport);
+    QVERIFY(!guiReport.isEmpty());
+    QCOMPARE(guiReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject(), cliScope);
+    QCOMPARE(QJsonDocument(normalizePreflightReport(guiReport)).toJson(QJsonDocument::Compact),
+             QJsonDocument(normalizePreflightReport(cliReport)).toJson(QJsonDocument::Compact));
+
+    const QString historyPath =
+        QDir(QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const auto editorAuditIt = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                                            { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                                     event.status == pdf::PDFOperationHistoryStatus::Accepted &&
+                                                     event.operatorIdentity == QStringLiteral("LoopEditor"); });
+    QVERIFY(editorAuditIt != events.cend());
+    QCOMPARE(editorAuditIt->effectiveProfileDigest, cliReport.value(QStringLiteral("effective_profile_digest")).toString());
+    QCOMPARE(editorAuditIt->resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             cliScope);
+    QVERIFY(history.verify().verified);
+}
+
+void EditorHostTest::importValidProfileAddsDigest()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+    QStandardPaths::setTestModeEnabled(true);
+    pdf::PDFSettings::setSettingsPath(temp.path());
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
+
+    const QString sourcePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    QFile bundled(sourcePath);
+    QVERIFY(bundled.open(QIODevice::ReadOnly));
+    const QJsonObject profile = QJsonDocument::fromJson(bundled.readAll()).object();
+    const QString expectedDigest = profile.value(QStringLiteral("digest")).toString();
+    QVERIFY(!expectedDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
+
+    const QString expectedId = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                                   .filePath(QStringLiteral("profiles/loop-default.json"));
+    bool found = false;
+    for (const QVariant& entry : host.preflightProfiles())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")).toString() == expectedId)
+        {
+            found = true;
+            QCOMPARE(item.value(QStringLiteral("digest")).toString(), expectedDigest);
+            QVERIFY(item.value(QStringLiteral("valid")).toBool());
+            break;
+        }
+    }
+    QVERIFY(found);
+}
+
+void EditorHostTest::importDigestMismatchProfileIsRejected()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+
+    QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("bad-profile") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Bad") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } } });
+    profile.insert(QStringLiteral("digest"), QString(64, QLatin1Char('a')));
+    const QString sourcePath = temp.filePath(QStringLiteral("bad-profile.json"));
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    sourceFile.write(QJsonDocument(profile).toJson(QJsonDocument::Compact));
+
+    EditorHost host;
+    QVERIFY(!host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
+}
+
+void EditorHostTest::saveProfileForkRecordsDerivedFrom()
+{
+    QTemporaryDir temp;
+    QVERIFY(temp.isValid());
+
+    EditorHost host;
+    QString parentDigest;
+    for (const QVariant& entry : host.preflightProfiles())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")) == host.selectedPreflightProfileId())
+        {
+            parentDigest = item.value(QStringLiteral("digest")).toString();
+            break;
+        }
+    }
+    QVERIFY(!parentDigest.isEmpty());
+
+    QVERIFY(host.beginPreflightProfileEdit());
+    QVERIFY(host.setPreflightCheckField(QStringLiteral("image-resolution"), QStringLiteral("min_dpi"), 240));
+    const QString destination = temp.filePath(QStringLiteral("forked-profile.json"));
+    QVERIFY(host.savePreflightProfileEdit(host.preflightProfileDraftVersion(), QUrl::fromLocalFile(destination)));
+
+    QFile forkedFile(destination);
+    QVERIFY(forkedFile.open(QIODevice::ReadOnly));
+    const QJsonObject forked = QJsonDocument::fromJson(forkedFile.readAll()).object();
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(forked, destination);
+    QVERIFY2(imported.ok, qPrintable(imported.errorMessage));
+    QCOMPARE(forked.value(QStringLiteral("derived_from")).toObject().value(QStringLiteral("digest")).toString(), parentDigest);
+    QVERIFY(forked.value(QStringLiteral("digest")).toString() != parentDigest);
+
+    const QByteArray roundTrip = pdf::serializePreflightProfileBytes(imported.profile);
+    const pdf::PreflightProfileImportResult reimported = pdf::importPreflightProfile(QJsonDocument::fromJson(roundTrip).object());
+    QVERIFY(reimported.ok);
+    QCOMPARE(roundTrip, pdf::serializePreflightProfileBytes(reimported.profile));
 }
 
 void EditorHostTest::openLargeDocument()
@@ -728,6 +927,238 @@ void EditorHostTest::openLargeDocument()
     // pointers (scripted is stack-allocated). DocumentViewSession will be
     // destroyed with EditorHost.
     session->hitTest()->clearSources();
+}
+
+// ---------------------------------------------------------------------------
+// Workspace surfaces (#586)
+// ---------------------------------------------------------------------------
+
+void EditorHostTest::fixWorkspacePresentsIdleLifecycleAndRefusesToArm()
+{
+    EditorHost host;
+
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+    QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.fixRollbackAvailable());
+    QVERIFY(!host.fixRollbackSummary().trimmed().isEmpty());
+    QVERIFY(host.fixRollbackPoints().isEmpty());
+    QVERIFY(!host.fixPreview().value(QStringLiteral("available")).toBool());
+    QVERIFY(!host.fixPreview().value(QStringLiteral("incomplete")).toBool());
+
+    // Nothing may be approved, rejected, executed, rolled back or inspected before a plan
+    // exists for this revision.
+    QVERIFY(!host.approveActionListPlan());
+    QVERIFY(!host.rejectActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.inspectActionListStep(0));
+    QVERIFY(!host.requestFixRollback(QStringLiteral("not-a-recorded-revision")));
+
+    // The lifecycle is always renderable, carries words as well as a shape, and never claims
+    // a pass.
+    const QVariantMap visual = host.fixLifecycleVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), QStringLiteral("NotChecked"));
+    QCOMPARE(visual.value(QStringLiteral("icon")).toString(), QStringLiteral("Outline"));
+    QVERIFY(!visual.value(QStringLiteral("accessibleName")).toString().trimmed().isEmpty());
+
+    // The identity every Fix affordance binds to exists even before a plan does, so a pane
+    // never has to invent one.
+    const QVariantMap identity = host.fixPlanIdentity();
+    QCOMPARE(identity.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("idle"));
+    QCOMPARE(identity.value(QStringLiteral("reviewDecision")).toString(), QStringLiteral("none"));
+    QCOMPARE(identity.value(QStringLiteral("planIsCurrent")).toBool(), false);
+    QCOMPARE(identity.value(QStringLiteral("executionArmed")).toBool(), false);
+}
+
+void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("job.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("gh-586-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("gh-586-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    // The catalog identifies a recipe by the file that defines it, and importing selects it.
+    QVERIFY(!host.selectedActionListRecipeId().isEmpty());
+
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // The Inspect workspace's corrective intent lands on a recipe that really runs the
+    // operation, and plans nothing by itself.
+    const QString recipeId = host.selectedActionListRecipeId();
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QCOMPARE(host.selectedActionListRecipeId(), recipeId);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+    QVERIFY(!host.selectActionListRecipeForOperation(QStringLiteral("no-such-operation")));
+    QVERIFY(!host.selectActionListRecipeForOperation(QString()));
+
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    // The plan is bound to the revision it was produced for, and the operator's approval is
+    // bound to that exact plan digest.
+    const QVariantMap planned = host.fixPlanIdentity();
+    const QString planDigest = planned.value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!planDigest.isEmpty());
+    QCOMPARE(planned.value(QStringLiteral("planIsCurrent")).toBool(), true);
+    QCOMPARE(planned.value(QStringLiteral("reviewDecision")).toString(), QStringLiteral("none"));
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+
+    QVERIFY(host.approveActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("approved"));
+    QVERIFY(host.fixExecutionArmed());
+    const QVariantMap approved = host.fixPlanIdentity();
+    QCOMPARE(approved.value(QStringLiteral("reviewDecision")).toString(), QStringLiteral("approved"));
+    QCOMPARE(approved.value(QStringLiteral("reviewedPlanDigest")).toString(), planDigest);
+    QCOMPARE(approved.value(QStringLiteral("executionArmed")).toBool(), true);
+
+    // Rejecting is the operator's own decision and leaves the plan visible for inspection.
+    QVERIFY(host.rejectActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("rejected"));
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+
+    host.replanActionList();
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+    QVERIFY(host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+
+    // A revision change may not inherit the review: the plan goes stale, the approval stops
+    // arming execution, and nothing may be approved against the superseded digest.
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.fixExecutionArmed());
+
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("stale"));
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.approveActionListPlan());
+    QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("planIsCurrent")).toBool(), false);
+    QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
+}
+
+void EditorHostTest::fixRollbackReturnsToARecordedRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString sourcePath = directory.filePath(QStringLiteral("job.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(sourcePath, &document, true));
+    }
+
+    // The recorded history a rollback returns to is written by the governed repair path; the
+    // shell only reads it and appends the rolled-back event through Core.
+    const QString repairedPath = directory.filePath(QStringLiteral("job-bleed.pdf"));
+    {
+        QProcess process;
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+        process.setProcessEnvironment(environment);
+        process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH),
+                      { QStringLiteral("repair"),
+                        sourcePath,
+                        QStringLiteral("--operation"),
+                        QStringLiteral("add-bleed"),
+                        QStringLiteral("--param"),
+                        QStringLiteral("bleed_mm=3"),
+                        QStringLiteral("--param"),
+                        QStringLiteral("mode=mirror"),
+                        QStringLiteral("--param"),
+                        QStringLiteral("force=true"),
+                        QStringLiteral("--profile"),
+                        preflightSourceDir() + QStringLiteral("/profiles/loop-default.json"),
+                        QStringLiteral("--output"),
+                        repairedPath,
+                        QStringLiteral("--console-format"),
+                        QStringLiteral("json") });
+        QByteArray stdOut;
+        QByteArray stdErr;
+        QVERIFY2(test_support::waitForFinishedAndCapture(process, 60000, stdOut, stdErr),
+                 qPrintable(QString::fromUtf8(stdErr)));
+        QCOMPARE(process.exitCode(), 0);
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(repairedPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    const QVariantList points = host.fixRollbackPoints();
+    QVERIFY(!points.isEmpty());
+    QVERIFY(host.fixRollbackAvailable());
+    QVERIFY(!host.fixRollbackSummary().trimmed().isEmpty());
+
+    // Only revisions Core can actually return to are offered: the as-received input stays a
+    // protected retention point and is never presented as a selectable revision.
+    for (const QVariant& point : points)
+    {
+        QCOMPARE(point.toMap().value(QStringLiteral("isOriginalInput")).toBool(), false);
+        QVERIFY(!point.toMap().value(QStringLiteral("rollbackId")).toString().isEmpty());
+        QVERIFY(!point.toMap().value(QStringLiteral("documentRevisionDigest")).toString().isEmpty());
+    }
+    const QString rollbackId = points.first().toMap().value(QStringLiteral("rollbackId")).toString();
+
+    // An unknown revision is refused before anything is written.
+    QVERIFY(!host.requestFixRollback(QStringLiteral("revision-that-was-never-recorded")));
+
+    QVERIFY(host.requestFixRollback(rollbackId));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // The rolled-back revision is a new sibling file; the open document is never overwritten.
+    const QStringList siblings =
+        QDir(directory.path()).entryList(QStringList{ QStringLiteral("*-rollback-*.pdf") }, QDir::Files);
+    QVERIFY2(!siblings.isEmpty(), "the rollback must write a new revision beside the document");
+    QVERIFY(QFile::exists(sourcePath));
+
+    // Core recorded the rollback as a new event and left the existing history intact.
+    const QString historyPath =
+        QDir(QFileInfo(repairedPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                        { return event.status == pdf::PDFOperationHistoryStatus::RolledBack; }));
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

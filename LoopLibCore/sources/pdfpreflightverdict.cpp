@@ -22,8 +22,14 @@
 
 #include "pdfpreflightverdict.h"
 
+#include "pdfdocumentsession.h"
+#include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
+#include "preflightprofileresolver.h"
+
 #include <QCoreApplication>
 #include <QJsonArray>
+#include <QTemporaryDir>
 
 #include <algorithm>
 
@@ -99,7 +105,144 @@ bool isFailClosedIncompleteErrorCode(const QString& errorCode)
     return errorCode == QLatin1String("unsupported-scope") || errorCode == QLatin1String("unresolved-variable") || errorCode == QLatin1String("budget-exceeded") || errorCode == QLatin1String("evidence-incomplete") || errorCode == QLatin1String("cancelled");
 }
 
+QStringList enabledPreflightCheckIds(const QJsonObject& profileObject)
+{
+    QStringList enabledCheckIds;
+    const QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();
+    for (const QJsonValue& value : checks)
+    {
+        const QJsonObject check = value.toObject();
+        if (check.value(QStringLiteral("enabled")).toBool(true))
+        {
+            enabledCheckIds.append(check.value(QStringLiteral("id")).toString());
+        }
+    }
+    return enabledCheckIds;
+}
+
+PDFOperationResult resolveMandatoryPostflightProfile(const QString& profilePath,
+                                                     MandatoryPostflightOptions options,
+                                                     QJsonObject* profileObject,
+                                                     PreflightProfileData* profileData,
+                                                     QString* errorMessage)
+{
+    if (options.profileJson.isEmpty() && profilePath.trimmed().isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("A preflight profile path is required before a candidate can be published."));
+    }
+
+    QJsonObject profile = options.profileJson;
+    if (profile.isEmpty())
+    {
+        QString loadError;
+        if (!PreflightEngine::loadProfile(profilePath, profile, loadError))
+        {
+            return PDFOperationResult(loadError);
+        }
+    }
+
+    const PreflightProfileImportResult imported = importPreflightProfile(profile,
+                                                                         profilePath.trimmed().isEmpty()
+                                                                             ? profile.value(QStringLiteral("id")).toString()
+                                                                             : profilePath);
+    if (!imported.ok)
+    {
+        return PDFOperationResult(imported.errorMessage);
+    }
+
+    const PreflightVariableBindResult bound = bindPreflightProfileVariables(imported.profile, options.profileBindings);
+    if (!bound.ok)
+    {
+        return PDFOperationResult(bound.errorMessage);
+    }
+
+    PreflightProfileData parsedProfile;
+    QString parseError;
+    if (!PreflightEngine::parseProfile(bound.profile, parsedProfile, parseError))
+    {
+        return PDFOperationResult(parseError);
+    }
+    parsedProfile.variableBindings = bound.bindings;
+    parsedProfile.fileDigest = imported.identity.digest;
+    parsedProfile.effectiveDigest = computeProfileDigest(bound.profile);
+    parsedProfile.profileIdentity = imported.identity.toJson();
+    parsedProfile.profileIdentity.insert(QStringLiteral("effective_digest"), parsedProfile.effectiveDigest);
+
+    if (profileObject)
+    {
+        *profileObject = bound.profile;
+    }
+    if (profileData)
+    {
+        *profileData = std::move(parsedProfile);
+    }
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return PDFOperationResult(true);
+}
+
 }   // namespace
+
+PDFRevalidationPlan planRepairStepPreflight(const PDFRepairOperation* operation,
+                                            const PDFDocument& document,
+                                            const QJsonObject& parameters,
+                                            const QStringList& enabledCheckIds,
+                                            const PDFRepairPlan& repairPlan)
+{
+    PDFRevalidationPlan full;
+    full.full = true;
+    full.checkIds = enabledCheckIds;
+    full.reason = QStringLiteral("operation-impact-unknown");
+    if (!operation)
+    {
+        return full;
+    }
+
+    const PDFOperationImpact declared = operation->impact(&document, parameters);
+    // The operation-owned impact is authoritative. A page-local target in a
+    // repair plan cannot narrow a declared document-wide/full-rewrite/oracle
+    // impact, and cannot repair an unknown or incomplete impact declaration.
+    PDFRevalidationPlan plan = planRevalidation(declared, enabledCheckIds);
+    if (plan.full)
+    {
+        return plan;
+    }
+
+    QSet<int> targetPages;
+    for (const PDFRepairTarget& target : repairPlan.targets)
+    {
+        if (target.pageIndex < 0)
+        {
+            plan.pages.clear();
+            plan.reason = QStringLiteral("document-target");
+            return plan;
+        }
+        targetPages.insert(target.pageIndex);
+    }
+    plan.pages.unite(targetPages);
+
+    // Only these object-evidence checks can currently honor a page subset
+    // without deriving document-global evidence from a partial collection.
+    // Others still benefit from selected checks but run on all document pages.
+    if (!plan.pages.isEmpty())
+    {
+        const bool allChecksPageLocal = std::all_of(
+            plan.checkIds.cbegin(), plan.checkIds.cend(),
+            [](const QString& checkId)
+            {
+                return checkId == QLatin1String("image-resolution") ||
+                       checkId == QLatin1String("thin-strokes");
+            });
+        if (!allChecksPageLocal)
+        {
+            plan.pages.clear();
+            plan.reason = QStringLiteral("check-scoped-document-pages");
+        }
+    }
+    return plan;
+}
 
 QString preflightVerdictStateToString(PreflightVerdictState state)
 {
@@ -338,6 +481,457 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     }
 
     return verdict;
+}
+
+PDFOperationResult runMandatoryPostflight(PDFDocument* document,
+                                          const QString& profilePath,
+                                          PreflightVerdict* verdictOut,
+                                          PreflightResult* resultOut,
+                                          MandatoryPostflightOptions options)
+{
+    if (!document || !verdictOut)
+    {
+        return PDFOperationResult(QStringLiteral("Mandatory postflight requires a document and verdict output."));
+    }
+
+    QJsonObject profileObject;
+    PreflightProfileData profileData;
+    const PDFOperationResult profileResult = resolveMandatoryPostflightProfile(profilePath, options, &profileObject, &profileData, nullptr);
+    if (!profileResult)
+    {
+        return profileResult;
+    }
+
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid())
+    {
+        return PDFOperationResult(QStringLiteral("Mandatory postflight could not create a temporary candidate file."));
+    }
+    const QString candidatePath = tempDir.filePath(QStringLiteral("candidate.pdf"));
+
+    PDFDocument reopenedCandidate;
+    const PDFOperationResult serialized = PDFRepairDiffEngine::buildSerializedCandidate(
+        *document,
+        [](PDFDocument*)
+        { return PDFOperationResult(true); },
+        candidatePath,
+        &reopenedCandidate,
+        nullptr);
+    if (!serialized)
+    {
+        return serialized;
+    }
+
+    PDFDocumentSession* session = PDFDocumentSession::createForInspection(&reopenedCandidate);
+    PreflightEngine engine(session);
+    engine.setOperationControl(options.operationControl);
+    const PreflightResult preflight = options.revalidationPlan
+                                          ? engine.run(profileData, *options.revalidationPlan)
+                                          : engine.run(profileData);
+    PDFDocumentSession::destroy(session);
+
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        PreflightVerdict cancelledVerdict;
+        cancelledVerdict.state = PreflightVerdictState::Incomplete;
+        cancelledVerdict.reasonCode = QStringLiteral("cancelled");
+        cancelledVerdict.reason = QStringLiteral("Mandatory postflight was cancelled.");
+        *verdictOut = cancelledVerdict;
+        if (resultOut)
+        {
+            *resultOut = preflight;
+            resultOut->inspectionComplete = false;
+            resultOut->errorCode = cancelledVerdict.reasonCode;
+            resultOut->errorMessage = cancelledVerdict.reason;
+        }
+        return PDFOperationResult(cancelledVerdict.reason);
+    }
+
+    const PreflightVerdict verdict = reducePreflightVerdict(preflight, &profileData);
+    *verdictOut = verdict;
+    if (resultOut)
+    {
+        *resultOut = preflight;
+    }
+
+    if (verdict.state == PreflightVerdictState::Incomplete && options.allowIncomplete)
+    {
+        return PDFOperationResult(true);
+    }
+    if (verdict.state == PreflightVerdictState::Pass)
+    {
+        return PDFOperationResult(true);
+    }
+
+    const QString summary = preflightVerdictOperatorSummary(verdict);
+    if (verdict.state == PreflightVerdictState::Incomplete)
+    {
+        return PDFOperationResult(QStringLiteral("Postflight did not inspect the complete candidate: %1").arg(summary));
+    }
+    return PDFOperationResult(summary);
+}
+
+PDFRepairFindingDelta computeRepairStepFindingDelta(const PDFDocument& baselineDocument,
+                                                    PDFDocument* afterDocument,
+                                                    const PDFRepairPlan& plan,
+                                                    const QString& profilePath,
+                                                    MandatoryPostflightOptions options,
+                                                    const PDFRepairOperation* operation,
+                                                    const QJsonObject& operationParameters)
+{
+    PDFRepairFindingDelta empty;
+    if (!afterDocument)
+    {
+        return empty;
+    }
+
+    MandatoryPostflightOptions validatorOptions = options;
+    PDFRevalidationPlan stepPlan;
+    if (operation && !validatorOptions.revalidationPlan)
+    {
+        QJsonObject profileObject = validatorOptions.profileJson;
+        if (profileObject.isEmpty())
+        {
+            QString loadError;
+            if (!PreflightEngine::loadProfile(profilePath, profileObject, loadError))
+            {
+                return empty;
+            }
+        }
+        stepPlan = planRepairStepPreflight(operation,
+                                           baselineDocument,
+                                           operationParameters,
+                                           enabledPreflightCheckIds(profileObject),
+                                           plan);
+        validatorOptions.revalidationPlan = &stepPlan;
+    }
+
+    PDFDocument baselineCandidate = baselineDocument;
+    PreflightVerdict baselineVerdict;
+    PreflightResult baselineResult;
+    MandatoryPostflightOptions baselineOptions = validatorOptions;
+    baselineOptions.allowIncomplete = true;
+    runMandatoryPostflight(&baselineCandidate,
+                           profilePath,
+                           &baselineVerdict,
+                           &baselineResult,
+                           baselineOptions);
+
+    PreflightVerdict afterVerdict;
+    PreflightResult afterResult;
+    runMandatoryPostflight(afterDocument,
+                           profilePath,
+                           &afterVerdict,
+                           &afterResult,
+                           validatorOptions);
+
+    return computeFindingDelta(baselineResult, afterResult);
+}
+
+PDFOperationResult runDeclaredRepairValidators(PDFDocument* document,
+                                               const PDFRepairPlan& plan,
+                                               const QString& profilePath,
+                                               PDFRepairResult* result,
+                                               MandatoryPostflightOptions options,
+                                               const PDFRepairOperation* operation,
+                                               const QJsonObject& operationParameters,
+                                               const PDFDocument* baselineDocument,
+                                               PreflightResult* postflightOut)
+{
+    if (!document || !result)
+    {
+        return PDFOperationResult(QStringLiteral("Declared repair validators require a document and result output."));
+    }
+
+    QList<PDFRepairValidatorKind> declared = plan.validators;
+    if (plan.requiresPostflight && !declared.contains(PDFRepairValidatorKind::NormalPreflight))
+    {
+        declared.append(PDFRepairValidatorKind::NormalPreflight);
+    }
+    if (declared.isEmpty())
+    {
+        return PDFOperationResult(true);
+    }
+
+    const bool needsPreflight = std::any_of(declared.cbegin(), declared.cend(),
+                                            [](PDFRepairValidatorKind kind)
+                                            { return kind != PDFRepairValidatorKind::StructuralIntegrity; });
+    PreflightVerdict verdict;
+    PreflightResult preflight;
+    PreflightResult baselineResult;
+    bool baselineCompared = false;
+    PDFOperationResult inspected(true);
+    if (needsPreflight)
+    {
+        MandatoryPostflightOptions validatorOptions = options;
+        validatorOptions.allowIncomplete = false;
+        PDFRevalidationPlan stepPlan;
+        if (operation && !validatorOptions.revalidationPlan)
+        {
+            QJsonObject profileObject = validatorOptions.profileJson;
+            if (profileObject.isEmpty())
+            {
+                QString loadError;
+                if (!PreflightEngine::loadProfile(profilePath, profileObject, loadError))
+                {
+                    inspected = PDFOperationResult(loadError);
+                }
+            }
+            if (inspected)
+            {
+                // The declared operation impact owns the revalidation scope; the
+                // pre-fix document is the one whose pages the repair targeted.
+                const PDFDocument& impactDocument = baselineDocument ? *baselineDocument : *document;
+                stepPlan = planRepairStepPreflight(operation,
+                                                   impactDocument,
+                                                   operationParameters,
+                                                   enabledPreflightCheckIds(profileObject),
+                                                   plan);
+                validatorOptions.revalidationPlan = &stepPlan;
+            }
+        }
+        if (inspected && baselineDocument)
+        {
+            PDFDocument baselineCandidate = *baselineDocument;
+            PreflightVerdict baselineVerdict;
+            MandatoryPostflightOptions baselineOptions = validatorOptions;
+            baselineOptions.allowIncomplete = true;
+            const PDFOperationResult baselineRun = runMandatoryPostflight(&baselineCandidate,
+                                                                          profilePath,
+                                                                          &baselineVerdict,
+                                                                          &baselineResult,
+                                                                          baselineOptions);
+            // A failing baseline is expected when a repair targets a finding. Only
+            // a baseline that produced no normalized report at all is an
+            // infrastructure or profile failure that would make the delta lie.
+            baselineCompared = !baselineResult.profileName.isEmpty();
+            if (!baselineRun && !baselineCompared)
+            {
+                result->status = PDFRepairStatus::Incomplete;
+                result->incompleteReasons.append(baselineRun.getErrorMessage());
+                inspected = baselineRun;
+            }
+        }
+        if (inspected)
+        {
+            inspected = runMandatoryPostflight(document, profilePath, &verdict, &preflight, validatorOptions);
+        }
+        if (postflightOut)
+        {
+            *postflightOut = preflight;
+        }
+    }
+    else
+    {
+        QTemporaryDir directory;
+        if (!directory.isValid())
+        {
+            inspected = PDFOperationResult(QStringLiteral("Structural validation could not create a candidate directory."));
+        }
+        else
+        {
+            PDFDocument reopened;
+            inspected = PDFRepairDiffEngine::buildSerializedCandidate(
+                *document,
+                [](PDFDocument*)
+                { return PDFOperationResult(true); },
+                directory.filePath(QStringLiteral("candidate.pdf")),
+                &reopened,
+                nullptr);
+        }
+    }
+
+    // The delta is evidence about the repair, so it must be computed whenever the
+    // after-run produced a normalized report — including a failing verdict. A repair
+    // that introduces a finding is exactly the case the delta has to name.
+    const bool inspectedCandidate = needsPreflight && !preflight.profileName.isEmpty();
+    bool deltaIncomplete = false;
+    bool introducedFindings = false;
+    if (inspectedCandidate && baselineCompared)
+    {
+        result->findingDelta = computeFindingDelta(baselineResult, preflight);
+        deltaIncomplete = !baselineResult.inspectionComplete || !preflight.inspectionComplete ||
+                          !result->findingDelta.incompleteFindingIds.isEmpty();
+        introducedFindings = !result->findingDelta.introducedFindingIds.isEmpty();
+    }
+
+    QString failure;
+    if (!inspected)
+    {
+        failure = inspected.getErrorMessage();
+    }
+
+    for (PDFRepairValidatorKind kind : declared)
+    {
+        PDFRepairValidationResult validation;
+        validation.validatorId = pdfRepairValidatorName(kind);
+        if (kind == PDFRepairValidatorKind::StructuralIntegrity)
+        {
+            if (!inspected && !inspectedCandidate)
+            {
+                validation.status = PDFRepairStatus::Incomplete;
+                validation.summary = QStringLiteral("Candidate serialization and reopening were not verified: %1").arg(failure);
+            }
+            else
+            {
+                validation.status = PDFRepairStatus::Passed;
+                validation.summary = QStringLiteral("Candidate was serialized and reopened successfully.");
+            }
+        }
+        else if (kind == PDFRepairValidatorKind::NormalPreflight)
+        {
+            if (inspectedCandidate && deltaIncomplete)
+            {
+                validation.status = PDFRepairStatus::Incomplete;
+                validation.summary = QStringLiteral("Repair revalidation was incomplete; no finding was cleared without complete evidence.");
+            }
+            else if (inspectedCandidate && introducedFindings)
+            {
+                validation.status = PDFRepairStatus::Failed;
+                validation.summary = QStringLiteral("Repair introduced %1 new preflight finding(s).")
+                                         .arg(result->findingDelta.introducedFindingIds.size());
+                validation.evidence = result->findingDelta.introducedFindingIds;
+            }
+            else
+            {
+                validation.summary = inspectedCandidate
+                                         ? preflightVerdictOperatorSummary(verdict)
+                                         : QStringLiteral("Normal preflight was not inspected: %1").arg(failure);
+                validation.status = inspectedCandidate && inspected && verdict.isPass()
+                                        ? PDFRepairStatus::Passed
+                                    : inspectedCandidate && verdict.state == PreflightVerdictState::Fail
+                                        ? PDFRepairStatus::Failed
+                                        : PDFRepairStatus::Incomplete;
+            }
+        }
+        else
+        {
+            QString requiredCheck;
+            switch (kind)
+            {
+                case PDFRepairValidatorKind::ImageResolution:
+                    requiredCheck = QStringLiteral("image-resolution");
+                    break;
+                case PDFRepairValidatorKind::ColorMode:
+                    requiredCheck = QStringLiteral("color-mode");
+                    break;
+                case PDFRepairValidatorKind::OutputIntent:
+                    requiredCheck = QStringLiteral("output-intent");
+                    break;
+                case PDFRepairValidatorKind::FontIntegrity:
+                    requiredCheck = QStringLiteral("font-integrity");
+                    break;
+                case PDFRepairValidatorKind::StructuralIntegrity:
+                case PDFRepairValidatorKind::NormalPreflight:
+                case PDFRepairValidatorKind::TextExtraction:
+                case PDFRepairValidatorKind::SignatureState:
+                case PDFRepairValidatorKind::Custom:
+                    break;
+            }
+            const auto status = std::find_if(preflight.checkStatuses.cbegin(), preflight.checkStatuses.cend(),
+                                             [&](const PreflightCheckStatus& check)
+                                             { return check.id == requiredCheck; });
+            if (!requiredCheck.isEmpty() && inspectedCandidate && status != preflight.checkStatuses.cend() &&
+                (status->status == QStringLiteral("ok") || status->status == QStringLiteral("warning")))
+            {
+                validation.status = PDFRepairStatus::Passed;
+                validation.summary = QStringLiteral("Check '%1' was inspected in the effective postflight.").arg(requiredCheck);
+            }
+            else
+            {
+                validation.status = PDFRepairStatus::Incomplete;
+                validation.summary = requiredCheck.isEmpty()
+                                         ? QStringLiteral("Validator '%1' has no executable verification contract.").arg(validation.validatorId)
+                                         : QStringLiteral("Validator '%1' requires a completed '%2' postflight check.").arg(validation.validatorId, requiredCheck);
+            }
+        }
+
+        if (validation.status == PDFRepairStatus::Incomplete)
+        {
+            result->incompleteReasons.append(validation.summary);
+            if (failure.isEmpty())
+            {
+                failure = validation.summary;
+            }
+        }
+        else if (validation.status == PDFRepairStatus::Failed)
+        {
+            result->validationFailures.append(validation.summary);
+            if (failure.isEmpty())
+            {
+                failure = validation.summary;
+            }
+        }
+        result->validations.append(std::move(validation));
+    }
+
+    if (needsPreflight)
+    {
+        if (!inspectedCandidate)
+        {
+            // No normalized report means no validator evidence at all: fail closed
+            // with an explicit incomplete status rather than a bare failure.
+            result->status = PDFRepairStatus::Incomplete;
+            verdict.state = PreflightVerdictState::Incomplete;
+            verdict.reasonCode = QStringLiteral("validator-not-inspected");
+            verdict.reason = failure;
+        }
+        if (deltaIncomplete && verdict.isPass())
+        {
+            verdict.state = PreflightVerdictState::Incomplete;
+            verdict.reasonCode = QStringLiteral("revalidation-incomplete");
+            verdict.reason = result->incompleteReasons.isEmpty() ? failure : result->incompleteReasons.first();
+        }
+        if (introducedFindings && (verdict.isPass() || verdict.state == PreflightVerdictState::Incomplete))
+        {
+            verdict.state = PreflightVerdictState::Fail;
+            verdict.reasonCode = QStringLiteral("repair-introduced-findings");
+            verdict.reason = result->validationFailures.isEmpty() ? failure : result->validationFailures.first();
+        }
+        if (!result->incompleteReasons.isEmpty() && verdict.isPass())
+        {
+            verdict.state = PreflightVerdictState::Incomplete;
+            verdict.reasonCode = QStringLiteral("declared-validator-incomplete");
+            verdict.reason = result->incompleteReasons.first();
+        }
+        result->verdict = verdict.toJson();
+    }
+
+    if (!failure.isEmpty())
+    {
+        return PDFOperationResult(failure);
+    }
+    return inspected;
+}
+
+bool preflightAllowsCertification(const PreflightResult& result)
+{
+    if (!result.inspectionComplete)
+    {
+        return false;
+    }
+    for (const PreflightCheckStatus& status : result.checkStatuses)
+    {
+        const QString normalizedStatus = status.status.trimmed().toLower();
+        const QString normalizedReason = status.reason.trimmed().toLower();
+        if (normalizedStatus.isEmpty() ||
+            normalizedStatus == QLatin1String("skipped") ||
+            normalizedStatus == QLatin1String("incomplete") ||
+            normalizedStatus == QLatin1String("unsupported") ||
+            normalizedStatus == QLatin1String("not_inspected") ||
+            normalizedStatus == QLatin1String("not-inspected") ||
+            normalizedReason == QLatin1String("budget-exceeded") ||
+            !status.budgetKind.isEmpty())
+        {
+            return false;
+        }
+    }
+    const PreflightVerdict verdict = reducePreflightVerdict(result);
+    if (!verdict.allowsCertificateIssuance())
+    {
+        return false;
+    }
+    return !result.profileIdentity.value(QStringLiteral("provisional")).toBool(false);
 }
 
 }   // namespace pdf

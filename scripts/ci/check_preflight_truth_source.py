@@ -156,7 +156,11 @@ RULES = (
 #   selectedPreflightProfileId   the controller's current profile selection
 #   hasPreflightReport           the controller's report-presence flag
 #   runPreflight, cancelPreflight, selectPreflightProfile, setPreflightVariable,
-#   requestPreflightReportExport, exportPreflightReportFileUrl
+#   requestPreflightReportExport, exportPreflightReportFileUrl,
+#   preflightProfileEditing, preflightEditableChecks, preflightProfileDraftVersion,
+#   requestPreflightProfileImport, requestPreflightProfileExport, requestPreflightProfileSave,
+#   importPreflightProfileFileUrl, beginPreflightProfileEdit, setPreflightCheckField,
+#   savePreflightProfileEdit, exportPreflightProfileFileUrl, cancelPreflightProfileEdit
 #                                preflight Q_INVOKABLE commands; they ask Core, they do not decide
 #
 # Controller-owned and bound read-only by the shipped pane

@@ -1,0 +1,38 @@
+{
+    "checks": [
+        {
+            "id": "bleed",
+            "reason": "restriction_unsupported:layers",
+            "scope_restrictions": {
+                "layers": [
+                    "Artwork"
+                ]
+            },
+            "status": "not_inspected"
+        }
+    ],
+    "error": {
+        "code": "unsupported-scope",
+        "message": "Check 'bleed' cannot honour the requested layers restriction."
+    },
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "profile": "Loop Restriction - layers",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Check 'bleed' cannot honour the requested layers restriction.",
+        "reason_code": "unsupported-scope",
+        "state": "incomplete",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

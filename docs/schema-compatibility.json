@@ -4,13 +4,14 @@
   "unsupported_major": "fail-closed",
   "kinds": {
     "preflight-report": {
-      "current": "3.0",
+      "current": "4.0",
       "supported_majors": [
         1,
         2,
-        3
+        3,
+        4
       ],
-      "previous": "2.0"
+      "previous": "3.0"
     },
     "preflight-profile": {
       "current": "1.0",
@@ -69,9 +70,10 @@
       "previous": "1.0"
     },
     "action-list": {
-      "current": "1.0",
+      "current": "2.0",
       "supported_majors": [
-        1
+        1,
+        2
       ],
       "previous": "1.0"
     },

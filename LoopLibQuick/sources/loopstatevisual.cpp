@@ -94,6 +94,16 @@ QString stateIconName(StateIcon icon)
             return QStringLiteral("Checkmark");
         case StateIcon::BadgeOverlay:
             return QStringLiteral("BadgeOverlay");
+        case StateIcon::DashedSquare:
+            return QStringLiteral("DashedSquare");
+        case StateIcon::HalfFilled:
+            return QStringLiteral("HalfFilled");
+        case StateIcon::Cross:
+            return QStringLiteral("Cross");
+        case StateIcon::Slash:
+            return QStringLiteral("Slash");
+        case StateIcon::Play:
+            return QStringLiteral("Play");
     }
 
     return QStringLiteral("Outline");
@@ -173,7 +183,7 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     // strings, so this maps names to the canonical #194 treatment and does no analysis of its own.
     const QString normalized = stateName.trimmed().toLower();
 
-    if (normalized == QLatin1String("pass"))
+    if (normalized == QLatin1String("pass") || normalized == QLatin1String("certified"))
     {
         return makeVisual(StateKind::Passed, ColorRole::Success, StateIcon::Checkmark);
     }
@@ -185,14 +195,76 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     {
         return makeVisual(StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare);
     }
-    if (normalized == QLatin1String("stale") || normalized == QLatin1String("incomplete"))
+    if (normalized == QLatin1String("stale") || normalized == QLatin1String("incomplete") || normalized == QLatin1String("certificate-invalid"))
     {
         return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
+    }
+    if (normalized == QLatin1String("not-certified"))
+    {
+        return makeVisual(StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline);
     }
 
     // "not-checked", "cancelled", an empty string (nothing has run) and anything unrecognised are
     // all "not a pass and nothing to trust" - the safe default.
     return makeVisual(StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline);
+}
+
+LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName)
+{
+    // The lifecycle owns these names; nothing here analyses PDF truth or re-decides the
+    // operator's decision. Each state takes a shape no other state uses so the state is
+    // legible without colour, and only `approved`/`succeeded` reach a positive treatment.
+    const QString normalized = stateName.trimmed().toLower();
+
+    if (normalized == QLatin1String("planned"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::DashedSquare,
+                 QStringLiteral("Plan ready for review") };
+    }
+    if (normalized == QLatin1String("preview-ready"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::HalfFilled,
+                 QStringLiteral("Preview ready for review") };
+    }
+    if (normalized == QLatin1String("approved"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::Checkmark,
+                 QStringLiteral("Plan approved, ready to execute") };
+    }
+    if (normalized == QLatin1String("executing") || normalized == QLatin1String("running"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::Play,
+                 QStringLiteral("Executing the approved plan") };
+    }
+    if (normalized == QLatin1String("succeeded"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare,
+                 QStringLiteral("Correction rechecked and published") };
+    }
+    if (normalized == QLatin1String("stale"))
+    {
+        return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
+                 QStringLiteral("Plan or preview is stale for the current revision") };
+    }
+    if (normalized == QLatin1String("rejected"))
+    {
+        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Cross,
+                 QStringLiteral("Plan rejected by the operator") };
+    }
+    if (normalized == QLatin1String("failed"))
+    {
+        return { StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle,
+                 QStringLiteral("Correction failed") };
+    }
+    if (normalized == QLatin1String("cancelled"))
+    {
+        return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Slash,
+                 QStringLiteral("Correction cancelled") };
+    }
+
+    // "idle", an empty string and anything unrecognised: nothing is planned, nothing to trust.
+    return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline,
+             QStringLiteral("No correction planned") };
 }
 
 }   // namespace pdfquick::tokens

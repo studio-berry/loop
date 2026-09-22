@@ -160,7 +160,7 @@ struct LOOPLIBCORESHARED_EXPORT PreflightProfileIdentity
 };
 
 LOOPLIBCORESHARED_EXPORT PreflightProfileIdentity identifyPreflightProfile(const QJsonObject& profile,
-                                                                             const QString& sourcePath = QString());
+                                                                           const QString& sourcePath = QString());
 
 struct LOOPLIBCORESHARED_EXPORT PreflightProfileImportResult
 {
@@ -174,15 +174,24 @@ struct LOOPLIBCORESHARED_EXPORT PreflightProfileImportResult
 /// Validates a profile file. A committed digest that does not match is rejected
 /// and never auto-repaired.
 LOOPLIBCORESHARED_EXPORT PreflightProfileImportResult importPreflightProfile(const QJsonObject& profile,
-                                                                               const QString& sourcePath = QString());
+                                                                             const QString& sourcePath = QString());
 
 /// Writes identity fields and a content digest in canonical form.
 LOOPLIBCORESHARED_EXPORT QJsonObject exportPreflightProfile(const QJsonObject& profile);
 
 /// Forks a profile, recording derived_from against the parent's digest.
 LOOPLIBCORESHARED_EXPORT QJsonObject forkPreflightProfile(const QJsonObject& parent,
-                                                            const QString& newId,
-                                                            const QString& newVersion);
+                                                          const QString& newId,
+                                                          const QString& newVersion);
+
+/// Canonical on-disk bytes for export/import round-trip stability.
+LOOPLIBCORESHARED_EXPORT QByteArray serializePreflightProfileBytes(const QJsonObject& profile);
+
+/// Applies fork semantics to an edited profile: bumps version, records
+/// derived_from against the parent digest, and recomputes the content digest.
+LOOPLIBCORESHARED_EXPORT QJsonObject commitPreflightProfileEdit(const QJsonObject& parent,
+                                                                const QJsonObject& edited,
+                                                                const QString& newVersion);
 
 struct LOOPLIBCORESHARED_EXPORT PreflightVariableBindResult
 {
@@ -197,8 +206,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightVariableBindResult
 /// Binding precedence is profile default < job-spec < CLI. Undeclared or
 /// unresolved required variables fail closed as unresolved-variable.
 LOOPLIBCORESHARED_EXPORT PreflightVariableBindResult bindPreflightProfileVariables(const QJsonObject& profile,
-                                                                                     const QJsonObject& jobSpecBindings = QJsonObject(),
-                                                                                     const QJsonObject& cliBindings = QJsonObject());
+                                                                                   const QJsonObject& jobSpecBindings = QJsonObject(),
+                                                                                   const QJsonObject& cliBindings = QJsonObject());
 
 }   // namespace pdf
 

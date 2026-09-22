@@ -58,10 +58,14 @@ add_library(LoopLibCore SHARED
     sources/pdfrepairoperation.cpp
     sources/pdfrepairoperation.h
     sources/pdfrepairprimitives.cpp
+    sources/pdfgovernedexecution.cpp
+    sources/pdfgovernedexecution.h
     sources/pdfstandardconversion.cpp
     sources/pdfstandardconversion.h
     sources/pdfactionlist.cpp
     sources/pdfactionlist.h
+    sources/pdfobjectselector.cpp
+    sources/pdfobjectselector.h
     sources/pdffixupregistry.cpp
     sources/pdffixupregistry.h
     sources/pdfimagedownsamplefixup.cpp
@@ -114,6 +118,12 @@ add_library(LoopLibCore SHARED
     sources/preflightclirun.h
     sources/pdfpreflightverdict.cpp
     sources/pdfpreflightverdict.h
+    sources/pdfpreflightaudit.cpp
+    sources/pdfpreflightaudit.h
+    sources/pdfpreflightcertificate.cpp
+    sources/pdfpreflightcertificate.h
+    sources/pdfpreflightevidencebundle.cpp
+    sources/pdfpreflightevidencebundle.h
     sources/preflightprofileresolver.cpp
     sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h
@@ -277,6 +287,8 @@ add_library(LoopLibCore SHARED
     sources/pdfoperationhistorystore.cpp
     sources/pdfsavepolicy.h
     sources/pdfsavepolicy.cpp
+    sources/pdfrecoverymanager.h
+    sources/pdfrecoverymanager.cpp
     fonts.qrc
 )
 

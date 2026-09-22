@@ -55,7 +55,13 @@ public:
         Page,
         Image,
         Finding,
-        Separation
+        Separation,
+
+        /// A governed correction the shell can plan or has planned: operation identity,
+        /// target, parameters, impact class, save policy, risk, approval state, output
+        /// identity and provenance (#586). It carries no PDF truth of its own - the host
+        /// fills it from the recipe/plan/result DTOs.
+        Operation
     };
     Q_ENUM(SelectionKind)
 

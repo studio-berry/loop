@@ -291,18 +291,20 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
     const std::optional<FindingTargetingCapability> capability = m_registry.capabilityFor(request.checkId);
     if (!request.isValid())
     {
+        clearPresentationState(true);
         result.reason = QStringLiteral("finding-navigation/invalid-request");
-    }
-    else if (!capability.has_value())
-    {
-        result.outcome = FindingNavigationOutcome::UnsupportedCheck;
-        result.reason = QStringLiteral("finding-navigation/check-not-registered");
     }
     else if (!requestMatchesCurrentRevision(request))
     {
         clearPresentationState(true);
         result.outcome = FindingNavigationOutcome::Stale;
         result.reason = QStringLiteral("finding-navigation/stale-revision");
+    }
+    else if (!capability.has_value())
+    {
+        clearPresentationState(true);
+        result.outcome = FindingNavigationOutcome::UnsupportedCheck;
+        result.reason = QStringLiteral("finding-navigation/check-not-registered");
     }
     else
     {

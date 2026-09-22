@@ -74,6 +74,36 @@ Pane {
             }
         }
 
+        RowLayout {
+            objectName: "preflightCertificateBadge"
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                Layout.alignment: Qt.AlignTop
+                font.pixelSize: 14
+                color: root.host ? root.host.preflightCertificateStateColor : "transparent"
+                text: root.host ? (root.preflightIconGlyphs[root.host.preflightCertificateStateVisual.icon] || "") : ""
+                Accessible.ignored: true
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: root.host ? root.host.preflightCertificateSummary : ""
+                Accessible.name: root.host ? root.host.preflightCertificateStateVisual.accessibleName : qsTr("Certified preflight status")
+                Accessible.description: qsTr("Certified preflight is tamper-evident attribution, not a digital signature.")
+            }
+        }
+
+        Label {
+            objectName: "preflightCertificateTrustCopy"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: qsTr("Tamper-evident attribution only — not a digital signature.")
+            Accessible.name: text
+        }
+
         ComboBox {
             id: profileSelector
             objectName: "preflightProfileSelector"
@@ -81,7 +111,7 @@ Pane {
             model: root.host ? root.host.preflightProfiles : []
             textRole: "name"
             valueRole: "id"
-            enabled: root.host && root.host.preflightStateName !== "running"
+            enabled: root.host && root.host.preflightStateName !== "running" && !(root.host && root.host.preflightProfileEditing)
             currentIndex: {
                 if (!root.host)
                     return -1
@@ -96,6 +126,117 @@ Pane {
             onActivated: function(index) {
                 if (root.host && model[index])
                     root.host.selectPreflightProfile(model[index].id)
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Button {
+                objectName: "importPreflightProfileButton"
+                text: qsTr("Import Profile")
+                enabled: root.host && root.host.preflightStateName !== "running" && !root.host.preflightProfileEditing
+                Accessible.name: qsTr("Import preflight profile")
+                onClicked: if (root.host) root.host.requestPreflightProfileImport()
+            }
+
+            Button {
+                objectName: "customizePreflightProfileButton"
+                text: qsTr("Customize Profile")
+                enabled: root.host && root.host.preflightStateName !== "running" && !root.host.preflightProfileEditing
+                Accessible.name: qsTr("Customize preflight profile")
+                onClicked: if (root.host) root.host.beginPreflightProfileEdit()
+            }
+
+            Button {
+                objectName: "exportPreflightProfileButton"
+                text: qsTr("Export Profile")
+                enabled: root.host && root.host.preflightStateName !== "running"
+                Accessible.name: qsTr("Export preflight profile")
+                onClicked: if (root.host) root.host.requestPreflightProfileExport()
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: root.host && root.host.preflightProfileEditing
+            spacing: 8
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Editing a copy of the selected profile. Save writes a fork with derived_from and a bumped version.")
+            }
+
+            Repeater {
+                model: root.host ? root.host.preflightEditableChecks : []
+                delegate: ColumnLayout {
+                    Layout.fillWidth: true
+                    required property var modelData
+                    property string checkId: modelData.id
+
+                    Label {
+                        text: modelData.id
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("Severity") }
+                        ComboBox {
+                            id: severityCombo
+                            Layout.fillWidth: true
+                            model: ["error", "warning", "info"]
+                            currentIndex: Math.max(0, ["error", "warning", "info"].indexOf(modelData.severity))
+                            onActivated: function(index) {
+                                if (root.host)
+                                    root.host.setPreflightCheckField(checkId, "severity", severityCombo.model[index])
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("Enabled") }
+                        CheckBox {
+                            checked: Boolean(modelData.enabled)
+                            onToggled: if (root.host) root.host.setPreflightCheckField(checkId, "enabled", checked)
+                        }
+                    }
+
+                    Repeater {
+                        model: modelData.fields || []
+                        delegate: RowLayout {
+                            Layout.fillWidth: true
+                            required property var modelData
+                            Label { text: modelData.name }
+                            TextField {
+                                Layout.fillWidth: true
+                                text: modelData.value === undefined || modelData.value === null ? "" : String(modelData.value)
+                                onEditingFinished: if (root.host) root.host.setPreflightCheckField(checkId, modelData.name, text)
+                            }
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Button {
+                    objectName: "savePreflightProfileForkButton"
+                    text: qsTr("Save Fork")
+                    enabled: root.host && root.host.preflightProfileEditing
+                    Accessible.name: qsTr("Save preflight profile fork")
+                    onClicked: if (root.host) root.host.requestPreflightProfileSave()
+                }
+                Button {
+                    objectName: "cancelPreflightProfileEditButton"
+                    text: qsTr("Cancel Edit")
+                    enabled: root.host && root.host.preflightProfileEditing
+                    Accessible.name: qsTr("Cancel preflight profile edit")
+                    onClicked: if (root.host) root.host.cancelPreflightProfileEdit()
+                }
             }
         }
 

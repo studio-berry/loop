@@ -22,14 +22,23 @@
 
 #include "processoutputcapture.h"
 
+#include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
+#include "pdfoperationhistorystore.h"
+
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QPair>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVector>
+
+#include <algorithm>
 
 namespace
 {
@@ -109,6 +118,22 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void preflightPageSelectorsNarrowReportScope();
+    void preflightRestrictedAuditBindsEffectiveScope();
+    void preflightWritesTheCanonicalReport();
+    void preflightRejectsReportFileAliasingInput();
+    void addBleedDoesNotAdvertiseReportFile();
+    void schemaRejectsNonJsonOutput();
+    void schemaReportsTheMatrixForEveryKind();
+    void schemaReportsUnsupportedMajorIdenticallyToCore();
+    void schemaReportsUnreadyForAnUnusableVersion();
+    void schemaAcceptsCurrentAndPreviousGoldens();
+    void capabilitiesReportMatrixVersions();
+    void redactRefusesToWriteOverItsOwnInput();
+    void addBleedRefusesToWriteOverItsOwnInput();
+    void rgbToCmykRefusesToWriteOverItsOwnInput();
+    void evidenceBundleExportVerifyPair();
+    void evidenceBundleRejectsNonJsonOutput();
 };
 
 void PdfToolContractTest::helpIsWrapped()
@@ -241,6 +266,19 @@ QJsonObject findDiagnostic(const ToolRun& run, const QString& code)
     return QJsonObject();
 }
 
+QByteArray fileDigest(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return QByteArray();
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(&file);
+    return hash.result();
+}
+
 }   // namespace
 
 void PdfToolContractTest::fetchImagesOnVectorOnlyDocumentNotesEmptyResult()
@@ -314,6 +352,756 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::preflightPageSelectorsNarrowReportScope()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Scoped image preflight") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const QStringList base{ QStringLiteral("preflight"), pdfPath,
+                            QStringLiteral("--profile"), profilePath,
+                            QStringLiteral("--console-format"), QStringLiteral("json") };
+    QStringList first = base;
+    first << QStringLiteral("--page-select") << QStringLiteral("1");
+    const ToolRun inspected = runPdfTool(first);
+    QVERIFY2(inspected.exitCode >= 0 && inspected.exitCode != 2, inspected.stderrData.constData());
+    const QJsonObject inspectedReport = inspected.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY(!inspectedReport.isEmpty());
+    QCOMPARE(inspectedReport.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("cli_page_scope")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    QCOMPARE(inspectedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+
+    QStringList bounded = base;
+    bounded << QStringLiteral("--page-first") << QStringLiteral("1")
+            << QStringLiteral("--page-last") << QStringLiteral("1");
+    const ToolRun withinRange = runPdfTool(bounded);
+    QVERIFY(withinRange.exitCode != 2);
+    const QJsonObject boundedReport = withinRange.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QCOMPARE(boundedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject().value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+
+    QStringList disjoint = base;
+    disjoint << QStringLiteral("--page-first") << QStringLiteral("2")
+             << QStringLiteral("--page-select") << QStringLiteral("1");
+    const ToolRun excluded = runPdfTool(disjoint);
+    QVERIFY(excluded.exitCode != 0);
+    const QJsonObject excludedReport = excluded.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY(!excludedReport.value(QStringLiteral("pass")).toBool(true));
+    QCOMPARE(excludedReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+             QStringLiteral("incomplete"));
+    QCOMPARE(excludedReport.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("status")).toString(),
+             QStringLiteral("not_applicable"));
+
+    QStringList malformed = base;
+    malformed << QStringLiteral("--page-select") << QStringLiteral("1-nope");
+    const ToolRun invalid = runPdfTool(malformed);
+    QVERIFY(invalid.exitCode != 0);
+    const QJsonObject invalidReport = invalid.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QCOMPARE(invalidReport.value(QStringLiteral("error")).toObject().value(QStringLiteral("code")).toString(),
+             QStringLiteral("unsupported-scope"));
+}
+
+void PdfToolContractTest::preflightRestrictedAuditBindsEffectiveScope()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Restricted audit parity") },
+        { QStringLiteral("restrictions"), QJsonObject{
+                                              { QStringLiteral("pages"), QStringLiteral("1") },
+                                              { QStringLiteral("object_classes"), QJsonArray{ QStringLiteral("image") } } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"),
+                                     pdfPath,
+                                     QStringLiteral("--profile"),
+                                     profilePath,
+                                     QStringLiteral("--console-format"),
+                                     QStringLiteral("json") });
+    QVERIFY2(run.exitCode >= 0 && run.exitCode != 2, run.stderrData.constData());
+    const QJsonObject report = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY(!report.isEmpty());
+    const QJsonObject scopeRestrictions =
+        report.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("scope_restrictions")).toObject();
+    QCOMPARE(scopeRestrictions.value(QStringLiteral("pages")).toArray(), QJsonArray({ 1 }));
+    QCOMPARE(scopeRestrictions.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
+
+    const QString historyPath =
+        QDir(QFileInfo(pdfPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const auto finishedIt = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                                         { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                                  event.status == pdf::PDFOperationHistoryStatus::Accepted; });
+    QVERIFY(finishedIt != events.cend());
+    QCOMPARE(finishedIt->effectiveProfileDigest, report.value(QStringLiteral("effective_profile_digest")).toString());
+    QCOMPARE(finishedIt->resultSummary.value(QStringLiteral("coverage_scope")).toObject().value(QStringLiteral("scope_restrictions")).toObject(),
+             scopeRestrictions);
+}
+
+void PdfToolContractTest::preflightWritesTheCanonicalReport()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("id"), QStringLiteral("report-file-contract") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Report file contract") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 1 } } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const QString reportPath = temporary.filePath(QStringLiteral("preflight-report.json"));
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"),
+                                     pdfPath,
+                                     QStringLiteral("--profile"),
+                                     profilePath,
+                                     QStringLiteral("--report-file"),
+                                     reportPath,
+                                     QStringLiteral("--console-format"),
+                                     QStringLiteral("json") });
+    verifyEnvelope(run, 0, QStringLiteral("preflight"));
+    QVERIFY2(QFile::exists(reportPath), qPrintable(reportPath));
+
+    QFile reportFile(reportPath);
+    QVERIFY(reportFile.open(QIODevice::ReadOnly));
+    const QJsonObject written = QJsonDocument::fromJson(reportFile.readAll()).object();
+    QCOMPARE(written.value(QStringLiteral("document_revision_digest")).toString(),
+             QString::fromLatin1(fileDigest(pdfPath).toHex()));
+    QVERIFY(!written.value(QStringLiteral("effective_profile_digest")).toString().isEmpty());
+    QVERIFY(!written.value(QStringLiteral("coverage_scope")).toObject().isEmpty());
+    const QJsonObject envelopeReport =
+        run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QCOMPARE(written.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+             envelopeReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString());
+
+    // The written file must be the payload the audit chain retains rather than a
+    // second rendering of the run: a certificate hashes the retained report, and
+    // the evidence bundle exporter binds a report to that same chain payload.
+    const QString historyPath =
+        QDir(QFileInfo(pdfPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const auto acceptedIt = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                                         { return event.kind == pdf::PDFOperationHistoryEventKind::PreflightRun &&
+                                                  event.status == pdf::PDFOperationHistoryStatus::Accepted; });
+    QVERIFY(acceptedIt != events.cend());
+    QCOMPARE(pdf::canonicalJson(written), pdf::canonicalJson(acceptedIt->resultSummary));
+}
+
+void PdfToolContractTest::preflightRejectsReportFileAliasingInput()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("id"), QStringLiteral("report-file-alias-contract") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Report file alias contract") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 1 } } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const QByteArray inputDigest = fileDigest(pdfPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"),
+                                     pdfPath,
+                                     QStringLiteral("--profile"),
+                                     profilePath,
+                                     QStringLiteral("--report-file"),
+                                     pdfPath,
+                                     QStringLiteral("--console-format"),
+                                     QStringLiteral("json") });
+    verifyEnvelope(run, 2, QStringLiteral("preflight"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("output.duplicate-planned-path"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), pdfPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(pdfPath), inputDigest);
+}
+
+void PdfToolContractTest::addBleedDoesNotAdvertiseReportFile()
+{
+    const ToolRun capabilities = runPdfTool({ QStringLiteral("capabilities"),
+                                              QStringLiteral("--command"),
+                                              QStringLiteral("add-bleed"),
+                                              QStringLiteral("--console-format"),
+                                              QStringLiteral("json") });
+    verifyEnvelope(capabilities, 0, QStringLiteral("capabilities"));
+
+    const QJsonArray commands = capabilities.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray();
+    QVERIFY2(!commands.isEmpty(), qPrintable(QString::fromUtf8(capabilities.stdoutData)));
+    const QJsonArray options = commands.first().toObject().value(QStringLiteral("options")).toArray();
+    for (const QJsonValue& value : options)
+    {
+        QVERIFY(value.toObject().value(QStringLiteral("id")).toString() != QStringLiteral("report-file"));
+    }
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const ToolRun run = runPdfTool({ QStringLiteral("add-bleed"),
+                                     QStringLiteral("--console-format"),
+                                     QStringLiteral("json"),
+                                     fixture,
+                                     QStringLiteral("--output"),
+                                     directory.filePath(QStringLiteral("candidate.pdf")),
+                                     QStringLiteral("--profile"),
+                                     profilePath,
+                                     QStringLiteral("--report-file"),
+                                     directory.filePath(QStringLiteral("report.json")) });
+    verifyEnvelope(run, 2, QStringLiteral("add-bleed"));
+    QVERIFY(!findDiagnostic(run, QStringLiteral("cli.invalid-arguments")).isEmpty());
+}
+
+void PdfToolContractTest::schemaRejectsNonJsonOutput()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--console-format"), QStringLiteral("text") });
+    QCOMPARE(run.exitCode, 2);
+    QVERIFY(run.json.isEmpty());
+    QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
+}
+
+void PdfToolContractTest::schemaReportsTheMatrixForEveryKind()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(run, 0, QStringLiteral("schema"));
+
+    const QJsonObject kinds = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+    QVERIFY2(!kinds.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    for (const QString& expected : { QStringLiteral("preflight-report"), QStringLiteral("preflight-profile"),
+                                     QStringLiteral("evidence-graph"), QStringLiteral("operation-plan"),
+                                     QStringLiteral("operation-result"), QStringLiteral("provenance-event"),
+                                     QStringLiteral("certificate"), QStringLiteral("capability-discovery"),
+                                     QStringLiteral("package-manifest") })
+    {
+        QVERIFY2(kinds.contains(expected), qPrintable(expected));
+    }
+    QCOMPARE(kinds.value(QStringLiteral("preflight-report")).toObject().value(QStringLiteral("current")).toString(),
+             QStringLiteral("4.0"));
+}
+
+void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
+{
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/unsupported-major.json");
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), fixture });
+    verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+    const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+    QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("unsupported-major"));
+    // These two strings are pinned verbatim in UnitTestsSchemaEvolution too. The
+    // duplication is deliberate: a shared constant would let the Core message
+    // change without any test noticing the CLI drifted from it.
+    QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.unsupported-major"));
+    QCOMPARE(data.value(QStringLiteral("message")).toString(),
+             QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
+                            "this build supports major(s) 1, 2, 3, 4."));
+    QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+             false);
+}
+
+void PdfToolContractTest::schemaReportsUnreadyForAnUnusableVersion()
+{
+    // An artifact whose version cannot be read was never prepared: nothing
+    // validated it, so it must not be advertised as a ready document just
+    // because `prepareSchemaDocument` leaves the original bytes in place when
+    // it aborts. The exit code alone does not catch this - the doc is
+    // incompatible and exits 1 either way.
+    QTemporaryDir artifactDirectory;
+    QVERIFY(artifactDirectory.isValid());
+
+    const QVector<QPair<QString, QByteArray>> artifacts{
+        { QStringLiteral("malformed-version.json"),
+          QByteArrayLiteral("{\"schema_kind\":\"preflight-report\",\"schema_version\":\"abc\"}") },
+        { QStringLiteral("missing-version.json"), QByteArrayLiteral("{\"schema_kind\":\"preflight-report\"}") },
+    };
+
+    for (const auto& artifact : artifacts)
+    {
+        const QString path = artifactDirectory.filePath(artifact.first);
+        QFile file(path);
+        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+        QCOMPARE(file.write(artifact.second), qint64(artifact.second.size()));
+        file.close();
+
+        const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), path });
+        verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+        const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+        QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+        QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("invalid"));
+        QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.invalid-version"));
+        QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+                 false);
+    }
+}
+
+void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
+{
+    const QString current = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v4.json");
+    const ToolRun currentRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), current });
+    verifyEnvelope(currentRun, 0, QStringLiteral("schema"));
+    const QJsonObject currentData = currentRun.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(currentData.value(QStringLiteral("compatibility")).toString(), QStringLiteral("compatible"));
+    QCOMPARE(currentData.value(QStringLiteral("migration")).toObject().value(QStringLiteral("applied")).toBool(),
+             false);
+
+    const QString previous = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v3.json");
+    const ToolRun previousRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), previous });
+    verifyEnvelope(previousRun, 0, QStringLiteral("schema"));
+    const QJsonObject migration = previousRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("migration")).toObject();
+    QCOMPARE(migration.value(QStringLiteral("required")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("applied")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("3.0"));
+    QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("4.0"));
+}
+
+void PdfToolContractTest::capabilitiesReportMatrixVersions()
+{
+    const ToolRun capabilities = runPdfTool({ QStringLiteral("capabilities") });
+    verifyEnvelope(capabilities, 0, QStringLiteral("capabilities"));
+    const QJsonArray schemas = capabilities.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("schemas")).toArray();
+    QCOMPARE(schemas.size(), 4);
+
+    const ToolRun matrixRun = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(matrixRun, 0, QStringLiteral("schema"));
+    const QJsonObject kinds = matrixRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+
+    const QHash<QString, QString> publishedToKind{
+        { QStringLiteral("loop-preflight-profile"), QStringLiteral("preflight-profile") },
+        { QStringLiteral("loop-preflight-report"), QStringLiteral("preflight-report") },
+        { QStringLiteral("pdftool-discovery"), QStringLiteral("capability-discovery") },
+        { QStringLiteral("pdftool-envelope"), QStringLiteral("pdftool-envelope") },
+    };
+
+    QCOMPARE(schemas.size(), publishedToKind.size());
+    for (const QJsonValue& schema : schemas)
+    {
+        const QJsonObject entry = schema.toObject();
+        const QString id = entry.value(QStringLiteral("id")).toString();
+        QVERIFY2(publishedToKind.contains(id), qPrintable(id));
+        const QJsonObject matrixEntry = kinds.value(publishedToKind.value(id)).toObject();
+        QVERIFY2(!matrixEntry.isEmpty(), qPrintable(id));
+        const QString current = matrixEntry.value(QStringLiteral("current")).toString();
+        QCOMPARE(entry.value(QStringLiteral("version")).toInt(), current.section(QLatin1Char('.'), 0, 0).toInt());
+    }
+}
+
+void PdfToolContractTest::redactRefusesToWriteOverItsOwnInput()
+{
+    // Redaction removes prior content, so the command must refuse to persist
+    // its result over the trusted input the caller handed it.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/color-rgb.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const ToolRun run = runPdfTool({ QStringLiteral("redact"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     inputPath, inputPath });
+
+    verifyEnvelope(run, 4, QStringLiteral("redact"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QVERIFY(QFile(inputPath).exists());
+
+    // The refusal must be about writing over the input, not about redaction:
+    // the same document and the same caller still produce the artifact when
+    // the output is a different path.
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("redact"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath, directory.filePath(QStringLiteral("redacted.pdf")) });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+}
+
+void PdfToolContractTest::addBleedRefusesToWriteOverItsOwnInput()
+{
+    // add-bleed declares saveAsNewArtifact("bleed correction must preserve the
+    // trusted source"), so a corrective run may not hand the input back as its
+    // own output.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun run = runPdfTool({ QStringLiteral("add-bleed"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     QStringLiteral("--overwrite"),
+                                     inputPath,
+                                     QStringLiteral("--output"), inputPath });
+
+    verifyEnvelope(run, 4, QStringLiteral("add-bleed"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+
+    // The refusal has to be about the destination, not about add-bleed: the
+    // same document and the same caller still produce a candidate at a distinct
+    // path.
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("add-bleed"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath,
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--profile"), profilePath,
+                                            QStringLiteral("--force") });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+    QVERIFY(QFile(candidatePath).exists());
+}
+
+void PdfToolContractTest::rgbToCmykRefusesToWriteOverItsOwnInput()
+{
+    // rgb-to-cmyk declares saveAsNewArtifact("color conversion creates a
+    // production candidate"), so the candidate may not replace the input even
+    // when the caller asks for --overwrite.
+    const QString profilePath = QFINDTESTDATA("testdata/synthetic-cmyk.icc");
+    QVERIFY2(!profilePath.isEmpty() && QFile::exists(profilePath), qPrintable(profilePath));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/output-intent-rgb.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun run = runPdfTool({ QStringLiteral("rgb-to-cmyk"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     QStringLiteral("--overwrite"),
+                                     inputPath,
+                                     QStringLiteral("--output"), inputPath,
+                                     QStringLiteral("--target-profile"), profilePath });
+
+    verifyEnvelope(run, 4, QStringLiteral("rgb-to-cmyk"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+
+    // The refusal has to be about the destination, not about the conversion:
+    // the same document and the same caller still convert at a distinct path.
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("rgb-to-cmyk"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath,
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--target-profile"), profilePath });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+    QVERIFY(QFile(candidatePath).exists());
+}
+
+void PdfToolContractTest::evidenceBundleExportVerifyPair()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    const QString pdfPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+    QVERIFY(QFile::copy(fixture, pdfPath));
+
+    // A certifiable run needs a non-provisional profile identity, so the profile
+    // declares its id and version.
+    const QString profilePath = temporary.filePath(QStringLiteral("profile.json"));
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::WriteOnly));
+    const QJsonObject profile{
+        { QStringLiteral("id"), QStringLiteral("bundle-contract") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Evidence bundle contract") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 1 } } } }
+    };
+    const QByteArray profileBytes = QJsonDocument(profile).toJson();
+    QCOMPARE(profileFile.write(profileBytes), profileBytes.size());
+    profileFile.close();
+
+    const QString certificatePath = temporary.filePath(QStringLiteral("certificate.json"));
+    const ToolRun certified = runPdfTool({ QStringLiteral("preflight"),
+                                           pdfPath,
+                                           QStringLiteral("--profile"),
+                                           profilePath,
+                                           QStringLiteral("--certify"),
+                                           certificatePath,
+                                           QStringLiteral("--console-format"),
+                                           QStringLiteral("json") });
+    QVERIFY2(certified.exitCode == 0, certified.stdoutData.constData());
+    verifyEnvelope(certified, 0, QStringLiteral("preflight"));
+    QVERIFY(QFile::exists(certificatePath));
+
+    const QString reportPath = temporary.filePath(QStringLiteral("report.json"));
+    QFile reportFile(reportPath);
+    QVERIFY(reportFile.open(QIODevice::WriteOnly));
+    const QByteArray reportBytes =
+        QJsonDocument(certified.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject())
+            .toJson(QJsonDocument::Indented);
+    QCOMPARE(reportFile.write(reportBytes), reportBytes.size());
+    reportFile.close();
+
+    const QString bundleDirectory = temporary.filePath(QStringLiteral("bundle"));
+    const ToolRun exported = runPdfTool({ QStringLiteral("export-evidence-bundle"),
+                                          pdfPath,
+                                          QStringLiteral("--report"),
+                                          reportPath,
+                                          QStringLiteral("--certificate"),
+                                          certificatePath,
+                                          QStringLiteral("--output"),
+                                          bundleDirectory,
+                                          QStringLiteral("--console-format"),
+                                          QStringLiteral("json") });
+    verifyEnvelope(exported, 0, QStringLiteral("export-evidence-bundle"));
+
+    const QStringList members{ QStringLiteral("manifest.json"),
+                               QStringLiteral("report.json"),
+                               QStringLiteral("certificate.json"),
+                               QStringLiteral("history.json"),
+                               QStringLiteral("rollback-references.json") };
+    for (const QString& member : members)
+    {
+        QVERIFY2(QFile::exists(QDir(bundleDirectory).filePath(member)), qPrintable(member));
+    }
+
+    const auto readMember = [&](const QString& name)
+    {
+        QFile file(QDir(bundleDirectory).filePath(name));
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QJsonObject();
+        }
+        return QJsonDocument::fromJson(file.readAll()).object();
+    };
+
+    const ToolRun verified = runPdfTool({ QStringLiteral("verify-evidence-bundle"),
+                                          bundleDirectory,
+                                          QStringLiteral("--console-format"),
+                                          QStringLiteral("json") });
+    verifyEnvelope(verified, 0, QStringLiteral("verify-evidence-bundle"));
+    const QJsonObject verification =
+        verified.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("verification")).toObject();
+    QVERIFY2(verification.value(QStringLiteral("valid")).toBool(), qPrintable(QString::fromUtf8(verified.stdoutData)));
+    QCOMPARE(verification.value(QStringLiteral("members_checked")).toInt(), members.size() - 1);
+
+    // The manifest, not the report, is the entry point for a reader without
+    // Loop: the effective profile, the coverage scope and the revision digest
+    // must be inside it, and it must never claim canonical authority.
+    const QJsonObject manifest = readMember(QStringLiteral("manifest.json"));
+    QCOMPARE(manifest.value(QStringLiteral("schema")).toString(), QStringLiteral("loop.preflight-evidence-bundle"));
+    QCOMPARE(manifest.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("authority")).toObject().value(QStringLiteral("canonical_state")).toString(),
+             QStringLiteral("internal"));
+    QCOMPARE(manifest.value(QStringLiteral("document")).toObject().value(QStringLiteral("revision_digest")).toString(),
+             QString::fromLatin1(fileDigest(pdfPath).toHex()));
+    QCOMPARE(manifest.value(QStringLiteral("document")).toObject().value(QStringLiteral("source_path_included")).toBool(true),
+             false);
+    QVERIFY(!manifest.value(QStringLiteral("effective_profile")).toObject().value(QStringLiteral("digest")).toString().isEmpty());
+    QVERIFY(!manifest.value(QStringLiteral("coverage_scope")).toObject().isEmpty());
+    QCOMPARE(manifest.value(QStringLiteral("members")).toArray().size(), members.size() - 1);
+    QVERIFY(!manifest.value(QStringLiteral("certificate")).toObject().isEmpty());
+
+    // Criterion: the bundle contains no raw file paths and no content outside
+    // the declared set.
+    const QStringList forbidden{ QFileInfo(pdfPath).absoluteFilePath(),
+                                 QDir::toNativeSeparators(QFileInfo(pdfPath).absoluteFilePath()),
+                                 QFileInfo(temporary.path()).absoluteFilePath(),
+                                 QDir::toNativeSeparators(QFileInfo(temporary.path()).absoluteFilePath()),
+                                 QStringLiteral("artwork.pdf") };
+    for (const QString& member : members)
+    {
+        QFile file(QDir(bundleDirectory).filePath(member));
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray content = file.readAll();
+        for (const QString& needle : forbidden)
+        {
+            QVERIFY2(!content.contains(needle.toUtf8()),
+                     qPrintable(QStringLiteral("bundle member '%1' carries '%2'").arg(member, needle)));
+        }
+    }
+
+    // Tampering with any member is detected and attributed to that member. A
+    // same-size edit is a digest mismatch; an added byte is a size mismatch.
+    const QString reportMemberPath = QDir(bundleDirectory).filePath(QStringLiteral("report.json"));
+    QFile reportMember(reportMemberPath);
+    QVERIFY(reportMember.open(QIODevice::ReadOnly));
+    QByteArray memberBytes = reportMember.readAll();
+    reportMember.close();
+    QVERIFY(memberBytes.size() > 8);
+    memberBytes[memberBytes.size() / 2] = memberBytes.at(memberBytes.size() / 2) == 'x' ? 'y' : 'x';
+    QVERIFY(reportMember.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(reportMember.write(memberBytes), memberBytes.size());
+    reportMember.close();
+
+    const ToolRun tampered = runPdfTool({ QStringLiteral("verify-evidence-bundle"),
+                                          bundleDirectory,
+                                          QStringLiteral("--console-format"),
+                                          QStringLiteral("json") });
+    verifyEnvelope(tampered, 1, QStringLiteral("verify-evidence-bundle"));
+    const QJsonArray tamperedFindings =
+        tampered.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("verification")).toObject().value(QStringLiteral("findings")).toArray();
+    bool digestMismatchNamedReport = false;
+    for (const QJsonValue& value : tamperedFindings)
+    {
+        const QJsonObject finding = value.toObject();
+        if (finding.value(QStringLiteral("code")).toString() == QLatin1String("member.digest-mismatch") &&
+            finding.value(QStringLiteral("member")).toString() == QLatin1String("report.json"))
+        {
+            digestMismatchNamedReport = true;
+        }
+    }
+    QVERIFY2(digestMismatchNamedReport, qPrintable(QString::fromUtf8(tampered.stdoutData)));
+
+    // A member the manifest does not declare is content outside the declared set.
+    const QString undeclaredPath = QDir(bundleDirectory).filePath(QStringLiteral("extra.json"));
+    QFile undeclared(undeclaredPath);
+    QVERIFY(undeclared.open(QIODevice::WriteOnly));
+    QCOMPARE(undeclared.write(QByteArrayLiteral("{}")), 2);
+    undeclared.close();
+    const ToolRun withUndeclared = runPdfTool({ QStringLiteral("verify-evidence-bundle"),
+                                                bundleDirectory,
+                                                QStringLiteral("--console-format"),
+                                                QStringLiteral("json") });
+    verifyEnvelope(withUndeclared, 1, QStringLiteral("verify-evidence-bundle"));
+    bool undeclaredReported = false;
+    for (const QJsonValue& value :
+         withUndeclared.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("verification")).toObject().value(QStringLiteral("findings")).toArray())
+    {
+        const QJsonObject finding = value.toObject();
+        if (finding.value(QStringLiteral("code")).toString() == QLatin1String("member.undeclared") &&
+            finding.value(QStringLiteral("member")).toString() == QLatin1String("extra.json"))
+        {
+            undeclaredReported = true;
+        }
+    }
+    QVERIFY2(undeclaredReported, qPrintable(QString::fromUtf8(withUndeclared.stdoutData)));
+    QVERIFY(QFile::remove(undeclaredPath));
+
+    // Offline means offline: a bundle exported before the inputs disappear still
+    // verifies with no document, no sidecar, and no certificate present.
+    const QString offlineBundle = temporary.filePath(QStringLiteral("offline-bundle"));
+    const ToolRun reExported = runPdfTool({ QStringLiteral("export-evidence-bundle"),
+                                            pdfPath,
+                                            QStringLiteral("--report"),
+                                            reportPath,
+                                            QStringLiteral("--certificate"),
+                                            certificatePath,
+                                            QStringLiteral("--output"),
+                                            offlineBundle,
+                                            QStringLiteral("--console-format"),
+                                            QStringLiteral("json") });
+    verifyEnvelope(reExported, 0, QStringLiteral("export-evidence-bundle"));
+    QVERIFY(QDir(temporary.filePath(QStringLiteral("artwork.pdf.loop-history"))).removeRecursively());
+    QVERIFY(QFile::remove(pdfPath));
+    QVERIFY(QFile::remove(certificatePath));
+    QVERIFY(QFile::remove(reportPath));
+    QVERIFY(!QFile::exists(pdfPath));
+    QVERIFY(!QFile::exists(reportPath));
+
+    const ToolRun offline = runPdfTool({ QStringLiteral("verify-evidence-bundle"),
+                                         offlineBundle,
+                                         QStringLiteral("--console-format"),
+                                         QStringLiteral("json") });
+    verifyEnvelope(offline, 0, QStringLiteral("verify-evidence-bundle"));
+    QVERIFY2(offline.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("verification")).toObject().value(QStringLiteral("valid")).toBool(),
+             qPrintable(QString::fromUtf8(offline.stdoutData)));
+}
+
+void PdfToolContractTest::evidenceBundleRejectsNonJsonOutput()
+{
+    const ToolRun exportRun = runPdfTool({ QStringLiteral("export-evidence-bundle"),
+                                           QStringLiteral("--console-format"),
+                                           QStringLiteral("text") });
+    QCOMPARE(exportRun.exitCode, 2);
+    QVERIFY(exportRun.json.isEmpty());
+    QVERIFY2(!exportRun.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
+
+    const ToolRun verifyRun = runPdfTool({ QStringLiteral("verify-evidence-bundle"),
+                                           QStringLiteral("--console-format"),
+                                           QStringLiteral("text") });
+    QCOMPARE(verifyRun.exitCode, 2);
+    QVERIFY(verifyRun.json.isEmpty());
+    QVERIFY2(!verifyRun.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
 }
 
 }   // namespace

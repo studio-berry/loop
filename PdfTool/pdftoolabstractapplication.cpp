@@ -22,6 +22,7 @@
 
 #include "pdftoolabstractapplication.h"
 #include "pdfdocumentreader.h"
+#include "pdfdocumentwriter.h"
 #include "pdfsafefilewriter.h"
 #include "pdfutils.h"
 #include "ocrsidecarprotocol.h"
@@ -244,7 +245,9 @@ PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
     descriptor.positionals = describePositionals(getOptionsFlags());
     descriptor.capabilities = describeCapabilities(getOptionsFlags());
 
-    if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
+    if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
+        command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
+        command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
     {
         descriptor.outputFormats = { QStringLiteral("json") };
     }
@@ -356,6 +359,13 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("output-dir"), { QStringLiteral("--output-dir") }, QStringLiteral("directory"), PDFToolValueType::Path);
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
     }
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("out"), { QStringLiteral("--out") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("id"), { QStringLiteral("--id") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("profile-version"), { QStringLiteral("--profile-version") }, QStringLiteral("version"), PDFToolValueType::String);
+    }
     if (optionFlags.testFlag(PreflightProfile))
     {
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
@@ -363,6 +373,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("profile-store"), { QStringLiteral("--profile-store") }, QStringLiteral("directory"), PDFToolValueType::Path);
         add(QStringLiteral("decisions"), { QStringLiteral("--decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("export-decisions"), { QStringLiteral("--export-decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("certify"), { QStringLiteral("--certify") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("require-signoff"), { QStringLiteral("--require-signoff") }, {}, PDFToolValueType::Boolean);
         add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -373,9 +384,17 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
         add(QStringLiteral("checks"), { QStringLiteral("--checks") }, QStringLiteral("ids"), PDFToolValueType::Csv);
     }
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
+    }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
+    }
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        add(QStringLiteral("input"), { QStringLiteral("--input") }, QStringLiteral("file"), PDFToolValueType::Path);
     }
     if (optionFlags.testFlag(OcrOptions))
     {
@@ -564,6 +583,14 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("enc-owner-password"), { QStringLiteral("--enc-owner-password") }, QStringLiteral("owner-password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("enc-permissions"), { QStringLiteral("--enc-permissions") }, QStringLiteral("permissions"), PDFToolValueType::Integer);
     }
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("directory"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("report"), { QStringLiteral("--report") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("certificate"), { QStringLiteral("--certificate") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("sign-off"), { QStringLiteral("--sign-off") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("artifact"), { QStringLiteral("--artifact") }, QStringLiteral("file"), PDFToolValueType::Path);
+    }
 
     std::sort(options.begin(), options.end(), [](const auto& left, const auto& right)
               { return left.id < right.id; });
@@ -573,6 +600,17 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
 QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositionals(Options optionFlags)
 {
     QList<PDFToolPositionalDescriptor> positionals;
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        appendPositional(positionals, { QStringLiteral("certificate"), PDFToolValueType::Path, true, false });
+        appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
+        return positionals;
+    }
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        appendPositional(positionals, { QStringLiteral("bundle"), PDFToolValueType::Path, true, false });
+        return positionals;
+    }
     if (optionFlags.testFlag(OpenDocument))
     {
         appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
@@ -654,9 +692,14 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(FlattenTransparency, QStringLiteral("fixup.flatten-transparency"));
     add(RgbToCmyk, QStringLiteral("fixup.rgb-to-cmyk"));
     add(PreflightProfile, QStringLiteral("preflight.run"));
+    add(PreflightProfileManage, QStringLiteral("preflight-profile.manage"));
     add(OcrOptions, QStringLiteral("ocr.client"));
     add(Diagnostics, QStringLiteral("diagnostics.bundle"));
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
+    add(SchemaDiagnostics, QStringLiteral("schema.diagnostics"));
+    add(VerifyPreflightCertificate, QStringLiteral("preflight.certificate.verify"));
+    add(EvidenceBundleExport, QStringLiteral("evidence-bundle.export"));
+    add(EvidenceBundleVerify, QStringLiteral("evidence-bundle.verify"));
     add(ActionList, QStringLiteral("action-list.execute"));
     capabilities.sort();
     return capabilities;
@@ -744,6 +787,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
         parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
         parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("approval-file", "Plan-bound governed approval JSON for committing output.", "file"));
         parser->addOption(QCommandLineOption("list-operations", "List registered repair operation descriptors."));
         parser->addOption(QCommandLineOption("allow-incomplete", "Allow an incomplete diff result to be returned for review; never auto-commit it."));
         parser->addOption(QCommandLineOption("pswd", "Password for an encrypted source PDF.", "password"));
@@ -824,6 +868,14 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         }
     }
 
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Loop preflight profile JSON input path."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("out"), QStringLiteral("Output profile JSON path."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("id"), QStringLiteral("New profile id for fork."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-version"), QStringLiteral("New profile version for fork."));
+    }
+
     if (optionFlags.testFlag(PreflightProfile))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loop preflight profile (JSON); bypasses contextual selection."));
@@ -831,6 +883,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("export-decisions"), QStringLiteral("Write the normalized operator decision JSON after the run."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("certify"), QStringLiteral("Write a standalone certified-preflight JSON after a certifiable run."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("require-signoff"), QStringLiteral("Require an active accept, waive, or override decision for every error finding."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
@@ -842,9 +895,20 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("checks"), QStringLiteral("Comma-separated preflight check ids for targeted revalidation; default runs all enabled checks."));
     }
 
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report-file"), QStringLiteral("Write the preflight report JSON this run is certified over to this file."));
+    }
+
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("command"), QStringLiteral("Limit discovery to one stable command ID."));
+    }
+
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("input"),
+                           QStringLiteral("Persisted JSON artifact to diagnose; omit to print the compatibility matrix."));
     }
 
     if (optionFlags.testFlag(OcrOptions))
@@ -863,6 +927,26 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("verify-redact-copy-metadata", "Original redaction copied metadata."));
         parser->addOption(QCommandLineOption("verify-redact-copy-outline", "Original redaction copied outline."));
         parser->addOption(QCommandLineOption("verify-redact-allow-incremental", "Do not fail when the output trailer contains /Prev."));
+    }
+
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        parser->addPositionalArgument("certificate", "Certified-preflight JSON file.");
+        parser->addPositionalArgument("document", "PDF document named by the certificate.");
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Bundle output directory (created, or refused when not empty)."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report"), QStringLiteral("Canonical preflight report JSON for the document revision."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("certificate"), QStringLiteral("Retained certified-preflight JSON, when the revision is certified."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("sign-off"), QStringLiteral("Governed sign-off record for a published correction."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("artifact"), QStringLiteral("Corrected output artifact whose identity the bundle declares."));
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        parser->addPositionalArgument("bundle", "Portable proof-of-preflight bundle directory.");
     }
 
     if (optionFlags.testFlag(Diagnostics))
@@ -1098,7 +1182,9 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         if (!parser->isSet("console-format"))
         {
             const QString command = getStandardString(Command);
-            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
+            if (command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
+                command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
+                command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
             }
@@ -1357,6 +1443,14 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
                                                            : pdf::PDFRgbToCmykOutputIntentPolicy::Replace;
     }
 
+    if (optionFlags.testFlag(PreflightProfileManage))
+    {
+        options.preflightProfilePath = parser->value("profile");
+        options.preflightProfileOutputPath = parser->value("out");
+        options.preflightProfileForkId = parser->value("id");
+        options.preflightProfileForkVersion = parser->value("profile-version");
+    }
+
     if (optionFlags.testFlag(PreflightProfile))
     {
         options.preflightProfilePath = parser->value("profile");
@@ -1364,6 +1458,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightProfileStorePath = parser->value("profile-store");
         options.preflightDecisionsPath = parser->value("decisions");
         options.preflightDecisionsExportPath = parser->value("export-decisions");
+        options.preflightCertificateOutputPath = parser->value("certify");
         options.preflightRequireSignoff = parser->isSet("require-signoff");
         options.preflightClientId = parser->value("client");
         options.preflightProductId = parser->value("product");
@@ -1383,9 +1478,39 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         }
     }
 
+    if (optionFlags.testFlag(PreflightReportFile))
+    {
+        options.preflightReportPath = parser->value("report-file");
+    }
+
+    if (optionFlags.testFlag(VerifyPreflightCertificate))
+    {
+        options.preflightCertificatePath = positionalArguments.value(0);
+        options.document = positionalArguments.value(1);
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleExport))
+    {
+        options.evidenceBundleOutputDirectory = parser->value("output");
+        options.evidenceBundleReportPath = parser->value("report");
+        options.evidenceBundleCertificatePath = parser->value("certificate");
+        options.evidenceBundleSignOffPath = parser->value("sign-off");
+        options.evidenceBundleArtifactPath = parser->value("artifact");
+    }
+
+    if (optionFlags.testFlag(EvidenceBundleVerify))
+    {
+        options.evidenceBundlePath = positionalArguments.value(0);
+    }
+
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         options.capabilitiesCommand = parser->value("command").trimmed();
+    }
+
+    if (optionFlags.testFlag(SchemaDiagnostics))
+    {
+        options.schemaInputPath = parser->value("input");
     }
 
     if (optionFlags.testFlag(OcrOptions))
@@ -1951,6 +2076,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.repairOutputDocument = parser->value("output");
         options.repairReportFile = parser->value("report-file");
         options.repairRenderDirectory = parser->value("render-dir");
+        options.repairApprovalFile = parser->value("approval-file");
         options.repairListOperations = parser->isSet("list-operations");
         options.repairAllowIncomplete = parser->isSet("allow-incomplete");
         options.preflightProfilePath = parser->value("profile");
@@ -2669,6 +2795,34 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutputs(const PDF
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, conflict.code, message,
                          QJsonObject{ { QStringLiteral("path"), conflict.path } });
         return PDFToolExitCode::InvalidInvocation;
+    }
+
+    return PDFToolExitCode::Success;
+}
+
+PDFToolExitCode PDFToolAbstractApplication::validateOperationSaveRequest(const PDFToolOptions& options,
+                                                                         const QString& sourcePath,
+                                                                         const QString& outputPath,
+                                                                         const pdf::PDFOperationSavePolicy& required,
+                                                                         bool appendInPlace) const
+{
+    pdf::PDFSaveRequest request;
+    request.sourcePath = sourcePath;
+    request.outputPath = outputPath;
+    request.required = required;
+    request.requested = required;
+    request.requestedExplicitly = true;
+    request.appendInPlace = appendInPlace;
+
+    const pdf::PDFOperationResult validation = pdf::validateSaveRequest(request);
+    if (!validation)
+    {
+        // The Core message is the pinned contract text; translating it would
+        // break the contract, so it is reported verbatim.
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("save-policy.refused"),
+                         validation.getErrorMessage(),
+                         QJsonObject{ { QStringLiteral("path"), outputPath } });
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     return PDFToolExitCode::Success;

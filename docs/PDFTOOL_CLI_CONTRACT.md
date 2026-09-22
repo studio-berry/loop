@@ -38,6 +38,13 @@ option values, local paths, environment variables, sidecar locations, or
 secrets. Fixup metadata is sourced from the Core implementation registry and
 contains only fixups available in the current build.
 
+The four published `schemas[].version` values are read from the compatibility
+matrix through `pdf::currentSchemaVersion()`, so discovery cannot drift from the
+authority Core enforces. The matrix itself is published by `PdfTool schema` with
+no `--input` (under `data.matrix`). The published ids and versions are unchanged:
+`loop-preflight-profile` 1, `loop-preflight-report` 3, `pdftool-discovery` 1,
+`pdftool-envelope` 1.
+
 ## Envelope
 
 ```json
@@ -140,6 +147,34 @@ In JSON mode, handled errors and warnings are captured in `diagnostics` and are
 **not** additionally written to stderr. In text/XML/HTML mode the existing
 human-facing stderr behavior is preserved.
 
+### Save-policy refusals
+
+A command that declares a save mode also declares what that mode has to
+guarantee. `redact` removes prior content, so its result is always a full
+rewrite and never an append. `add-bleed` and `rgb-to-cmyk` are corrective
+commands: they take the policy from their own operation registration
+(`PDFRepairRegistry::instance().find(<id>)->savePolicy()`) instead of repeating
+the rationale in the CLI, so the declaration is the single authority and the
+command cannot talk the operation out of it. The guard runs before the document
+is read, so an incompatible request is rejected before any content is touched.
+
+| Command | `code` | Exit | Guard | `message` |
+|---|---|---|---|---|
+| `redact` | `save-policy.refused` | `4 processing-failure` | Redaction removes prior content, so the output must be a full rewrite written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+| `add-bleed` | `save-policy.refused` | `4 processing-failure` | The operation declares `saveAsNewArtifact` ("bleed correction must preserve the trusted source"), so the candidate must be written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+| `rgb-to-cmyk` | `save-policy.refused` | `4 processing-failure` | The operation declares `saveAsNewArtifact` ("color conversion creates a production candidate"), so the candidate must be written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+
+`context` carries the refused output path as `path`. The diagnostic is an
+`error`, the run records no output, and the input file is left byte-identical:
+`PdfTool redact received.pdf received.pdf`,
+`PdfTool add-bleed received.pdf --output received.pdf`, and
+`PdfTool rgb-to-cmyk received.pdf --output received.pdf --target-profile <icc>`
+are never successful invocations.
+
+The refusal is not conditional on `--overwrite`, which only authorises replacing
+an existing candidate, and it applies in `--dry-run` and `--report` mode too: an
+invocation that can never succeed must not be reported as a plan.
+
 ### Empty results
 
 Extraction commands (`fetch-images`, `fetch-text`, `attachments`) complete
@@ -184,11 +219,13 @@ file. A run where some files succeed and some fail reports `partial-output`.
 
 `--console-format json` and `--console-format=json` are detected from the raw
 command line before parsing, so that malformed command lines still return a
-valid JSON error envelope when JSON was requested. The `preflight`, `ocr`, and
-`capabilities` commands default to JSON because their contracts are
-machine-readable; malformed invocations of those commands therefore also
-return the envelope. Supplying a different console format to those commands is
-an invalid invocation.
+valid JSON error envelope when JSON was requested. The `preflight`, `ocr`,
+`capabilities`, `schema`, `verify-certificate`, `export-evidence-bundle`, and
+`verify-evidence-bundle` commands default to JSON because their contracts
+are machine-readable; malformed invocations of those commands therefore also
+return the envelope. Supplying a different console format to `preflight`,
+`ocr`, `capabilities`, `schema`, `export-evidence-bundle`, or
+`verify-evidence-bundle` is an invalid invocation.
 
 ## Unknown command
 
@@ -204,9 +241,37 @@ process must no longer appear successful.
 | `diff` | Difference report | `1 findings` |
 | `verify-signatures`, `verify-redaction` | Verification report | `1 findings` |
 | `preflight` | `{ "report": <existing preflight report> }` | `1 findings` |
+| `export-evidence-bundle` | `{ "manifest": <bundle manifest>, "bundle_directory": <path>, "member_count": <n> }` | `1 findings` when the bundle is refused |
+| `verify-evidence-bundle` | `{ "verification": <bundle verification record> }` | `1 findings` when the bundle does not verify |
 | `ocr` | `{ "report": <existing OCR report> }` | `5 partial-output` |
+| `schema` | `{ "matrix": <compatibility matrix> }` or the artifact diagnostic (below) | `1 findings` when the artifact is incompatible |
 | `render`, `separate`, image/attachment extraction | Summary + `outputs[]` | `5 partial-output` |
 | `optimize`, `redact`, encrypt/decrypt, unite, add-bleed | Operation data + final output | Usually `4 processing-failure` on failure |
+
+### `schema`
+
+```json
+{
+  "input": "report.json",
+  "schema_kind": "preflight-report",
+  "schema_version": "99.0",
+  "compatibility": "unsupported-major",
+  "code": "schema.unsupported-major",
+  "message": "Unsupported schema major: kind 'preflight-report' version 99; this build supports major(s) 1, 2, 3.",
+  "migration": { "required": false, "applied": false, "document_ready": false, "from": "", "to": "" }
+}
+```
+
+Exit `0` when `compatibility` is `compatible`, exit `1` (`findings`) otherwise,
+exit `3` (`input-error`) when the file cannot be read or is not a JSON object.
+`migration.required` is true when a supported older major would need a migration,
+`migration.applied` is true when one was produced, and `migration.document_ready`
+is false whenever the artifact could not be prepared (an unreadable or absent
+`schema_version`, an unsupported major, or a supported major with no migrator
+yet). `migration.from` and `migration.to` are the version the document was at and
+the version it is at after preparation — empty strings when preparation aborted
+before it assigned them, which is why `schema_version` above (not
+`migration.from`) is the field that carries the artifact's own version.
 
 ## Schema
 

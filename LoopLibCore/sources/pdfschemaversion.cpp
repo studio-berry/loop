@@ -22,7 +22,9 @@
 
 #include "pdfschemaversion.h"
 
+#include <QCryptographicHash>
 #include <QFile>
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -59,14 +61,99 @@ QJsonObject loadCompatibilityMatrix()
 PDFSchemaVersion parseCurrentVersion(const QJsonObject& entry)
 {
     bool ok = false;
-    PDFSchemaVersion version = PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("current")), &ok);
+    const PDFSchemaVersion version = PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("current")), &ok);
     if (!ok)
     {
-        const int major = entry.value(QStringLiteral("supported_majors")).toArray().last().toInt(1);
-        version.major = static_cast<quint16>(major);
-        version.minor = 0;
+        // No readable `current` means no known current version. Deriving a major
+        // from `supported_majors` would invent the version the matrix declined
+        // to declare and relabel documents as current on its strength, so fail
+        // closed with the same invalid version an absent entry yields.
+        return {};
     }
     return version;
+}
+
+QString supportedMajorsText(const QJsonObject& matrix, PDFSchemaKind kind)
+{
+    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
+    const QJsonArray supported =
+        kinds.value(pdfSchemaKindToString(kind)).toObject().value(QStringLiteral("supported_majors")).toArray();
+    QStringList majors;
+    for (const QJsonValue& major : supported)
+    {
+        majors.append(QString::number(major.toInt()));
+    }
+    return majors.join(QStringLiteral(", "));
+}
+
+QString stableFindingIdFromJson(const QJsonObject& finding)
+{
+    const QString objectId = finding.value(QStringLiteral("object_id")).toVariant().toString();
+    const int page = finding.value(QStringLiteral("page")).toInt(0);
+    QString scope = finding.value(QStringLiteral("scope")).toString();
+    if (scope.isEmpty())
+    {
+        scope = !objectId.isEmpty() ? QStringLiteral("object")
+                                    : (page > 0 ? QStringLiteral("page") : QStringLiteral("document"));
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(finding.value(QStringLiteral("check_id")).toString().toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(scope.toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(QByteArray::number(page));
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(objectId.toUtf8());
+    hash.addData(QByteArrayLiteral("\x1f"));
+    hash.addData(finding.value(QStringLiteral("type")).toString().toUtf8());
+    return QString::fromLatin1(hash.result().toHex().left(16));
+}
+
+QJsonObject migratePreflightReportV3ToV4(QJsonObject document)
+{
+    for (const QString& field : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        const QJsonValue section = document.value(field);
+        if (!section.isArray())
+        {
+            continue;
+        }
+        QJsonArray findings = section.toArray();
+        for (qsizetype index = 0; index < findings.size(); ++index)
+        {
+            QJsonObject finding = findings.at(index).toObject();
+            if (finding.value(QStringLiteral("id")).toString().isEmpty())
+            {
+                finding.insert(QStringLiteral("id"), stableFindingIdFromJson(finding));
+                findings[index] = finding;
+            }
+        }
+        document.insert(field, findings);
+    }
+
+    // A pre-v4 failed report can have an empty blocking list solely because its
+    // findings had no stable ids yet. Reconstruct that list from error findings;
+    // existing explicit dispositions remain untouched.
+    QJsonObject verdict = document.value(QStringLiteral("verdict")).toObject();
+    if (verdict.value(QStringLiteral("state")).toString() == QStringLiteral("fail") &&
+        verdict.value(QStringLiteral("blocking_finding_ids")).toArray().isEmpty())
+    {
+        QJsonArray blocking;
+        for (const QJsonValue& item : document.value(QStringLiteral("errors")).toArray())
+        {
+            const QString id = item.toObject().value(QStringLiteral("id")).toString();
+            if (!id.isEmpty())
+            {
+                blocking.append(id);
+            }
+        }
+        verdict.insert(QStringLiteral("blocking_finding_ids"), blocking);
+        document.insert(QStringLiteral("verdict"), verdict);
+    }
+
+    document.insert(QStringLiteral("schema_version"), 4);
+    return document;
 }
 
 QJsonObject migratePreflightReportV2ToV3(QJsonObject document)
@@ -141,6 +228,15 @@ QJsonObject migratePreflightReportV1ToV2(QJsonObject document)
     {
         document.insert(QStringLiteral("schema_kind"), pdfSchemaKindToString(PDFSchemaKind::PreflightReport));
     }
+    document.insert(QStringLiteral("schema_version"), 2);
+    return document;
+}
+
+QJsonObject migrateActionListV1ToV2(QJsonObject document)
+{
+    // Action List v2 keeps the v1 fields and adds selector-capable steps, so
+    // the legacy recipe can advance without dropping unknown fields.
+    document.insert(QStringLiteral("schema"), QStringLiteral("loop-action-list/2"));
     document.insert(QStringLiteral("schema_version"), 2);
     return document;
 }
@@ -302,9 +398,13 @@ PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
                                                           PDFSchemaVersion version,
                                                           const QJsonObject& matrix)
 {
-    if (kind == PDFSchemaKind::Unknown || !version.isValid())
+    if (kind == PDFSchemaKind::Unknown)
     {
         return PDFSchemaCompatibility::UnknownKind;
+    }
+    if (!version.isValid())
+    {
+        return PDFSchemaCompatibility::Invalid;
     }
 
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
@@ -336,29 +436,78 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
     return checkSchemaCompatibilityWithMatrix(kind, version, loadCompatibilityMatrix());
 }
 
-PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind)
+QString pdfSchemaCompatibilityToString(PDFSchemaCompatibility compatibility)
 {
-    const QJsonObject matrix = loadCompatibilityMatrix();
-    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
-    const QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
-    if (!entry.isEmpty())
+    switch (compatibility)
     {
-        return parseCurrentVersion(entry);
-    }
-
-    switch (kind)
-    {
-        case PDFSchemaKind::PreflightReport:
-            return { 3, 0 };
-        case PDFSchemaKind::HistoryDb:
-        case PDFSchemaKind::PageMasterManifest:
-            return { 3, 0 };
-        default:
-            return { 1, 0 };
-        case PDFSchemaKind::Unknown:
+        case PDFSchemaCompatibility::Compatible:
+            return QStringLiteral("compatible");
+        case PDFSchemaCompatibility::UnsupportedMajor:
+            return QStringLiteral("unsupported-major");
+        case PDFSchemaCompatibility::UnknownKind:
+            return QStringLiteral("unknown-kind");
+        case PDFSchemaCompatibility::Invalid:
             break;
     }
-    return {};
+    return QStringLiteral("invalid");
+}
+
+PDFSchemaCompatibilityDiagnostic schemaCompatibilityDiagnostic(PDFSchemaKind kind, PDFSchemaVersion version)
+{
+    PDFSchemaCompatibilityDiagnostic diagnostic;
+    diagnostic.kind = kind;
+    diagnostic.version = version;
+    diagnostic.compatibility = checkSchemaCompatibility(kind, version);
+
+    switch (diagnostic.compatibility)
+    {
+        case PDFSchemaCompatibility::Compatible:
+            diagnostic.code = QStringLiteral("schema.compatible");
+            diagnostic.message = QStringLiteral("Schema kind '%1' version %2 is supported.")
+                                     .arg(pdfSchemaKindToString(kind), version.toString());
+            break;
+        case PDFSchemaCompatibility::UnsupportedMajor:
+            diagnostic.code = QStringLiteral("schema.unsupported-major");
+            // The message names the unsupported major; the full MAJOR.MINOR is
+            // carried by `diagnostic.version` and reported as `schema_version`.
+            diagnostic.message =
+                QStringLiteral("Unsupported schema major: kind '%1' version %2; this build supports major(s) %3.")
+                    .arg(pdfSchemaKindToString(kind), QString::number(version.major),
+                         supportedMajorsText(loadCompatibilityMatrix(), kind));
+            break;
+        case PDFSchemaCompatibility::UnknownKind:
+            diagnostic.code = QStringLiteral("schema.unknown-kind");
+            diagnostic.message =
+                QStringLiteral("Unknown schema kind: the document declares no recognised 'schema_kind'.");
+            break;
+        case PDFSchemaCompatibility::Invalid:
+            diagnostic.code = QStringLiteral("schema.invalid-version");
+            diagnostic.message = QStringLiteral(
+                "Invalid schema version: 'schema_version' must be an integer major or a \"MAJOR.MINOR\" string.");
+            break;
+    }
+    return diagnostic;
+}
+
+QJsonObject schemaCompatibilityMatrix()
+{
+    return loadCompatibilityMatrix();
+}
+
+PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind)
+{
+    return currentSchemaVersionWithMatrix(kind, loadCompatibilityMatrix());
+}
+
+PDFSchemaVersion currentSchemaVersionWithMatrix(PDFSchemaKind kind, const QJsonObject& matrix)
+{
+    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
+    const QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
+    if (entry.isEmpty())
+    {
+        return {};
+    }
+    return parseCurrentVersion(entry);
 }
 
 QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document)
@@ -373,8 +522,18 @@ QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJs
         if (from.major == 2)
         {
             document = migratePreflightReportV2ToV3(std::move(document));
+            from = { 3, 0 };
+        }
+        if (from.major == 3)
+        {
+            document = migratePreflightReportV3ToV4(std::move(document));
         }
         return document;
+    }
+
+    if (kind == PDFSchemaKind::ActionList && from.major == 1)
+    {
+        return migrateActionListV1ToV2(std::move(document));
     }
 
     Q_UNUSED(from);
@@ -393,7 +552,10 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
     }
     if (envelope.kind == PDFSchemaKind::Unknown)
     {
-        envelope.kind = PDFSchemaKind::PreflightReport;
+        // Neither the document nor the caller identifies the contract. Guessing
+        // a kind would interpret unknown bytes as a preflight report.
+        result.document = {};
+        return result;
     }
 
     if (!envelope.version.isValid())
@@ -414,7 +576,10 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
 
     const PDFSchemaVersion target = currentSchemaVersion(envelope.kind);
     result.fromVersion = envelope.version;
-    result.toVersion = target;
+    // toVersion is the version the document is at when this returns; only a
+    // migration moves it. Reporting the matrix target here would tell a caller
+    // it holds current bytes while it holds a newer minor payload.
+    result.toVersion = envelope.version;
 
     while (envelope.version.major < target.major)
     {

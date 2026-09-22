@@ -22,6 +22,8 @@
 
 #include "preflightfindingsmodel.h"
 
+#include "findingnavigation.h"
+
 #include <QSet>
 #include <QVariant>
 
@@ -226,7 +228,7 @@ void PreflightFindingsModel::clear()
 
 void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
 {
-    if (!findingId.isEmpty() && !finding(findingId))
+    if ((!findingId.isEmpty() && !finding(findingId)) || m_selectedFindingId == findingId)
     {
         return;
     }
@@ -327,9 +329,12 @@ QVector<FindingOverlay> PreflightFindingsModel::overlays(const QString& document
     {
         return result;
     }
+    const FindingTargetingCapabilityRegistry capabilities = FindingTargetingCapabilityRegistry::defaultRegistry();
     for (const PreflightFindingView& finding : m_findings)
     {
-        if (finding.page == page)
+        const auto capability = capabilities.capabilityFor(finding.checkId);
+        if (finding.page == page && hasRenderableBbox(finding.bbox) &&
+            capability.has_value() && capability->supportsOverlayEvidence)
         {
             result.push_back({ finding.id, finding.documentRevision, finding.page, finding.bbox,
                                finding.severity, finding.selected });
@@ -377,9 +382,12 @@ QHash<QString, int> PreflightFindingsModel::groupCounts(QString severity) const
 QList<InteractionTarget> PreflightFindingsModel::interactionTargets() const
 {
     QList<InteractionTarget> targets;
+    const FindingTargetingCapabilityRegistry capabilities = FindingTargetingCapabilityRegistry::defaultRegistry();
     for (const PreflightFindingView& finding : m_findings)
     {
-        if (!hasRenderableBbox(finding.bbox) || finding.page <= 0)
+        const auto capability = capabilities.capabilityFor(finding.checkId);
+        if (!hasRenderableBbox(finding.bbox) || finding.page <= 0 ||
+            !capability.has_value() || !capability->supportsOverlayEvidence)
         {
             continue;
         }
