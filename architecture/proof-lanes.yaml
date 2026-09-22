@@ -164,13 +164,17 @@ subsystems:
         id: UnitTestsStandardOracle
         policy_module: preflight
         executes: binding
-      - kind: fixture
+      - kind: architecture
         bind: fixture
         id: loop-preflight/testdata/fixtures
         executes: binding
       - kind: architecture
         bind: catalog
         id: docs/generated/preflight-check-catalog.json
+        executes: binding
+      - kind: architecture
+        bind: catalog
+        id: docs/generated/preflight-corpus-coverage.json
         executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
@@ -359,6 +363,7 @@ migration:
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
     - UnitTestsGovernedExecution
+    - UnitTestsImageDecodeGuard
     - UnitTestsImageDownsampleFixup
     - UnitTestsObjectSelector
     - UnitTestsOcrPageGate
