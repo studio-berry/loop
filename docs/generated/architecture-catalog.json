@@ -421,6 +421,7 @@
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
+    "UnitTestsImageDecodeGuard",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",

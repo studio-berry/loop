@@ -37,6 +37,7 @@ namespace pdf
 class PDFStream;
 class PDFDocument;
 class PDFObjectStorage;
+class PDFProcessingBudget;
 class PDFRenderErrorReporter;
 
 /// Alternate image object. Defines alternate image, which
@@ -78,7 +79,8 @@ public:
                                 PDFColorSpacePointer colorSpace,
                                 bool isSoftMask,
                                 RenderingIntent renderingIntent,
-                                PDFRenderErrorReporter* errorReporter);
+                                PDFRenderErrorReporter* errorReporter,
+                                PDFProcessingBudget* processingBudget = nullptr);
 
     enum class ImageCompression
     {

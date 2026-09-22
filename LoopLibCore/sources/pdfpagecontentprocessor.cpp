@@ -3163,10 +3163,13 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
         }
     }
 
-    PDFImage pdfImage = PDFImage::createImage(m_document, stream, qMove(colorSpace), false, m_graphicState.getRenderingIntent(), this);
+    PDFImage pdfImage = PDFImage::createImage(m_document, stream, qMove(colorSpace), false, m_graphicState.getRenderingIntent(), this, m_processingBudget);
 
     if (!performOriginalImagePainting(pdfImage, stream, reference))
     {
+        // Pixels for the decoded image (and codec output buffers) were reserved inside
+        // createImage when a processing budget is attached. getImage must not allocate a
+        // large QImage for truncated sample data.
         QImage image = pdfImage.getImage(m_CMS, this, m_operationControl);
 
         if (!isProcessingCancelled())
@@ -3182,12 +3185,6 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
 
             if (!image.isNull())
             {
-                if (m_processingBudget)
-                {
-                    const uint64_t pixels = static_cast<uint64_t>(image.width()) * static_cast<uint64_t>(image.height());
-                    m_processingBudget->chargeRenderPixels(pixels, PDFTranslationContext::tr("decoded image"));
-                }
-
                 if (PDFImage::canBeConvertedToMonochromatic(image))
                 {
                     image.convertTo(QImage::Format_Mono);

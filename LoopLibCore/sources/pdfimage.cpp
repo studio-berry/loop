@@ -29,6 +29,8 @@
 #include "pdfccittfaxdecoder.h"
 #include "pdfstreamfilters.h"
 #include "pdfimageconversion.h"
+#include "pdfimagedecodeguard.h"
+#include "pdfprocessingbudget.h"
 
 #include <openjpeg.h>
 #include <jpeglib.h>
@@ -49,9 +51,6 @@ namespace pdf
 namespace
 {
 
-constexpr PDFInteger MAXIMUM_PDF_IMAGE_DIMENSION = 16384;
-constexpr PDFInteger MAXIMUM_PDF_IMAGE_PIXELS = MAXIMUM_PDF_IMAGE_DIMENSION * MAXIMUM_PDF_IMAGE_DIMENSION;
-
 struct PreparedImageData
 {
     QByteArray pixels;
@@ -71,13 +70,14 @@ static int clampThreshold(int threshold)
 
 static void validateImageDimensions(PDFInteger width, PDFInteger height)
 {
-    PDFInteger pixelCount = 0;
-    if (width <= 0 || height <= 0 ||
-        width > MAXIMUM_PDF_IMAGE_DIMENSION || height > MAXIMUM_PDF_IMAGE_DIMENSION ||
-        !pdfTryMultiply(width, height, pixelCount) || pixelCount > MAXIMUM_PDF_IMAGE_PIXELS)
-    {
-        throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Invalid size of image (%1x%2)").arg(width).arg(height));
-    }
+    PDFImageDecodeGuard::requireImageDimensions(width, height);
+}
+
+static void reserveImageRaster(PDFProcessingBudget* budget, PDFInteger width, PDFInteger height, QString context)
+{
+    validateImageDimensions(width, height);
+    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height);
+    PDFImageDecodeGuard::reserveRenderPixels(budget, pixels, std::move(context));
 }
 
 static Qt::TransformationMode getTransformationMode(PDFImage::ResampleFilter filter)
@@ -753,14 +753,15 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                                PDFColorSpacePointer colorSpace,
                                bool isSoftMask,
                                RenderingIntent renderingIntent,
-                               PDFRenderErrorReporter* errorReporter)
+                               PDFRenderErrorReporter* errorReporter,
+                               PDFProcessingBudget* processingBudget)
 {
     PDFImage image;
     image.m_colorSpace = colorSpace;
     image.m_renderingIntent = renderingIntent;
 
     const PDFDictionary* dictionary = stream->getDictionary();
-    QByteArray content = document->getDecodedStream(stream);
+    QByteArray content = document->getDecodedStream(stream, processingBudget);
     PDFDocumentDataLoaderDecorator loader(document);
 
     if (content.isEmpty())
@@ -829,7 +830,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         }
         else if (object.isStream())
         {
-            PDFImage softMaskImage = createImage(document, object.getStream(), PDFColorSpacePointer(new PDFDeviceGrayColorSpace()), false, renderingIntent, errorReporter);
+            PDFImage softMaskImage = createImage(document, object.getStream(), PDFColorSpacePointer(new PDFDeviceGrayColorSpace()), false, renderingIntent, errorReporter, processingBudget);
 
             if (softMaskImage.m_imageData.getMaskingType() != PDFImageData::MaskingType::ImageMask ||
                 softMaskImage.m_imageData.getColorChannels() != 1 ||
@@ -860,7 +861,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
 
         if (softMaskObject.isStream())
         {
-            PDFImage softMaskImage = createImage(document, softMaskObject.getStream(), PDFColorSpacePointer(new PDFDeviceGrayColorSpace()), true, renderingIntent, errorReporter);
+            PDFImage softMaskImage = createImage(document, softMaskObject.getStream(), PDFColorSpacePointer(new PDFDeviceGrayColorSpace()), true, renderingIntent, errorReporter, processingBudget);
             maskingType = PDFImageData::MaskingType::SoftMask;
             image.m_softMask = qMove(softMaskImage.m_imageData);
         }
@@ -1053,6 +1054,18 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
             const unsigned int height = codec.output_height;
             const unsigned int components = codec.output_components;
             const unsigned int bitsPerComponent =  8;
+            try
+            {
+                reserveImageRaster(processingBudget,
+                                   static_cast<PDFInteger>(width),
+                                   static_cast<PDFInteger>(height),
+                                   PDFTranslationContext::tr("JPEG image raster"));
+            }
+            catch (...)
+            {
+                jpeg_destroy_decompress(&codec);
+                throw;
+            }
             unsigned int bufferSize = 0;
             if (!pdfTryMultiply(rowStride, height, bufferSize))
             {
@@ -1297,6 +1310,23 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                     QByteArray imageDataBuffer;
                     if (valid)
                     {
+                        try
+                        {
+                            reserveImageRaster(processingBudget,
+                                               static_cast<PDFInteger>(width),
+                                               static_cast<PDFInteger>(height),
+                                               PDFTranslationContext::tr("JPEG 2000 image raster"));
+                        }
+                        catch (const PDFException&)
+                        {
+                            valid = false;
+                            imageData.errors.push_back(PDFRenderError(RenderErrorType::Error,
+                                                                      PDFTranslationContext::tr("Invalid size of image (%1x%2)").arg(width).arg(height)));
+                        }
+                    }
+
+                    if (valid)
+                    {
                         imageDataBuffer = QByteArray(bufferSize, 0);
                         for (unsigned int row = 0; row < h; ++row)
                         {
@@ -1396,26 +1426,58 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         parameters.damagedRowsBeforeError = loader.readIntegerFromDictionary(filterParamsDictionary, "DamagedRowsBeforeError", 0);
         parameters.decode = !decode.empty() ? qMove(decode) : std::vector<PDFReal>({ 0.0, 1.0 });
 
-        QByteArray imageDataBuffer = document->getDecodedStream(stream);
-        PDFCCITTFaxDecoder decoder(&imageDataBuffer, parameters);
+        // Bound /Columns (and /Rows when known) before the CCITT decoder allocates line buffers.
+        const PDFInteger rowsForCap = parameters.rows > 0 ? parameters.rows : 1;
+        PDFImageDecodeGuard::requireImageDimensions(parameters.columns, rowsForCap);
+        if (parameters.rows > 0)
+        {
+            PDFImageDecodeGuard::reserveRenderPixels(processingBudget,
+                                                     static_cast<std::uint64_t>(parameters.columns) * static_cast<std::uint64_t>(parameters.rows),
+                                                     PDFTranslationContext::tr("CCITT image raster"));
+        }
+
+        PDFCCITTFaxDecoder decoder(&content, parameters);
         image.m_imageData = decoder.decode();
+        if (image.m_imageData.isValid())
+        {
+            const PDFInteger decodedRows = static_cast<PDFInteger>(image.m_imageData.getHeight());
+            if (parameters.rows <= 0)
+            {
+                reserveImageRaster(processingBudget, parameters.columns, decodedRows,
+                                   PDFTranslationContext::tr("CCITT image raster"));
+            }
+            else if (decodedRows > parameters.rows)
+            {
+                const std::uint64_t extra = static_cast<std::uint64_t>(parameters.columns) *
+                                           static_cast<std::uint64_t>(decodedRows - parameters.rows);
+                PDFImageDecodeGuard::reserveRenderPixels(processingBudget, extra,
+                                                         PDFTranslationContext::tr("CCITT image raster"));
+            }
+        }
     }
     else if (imageFilterName == "JBIG2Decode")
     {
-        QByteArray data = document->getDecodedStream(stream);
         QByteArray globalData;
         if (filterParamsDictionary)
         {
             const PDFObject& globalDataObject = document->getObject(filterParamsDictionary->get("JBIG2Globals"));
             if (globalDataObject.isStream())
             {
-                globalData = document->getDecodedStream(globalDataObject.getStream());
+                globalData = document->getDecodedStream(globalDataObject.getStream(), processingBudget);
             }
         }
 
-        PDFJBIG2Decoder decoder(qMove(data), qMove(globalData), errorReporter);
+        PDFJBIG2Decoder decoder(QByteArray(content), qMove(globalData), errorReporter);
         image.m_imageData = decoder.decode(maskingType);
         image.m_imageData.setDecode(!decode.empty() ? qMove(decode) : std::vector<PDFReal>({ 0.0, 1.0 }));
+        if (image.m_imageData.isValid())
+        {
+            reserveImageRaster(processingBudget,
+                               static_cast<PDFInteger>(image.m_imageData.getWidth()),
+                               static_cast<PDFInteger>(image.m_imageData.getHeight()),
+                               PDFTranslationContext::tr("JBIG2 image raster"));
+            PDFImageDecodeGuard::requireSufficientSampleBytes(image.m_imageData);
+        }
     }
     else if (colorSpace || isSoftMask)
     {
@@ -1424,7 +1486,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         const unsigned int bitsPerComponent = static_cast<unsigned int>(loader.readIntegerFromDictionary(dictionary, "BitsPerComponent", 8));
         const PDFInteger widthValue = loader.readIntegerFromDictionary(dictionary, "Width", 0);
         const PDFInteger heightValue = loader.readIntegerFromDictionary(dictionary, "Height", 0);
-        validateImageDimensions(widthValue, heightValue);
+        PDFImageDecodeGuard::requireImageDimensions(widthValue, heightValue);
         const unsigned int width = static_cast<unsigned int>(widthValue);
         const unsigned int height = static_cast<unsigned int>(heightValue);
 
@@ -1443,8 +1505,11 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         }
         const unsigned int stride = strideProduct / 8;
 
-        QByteArray imageDataBuffer = document->getDecodedStream(stream);
-        image.m_imageData = PDFImageData(components, bitsPerComponent, width, height, stride, maskingType, qMove(imageDataBuffer), qMove(mask), qMove(decode), qMove(matte));
+        PDFImageDecodeGuard::requireSufficientSampleBytes(content, width, height, components, bitsPerComponent, stride);
+        PDFImageDecodeGuard::reserveRenderPixels(processingBudget,
+                                                 static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height),
+                                                 PDFTranslationContext::tr("image raster"));
+        image.m_imageData = PDFImageData(components, bitsPerComponent, width, height, stride, maskingType, qMove(content), qMove(mask), qMove(decode), qMove(matte));
     }
     else if (imageMask)
     {
@@ -1459,7 +1524,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
 
         const PDFInteger widthValue = loader.readIntegerFromDictionary(dictionary, "Width", 0);
         const PDFInteger heightValue = loader.readIntegerFromDictionary(dictionary, "Height", 0);
-        validateImageDimensions(widthValue, heightValue);
+        PDFImageDecodeGuard::requireImageDimensions(widthValue, heightValue);
         const unsigned int width = static_cast<unsigned int>(widthValue);
         const unsigned int height = static_cast<unsigned int>(heightValue);
 
@@ -1471,8 +1536,11 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         }
         const unsigned int stride = strideValue / 8;
 
-        QByteArray imageDataBuffer = document->getDecodedStream(stream);
-        image.m_imageData = PDFImageData(1, bitsPerComponent, width, height, stride, maskingType, qMove(imageDataBuffer), qMove(mask), qMove(decode), qMove(matte));
+        PDFImageDecodeGuard::requireSufficientSampleBytes(content, width, height, 1, bitsPerComponent, stride);
+        PDFImageDecodeGuard::reserveRenderPixels(processingBudget,
+                                                 static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height),
+                                                 PDFTranslationContext::tr("image mask raster"));
+        image.m_imageData = PDFImageData(1, bitsPerComponent, width, height, stride, maskingType, qMove(content), qMove(mask), qMove(decode), qMove(matte));
     }
 
     return image;
@@ -1604,11 +1672,13 @@ QImage PDFImage::getImage(const PDFCMS* cms,
         }
 
         if (m_imageData.getWidth() == 0 || m_imageData.getHeight() == 0 ||
-            m_imageData.getWidth() > MAXIMUM_PDF_IMAGE_DIMENSION ||
-            m_imageData.getHeight() > MAXIMUM_PDF_IMAGE_DIMENSION)
+            m_imageData.getWidth() > PDFImageDecodeGuard::MAXIMUM_IMAGE_DIMENSION ||
+            m_imageData.getHeight() > PDFImageDecodeGuard::MAXIMUM_IMAGE_DIMENSION)
         {
             throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Invalid size of image (%1x%2)").arg(m_imageData.getWidth()).arg(m_imageData.getHeight()));
         }
+
+        PDFImageDecodeGuard::requireSufficientSampleBytes(m_imageData);
 
         QImage image(m_imageData.getWidth(), m_imageData.getHeight(), QImage::Format_Alpha8);
 

@@ -242,6 +242,8 @@ add_library(LoopLibCore SHARED
     sources/pdfimageoptimizer.h
     sources/pdfimage.cpp
     sources/pdfimage.h
+    sources/pdfimagedecodeguard.cpp
+    sources/pdfimagedecodeguard.h
     sources/pdfdocumentsanitizer.h
     sources/pdfdocumentsanitizer.cpp
     sources/pdfimageconversion.h

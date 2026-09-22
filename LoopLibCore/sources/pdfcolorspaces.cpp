@@ -28,6 +28,7 @@
 #include "pdfpattern.h"
 #include "pdfcms.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfimagedecodeguard.h"
 
 #include <QCryptographicHash>
 
@@ -264,6 +265,9 @@ QImage PDFAbstractColorSpace::getImage(const PDFImageData& imageData,
 {
     if (imageData.isValid())
     {
+        // Reject truncated sample buffers before allocating a full WxH raster.
+        PDFImageDecodeGuard::requireSufficientSampleBytes(imageData);
+
         switch (imageData.getMaskingType())
         {
             case PDFImageData::MaskingType::None:
@@ -643,6 +647,8 @@ QImage PDFAbstractColorSpace::createAlphaMask(const PDFImageData& softMask)
     {
         throw PDFException(PDFTranslationContext::tr("Invalid size of soft mask."));
     }
+
+    PDFImageDecodeGuard::requireSufficientSampleBytes(softMask);
 
     QImage image(softMask.getWidth(), softMask.getHeight(), QImage::Format_Alpha8);
 
@@ -2206,6 +2212,8 @@ QImage PDFIndexedColorSpace::getImage(const PDFImageData& imageData,
 {
     if (imageData.isValid())
     {
+        PDFImageDecodeGuard::requireSufficientSampleBytes(imageData);
+
         auto createRGBPalette = [&]()
         {
             std::vector<std::array<unsigned char, 3>> palette(m_maxValue + 1);
