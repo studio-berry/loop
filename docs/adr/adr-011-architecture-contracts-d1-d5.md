@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** governed execution (#369/#370) + contract closure (#675)
-**Last-verified:** 2026-09-22 @ b45caba74c919b1d42e1d6a55fa44fc83a2de748
+**Last-verified:** 2026-09-22 @ ff7b76563119980390e1a4cd0737e904007e6fac
 **Superseded-by:** none
 **Date:** 2026-09-22
 **Deciders:** Loop 0.3.0 release architecture (#638 / #675)
