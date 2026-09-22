@@ -277,7 +277,7 @@ subsystems:
         id: agent-policy:pdftool
         executes: binding
   - id: pdf-worker-isolation
-    summary: PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618).
+    summary: "PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618)."
     owns_targets: true
     paths:
       - PdfTool/loop-pdf-worker-main.cpp

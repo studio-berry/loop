@@ -54,6 +54,7 @@ LEGACY_TOKEN_ALLOWLIST = frozenset(
 ENTRYPOINT_SURFACES = {
     "LoopEditor/main.cpp": "LoopEditor",
     "PdfTool/main.cpp": "PdfTool",
+    "PdfTool/loop-pdf-worker-main.cpp": "LoopPdfWorker",
     "CodeGenerator/main.cpp": "CodeGenerator",
     "JBIG2_Viewer/main.cpp": "Jbig2Viewer",
     "PdfExampleGenerator/main.cpp": "PdfExampleGenerator",

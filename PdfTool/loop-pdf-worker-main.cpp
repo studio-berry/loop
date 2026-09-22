@@ -56,8 +56,7 @@ int main(int argc, char* argv[])
     // reporter. A hostile PDF that crashes this process must not produce a
     // customer-content minidump (R-008).
     QCoreApplication application(argc, argv);
-    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
-    QCoreApplication::setApplicationName(QStringLiteral("loop-pdf-worker"));
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopPdfWorker);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Isolated LoopLibCore worker for untrusted open/preflight"));
