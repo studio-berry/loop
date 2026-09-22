@@ -24,6 +24,7 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdfimage.h"
+#include "pdfimagedecodeguard.h"
 #include "pdfpattern.h"
 #include "pdfexecutionpolicy.h"
 #include "pdfstreamfilters.h"
@@ -3167,9 +3168,20 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
 
     if (!performOriginalImagePainting(pdfImage, stream, reference))
     {
-        // Pixels for the decoded image (and codec output buffers) were reserved inside
-        // createImage when a processing budget is attached. getImage must not allocate a
-        // large QImage for truncated sample data.
+        // Reserve declared output pixels before color-space rasterization. Codec
+        // paths that allocate inside createImage already reserved there.
+        if (m_processingBudget)
+        {
+            const PDFImageData& imageData = pdfImage.getImageData();
+            if (imageData.isValid())
+            {
+                const std::uint64_t pixels = static_cast<std::uint64_t>(imageData.getWidth()) *
+                                            static_cast<std::uint64_t>(imageData.getHeight());
+                PDFImageDecodeGuard::reserveRenderPixels(m_processingBudget, pixels,
+                                                         PDFTranslationContext::tr("decoded image"));
+            }
+        }
+
         QImage image = pdfImage.getImage(m_CMS, this, m_operationControl);
 
         if (!isProcessingCancelled())
