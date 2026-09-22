@@ -41,7 +41,14 @@ MODULE = (
 )
 
 WINDOWS_CACHE = "CMAKE_CXX_COMPILER:FILEPATH=C:/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe\r\n"
-LINUX_CACHE = "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++\r\n"
+# Visual Studio generator caches omit CMAKE_CXX_COMPILER. This is the shape
+# written by windows-latest when cmake is invoked without -G.
+VISUAL_STUDIO_CACHE = (
+    "CMAKE_CXX_FLAGS:STRING=/DWIN32 /D_WINDOWS /GR /EHsc\r\n"
+    "CMAKE_LINKER:FILEPATH=C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/link.exe\r\n"
+    "CMAKE_GENERATOR:INTERNAL=Visual Studio 17 2022\r\n"
+)
+LINUX_CACHE = "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++\r\nCMAKE_GENERATOR:INTERNAL=Unix Makefiles\r\n"
 
 
 def ctestfile(provisioned: str, unprovisioned: str) -> str:
@@ -143,8 +150,16 @@ class QtTestRuntimeBuildTest(unittest.TestCase):
 
     def test_windows_build_detection(self) -> None:
         self.assertTrue(windows_build(WINDOWS_CACHE))
+        self.assertTrue(windows_build(VISUAL_STUDIO_CACHE))
         self.assertFalse(windows_build(LINUX_CACHE))
         self.assertFalse(windows_build(""))
+
+    def test_visual_studio_generator_cache_is_a_windows_build(self) -> None:
+        text = (
+            'add_test(One "x")\r\n'
+            f'set_tests_properties(One PROPERTIES ENVIRONMENT_MODIFICATION "{PREPEND}C:/Qt/bin")\r\n'
+        )
+        self.assertEqual(check_build(VISUAL_STUDIO_CACHE, text), [])
 
 
 if __name__ == "__main__":
