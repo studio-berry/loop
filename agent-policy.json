@@ -31,7 +31,8 @@
       "push_or_merge",
       "history_rewrite",
       "upstream_sync",
-      "signing_or_credential_operations"
+      "signing_or_credential_operations",
+      "sealed_fixture_output_changes"
     ]
   },
   "source_of_truth": [
@@ -175,7 +176,8 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsProfileIdentity",
         "UnitTestsOperatorAcceptance",
-        "UnitTestsStandardOracle"
+        "UnitTestsStandardOracle",
+        "UnitTestsPreflightWorkflowAcceptance"
       ]
     },
     "pagemaster": {
@@ -208,6 +210,9 @@
         "LoopLibQuick/**",
         "LoopEditor/editorhost.cpp",
         "LoopEditor/editorhost.h",
+        "LoopEditor/quickdocumentmodel.cpp",
+        "LoopEditor/quickdocumentmodel.h",
+        "UnitTests/tst_quickdocumentmodeltest.cpp",
         "LoopEditor/documentviewsession.cpp",
         "LoopEditor/documentviewsession.h",
         "LoopEditor/main.cpp",
@@ -224,7 +229,7 @@
         "ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoopLibQuick", "LoopEditor", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
     },
     "developer_widgets": {
       "paths": [
@@ -268,6 +273,7 @@
     "source_integrity",
     "architecture_catalog",
     "policy_adapters",
+    "architecture_contracts",
     "changelog"
   ],
   "changelog": {

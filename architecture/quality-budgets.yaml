@@ -1,0 +1,124 @@
+format_version: 1
+kind: quality-budgets
+description: Movement checks for visual and data work. Enforced metrics compare a committed baseline. Declared metrics must still exist for the mapped subsystems.
+require_budget:
+  - bleed-fixup
+  - document-search
+  - preflight
+  - packaging
+  - quick
+  - fixture-lifecycle
+metrics:
+  - id: preflight-fixture-count
+    subsystem: preflight
+    lane: fixture
+    comparison: minimum
+    minimum: 62
+    unit: pdfs
+    enforcement: enforced
+    baseline: loop-preflight/testdata/fixtures
+    baseline_kind: pdf-count
+    fixture_class: regression
+    agent_tunable: false
+  - id: rendering-channel-delta
+    subsystem: quick
+    lane: differential
+    comparison: maximum
+    maximum: 2
+    unit: channel-delta
+    enforcement: enforced
+    baseline: UnitTests/testdata/canvas-parity/budgets.json
+    baseline_kind: canvas-parity-field
+    baseline_field: max_channel_delta_budget
+    fixture_class: regression
+    agent_tunable: false
+  - id: rendering-differing-pixels
+    subsystem: quick
+    lane: differential
+    comparison: maximum
+    maximum: 64
+    unit: pixels
+    enforcement: enforced
+    baseline: UnitTests/testdata/canvas-parity/budgets.json
+    baseline_kind: canvas-parity-field
+    baseline_field: differing_pixel_budget
+    fixture_class: regression
+    agent_tunable: false
+  - id: rendering-geometry-tolerance
+    subsystem: quick
+    lane: differential
+    comparison: maximum
+    maximum: 0.5
+    unit: mm
+    enforcement: enforced
+    baseline: UnitTests/testdata/canvas-parity/budgets.json
+    baseline_kind: canvas-parity-field
+    baseline_field: geometry_tolerance_mm
+    fixture_class: regression
+    agent_tunable: false
+  - id: search-latency
+    subsystem: document-search
+    lane: unit
+    comparison: maximum
+    maximum: 150
+    unit: ms/page
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: No committed per-page search timing baseline. TODO record a ctest measurement before this budget can fail a run.
+  - id: bleed-fixup-latency
+    subsystem: bleed-fixup
+    lane: unit
+    comparison: maximum
+    maximum: 150
+    unit: ms/page
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: No committed bleed-fixup timing baseline. TODO attach UnitTestsBleedFixup elapsed time.
+  - id: resident-memory
+    subsystem: core
+    lane: unit
+    comparison: maximum
+    maximum: 512
+    unit: MiB
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: No committed RSS baseline. TODO sample the widgets-free unit-test process.
+  - id: parser-differential-agreement
+    subsystem: preflight
+    lane: differential
+    comparison: minimum
+    minimum: 1
+    unit: agreement
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: UnitTestsStandardOracle exists. TODO publish an agreement ratio artifact and compare it here.
+  - id: packaging-size
+    subsystem: packaging
+    lane: packaging
+    comparison: maximum_regression_percent
+    maximum_regression_percent: 2
+    unit: percent
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: No committed package-byte baseline. TODO compare Linux and Windows artifacts to a recorded size.
+  - id: sealed-rendering-channel-delta
+    subsystem: fixture-lifecycle
+    lane: sealed-eval
+    comparison: maximum
+    maximum: 2
+    unit: channel-delta
+    enforcement: declared
+    harness: pending
+    fixture_class: sealed-eval
+    agent_tunable: false
+    todo: Held-out raised-text, mixed-paint, and texture measurement is not produced in v1. Agents must not retune this cap.

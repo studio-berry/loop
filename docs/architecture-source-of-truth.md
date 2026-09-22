@@ -48,3 +48,8 @@ result. Product versioning is the matching input at
 [`docs/version-policy.json`](version-policy.json) (Semantic Versioning 2.0,
 current `0.2.0-alpha`). Ephemeral topic branches are not architecture facts
 and are not copied into the catalog.
+
+Proof lanes, dependency boundaries, fixture classes, and quality budgets live
+in [`architecture/`](../architecture/). `scripts/agent/check-architecture.py`
+fails when a changed subsystem has no proof lane, a sealed fixture changes
+without approval, or an enforced budget moves past its baseline.

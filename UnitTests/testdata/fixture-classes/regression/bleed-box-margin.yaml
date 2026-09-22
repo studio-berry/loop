@@ -1,0 +1,10 @@
+id: bleed-box-margin
+class: regression
+origin: loop-preflight/testdata/fixtures/bleed-adequate.pdf
+expected_behavior: A page with 10pt of bleed margin passes the bleed check at amount_pt 9. Do not loosen the expected pass to make a suite green.
+difficulty: medium
+why_it_exists: Protects bleed-box fallback behavior that UnitTestsBleedFixup and the preflight corpus already cover.
+metrics:
+  - preflight-fixture-count
+approval_required: true
+expected_output: pass

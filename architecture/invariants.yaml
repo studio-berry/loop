@@ -1,0 +1,29 @@
+format_version: 1
+kind: invariants
+description: Machine-checked architecture invariants. Numbered product invariants remain in docs/architecture-invariants.json and the generated catalog.
+source_catalog: docs/architecture-invariants.json
+checks:
+  - id: forbidden-dependencies
+    enforcement: enforced
+    summary: Product layers must not link or include Widgets, and core must not link presentation or tool layers.
+  - id: dependency-direction
+    enforcement: enforced
+    summary: Each product target may link only the libraries named on its layer.
+  - id: storage-boundaries
+    enforcement: enforced
+    summary: Interaction, the Quick document model, and the preflight engine do not open settings, SQL, or the network.
+  - id: deterministic-core
+    enforcement: enforced
+    summary: LoopLibCore does not include QtNetwork. Clock and RNG calls outside the parser remain a harness TODO.
+    todo: Narrow QDateTime and QRandomGenerator bans to the parser and writer once those call sites are classified.
+  - id: model-network-isolation
+    enforcement: enforced
+    summary: The document model does not include preflight, PageMaster, or QtNetwork.
+  - id: public-api-ownership
+    enforcement: enforced
+    summary: PageMaster, the document model, and preflight each have one listed home. Duplicate homes fail.
+reusable_for:
+  - product: ivory
+    maps_to: Snapshot immutability and semantic dependency rules use boundaries plus invariants, with different layer ids.
+  - product: revenger
+    maps_to: Architecture and ISA invariants use the invariants document and proof-lanes, with different check ids.
