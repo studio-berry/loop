@@ -84,34 +84,34 @@ public:
 
     enum class ImageCompression
     {
-        Flate,          ///< FlateDecode compressed data with PNG predictor
-        JPEG,           ///< DCTDecode
-        JPEG2000,       ///< JPXDecode
-        RunLength       ///< RunLengthDecode
+        Flate,   ///< FlateDecode compressed data with PNG predictor
+        JPEG,   ///< DCTDecode
+        JPEG2000,   ///< JPXDecode
+        RunLength   ///< RunLengthDecode
     };
 
     enum class ImageColorMode
     {
-        Preserve,       ///< Preserve source characteristics
-        Color,          ///< Force DeviceRGB output
-        Grayscale,      ///< Force DeviceGray output
-        Monochrome      ///< 1-bit DeviceGray with decode array [0 1]
+        Preserve,   ///< Preserve source characteristics
+        Color,   ///< Force DeviceRGB output
+        Grayscale,   ///< Force DeviceGray output
+        Monochrome   ///< 1-bit DeviceGray with decode array [0 1]
     };
 
     /// Resampling filter used when scaling the image before encoding.
     enum class ResampleFilter
     {
-        Nearest,  ///< Nearest-neighbor (fast, low quality).
-        Bilinear, ///< Bilinear interpolation.
-        Bicubic,  ///< Bicubic interpolation (default).
+        Nearest,   ///< Nearest-neighbor (fast, low quality).
+        Bilinear,   ///< Bilinear interpolation.
+        Bicubic,   ///< Bicubic interpolation (default).
         Lanczos   ///< Lanczos filter (highest quality, slower).
     };
 
     /// Specifies how to handle alpha when encoding to a PDF image stream.
     enum class AlphaHandling
     {
-        FlattenToWhite,         ///< Composite onto white background.
-        DropAlphaPreserveColors ///< Preserve RGB, drop alpha (for separate soft mask).
+        FlattenToWhite,   ///< Composite onto white background.
+        DropAlphaPreserveColors   ///< Preserve RGB, drop alpha (for separate soft mask).
     };
 
     /// Options used to encode a QImage into a PDF image stream.
@@ -119,13 +119,13 @@ public:
     {
         ImageCompression compression = ImageCompression::Flate;
         ImageColorMode colorMode = ImageColorMode::Preserve;
-        QSize targetSize;                       ///< Invalid size keeps original dimensions
-        int jpegQuality = 85;                   ///< 0-100 quality for baseline JPEG
-        float jpeg2000Rate = 0.0f;              ///< >0 for lossy ratio, 0.0 for lossless
-        int monochromeThreshold = 128;          ///< Threshold for monochrome conversion (<0 selects automatic)
-        bool enablePngPredictor = true;         ///< Adds PNG predictor metadata for Flate
-        ResampleFilter resampleFilter = ResampleFilter::Bicubic; ///< Resampling filter for scaling
-        AlphaHandling alphaHandling = AlphaHandling::FlattenToWhite; ///< Alpha compositing mode
+        QSize targetSize;   ///< Invalid size keeps original dimensions
+        int jpegQuality = 85;   ///< 0-100 quality for baseline JPEG
+        float jpeg2000Rate = 0.0f;   ///< >0 for lossy ratio, 0.0 for lossless
+        int monochromeThreshold = 128;   ///< Threshold for monochrome conversion (<0 selects automatic)
+        bool enablePngPredictor = true;   ///< Adds PNG predictor metadata for Flate
+        ResampleFilter resampleFilter = ResampleFilter::Bicubic;   ///< Resampling filter for scaling
+        AlphaHandling alphaHandling = AlphaHandling::FlattenToWhite;   ///< Alpha compositing mode
     };
 
     /// Creates PDF stream representing supplied image.
@@ -193,4 +193,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFIMAGE_H
+#endif   // PDFIMAGE_H

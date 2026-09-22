@@ -3176,7 +3176,7 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
             if (imageData.isValid())
             {
                 const std::uint64_t pixels = static_cast<std::uint64_t>(imageData.getWidth()) *
-                                            static_cast<std::uint64_t>(imageData.getHeight());
+                                             static_cast<std::uint64_t>(imageData.getHeight());
                 PDFImageDecodeGuard::reserveRenderPixels(m_processingBudget, pixels,
                                                          PDFTranslationContext::tr("decoded image"));
             }

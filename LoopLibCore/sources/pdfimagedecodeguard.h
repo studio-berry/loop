@@ -49,10 +49,10 @@ constexpr PDFInteger MAXIMUM_IMAGE_PIXELS = MAXIMUM_IMAGE_DIMENSION * MAXIMUM_IM
 /// Ceiling of (width * height * components * bitsPerComponent) / 8.
 /// Returns false on overflow or invalid geometry.
 LOOPLIBCORESHARED_EXPORT bool tryExpectedMinImageSampleBytes(std::uint64_t width,
-                                                              std::uint64_t height,
-                                                              std::uint64_t components,
-                                                              std::uint64_t bitsPerComponent,
-                                                              std::uint64_t& outBytes);
+                                                             std::uint64_t height,
+                                                             std::uint64_t components,
+                                                             std::uint64_t bitsPerComponent,
+                                                             std::uint64_t& outBytes);
 
 LOOPLIBCORESHARED_EXPORT std::uint64_t expectedMinImageSampleBytes(std::uint64_t width,
                                                                    std::uint64_t height,
@@ -81,4 +81,4 @@ LOOPLIBCORESHARED_EXPORT void reserveRenderPixels(PDFProcessingBudget* budget,
 
 }   // namespace pdf
 
-#endif // PDFIMAGEDECODEGUARD_H
+#endif   // PDFIMAGEDECODEGUARD_H

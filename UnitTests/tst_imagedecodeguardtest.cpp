@@ -171,7 +171,7 @@ void ImageDecodeGuardTest::lowRenderPixelBudgetRejectsLargeImage()
     pdf::PDFDocument document = builder.build();
 
     pdf::PDFProcessingLimits limits;
-    limits.maxRenderPixels = 100; // well below 64*64
+    limits.maxRenderPixels = 100;   // well below 64*64
     pdf::PDFProcessingBudget budget(limits);
 
     bool threwBudget = false;
@@ -193,7 +193,7 @@ void ImageDecodeGuardTest::smallValidImageStillRenders()
     pdf::PDFDocumentBuilder builder;
     builder.createDocument();
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 200, 200));
-    QByteArray samples(4, char(0x20)); // 2x2 DeviceGray
+    QByteArray samples(4, char(0x20));   // 2x2 DeviceGray
     const pdf::PDFObjectReference imageReference = addRawImage(builder, 2, 2, 8, "DeviceGray", samples);
     setPageContent(builder, pageReference, "q 50 0 0 50 10 10 cm /Im1 Do Q", makeImageResources(imageReference));
     pdf::PDFDocument document = builder.build();

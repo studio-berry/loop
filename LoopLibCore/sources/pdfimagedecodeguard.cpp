@@ -67,7 +67,10 @@ std::uint64_t expectedMinImageSampleBytes(std::uint64_t width,
     {
         throw PDFRendererException(RenderErrorType::Error,
                                    PDFTranslationContext::tr("Invalid image sample geometry (%1x%2, %3 components, %4 bpc).")
-                                       .arg(width).arg(height).arg(components).arg(bitsPerComponent));
+                                       .arg(width)
+                                       .arg(height)
+                                       .arg(components)
+                                       .arg(bitsPerComponent));
     }
     return bytes;
 }
@@ -110,7 +113,8 @@ void requireSufficientSampleBytes(const QByteArray& data,
     {
         throw PDFRendererException(RenderErrorType::Error,
                                    PDFTranslationContext::tr("Image data is too short for declared dimensions (%1 bytes, need at least %2).")
-                                       .arg(data.size()).arg(required));
+                                       .arg(data.size())
+                                       .arg(required));
     }
 }
 
