@@ -4,6 +4,9 @@ claims:
   - id: worker-isolation-unit
     evidence:
       - unit:UnitTestsPdfWorkerIsolation
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:build_policy
   - id: worker-isolation-security
     evidence:
       - security:scripts/ci/check_pdf_worker_isolation.py
