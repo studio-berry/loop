@@ -22,6 +22,12 @@ claims:
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
   - id: regression-fixtures
     evidence:
       - fixture:regression:bleed-box-margin
@@ -37,4 +43,5 @@ unresolved:
   - UnitTestsBleedFixup writer-byte flake tracked in issue 656
   - UnitTestsImageDecodeGuard deferred proof-lane migration
   - sealed-rendering-channel-delta harness
+  - scripts/ci/check_independent_validation_gate.py
 sealed_output_approval: human
