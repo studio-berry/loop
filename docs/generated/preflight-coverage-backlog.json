@@ -103,7 +103,7 @@
   "matrix_id": "loop-gwg-pdfx-v1",
   "not_covered": [
     "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
-    "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+    "PDF/VT variable-data streams are neither understood, validated, nor preserved",
     "DeviceN ink-limit per named colorant beyond inventory",
     "Barcode / slug / Braille content validation",
     "Multi-page imposition and reader-spread checks"
@@ -165,20 +165,8 @@
         "newspaper",
         "digital"
       ],
-      "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/VT variable-data streams are neither understood, validated, nor preserved",
+      "gap": "PDF/VT variable-data streams are neither understood, validated, nor preserved",
       "id": "pdfvt-variable-data",
-      "priority": "P1",
-      "state": "open"
-    },
-    {
-      "closed_by": "#665",
-      "families": [
-        "sheetfed-offset",
-        "packaging",
-        "digital"
-      ],
-      "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/X-5 (X-5n/X-5g) and PDF/A-3 output are neither validated nor produced",
-      "id": "pdfx5-pdfa3-output",
       "priority": "P1",
       "state": "open"
     },
@@ -398,6 +386,18 @@
       "id": "color-inventory-probe-depth",
       "priority": "P3",
       "state": "open"
+    },
+    {
+      "closed_by": "conformance-claims",
+      "families": [
+        "sheetfed-offset",
+        "packaging",
+        "digital"
+      ],
+      "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as #665)",
+      "id": "pdfx5-pdfa3-output",
+      "priority": "P3",
+      "state": "landed"
     },
     {
       "closed_by": "unfiled",
