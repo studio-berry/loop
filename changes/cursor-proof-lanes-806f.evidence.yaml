@@ -1,0 +1,31 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: architecture-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: packaging-bindings
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+  - id: regression-fixtures
+    evidence:
+      - fixture:regression:bleed-box-margin
+      - budget:preflight-fixture-count
+      - budget:rendering-channel-delta
+  - id: sealed-holdout
+    lane: sealed-eval
+    evidence:
+      - sealed-eval:mixed-surface-holdout
+      - budget:sealed-rendering-channel-delta
+unresolved:
+  - search-latency harness
+  - bleed-fixup-latency harness
+  - resident-memory harness
+  - parser-differential-agreement harness
+  - packaging-size baseline
+  - sealed-rendering-channel-delta harness
+sealed_output_approval: human

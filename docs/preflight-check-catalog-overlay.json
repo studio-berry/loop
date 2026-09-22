@@ -257,6 +257,44 @@
     "rgb-to-cmyk"
    ]
   },
+  "conformance-claims": {
+   "measures": "Whether the document declares PDF/X-5n, PDF/X-5g, or PDF/A-3, which Loop does not validate.",
+   "limitations": "Does not produce those files and does not evaluate their external-resource or n-colorant output-intent rules. A declared level is reported unsupported. PDF/VT is a separate gap.",
+   "coverage": "partial",
+   "families": [
+    "sheetfed-offset",
+    "packaging",
+    "digital"
+   ],
+   "parameters": [],
+   "severity": [
+    {
+     "finding_type": "check-unsupported",
+     "severity": "warning",
+     "condition": "the document declares pdfx-5n, pdfx-5g, or pdfa-3. The finding stays a warning so it is not a content-defect error; the check status is unsupported and the run is incomplete."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "warning",
+     "condition": "catalog metadata is present but cannot be decoded, and no level was declared in the document info keys. The check status is not_inspected."
+    }
+   ],
+   "evidence": [
+    "scope",
+    "type",
+    "severity",
+    "message",
+    "check_id",
+    "evidence.level_id",
+    "evidence.produced",
+    "evidence.validated",
+    "evidence.report_disposition",
+    "evidence.backlog_row",
+    "evidence.catalog_disposition",
+    "evidence.reason"
+   ],
+   "fixups": []
+  },
   "content-bleed": {
    "measures": "Whether painted content reaches the requested bleed margin.",
    "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
@@ -1326,7 +1364,7 @@
   {
    "id": "pdfvt-variable-data",
    "priority": "P1",
-   "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/VT variable-data streams are neither understood, validated, nor preserved",
+   "gap": "PDF/VT variable-data streams are neither understood, validated, nor preserved",
    "families": [
     "web-offset",
     "newspaper",
@@ -1337,15 +1375,15 @@
   },
   {
    "id": "pdfx5-pdfa3-output",
-   "priority": "P1",
-   "gap": "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims: PDF/X-5 (X-5n/X-5g) and PDF/A-3 output are neither validated nor produced",
+   "priority": "P3",
+   "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as #665)",
    "families": [
     "sheetfed-offset",
     "packaging",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#665"
+   "state": "landed",
+   "closed_by": "conformance-claims"
   },
   {
    "id": "bleed-raster-strip-depth",
@@ -1577,7 +1615,7 @@
  ],
  "not_covered": [
   "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
-  "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+  "PDF/VT variable-data streams are neither understood, validated, nor preserved",
   "DeviceN ink-limit per named colorant beyond inventory",
   "Barcode / slug / Braille content validation",
   "Multi-page imposition and reader-spread checks"

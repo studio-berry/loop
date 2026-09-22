@@ -28,6 +28,7 @@
 #include "pdfpattern.h"
 #include "pdfcms.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfimagedecodeguard.h"
 
 #include <QCryptographicHash>
 
@@ -86,7 +87,7 @@ private:
     size_t m_tableSize = 0;
 };
 
-} // namespace
+}   // namespace
 
 PDFColorComponentMatrix_3x3 getInverseMatrix(const PDFColorComponentMatrix_3x3& matrix)
 {
@@ -100,12 +101,12 @@ PDFColorComponentMatrix_3x3 getInverseMatrix(const PDFColorComponentMatrix_3x3& 
     const PDFColorComponent a_32 = matrix.getValue(2, 1);
     const PDFColorComponent a_33 = matrix.getValue(2, 2);
 
-    const PDFColorComponent determinant = -a_13* a_22 * a_31 + a_12 * a_23 * a_31 + a_13 * a_21 * a_32 - a_11 * a_23 * a_32 - a_12 * a_21 * a_33 + a_11 * a_22 * a_33;
+    const PDFColorComponent determinant = -a_13 * a_22 * a_31 + a_12 * a_23 * a_31 + a_13 * a_21 * a_32 - a_11 * a_23 * a_32 - a_12 * a_21 * a_33 + a_11 * a_22 * a_33;
     const PDFColorComponent coefficient = !qIsNull(determinant) ? 1.0 / determinant : 0.0;
 
-    PDFColorComponentMatrix_3x3 inversedMatrix { a_22 * a_33 - a_23 * a_32, a_13 * a_32 - a_12 * a_33, a_12 * a_23 - a_13 * a_22,
-                                                 a_23 * a_31 - a_21 * a_33, a_11 * a_33 - a_13 * a_31, a_13 * a_21 - a_11 * a_23,
-                                                 a_21 * a_32 - a_22 * a_31, a_12 * a_31 - a_11 * a_32, a_11 * a_22 - a_12 * a_21 };
+    PDFColorComponentMatrix_3x3 inversedMatrix{ a_22 * a_33 - a_23 * a_32, a_13 * a_32 - a_12 * a_33, a_12 * a_23 - a_13 * a_22,
+                                                a_23 * a_31 - a_21 * a_33, a_11 * a_33 - a_13 * a_31, a_13 * a_21 - a_11 * a_23,
+                                                a_21 * a_32 - a_22 * a_31, a_12 * a_31 - a_11 * a_32, a_11 * a_22 - a_12 * a_21 };
     inversedMatrix.multiplyByFactor(coefficient);
     return inversedMatrix;
 }
@@ -264,6 +265,9 @@ QImage PDFAbstractColorSpace::getImage(const PDFImageData& imageData,
 {
     if (imageData.isValid())
     {
+        // Reject truncated sample buffers before allocating a full WxH raster.
+        PDFImageDecodeGuard::requireSufficientSampleBytes(imageData);
+
         switch (imageData.getMaskingType())
         {
             case PDFImageData::MaskingType::None:
@@ -335,7 +339,7 @@ QImage PDFAbstractColorSpace::getImage(const PDFImageData& imageData,
 
                         fillRGBBuffer(inputColors, outputLine, intent, cms, reporter);
                     }
-                    catch (const PDFException &lineException)
+                    catch (const PDFException& lineException)
                     {
                         QMutexLocker lock(&exceptionMutex);
                         if (!exception)
@@ -436,7 +440,7 @@ QImage PDFAbstractColorSpace::getImage(const PDFImageData& imageData,
                             *outputLine++ = 255;
                         }
                     }
-                    catch (const PDFException &lineException)
+                    catch (const PDFException& lineException)
                     {
                         QMutexLocker lock(&exceptionMutex);
                         if (!exception)
@@ -563,7 +567,7 @@ QImage PDFAbstractColorSpace::getImage(const PDFImageData& imageData,
                             *outputLine++ = alphaValues[j];
                         }
                     }
-                    catch (const PDFException &lineException)
+                    catch (const PDFException& lineException)
                     {
                         QMutexLocker lock(&exceptionMutex);
                         if (!exception)
@@ -644,6 +648,8 @@ QImage PDFAbstractColorSpace::createAlphaMask(const PDFImageData& softMask)
         throw PDFException(PDFTranslationContext::tr("Invalid size of soft mask."));
     }
 
+    PDFImageDecodeGuard::requireSufficientSampleBytes(softMask);
+
     QImage image(softMask.getWidth(), softMask.getHeight(), QImage::Format_Alpha8);
 
     unsigned int componentCount = softMask.getComponents();
@@ -672,7 +678,7 @@ QImage PDFAbstractColorSpace::createAlphaMask(const PDFImageData& softMask)
             return image;
         }
 
-        std::array<unsigned char, 256> decodeTable = { };
+        std::array<unsigned char, 256> decodeTable = {};
         for (size_t i = 0; i < decodeTable.size(); ++i)
         {
             PDFReal alpha = interpolate(i, 0.0, 255.0, decode[0], decode[1]);
@@ -903,7 +909,7 @@ bool PDFAbstractColorSpace::transform(const PDFAbstractColorSpace* source,
 
             for (auto sourceIt = input.cbegin(); sourceIt != input.cend(); sourceIt = std::next(sourceIt, 3))
             {
-                PDFColor3 ABC = { };
+                PDFColor3 ABC = {};
                 Q_ASSERT(sourceIt != input.end());
                 ABC[0] = *sourceIt;
                 Q_ASSERT(sourceIt + 1 != input.end());
@@ -1245,7 +1251,7 @@ bool PDFAbstractColorSpace::transform(const PDFAbstractColorSpace* source,
         {
             const PDFColorComponent* sourceColor = sourceData + i * sourceColorChannelCount;
             PDFColorComponent* targetColor = targetData + i * targetColorChannelCount;
-            PDFColor3 rgbColor = { };
+            PDFColor3 rgbColor = {};
 
             if (!sourceToRGB(sourceType, sourceColor, rgbColor))
             {
@@ -1289,7 +1295,7 @@ bool PDFAbstractColorSpace::transform(const PDFAbstractColorSpace* source,
             auto outputIt = output.begin();
             for (auto transformedOutputIt = transformedOutput.cbegin(); transformedOutputIt != transformedOutput.cend(); transformedOutputIt = std::next(transformedOutputIt, 3))
             {
-                PDFColor3 XYZ = { };
+                PDFColor3 XYZ = {};
                 Q_ASSERT(transformedOutputIt != transformedOutput.end());
                 XYZ[0] = *transformedOutputIt;
                 Q_ASSERT(transformedOutputIt + 1 != transformedOutput.end());
@@ -1317,7 +1323,7 @@ bool PDFAbstractColorSpace::transform(const PDFAbstractColorSpace* source,
             auto outputIt = output.begin();
             for (auto transformedOutputIt = transformedOutput.cbegin(); transformedOutputIt != transformedOutput.cend(); transformedOutputIt = std::next(transformedOutputIt, 3))
             {
-                PDFColor3 XYZ = { };
+                PDFColor3 XYZ = {};
                 XYZ[0] = *transformedOutputIt;
                 XYZ[1] = *std::next(transformedOutputIt, 1);
                 XYZ[2] = *std::next(transformedOutputIt, 2);
@@ -1526,10 +1532,9 @@ PDFColorSpacePointer PDFAbstractColorSpace::createDeviceColorSpaceByNameImpl(con
 /// Conversion matrix from XYZ space to RGB space. Values are taken from this article:
 /// https://en.wikipedia.org/wiki/SRGB#The_sRGB_transfer_function_.28.22gamma.22.29
 static constexpr const PDFColorComponentMatrix<3, 3> matrixXYZtoRGB(
-     3.2406f, -1.5372f, -0.4986f,
-    -0.9689f,  1.8758f,  0.0415f,
-     0.0557f, -0.2040f,  1.0570f
-);
+    3.2406f, -1.5372f, -0.4986f,
+    -0.9689f, 1.8758f, 0.0415f,
+    0.0557f, -0.2040f, 1.0570f);
 
 PDFColor3 PDFAbstractColorSpace::convertXYZtoRGB(const PDFColor3& xyzColor)
 {
@@ -1580,7 +1585,6 @@ PDFCalGrayColorSpace::PDFCalGrayColorSpace(PDFColor3 whitePoint, PDFColor3 black
     m_blackPoint(blackPoint),
     m_gamma(gamma)
 {
-
 }
 
 bool PDFCalGrayColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -1661,7 +1665,6 @@ PDFCalRGBColorSpace::PDFCalRGBColorSpace(PDFColor3 whitePoint, PDFColor3 blackPo
     m_gamma(gamma),
     m_matrix(matrix)
 {
-
 }
 
 bool PDFCalRGBColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -1730,9 +1733,9 @@ PDFColorSpacePointer PDFCalRGBColorSpace::createCalRGBColorSpace(const PDFDocume
     PDFColor3 whitePoint = { 0.9505f, 1.0000f, 1.0890f };
     PDFColor3 blackPoint = { 0, 0, 0 };
     PDFColor3 gamma = { 1.0f, 1.0f, 1.0f };
-    PDFColorComponentMatrix_3x3 matrix( 1, 0, 0,
-                                        0, 1, 0,
-                                        0, 0, 1 );
+    PDFColorComponentMatrix_3x3 matrix(1, 0, 0,
+                                       0, 1, 0,
+                                       0, 0, 1);
 
     PDFDocumentDataLoaderDecorator loader(document);
     loader.readNumberArrayFromDictionary(dictionary, CAL_WHITE_POINT, whitePoint.begin(), whitePoint.end());
@@ -1773,7 +1776,6 @@ PDFLabColorSpace::PDFLabColorSpace(PDFColor3 whitePoint,
     m_bMin(bMin),
     m_bMax(bMax)
 {
-
 }
 
 bool PDFLabColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -2133,7 +2135,6 @@ PDFIndexedColorSpace::PDFIndexedColorSpace(PDFColorSpacePointer baseColorSpace, 
     m_colors(qMove(colors)),
     m_maxValue(maxValue)
 {
-
 }
 
 bool PDFIndexedColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -2206,6 +2207,8 @@ QImage PDFIndexedColorSpace::getImage(const PDFImageData& imageData,
 {
     if (imageData.isValid())
     {
+        PDFImageDecodeGuard::requireSufficientSampleBytes(imageData);
+
         auto createRGBPalette = [&]()
         {
             std::vector<std::array<unsigned char, 3>> palette(m_maxValue + 1);
@@ -2499,7 +2502,6 @@ PDFSeparationColorSpace::PDFSeparationColorSpace(QByteArray&& colorName, PDFColo
     m_isNone(m_colorName == "None"),
     m_isAll(m_colorName == "All")
 {
-
 }
 
 bool PDFSeparationColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -2565,7 +2567,8 @@ QColor PDFSeparationColorSpace::getColor(const PDFColor& color, const PDFCMS* cm
     if (result)
     {
         PDFColor inputColor;
-        std::for_each(outputColor.cbegin(), outputColor.cend(), [&inputColor](double value) { inputColor.push_back(static_cast<float>(value)); });
+        std::for_each(outputColor.cbegin(), outputColor.cend(), [&inputColor](double value)
+                      { inputColor.push_back(static_cast<float>(value)); });
         return m_alternateColorSpace->getColor(inputColor, cms, intent, reporter, false);
     }
     else
@@ -2716,7 +2719,8 @@ PDFDeviceNColorSpace::PDFDeviceNColorSpace(PDFDeviceNColorSpace::Type type,
     m_processColorSpaceComponents(qMove(processColorSpaceComponents)),
     m_isNone(false)
 {
-    m_isNone = std::all_of(m_colorants.cbegin(), m_colorants.cend(), [](const auto& colorant) { return colorant.name == "None"; });
+    m_isNone = std::all_of(m_colorants.cbegin(), m_colorants.cend(), [](const auto& colorant)
+                           { return colorant.name == "None"; });
 }
 
 bool PDFDeviceNColorSpace::equals(const PDFAbstractColorSpace* other) const
@@ -2800,7 +2804,8 @@ QColor PDFDeviceNColorSpace::getColor(const PDFColor& color, const PDFCMS* cms, 
     if (result)
     {
         PDFColor inputColor2;
-        std::for_each(outputColor.cbegin(), outputColor.cend(), [&inputColor2](double value) { inputColor2.push_back(static_cast<float>(value)); });
+        std::for_each(outputColor.cbegin(), outputColor.cend(), [&inputColor2](double value)
+                      { inputColor2.push_back(static_cast<float>(value)); });
         return m_alternateColorSpace->getColor(inputColor2, cms, intent, reporter, false);
     }
     else

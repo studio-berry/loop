@@ -245,6 +245,7 @@
     "bleed",
     "color-inventory",
     "color-mode",
+    "conformance-claims",
     "content-bleed",
     "dieline",
     "embedded-fonts",
@@ -267,6 +268,7 @@
   "preflight_coverage": {
     "coverage_holes": [
       "bleed",
+      "conformance-claims",
       "content-bleed",
       "dieline",
       "hidden-layers",
@@ -419,6 +421,7 @@
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
+    "UnitTestsImageDecodeGuard",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",

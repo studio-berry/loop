@@ -1,0 +1,10 @@
+id: mixed-surface-holdout
+class: sealed-eval
+origin: held-out
+expected_behavior: Raised-text, mixed paint, and texture pages stay inside the sealed rendering cap. This case is not for making a suite pass.
+difficulty: hard
+why_it_exists: Held-out visual case. Missing this split is how texture and edge scores get taught to the suite.
+metrics:
+  - sealed-rendering-channel-delta
+approval_required: true
+expected_output: within-budget

@@ -112,6 +112,8 @@ add_library(LoopLibCore SHARED
     sources/pdfevidencegraph.h
     sources/pdfoperationimpact.cpp
     sources/pdfoperationimpact.h
+    sources/pdfconformanceclaim.cpp
+    sources/pdfconformanceclaim.h
     sources/preflightengine.cpp
     sources/preflightengine.h
     sources/preflightclirun.cpp
@@ -240,6 +242,8 @@ add_library(LoopLibCore SHARED
     sources/pdfimageoptimizer.h
     sources/pdfimage.cpp
     sources/pdfimage.h
+    sources/pdfimagedecodeguard.cpp
+    sources/pdfimagedecodeguard.h
     sources/pdfdocumentsanitizer.h
     sources/pdfdocumentsanitizer.cpp
     sources/pdfimageconversion.h

@@ -440,6 +440,25 @@ def main() -> int:
         ROOT,
         args.dry_run,
     )
+    architecture_command = [
+        python,
+        "scripts/agent/check-architecture.py",
+        "--base",
+        args.base,
+        "--head",
+        args.head,
+    ]
+    if args.head_branch:
+        architecture_command.extend(["--head-branch", args.head_branch])
+    if args.skip_changelog:
+        architecture_command.append("--skip-evidence")
+    add_result(
+        evidence,
+        "architecture_contracts",
+        architecture_command,
+        ROOT,
+        False,
+    )
 
     # The Windows Qt test-runtime wiring is one include line in a file every new
     # test target appends to, so a merge against a branch that predates it can
