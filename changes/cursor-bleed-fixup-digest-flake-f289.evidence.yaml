@@ -7,5 +7,17 @@ claims:
       - architecture:agent-policy:core
       - packaging:linux-build
       - packaging:windows-build
+  - id: core-policy-bindings
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: agent-policy-bindings
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
 unresolved:
   - bleed-fixup-latency harness
+  - core:scripts/ci/check_independent_validation_gate.py
