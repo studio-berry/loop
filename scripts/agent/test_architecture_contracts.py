@@ -4,9 +4,15 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import unittest
 from pathlib import Path
+
+try:
+    import yaml
+except ImportError:  # CI does not install PyYAML; the subset loader is the contract parser.
+    yaml = None
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,9 +36,8 @@ class ArchitectureContractTests(unittest.TestCase):
         errors = MODULE.static_errors(ROOT)
         self.assertEqual(errors, [], "\n".join(errors))
 
+    @unittest.skipUnless(yaml is not None, "PyYAML is not installed")
     def test_yaml_subset_matches_pyyaml(self) -> None:
-        import yaml
-
         paths = list((ROOT / "architecture").glob("*.yaml"))
         paths += list((ROOT / "UnitTests/testdata/fixture-classes").rglob("*.yaml"))
         for path in paths:
@@ -40,7 +45,7 @@ class ArchitectureContractTests(unittest.TestCase):
             self.assertEqual(YAML.load_yaml(text), yaml.safe_load(text), path)
 
     def test_forbidden_include_is_detected(self) -> None:
-        patterns = [__import__("re").compile(r"^QWidget$")]
+        patterns = [re.compile(r"^QWidget$")]
         hits = MODULE.include_hits('#include "QWidget"\n', patterns)
         self.assertEqual(hits, ["QWidget"])
 
