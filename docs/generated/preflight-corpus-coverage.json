@@ -1,16 +1,6 @@
 {
   "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
-  "corpus_gaps": [
-    "conformance-claims",
-    "dieline",
-    "font-integrity",
-    "hidden-layers",
-    "invisible-content",
-    "obscured-content",
-    "off-page-content",
-    "processing-steps",
-    "thin-parts"
-  ],
+  "corpus_gaps": [],
   "definition": "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot carries at least one finding in errors[] or warnings[] whose check_id is the row and whose type is not an inspection-failure type (budget-exceeded, check-error, check-incomplete, evidence-incomplete). A check that is merely enabled, that reports incomplete, skipped, non-inspected or non-applicable inspection, or that the fixture's profile disables does not count as exercising its row; those fixtures are listed in uninspected_fixtures. A finding that reports an inspection failure is not evidence that the check detects the defect.",
   "format_version": 1,
   "generated_by": "scripts/generate-architecture-catalogs.py",
@@ -83,9 +73,11 @@
     },
     "conformance-claims": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture declares PDF/X-5n, PDF/X-5g, or PDF/A-3; the class is followed by the pdfx5-pdfa3-output backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "conformance-pdfx5n"
+      ],
       "uninspected_fixtures": []
     },
     "content-bleed": {
@@ -105,9 +97,11 @@
     },
     "dieline": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries a cutting-die processing step; the class is followed by the dieline-geometry backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "dieline-missing"
+      ],
       "uninspected_fixtures": []
     },
     "embedded-fonts": {
@@ -123,16 +117,20 @@
     },
     "font-integrity": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries a corrupt embedded font program; the class is followed by the font-glyph-coverage backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "font-integrity-corrupt"
+      ],
       "uninspected_fixtures": []
     },
     "hidden-layers": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries optional content groups; the class is followed by the hidden-layers-ocmd backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "hidden-layers"
+      ],
       "uninspected_fixtures": []
     },
     "image-resolution": {
@@ -157,23 +155,29 @@
     },
     "invisible-content": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries invisible paint; the class is followed by the invisible-content-breadth backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "invisible-content"
+      ],
       "uninspected_fixtures": []
     },
     "obscured-content": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries content covered by later painting; the class is followed by the obscured-content-occlusion backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "obscured-content"
+      ],
       "uninspected_fixtures": []
     },
     "off-page-content": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries an object painted outside the page; the class is followed by the off-page-content-clipping backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "off-page-content"
+      ],
       "uninspected_fixtures": []
     },
     "output-intent": {
@@ -199,16 +203,20 @@
     },
     "processing-steps": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture carries an ISO 19593-1 processing step; the class is followed by the dieline-geometry backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "processing-steps-missing"
+      ],
       "uninspected_fixtures": []
     },
     "thin-parts": {
       "clean_fixture_count": 0,
-      "corpus_gap": "No corpus fixture produces a thin-parts finding: thin-parts-fill measures 0.24 pt against the 0.25 pt threshold at probe_dpi 600, inside the 0.12 pt measurement precision, so the check reports check-incomplete with reason measurement-near-threshold instead of a finding; the class is followed by the thin-parts-raster-budget backlog row.",
+      "corpus_gap": null,
       "coverage": "partial",
-      "finding_fixtures": [],
+      "finding_fixtures": [
+        "thin-parts-clear"
+      ],
       "uninspected_fixtures": [
         "thin-parts-fill"
       ]
@@ -264,6 +272,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 67,
+  "source_fixtures": 76,
   "unattributed_findings": 1
 }

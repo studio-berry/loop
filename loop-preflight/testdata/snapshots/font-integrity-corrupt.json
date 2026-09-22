@@ -1,0 +1,47 @@
+{
+    "checks": [
+        {
+            "id": "font-integrity",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "font-integrity",
+            "evidence": {
+                "defects": [
+                    "UnreadableTableDirectory"
+                ],
+                "embedded": true,
+                "font_resource": "F2+0",
+                "font_subtype": "4",
+                "inspection_complete": true
+            },
+            "message": "Font 'F2+0' has integrity defects: UnreadableTableDirectory",
+            "object_id": "7 0 R",
+            "page": 1,
+            "scope": "object",
+            "severity": "error",
+            "type": "font-integrity"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Font Integrity",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "f6a25dd66cb4cab4"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

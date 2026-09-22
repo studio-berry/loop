@@ -1,0 +1,49 @@
+{
+    "checks": [
+        {
+            "id": "thin-parts",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "bbox": [
+                19.9999995,
+                99.9999995,
+                180.0000005,
+                100.0000005
+            ],
+            "check_id": "thin-parts",
+            "evidence": {
+                "class": "thin-stroke",
+                "measuredWidthPt": 0,
+                "measurementPrecisionPt": 0.12,
+                "thresholdPt": 0.25
+            },
+            "message": "Thin stroke on page 1 has minimum effective width 0.000000 pt below 0.250000 pt.",
+            "page": 1,
+            "scope": "object",
+            "severity": "error",
+            "type": "hairline-stroke"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Thin Parts Clear",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "1329bdf75fdb35bd"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

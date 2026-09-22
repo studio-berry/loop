@@ -34,17 +34,7 @@ spec.loader.exec_module(generator)
 OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
 CORPUS_MAP_PATH = ROOT / "docs" / "generated" / "preflight-corpus-coverage.json"
 
-REVIEWED_CORPUS_GAPS = [
-    "conformance-claims",
-    "dieline",
-    "font-integrity",
-    "hidden-layers",
-    "invisible-content",
-    "obscured-content",
-    "off-page-content",
-    "processing-steps",
-    "thin-parts",
-]
+REVIEWED_CORPUS_GAPS = []
 
 
 def synthetic_manifest_and_snapshots(exclude: str | None = None) -> tuple[list[dict], dict[str, dict]]:
