@@ -1,0 +1,28 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: document-search-budget
+    evidence:
+      - unit:UnitTestsDocumentSearch
+      - unit:UnitTestsQuickDocumentModel
+      - architecture:scripts/ci/check_search_budget_gate.py
+      - architecture:agent-policy:quick
+      - fixture:regression:search-budget-independence
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: architecture-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: fixture-classification
+    evidence:
+      - fixture:regression:bleed-box-margin
+      - fixture:regression:search-budget-independence
+  - id: sealed-holdout
+    lane: sealed-eval
+    evidence:
+      - sealed-eval:mixed-surface-holdout
+unresolved:
+  - search-latency harness
+sealed_output_approval: human
