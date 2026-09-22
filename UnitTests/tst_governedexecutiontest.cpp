@@ -58,7 +58,7 @@ QJsonObject loadGoldenObject(const QString& fileName)
     return document.object();
 }
 
-} // namespace
+}   // namespace
 
 class GovernedExecutionTest final : public QObject
 {

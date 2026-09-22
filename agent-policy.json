@@ -92,6 +92,7 @@
         "UnitTests/tst_documentsearchtest.cpp",
         "UnitTests/tst_filenamesanitizertest.cpp",
         "UnitTests/tst_fontencodingtest.cpp",
+        "UnitTests/tst_governedexecutiontest.cpp",
         "UnitTests/tst_imageoptimizertest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_jbig2decodertest.cpp",

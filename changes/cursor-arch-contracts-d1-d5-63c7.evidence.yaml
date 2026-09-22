@@ -6,28 +6,35 @@ claims:
       - unit:UnitTestsGovernedExecution
       - fixture:regression:canonical-json-golden
       - budget:canonical-json-digest-stability
-      - architecture:scripts/agent/check-architecture.py
-  - id: d2-preview-non-publishing
+      - architecture:agent-policy:core
+  - id: d2-d4-governed-execution
     evidence:
       - unit:UnitTestsGovernedExecution
-  - id: d3-destination-binding
-    evidence:
-      - unit:UnitTestsGovernedExecution
-      - unit:UnitTestsRepairOperation
-      - unit:UnitTestsSafeFileWriter
-  - id: d4-durable-completion
-    evidence:
-      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - packaging:linux-build
+      - packaging:windows-build
   - id: d5-cross-surface-identity
     evidence:
       - unit:UnitTestsGovernedExecution
       - unit:scripts/ci/test_check_governed_parity.py
-  - id: packaging-bindings
+  - id: architecture-contracts
     evidence:
-      - packaging:linux-build
-      - packaging:windows-build
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: regression-fixtures
+    evidence:
+      - fixture:regression:bleed-box-margin
+      - fixture:regression:canonical-json-golden
+  - id: sealed-holdout
+    lane: sealed-eval
+    evidence:
+      - sealed-eval:mixed-surface-holdout
+      - budget:sealed-rendering-channel-delta
 unresolved:
   - canonical-json-digest-stability harness artifact count
   - d1-d5 static call-site architecture checkers
   - UnitTestsBleedFixup writer-byte flake tracked in issue 656
   - UnitTestsImageDecodeGuard deferred proof-lane migration
+  - sealed-rendering-channel-delta harness
+sealed_output_approval: human
