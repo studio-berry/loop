@@ -7,12 +7,15 @@ claims:
       - unit:agent-policy:pdftool
       - unit:agent-policy:pagemaster
       - unit:agent-policy:build_policy
+      - unit:scripts/agent/test_architecture_contracts.py
   - id: worker-isolation-security
     evidence:
       - security:scripts/ci/check_pdf_worker_isolation.py
   - id: worker-isolation-architecture
     evidence:
       - architecture:agent-policy:pdftool
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
 unresolved:
   - Windows job-object release-worker sandbox
   - Editor migration onto loop-pdf-worker
