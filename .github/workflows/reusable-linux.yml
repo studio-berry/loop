@@ -387,7 +387,7 @@ jobs:
       - name: Test agent policy checker
         if: inputs.fast
         working-directory: loop
-        run: python3 -m unittest scripts.agent.test_check_change -v
+        run: python3 -m unittest scripts.agent.test_check_change scripts.agent.test_architecture_contracts -v
 
       - name: Upload agent-fast evidence
         if: inputs.fast

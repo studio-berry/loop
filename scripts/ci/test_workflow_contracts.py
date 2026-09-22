@@ -24,7 +24,8 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
         self.assertIn("name: Test agent policy checker", workflow)
         self.assertIn("if: inputs.fast", workflow)
-        self.assertIn("python3 -m unittest scripts.agent.test_check_change -v", workflow)
+        self.assertIn("python3 -m unittest scripts.agent.test_check_change scripts.agent.test_architecture_contracts -v", workflow)
+        self.assertIn("scripts/agent/check-architecture.py", (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
 
     def test_source_integrity_runs_loop_identity_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

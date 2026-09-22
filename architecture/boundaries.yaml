@@ -1,0 +1,152 @@
+format_version: 1
+kind: boundaries
+description: Dependency direction and forbidden edges for Loop product layers.
+widgets_link_tokens:
+  - Qt6::Widgets
+  - Qt6::QuickWidgets
+widgets_link_allow:
+  - CanvasBenchmark/CMakeLists.txt
+  - CodeGenerator/CMakeLists.txt
+  - JBIG2_Viewer/CMakeLists.txt
+  - PdfExampleGenerator/CMakeLists.txt
+layers:
+  - id: core
+    cmake: LoopLibCore/CMakeLists.txt
+    target: LoopLibCore
+    sources: LoopLibCore/sources
+    may_link:
+      - Qt6::Core
+      - Qt6::Gui
+      - Qt6::Xml
+      - Qt6::Svg
+      - Qt6::Sql
+      - OpenSSL::SSL
+      - OpenSSL::Crypto
+      - ZLIB::ZLIB
+      - Freetype::Freetype
+      - openjp2
+      - JPEG::JPEG
+      - TBB::tbb
+      - Secur32
+      - Mscms
+      - Gdi32
+      - User32
+      - crypt32
+      - Psapi
+      - shell32
+      - blend2d::blend2d
+      - sentry::sentry
+    forbidden_includes:
+      - "^QtWidgets(/|$)"
+      - "^QWidget$"
+      - "^QtQml(/|$)"
+      - "^QtQuick(/|$)"
+      - "^QQuick"
+      - "^QtNetwork(/|$)"
+      - "^QNetworkAccessManager$"
+      - "^quickdocumentmodel\\.h$"
+  - id: interaction
+    cmake: LoopLibInteraction/CMakeLists.txt
+    target: LoopLibInteraction
+    sources: LoopLibInteraction/sources
+    may_link:
+      - LoopLibCore
+      - Qt6::Core
+      - Qt6::Gui
+    forbidden_includes:
+      - "^QtWidgets(/|$)"
+      - "^QWidget$"
+      - "^QtQml(/|$)"
+      - "^QtQuick(/|$)"
+      - "^QQuick"
+      - "^QQml"
+      - "^QtNetwork(/|$)"
+      - "^quickdocumentmodel\\.h$"
+  - id: quick
+    cmake: LoopLibQuick/CMakeLists.txt
+    target: LoopLibQuick
+    sources: LoopLibQuick/sources
+    may_link:
+      - LoopLibInteraction
+      - LoopLibCore
+      - Qt6::Core
+      - Qt6::Gui
+      - Qt6::Qml
+      - Qt6::Quick
+    forbidden_includes:
+      - "^QtWidgets(/|$)"
+      - "^QWidget$"
+      - "^Qt6::Widgets$"
+      - "^quickdocumentmodel\\.h$"
+      - "^pdfpagemasterexport\\.h$"
+  - id: pdftool
+    cmake: PdfTool/CMakeLists.txt
+    target: PdfTool
+    sources: PdfTool
+    may_link:
+      - LoopLibCore
+      - Qt6::Core
+      - Qt6::Gui
+      - Qt6::Xml
+      - ole32
+      - sapi
+    forbidden_includes:
+      - "^QtWidgets(/|$)"
+      - "^QWidget$"
+      - "^quickdocumentmodel\\.h$"
+      - "^QtQuick(/|$)"
+  - id: editor
+    cmake: LoopEditor/CMakeLists.txt
+    target: LoopEditor
+    sources: LoopEditor
+    may_link:
+      - LoopLibQuick
+      - LoopLibInteraction
+      - LoopLibCore
+      - Qt6::Core
+      - Qt6::Gui
+      - Qt6::Qml
+      - Qt6::Quick
+      - Qt6::QuickControls2
+      - Qt6::QuickDialogs2
+    forbidden_includes:
+      - "^QtWidgets(/|$)"
+      - "^QWidget$"
+separations:
+  - id: document-model-vs-preflight
+    paths:
+      - LoopEditor/quickdocumentmodel.cpp
+      - LoopEditor/quickdocumentmodel.h
+    forbidden_includes:
+      - "^preflightengine\\.h$"
+      - "^pdfpagemasterexport\\.h$"
+      - "^QtWidgets(/|$)"
+      - "^QtNetwork(/|$)"
+      - "^QNetworkAccessManager$"
+    forbidden_tokens:
+      - QSettings
+      - QSqlDatabase
+      - QNetworkAccessManager
+  - id: preflight-vs-ui
+    paths:
+      - LoopLibCore/sources/preflightengine.cpp
+      - LoopLibCore/sources/preflightengine.h
+      - LoopLibCore/sources/preflightprofileresolver.cpp
+      - LoopLibCore/sources/preflightprofileresolver.h
+    forbidden_includes:
+      - "^quickdocumentmodel\\.h$"
+      - "^QtWidgets(/|$)"
+      - "^QtQuick(/|$)"
+      - "^QQuick"
+      - "^QtNetwork(/|$)"
+    forbidden_tokens:
+      - QNetworkAccessManager
+      - QSettings
+      - QSqlDatabase
+  - id: interaction-storage
+    paths:
+      - LoopLibInteraction/sources
+    forbidden_tokens:
+      - QSettings
+      - QSqlDatabase
+      - QNetworkAccessManager

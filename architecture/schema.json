@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "architecture/schema.json",
+  "title": "Loop architecture contracts",
+  "description": "Shared shape for architecture YAML documents and PR evidence manifests. Ivory can reuse boundaries and invariants for snapshot immutability. Revenger can reuse invariants and proof-lanes for ISA rules. Medic-style fixture classes and quality budgets are the archetype for held-out visual metrics.",
+  "type": "object",
+  "required": ["format_version", "kind"],
+  "properties": {
+    "format_version": {"const": 1},
+    "kind": {
+      "enum": [
+        "boundaries",
+        "invariants",
+        "proof-lanes",
+        "ownership",
+        "fixtures",
+        "quality-budgets",
+        "evidence"
+      ]
+    }
+  },
+  "$defs": {
+    "laneKind": {
+      "enum": [
+        "unit",
+        "integration",
+        "fixture",
+        "differential",
+        "security",
+        "architecture",
+        "packaging",
+        "sealed-eval"
+      ]
+    },
+    "fixtureClass": {"enum": ["development", "regression", "sealed-eval"]},
+    "proofLane": {
+      "type": "object",
+      "required": ["kind", "bind", "id", "executes"],
+      "properties": {
+        "kind": {"$ref": "#/$defs/laneKind"},
+        "bind": {"enum": ["ctest", "script", "fixture", "workflow", "policy", "catalog"]},
+        "id": {"type": "string", "minLength": 1},
+        "executes": {"enum": ["binding", "stub"]},
+        "policy_module": {"type": "string"},
+        "ref": {"type": "string"},
+        "contains": {"type": "string"},
+        "fixture_class": {"$ref": "#/$defs/fixtureClass"}
+      }
+    },
+    "fixtureRecord": {
+      "type": "object",
+      "required": [
+        "id",
+        "class",
+        "origin",
+        "expected_behavior",
+        "difficulty",
+        "why_it_exists",
+        "metrics",
+        "approval_required"
+      ],
+      "properties": {
+        "class": {"$ref": "#/$defs/fixtureClass"},
+        "difficulty": {"enum": ["easy", "medium", "hard"]},
+        "approval_required": {"type": "boolean"},
+        "metrics": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "qualityMetric": {
+      "type": "object",
+      "required": ["id", "subsystem", "lane", "comparison", "enforcement", "fixture_class"],
+      "properties": {
+        "lane": {"$ref": "#/$defs/laneKind"},
+        "comparison": {"enum": ["minimum", "maximum", "maximum_regression_percent"]},
+        "enforcement": {"enum": ["enforced", "declared"]},
+        "fixture_class": {"$ref": "#/$defs/fixtureClass"},
+        "agent_tunable": {"type": "boolean"}
+      }
+    },
+    "evidenceManifest": {
+      "type": "object",
+      "required": ["format_version", "kind", "claims", "unresolved"],
+      "properties": {
+        "kind": {"const": "evidence"},
+        "claims": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "evidence"],
+            "properties": {
+              "id": {"type": "string"},
+              "lane": {"$ref": "#/$defs/laneKind"},
+              "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            }
+          }
+        },
+        "unresolved": {"type": "array", "items": {"type": "string"}},
+        "sealed_output_approval": {"enum": ["human"]}
+      }
+    }
+  }
+}
