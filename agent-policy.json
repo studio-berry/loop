@@ -128,6 +128,7 @@
         "UnitTestsEvidenceGraph",
         "UnitTestsFilenameSanitizer",
         "UnitTestsFontEncoding",
+        "UnitTestsGovernedExecution",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsApplicationIdentity",
         "UnitTestsIdentitySeparation",

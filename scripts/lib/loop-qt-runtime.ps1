@@ -14,6 +14,11 @@ function Add-LoopQtRuntimeToPath {
     [OutputType([string])]
     param()
 
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
+        Write-Verbose "Non-Windows Qt libraries use the platform loader path; no DLL PATH adjustment is needed."
+        return $null
+    }
+
     $qtRoot = if ($env:LOOP_QT_ROOT) { $env:LOOP_QT_ROOT } elseif ($env:QT_ROOT_DIR) { $env:QT_ROOT_DIR } else { "" }
     if (-not $qtRoot) {
         Write-Verbose "Neither LOOP_QT_ROOT nor QT_ROOT_DIR is set; assuming Qt is already on PATH."

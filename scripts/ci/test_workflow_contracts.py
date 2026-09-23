@@ -8,6 +8,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_packaging_dispatch_permissions_have_unique_keys(self):
+        workflow = (ROOT / ".github/workflows/dispatch-packaging.yml").read_text(
+            encoding="utf-8"
+        )
+        permissions = workflow.split("permissions:\n", 1)[1].split("\njobs:", 1)[0]
+        self.assertEqual(permissions.count("actions:"), 1)
+
     def test_issue_promotion_workflow_tracks_only_protected_promotion_pushes(self):
         workflow = (ROOT / ".github/workflows/issue-promotion.yml").read_text(
             encoding="utf-8"

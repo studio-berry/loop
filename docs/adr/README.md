@@ -59,6 +59,7 @@ python3 scripts/generate-architecture-catalogs.py --check
 | [008 (history)](adr-008-generated-history-rewrite.md) | implemented | Generated-artifact history rewrite |
 | [009](adr-009-canvas-hosting-benchmark.md) | accepted | Canvas hosting benchmark admission |
 | [010](adr-010-quick-root-admission.md) | accepted | Quick root admission contracts |
+| [011](adr-011-architecture-contracts-d1-d5.md) | accepted | 0.3.0 architecture contracts D1–D5 |
 
 Implementation tracking for ADR-005 lives separately in
 [`ADR-005-product-surface-pruning-implementation-plan.md`](../ADR-005-product-surface-pruning-implementation-plan.md).
