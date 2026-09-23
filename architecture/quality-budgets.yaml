@@ -122,3 +122,14 @@ metrics:
     fixture_class: sealed-eval
     agent_tunable: false
     todo: Held-out raised-text, mixed-paint, and texture measurement is not produced in v1. Agents must not retune this cap.
+  - id: canonical-json-digest-stability
+    subsystem: governed-execution
+    lane: fixture
+    comparison: minimum
+    minimum: 1
+    unit: golden-vector-sets
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: UnitTestsGovernedExecution pins golden digests. TODO publish a machine-readable digest artifact count for this budget.
