@@ -1,5 +1,5 @@
 {
-  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "claim": "Loop does not claim formal GWG conformance. For sheetfed-offset and packaging, no GWG 2022/2024 certificate requirements are evaluated; clean results cover only the listed checks. Coverage is measured against GWG process families and PDF/X.",
   "corpus_gaps": [],
   "definition": "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot carries at least one finding in errors[] or warnings[] whose check_id is the row and whose type is not an inspection-failure type (budget-exceeded, check-error, check-incomplete, evidence-incomplete). A check that is merely enabled, that reports incomplete, skipped, non-inspected or non-applicable inspection, or that the fixture's profile disables does not count as exercising its row; those fixtures are listed in uninspected_fixtures. A finding that reports an inspection failure is not evidence that the check detects the defect.",
   "format_version": 1,

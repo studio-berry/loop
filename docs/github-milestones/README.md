@@ -14,8 +14,8 @@ Canonical milestone text for [studio-berry/loop](https://github.com/studio-berry
 | 0.2.1 | 17 | Living | — |
 | 0.3.0 | 9 | Living | 0.0.5 (supersedes retired `0.1.3` title) |
 | 0.4.0 | 10 | Living | 0.0.6 (supersedes retired `0.1.4` title) |
-| 0.5.0 | 11 | Planned (proposed) | — |
-| 0.6.0 | 12 | Planned (proposed) | 0.7.0 (retired 2026-09-06 consolidation title) |
+| 0.5.0 | 12 (live title; description and assignments need sync) | Planned (proposed) | — |
+| 0.6.0 | pending creation during sync | Planned (proposed) | 0.7.0 (retired 2026-09-06 consolidation title) |
 | 0.7.0 | 13 | Planned (proposed) | 0.8.0 (former title; also consolidates retired `0.9.0`) |
 | 0.8.0 | 14 | Planned (proposed) | 0.10.0 (retired 2026-09-06 consolidation title) |
 
@@ -48,3 +48,14 @@ python scripts/github/sync_milestones.py
 ```
 
 The script matches milestones by title, creates missing canonical milestones, updates description plus optional open/closed state from [`manifest.json`](manifest.json), and closes retired titles listed under `retire` (currently `0.1.2`, `0.1.3`, `0.1.4`, `0.9.0`, `0.10.0`).
+
+## 2026-09-23 live GitHub topology reconciliation (required before issue bulk moves)
+
+The GitHub milestone titled **0.5.0** currently has numeric id **#12** but retains the **0.6.0** description and 0.6.0-labelled issue assignments. GitHub milestone #11 is not an assignable 0.5.0 target; the manifest's earlier #11/#12 mapping was stale. The repository sync script matches by **title** and updates **description/state**; it does **not** retitle existing milestones or migrate issue assignments.
+
+1. Dry-run `python scripts/github/sync_milestones.py` using this reviewed manifest and inspect the live milestone list. It should update 0.4.0 and 0.5.0 descriptions and create a distinct 0.6.0 milestone; check for unrelated state changes before `--apply`.
+2. After the corrected 0.6.0 milestone exists, move the existing 0.6.0 issue cohort currently on #12 into its newly created numeric milestone; only then move the 17 active 0.5.0 issues currently on #10 into #12.
+3. Verify title, description, due date, open/closed issue counts, and active milestone membership for both 0.4.0, 0.5.0 and 0.6.0. Historical closed 0.4.0 issues remain historical references; #53/#159/#33/#268 are not live release dependencies.
+4. The canonical 0.4.0 release theme is **Evidence-Grounded Correction Assistance** (#584/#590/#371/#686). Medic is a separately qualified, cross-milestone sidecar and cannot block 0.4.0.
+
+Do not rely on manifest `github_number` to perform remote writes: `sync_milestones.py` resolves titles and GitHub's actual numbers. Do not move issues to a milestone merely because its former manifest numeric id matches.

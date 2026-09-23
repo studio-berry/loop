@@ -1209,7 +1209,7 @@
       ]
     }
   },
-  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "claim": "Loop does not claim formal GWG conformance. For sheetfed-offset and packaging, no GWG 2022/2024 certificate requirements are evaluated; clean results cover only the listed checks. Coverage is measured against GWG process families and PDF/X.",
   "fixup_registry": [
     "add-bleed",
     "downsample-images",

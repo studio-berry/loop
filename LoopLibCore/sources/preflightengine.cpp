@@ -917,7 +917,9 @@ QJsonObject preflightCoverageScopeFor(const PreflightProfileData& profile)
         }
     }
     return QJsonObject{
-        { QStringLiteral("claim"), QStringLiteral("Loop does not claim formal GWG conformance.") },
+        { QStringLiteral("claim"), QStringLiteral("This run does not evaluate formal GWG 2022/2024 conformance for "
+                                                  "sheetfed-offset or packaging. A clean result covers only its "
+                                                  "enabled checks, not either family certificate.") },
         { QStringLiteral("matrix_id"), QStringLiteral("loop-gwg-pdfx-v1") },
         { QStringLiteral("enabled_checks"), checkIds }
     };
