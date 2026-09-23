@@ -806,6 +806,15 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
 
+    const pdf::PDFHistoryRetentionResult retention = operationHistory.enforceRetention({}, historyArtifacts);
+    if (!retention.success)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.retention-failed"),
+                         QStringLiteral("The repair history was recorded, but retention could not be enforced: %1")
+                             .arg(retention.errorMessage));
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     if (!options.repairReportFile.isEmpty())
     {
         QString reportError;
