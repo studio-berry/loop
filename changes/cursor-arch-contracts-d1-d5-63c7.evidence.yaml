@@ -22,6 +22,11 @@ claims:
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
+  - id: pdf-worker-cross-platform-regressions
+    evidence:
+      - unit:UnitTestsPdfWorkerIsolation
+      - security:scripts/ci/check_pdf_worker_isolation.py
+      - architecture:agent-policy:pdftool
   - id: core-module-lanes
     evidence:
       - unit:agent-policy:core
