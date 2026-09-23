@@ -80,11 +80,9 @@ constexpr int64_t JBIG2_MAX_TOTAL_BITMAP_PIXELS = 512LL * 1024 * 1024;
 //    unrestricted, while it bounds a degenerate stream (whose items cost only a
 //    handful of arithmetic-decoder rounds each) to a couple of seconds regardless of
 //    how large the pixel budget above is.
-// Empty symbol-dictionary height classes are separately capped because each one can
-// spend many arithmetic-decoder rounds without producing a symbol or charging pixels.
 constexpr int64_t JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS = 160LL * 1024 * 1024;
 constexpr int64_t JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS = 2LL * 1024 * 1024;
-constexpr uint32_t JBIG2_MAX_EMPTY_SYMBOL_DICTIONARY_HEIGHT_CLASSES = 256;
+constexpr uint32_t JBIG2_MAX_CONSECUTIVE_EMPTY_EXPORT_RUNS = 1000;
 
 // Custom Huffman code tables (7.4.3) store an 8-bit-derived range-length
 // field per entry with no inherent bound, and a real table has at most a
@@ -1640,7 +1638,6 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
     /* 6.5.5 step 3) - initalize variables to zero */
     uint32_t HCHEIGHT = 0;
     uint32_t NSYMSDECODED = 0;
-    uint32_t emptyHeightClasses = 0;
 
     /* 6.5.5 step 4) - read all bitmaps */
     while (NSYMSDECODED < parameters.SDNUMNEWSYMS)
@@ -1818,12 +1815,6 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
             ++NSYMSDECODED;
         }
 
-        if (NSYMSDECODED == HCFIRSTSYM &&
-            ++emptyHeightClasses > JBIG2_MAX_EMPTY_SYMBOL_DICTIONARY_HEIGHT_CLASSES)
-        {
-            throw PDFException(PDFTranslationContext::tr("JBIG2 symbol dictionary has too many empty height classes."));
-        }
-
         /* 6.5.5 step 4) d) - create collective bitmap */
         if (parameters.SDHUFF && parameters.SDREFAGG == 0)
         {
@@ -1875,11 +1866,24 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
     }
     EXFLAGS.reserve(symbolsSize);
     bool CUREXFLAG = false;
+    uint32_t emptyExportRuns = 0;
     while (EXFLAGS.size() < symbolsSize)
     {
         const uint32_t EXRUNLENGTH = static_cast<uint32_t>(checkInteger(parameters.SDHUFF ? parameters.EXRUNLENGTH_Decoder.readSignedInteger() : arithmeticDecoder.getSignedInteger(&arithmeticDecoderStates.states[PDFJBIG2ArithmeticDecoderStates::IAEX])));
 
-        if (EXRUNLENGTH + EXFLAGS.size() > symbolsSize)
+        if (EXRUNLENGTH == 0)
+        {
+            if (++emptyExportRuns >= JBIG2_MAX_CONSECUTIVE_EMPTY_EXPORT_RUNS)
+            {
+                throw PDFException(PDFTranslationContext::tr("JBIG2 too many empty export flag runs in symbol dictionary."));
+            }
+        }
+        else
+        {
+            emptyExportRuns = 0;
+        }
+
+        if (EXRUNLENGTH > symbolsSize - EXFLAGS.size())
         {
             throw PDFException(PDFTranslationContext::tr("JBIG2 - invalid export flags in symbol dictionary."));
         }

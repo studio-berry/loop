@@ -22,8 +22,8 @@
       "minimized": true
     },
     {
-      "id": "jbig2-empty-height-classes-timeout",
-      "path": "Fuzz/corpus/fuzz_images/jbig2-empty-height-classes-timeout.bin",
+      "id": "jbig2-zero-export-run-timeout",
+      "path": "Fuzz/corpus/fuzz_images/jbig2-zero-export-run-timeout.bin",
       "harness": "fuzz_images",
       "origin": "fuzz-finding",
       "issue": 64,
