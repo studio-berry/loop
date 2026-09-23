@@ -165,6 +165,13 @@ pdf::PDFOperationResult appendAddBleedProvenance(const QString& outputPath,
         return pdf::PDFOperationResult(QStringLiteral("Could not append add-bleed history result."));
     }
 
+    const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
+    if (!retention.success)
+    {
+        return pdf::PDFOperationResult(QStringLiteral("Add-bleed history was recorded, but retention could not be enforced: %1")
+                                           .arg(retention.errorMessage));
+    }
+
     return true;
 }
 

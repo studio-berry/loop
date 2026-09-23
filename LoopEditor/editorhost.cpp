@@ -2476,6 +2476,14 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
+    const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
+    if (!retention.success)
+    {
+        announceDocumentState(tr("The revision was restored, but history retention could not be enforced: %1")
+                                  .arg(retention.errorMessage));
+        return false;
+    }
+
     announceDocumentState(tr("Returned to revision %1 as %2.")
                               .arg(point->documentRevisionDigest.left(12), QFileInfo(destination).fileName()));
     openFileUrl(QUrl::fromLocalFile(destination));
