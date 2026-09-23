@@ -26,8 +26,10 @@
       "LoopLibQuick/CMakeLists.txt",
       "PdfExampleGenerator/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
+      "PdfTool/CMakeLists.txt",
       "ProductQuickAccessibilitySmoke/CMakeLists.txt",
       "QuickShellSmoke/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
@@ -441,7 +443,8 @@
         "UnitTestsSchemaEvolution",
         "UnitTestsStandardOracle",
         "UnitTestsTransparencyFlattener",
-        "UnitTestsWorkloadEnvelope"
+        "UnitTestsWorkloadEnvelope",
+        "loop-pdf-worker"
       ]
     },
     {
@@ -2450,6 +2453,33 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsPdfWorkerIsolation",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsPluginAbi",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -3388,6 +3418,43 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": []
+    },
+    {
+      "id": "loop-pdf-worker",
+      "kind": "executable",
+      "cmake": "PdfTool/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "loop-pdf-worker=present in docs/product-surface.json",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
     }
   ],
   "legacy_executables": [
@@ -3510,8 +3577,8 @@
     }
   ],
   "counts": {
-    "targets": 80,
-    "installed_in_profile": 4,
+    "targets": 82,
+    "installed_in_profile": 5,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,
     "legacy_executables": 4,

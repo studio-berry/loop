@@ -449,6 +449,7 @@
     "UnitTestsPageSurface",
     "UnitTestsPageSurfaceBudget",
     "UnitTestsPdfToolContract",
+    "UnitTestsPdfWorkerIsolation",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
