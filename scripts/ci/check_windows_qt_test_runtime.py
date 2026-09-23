@@ -137,10 +137,21 @@ def check_source(unit_tests_text: str, module_text: str | None) -> list[Violatio
 
 
 def windows_build(cache_text: str) -> bool:
-    """True when the CMake cache names an MSVC-family compiler."""
+    """True when the CMake cache is an MSVC-family Windows build.
+
+    Ninja and Makefiles record ``CMAKE_CXX_COMPILER`` as ``cl.exe`` (``clang-cl.exe``
+    contains that suffix). The Visual Studio generator, which GitHub
+    ``windows-latest`` uses when ``-G`` is omitted, does not write
+    ``CMAKE_CXX_COMPILER`` at all and records ``CMAKE_GENERATOR=Visual Studio …``
+    instead.
+    """
     for line in cache_text.splitlines():
-        if line.startswith("CMAKE_CXX_COMPILER:"):
-            return "cl.exe" in line
+        if line.startswith("CMAKE_CXX_COMPILER:") and "cl.exe" in line.lower():
+            return True
+        if line.startswith("CMAKE_GENERATOR:"):
+            generator = line.split("=", 1)[-1].strip()
+            if generator.startswith("Visual Studio"):
+                return True
     return False
 
 

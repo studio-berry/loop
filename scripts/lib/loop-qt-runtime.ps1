@@ -20,6 +20,11 @@ function Add-LoopQtRuntimeToPath {
         return $null
     }
 
+    if (-not $IsWindows) {
+        Write-Verbose "Add-LoopQtRuntimeToPath is Windows-only; Linux CI supplies Qt via LD_LIBRARY_PATH."
+        return $null
+    }
+
     $binDir = Join-Path $qtRoot "bin"
     foreach ($dll in @("Qt6Core.dll", "Qt6Quick.dll")) {
         if (-not (Test-Path -LiteralPath (Join-Path $binDir $dll))) {
