@@ -1,0 +1,36 @@
+{
+    "checks": [
+        {
+            "id": "dieline",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "dieline",
+            "message": "No ISO 19593-1 cutting-die OCG or legacy dieline spot color was detected.",
+            "scope": "document",
+            "severity": "error",
+            "type": "dieline-missing"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Dieline Required",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "c991094ff59d6e6c"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

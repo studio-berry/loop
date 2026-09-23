@@ -1,0 +1,39 @@
+{
+    "checks": [
+        {
+            "id": "hidden-layers",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - Hidden Layers",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "ocg_name": "HiddenMarks"
+            },
+            "message": "Optional-content group 'HiddenMarks' is not printable by default.",
+            "scope": "document",
+            "severity": "warning",
+            "type": "hidden-layers"
+        }
+    ]
+}
