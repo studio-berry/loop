@@ -1,0 +1,45 @@
+{
+    "checks": [
+        {
+            "id": "off-page-content",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - Off-page Content",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "bbox": [
+                300,
+                300,
+                320,
+                320
+            ],
+            "check_id": "off-page-content",
+            "evidence": {
+                "confidence": "exact"
+            },
+            "message": "mark lies outside the effective page/bleed box on page 1.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "off-page-content"
+        }
+    ]
+}

@@ -566,10 +566,25 @@ expected size unset).
 ```bash
 pip install reportlab pillow pikepdf
 python3 loop-preflight/tools/generate_fixtures.py   # writes into testdata/fixtures/
+python3 loop-preflight/tools/generate_corpus_gap_fixtures.py  # #668 gap fixtures
 ```
 
 The output is deterministic, so a re-run with no code change produces no diff. Review
 `git status` / `git diff` before committing to confirm no real client file slipped in.
+
+Corpus-gap fixtures added for #668 (each isolates one previously unexercised check):
+
+| Fixture | Profile | Expect | Check(s) |
+|---------|---------|--------|----------|
+| `off-page-content.pdf` | test-off-page-content | warning | `off-page-content` |
+| `invisible-content.pdf` | test-invisible-content | warning | `invisible-content` |
+| `obscured-content.pdf` | test-obscured-content | info | `obscured-content` |
+| `hidden-layers.pdf` | test-hidden-layers | warning | `hidden-layers` |
+| `font-integrity-corrupt.pdf` | test-font-integrity | fail | `font-integrity` |
+| `thin-parts-clear.pdf` | test-thin-parts-clear | fail | `thin-parts` (not near-threshold) |
+| `blank-page.pdf` | test-dieline-required | fail | `dieline` |
+| `blank-page.pdf` | test-processing-steps-required | fail | `processing-steps` |
+| `conformance-pdfx5n.pdf` | test-conformance-claims | incomplete | `conformance-claims` |
 
 ### Public PDF/A corpora (MIC-146)
 

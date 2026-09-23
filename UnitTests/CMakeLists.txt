@@ -639,6 +639,23 @@ set_target_properties(UnitTestsPdfToolContract PROPERTIES
 )
 add_test(UnitTestsPdfToolContract "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPdfToolContract")
 
+add_executable(UnitTestsPdfWorkerIsolation
+    tst_pdfworkerisolation.cpp
+)
+target_link_libraries(UnitTestsPdfWorkerIsolation PRIVATE Qt6::Core Qt6::Test)
+add_dependencies(UnitTestsPdfWorkerIsolation PdfTool loop-pdf-worker)
+target_compile_definitions(UnitTestsPdfWorkerIsolation PRIVATE
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+    LOOP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+set_target_properties(UnitTestsPdfWorkerIsolation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPdfWorkerIsolation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPdfWorkerIsolation")
+
 add_executable(UnitTestsBleedMarginProbe
 	tst_bleedmarginprobetest.cpp
 )
@@ -817,6 +834,20 @@ set_target_properties(UnitTestsContentProcessorLimits PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsContentProcessorLimits "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsContentProcessorLimits")
+
+add_executable(UnitTestsImageDecodeGuard
+	tst_imagedecodeguardtest.cpp
+)
+
+target_link_libraries(UnitTestsImageDecodeGuard PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsImageDecodeGuard PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsImageDecodeGuard "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsImageDecodeGuard")
 
 add_executable(UnitTestsJbig2Decoder
 	tst_jbig2decodertest.cpp

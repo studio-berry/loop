@@ -1,0 +1,410 @@
+format_version: 1
+kind: proof-lanes
+description: Subsystem to proof-lane map. Binding lanes must exist. Stub lanes are harness TODOs and must be named in unresolved when the subsystem changes.
+lane_kinds:
+  - unit
+  - integration
+  - fixture
+  - differential
+  - security
+  - architecture
+  - packaging
+  - sealed-eval
+catalog: docs/generated/architecture-catalog.json
+policy: agent-policy.json
+cmake_sources:
+  - UnitTests/CMakeLists.txt
+  - UnitTests/phase4-tests.cmake
+significant_paths:
+  - UnitTests/**
+  - LoopLibCore/**
+  - LoopLibInteraction/**
+  - LoopLibQuick/**
+  - LoopEditor/**
+  - PdfTool/**
+  - loop-preflight/**
+  - .github/workflows/**
+  - scripts/**
+  - agent-policy.json
+  - CMakeLists.txt
+  - cmake/**
+  - docs/schemas/**
+  - architecture/**
+  - AGENTS.md
+subsystems:
+  - id: bleed-fixup
+    summary: Bleed fixup and UnitTestsBleedFixup.
+    owns_targets: true
+    paths:
+      - LoopLibCore/sources/pdfbleedfixup.cpp
+      - LoopLibCore/sources/pdfbleedfixup.h
+      - LoopLibCore/sources/pdfcontourbleedfixup.cpp
+      - LoopLibCore/sources/pdfcontourbleedfixup.h
+      - UnitTests/tst_bleedfixuptest.cpp
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsBleedFixup
+        policy_module: core
+        executes: binding
+      - kind: architecture
+        bind: policy
+        id: agent-policy:core
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: linux-build
+        ref: .github/workflows/reusable-linux.yml
+        contains: ctest
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-build
+        ref: .github/workflows/reusable-windows.yml
+        contains: ctest
+        executes: binding
+  - id: document-search
+    summary: PDF search and the Quick document model.
+    owns_targets: true
+    paths:
+      - LoopLibCore/sources/pdfdocumentsearch.cpp
+      - LoopLibCore/sources/pdfdocumentsearch.h
+      - LoopEditor/quickdocumentmodel.cpp
+      - LoopEditor/quickdocumentmodel.h
+      - UnitTests/tst_documentsearchtest.cpp
+      - UnitTests/tst_quickdocumentmodeltest.cpp
+      - UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
+      - scripts/ci/check_search_budget_gate.py
+      - scripts/ci/test_check_search_budget_gate.py
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsDocumentSearch
+        policy_module: core
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsQuickDocumentModel
+        policy_module: quick
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/ci/check_search_budget_gate.py
+        executes: binding
+      - kind: architecture
+        bind: policy
+        id: agent-policy:quick
+        executes: binding
+      - kind: fixture
+        bind: fixture
+        id: search-budget-independence
+        fixture_class: regression
+        ref: UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: linux-build
+        ref: .github/workflows/reusable-linux.yml
+        contains: ctest
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-build
+        ref: .github/workflows/reusable-windows.yml
+        contains: ctest
+        executes: binding
+  - id: preflight
+    summary: Preflight engine, corpus, and profile identity.
+    owns_targets: true
+    paths_from: agent-policy:preflight
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPreflightChecks
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPreflightEngine
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPreflightInteraction
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPreflightVerdict
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPreflightProfileResolver
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsProfileIdentity
+        policy_module: preflight
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsOperatorAcceptance
+        policy_module: preflight
+        executes: binding
+      - kind: integration
+        bind: ctest
+        id: UnitTestsPreflightCorpus
+        policy_module: preflight
+        executes: binding
+      - kind: integration
+        bind: ctest
+        id: UnitTestsPreflightWorkflowAcceptance
+        policy_module: preflight
+        executes: binding
+      - kind: differential
+        bind: ctest
+        id: UnitTestsStandardOracle
+        policy_module: preflight
+        executes: binding
+      - kind: architecture
+        bind: fixture
+        id: loop-preflight/testdata/fixtures
+        executes: binding
+      - kind: architecture
+        bind: catalog
+        id: docs/generated/preflight-check-catalog.json
+        executes: binding
+      - kind: architecture
+        bind: catalog
+        id: docs/generated/preflight-corpus-coverage.json
+        executes: binding
+  - id: packaging
+    summary: Install and release-gate workflows.
+    paths:
+      - .github/workflows/reusable-linux.yml
+      - .github/workflows/reusable-windows.yml
+      - .github/workflows/LinuxInstall.yml
+      - .github/workflows/WindowsInstall.yml
+      - .github/workflows/dispatch-packaging.yml
+      - .github/workflows/release-gate.yml
+      - .github/workflows/ci.yml
+      - scripts/ci/verify_release_assets.py
+    required:
+      - kind: packaging
+        bind: workflow
+        id: linux-build
+        ref: .github/workflows/reusable-linux.yml
+        contains: ctest
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-build
+        ref: .github/workflows/reusable-windows.yml
+        contains: ctest
+        executes: binding
+      - kind: security
+        bind: workflow
+        id: codeql
+        ref: .github/workflows/codeql.yml
+        contains: CodeQL
+        executes: binding
+  - id: agent-policy
+    summary: Agent policy, architecture contracts, and the contract checker.
+    paths:
+      - agent-policy.json
+      - scripts/agent/**
+      - architecture/**
+      - AGENTS.md
+      - .github/workflows/ci.yml
+      - .github/workflows/reusable-linux.yml
+      - .github/workflows/release-gate.yml
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/agent/test_architecture_contracts.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/agent/check-architecture.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/agent/generate-adapters.py
+        executes: binding
+  - id: fixture-lifecycle
+    summary: Classified golden fixtures.
+    paths:
+      - UnitTests/testdata/fixture-classes/**
+      - architecture/fixtures.yaml
+    required:
+      - kind: fixture
+        bind: fixture
+        id: bleed-box-margin
+        fixture_class: regression
+        ref: UnitTests/testdata/fixture-classes/regression/bleed-box-margin.yaml
+        executes: binding
+      - kind: sealed-eval
+        bind: fixture
+        id: mixed-surface-holdout
+        fixture_class: sealed-eval
+        ref: UnitTests/testdata/fixture-classes/sealed-eval/mixed-surface-holdout.yaml
+        executes: binding
+  - id: core
+    summary: Agent-policy core module.
+    paths_from: agent-policy:core
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:core
+        executes: binding
+      - kind: architecture
+        bind: catalog
+        id: docs/generated/architecture-catalog.json
+        executes: binding
+      - kind: security
+        bind: script
+        id: scripts/ci/check_source_integrity.py
+        executes: binding
+      - kind: differential
+        bind: ctest
+        id: UnitTestsConversionOracle
+        policy_module: core
+        executes: binding
+      - kind: sealed-eval
+        bind: script
+        id: scripts/ci/check_independent_validation_gate.py
+        executes: stub
+  - id: pdftool
+    summary: Agent-policy pdftool module.
+    paths_from: agent-policy:pdftool
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:pdftool
+        executes: binding
+  - id: pdf-worker-isolation
+    summary: "PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618)."
+    owns_targets: true
+    paths:
+      - PdfTool/loop-pdf-worker-main.cpp
+      - PdfTool/pdfworkerruntime.cpp
+      - PdfTool/pdfworkerruntime.h
+      - PdfTool/pdfworkersandbox.cpp
+      - PdfTool/pdfworkersandbox.h
+      - PdfTool/pdfworkerprotocol.h
+      - PdfTool/pdfworkerclient.cpp
+      - PdfTool/pdfworkerclient.h
+      - PdfTool/pdftoolworker.cpp
+      - PdfTool/pdftoolworker.h
+      - UnitTests/tst_pdfworkerisolation.cpp
+      - scripts/ci/check_pdf_worker_isolation.py
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPdfWorkerIsolation
+        policy_module: pdftool
+        executes: binding
+      - kind: security
+        bind: script
+        id: scripts/ci/check_pdf_worker_isolation.py
+        executes: binding
+      - kind: architecture
+        bind: policy
+        id: agent-policy:pdftool
+        executes: binding
+  - id: pagemaster
+    summary: Agent-policy pagemaster module.
+    paths_from: agent-policy:pagemaster
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:pagemaster
+        executes: binding
+  - id: interaction
+    summary: Agent-policy interaction module.
+    paths_from: agent-policy:interaction
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:interaction
+        executes: binding
+  - id: quick
+    summary: Agent-policy quick module.
+    paths_from: agent-policy:quick
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:quick
+        executes: binding
+  - id: developer_widgets
+    summary: Opt-in Widgets developer tools.
+    paths_from: agent-policy:developer_widgets
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:developer_widgets
+        executes: binding
+  - id: plugins
+    summary: Agent-policy plugins module.
+    paths_from: agent-policy:plugins
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:plugins
+        executes: binding
+  - id: schemas_contracts
+    summary: Agent-policy schema module.
+    paths_from: agent-policy:schemas_contracts
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:schemas_contracts
+        executes: binding
+  - id: build_policy
+    summary: Agent-policy build module.
+    paths_from: agent-policy:build_policy
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:build_policy
+        executes: binding
+  - id: documentation
+    summary: Narrative docs and generated adapters.
+    paths_from: agent-policy:documentation
+    required:
+      - kind: architecture
+        bind: script
+        id: scripts/generate-architecture-catalogs.py
+        executes: binding
+migration:
+  deferred_paths:
+    - UnitTests/**
+    - LoopLibCore/**
+    - LoopLibInteraction/**
+    - LoopLibQuick/**
+    - LoopEditor/**
+    - PdfTool/**
+    - loop-preflight/**
+    - .github/workflows/**
+    - scripts/**
+    - CMakeLists.txt
+    - cmake/**
+  deferred_targets:
+    - UnitTestsActionList
+    - UnitTestsAuthorSettings
+    - UnitTestsContentEditor
+    - UnitTestsFindingNavigation
+    - UnitTestsGovernedExecution
+    - UnitTestsImageDownsampleFixup
+    - UnitTestsObjectSelector
+    - UnitTestsOcrPageGate
+    - UnitTestsProductionGeometry
+    - UnitTestsResourceBudget
+    - UnitTestsShellInspectorDispatch
+    - UnitTestsShellWorkspace

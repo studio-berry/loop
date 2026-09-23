@@ -245,6 +245,7 @@
     "bleed",
     "color-inventory",
     "color-mode",
+    "conformance-claims",
     "content-bleed",
     "dieline",
     "embedded-fonts",
@@ -264,9 +265,11 @@
     "trim",
     "white-overprint"
   ],
+  "preflight_corpus_coverage": "docs/generated/preflight-corpus-coverage.json",
   "preflight_coverage": {
     "coverage_holes": [
       "bleed",
+      "conformance-claims",
       "content-bleed",
       "dieline",
       "hidden-layers",
@@ -419,6 +422,7 @@
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
+    "UnitTestsImageDecodeGuard",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
@@ -445,6 +449,7 @@
     "UnitTestsPageSurface",
     "UnitTestsPageSurfaceBudget",
     "UnitTestsPdfToolContract",
+    "UnitTestsPdfWorkerIsolation",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",

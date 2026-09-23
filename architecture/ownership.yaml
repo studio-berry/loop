@@ -1,0 +1,42 @@
+format_version: 1
+kind: ownership
+description: Public surfaces and the single home for PageMaster, the document model, and preflight.
+surfaces:
+  - id: core
+    paths:
+      - LoopLibCore/sources/pdfplugin.h
+      - LoopLibCore/sources/pdfdocumentsearch.h
+  - id: pagemaster
+    paths:
+      - LoopLibCore/sources/pdfpagemasterexport.h
+      - LoopLibCore/sources/pdfpagemasterexport.cpp
+    forbid_basenames_under:
+      - LoopEditor
+      - LoopLibQuick
+      - LoopLibInteraction
+      - PdfTool
+  - id: document-model
+    paths:
+      - LoopEditor/quickdocumentmodel.h
+      - LoopEditor/quickdocumentmodel.cpp
+    forbid_basenames_under:
+      - LoopLibCore
+      - LoopLibQuick
+      - LoopLibInteraction
+      - PdfTool
+  - id: preflight
+    paths:
+      - LoopLibCore/sources/preflightengine.h
+      - LoopLibCore/sources/preflightengine.cpp
+    forbid_basenames_under:
+      - LoopEditor/quickdocumentmodel.cpp
+      - LoopEditor/quickdocumentmodel.h
+      - LoopLibQuick
+      - LoopLibInteraction
+  - id: pdftool
+    paths:
+      - PdfTool/CMakeLists.txt
+  - id: editor-plugins
+    paths: []
+    absent_tree: LoopEditorPlugins
+    note: Interactive plugins are hosted by the Editor. pdfplugin.h stays in LoopLibCore as the ABI, not as a widget UI.

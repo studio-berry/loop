@@ -1,0 +1,9 @@
+id: search-iteration
+class: development
+origin: synthetic
+expected_behavior: Local scratch note for search-budget experiments. Not a release gate. The binding regression case is search-budget-independence under fixture-classes/regression.
+difficulty: easy
+why_it_exists: Gives agents a writable development fixture so they do not retune regression or sealed cases.
+metrics:
+  - search-latency
+approval_required: false

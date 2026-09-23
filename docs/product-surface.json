@@ -32,8 +32,24 @@
       "rationale": "Headless and automation surface; command names and JSON contracts remain stable.",
       "profiles": { "developer": "present", "loop-release": "present" },
       "replacement_surface": null,
-      "dependencies": ["LoopLibCore"],
+      "dependencies": ["LoopLibCore", "loop-pdf-worker"],
       "validation_evidence": "PdfTool capabilities --console-format json",
+      "follow_up_issue": null
+    },
+    {
+      "id": "loop-pdf-worker",
+      "kind": "application",
+      "artifact": "loop-pdf-worker",
+      "artifact_scope": "install",
+      "artifact_patterns": ["loop-pdf-worker", "loop-pdf-worker.*"],
+      "source_status": "maintained",
+      "disposition": "CLI-ONLY",
+      "owner": "m.berry",
+      "rationale": "Isolated LoopLibCore helper for untrusted open/preflight; installed beside PdfTool and must not initialize Sentry/crashpad.",
+      "profiles": { "developer": "present", "loop-release": "present" },
+      "replacement_surface": null,
+      "dependencies": ["LoopLibCore"],
+      "validation_evidence": "scripts/ci/check_pdf_worker_isolation.py",
       "follow_up_issue": null
     },
     {
@@ -532,6 +548,7 @@
       "libLoop*",
       "PdfTool*",
       "libPdfTool*",
+      "loop-pdf-worker*",
       "*Plugin",
       "lib*Plugin*"
     ],
@@ -604,6 +621,9 @@
         "verify-evidence-bundle",
         "verify-redaction",
         "verify-signatures",
+        "worker-open",
+        "worker-ping",
+        "worker-preflight",
         "xml"
       ]
     }

@@ -28,6 +28,7 @@ Approval is required for:
 - history rewrite
 - upstream sync
 - signing or credential operations
+- sealed fixture output changes
 
 ## Required proof and changelog
 
@@ -35,6 +36,10 @@ Approval is required for:
 - Every PR adds exactly one `changes/<sanitized-head-branch>.md` fragment. Required fields: Category, Audience, Breaking-Change, Summary. Categories: added, changed, fixed, security, internal.
 - Use `internal` for tooling or documentation changes; it still requires a fragment.
 - Do not invent a public contract when a protected interface, schema, persistence format, central type, or root build contract must change; stop and report the contract change.
+- Architecture contracts in `architecture/` are checked by `scripts/agent/check-architecture.py`. A changed subsystem with no proof lane fails.
+- PRs that touch a subsystem other than documentation add `changes/<sanitized-head-branch>.evidence.yaml`. Evidence refs must resolve and cover that subsystem's binding proof lanes.
+- Golden fixtures are `development`, `regression`, or `sealed-eval`. Sealed expected outputs fail closed unless the evidence manifest sets `sealed_output_approval: human`.
+- Quality budgets in `architecture/quality-budgets.yaml` fail when an enforced metric moves past its baseline. Declared metrics still have to exist for the mapped subsystems.
 
 ## Engineering contract
 

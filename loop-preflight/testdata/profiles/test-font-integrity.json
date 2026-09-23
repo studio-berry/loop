@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Font Integrity",
+  "description": "Isolates font-integrity for the golden corpus.",
+  "checks": [
+    {
+      "id": "font-integrity",
+      "severity": "error"
+    }
+  ]
+}

@@ -440,6 +440,18 @@ void BleedFixupTest::apply_cmykOutputIntentDecodeFailure_returnsError()
     builder.setPageBleedBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
     embedCmykOutputIntentWithUndecodableProfile(&builder);
     pdf::PDFDocument document = builder.build();
+    // Fail-closed proof must compare in-memory object storage, not independently
+    // re-serialized writer bytes (CreationDate/ID make digests nondeterministic).
+    const pdf::PDFDocument before = document;
+    QCOMPARE(before.getCatalog()->getPageCount(), size_t(1));
+    const pdf::PDFPage* beforePage = before.getCatalog()->getPage(0);
+    const QRectF beforeMedia = beforePage->getMediaBox();
+    const QRectF beforeTrim = beforePage->getTrimBox();
+    const QRectF beforeBleed = beforePage->getBleedBox();
+    const auto beforeIntents = before.getCatalog()->getOutputIntents();
+    QCOMPARE(beforeIntents.size(), size_t(1));
+    const QString beforeIntentId = beforeIntents.front().getOutputConditionIdentifier();
+    const size_t beforeObjectCount = before.getStorage().getObjects().size();
 
     pdf::PDFBleedFixupSettings settings;
     settings.force = true;
@@ -451,7 +463,17 @@ void BleedFixupTest::apply_cmykOutputIntentDecodeFailure_returnsError()
     QVERIFY(!result);
     QVERIFY(result.getErrorMessage().contains(QStringLiteral("could not be decoded")));
     QVERIFY(result.getErrorMessage().contains(QStringLiteral("Test CMYK")));
-    QCOMPARE(documentDigest(document), documentDigest(builder.build()));
+
+    QVERIFY(document == before);
+    QCOMPARE(document.getStorage().getObjects().size(), beforeObjectCount);
+    QCOMPARE(document.getCatalog()->getPageCount(), size_t(1));
+    const pdf::PDFPage* afterPage = document.getCatalog()->getPage(0);
+    QCOMPARE(afterPage->getMediaBox(), beforeMedia);
+    QCOMPARE(afterPage->getTrimBox(), beforeTrim);
+    QCOMPARE(afterPage->getBleedBox(), beforeBleed);
+    const auto afterIntents = document.getCatalog()->getOutputIntents();
+    QCOMPARE(afterIntents.size(), size_t(1));
+    QCOMPARE(afterIntents.front().getOutputConditionIdentifier(), beforeIntentId);
 }
 
 void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()

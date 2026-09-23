@@ -1,0 +1,43 @@
+format_version: 1
+kind: fixtures
+description: Golden fixtures are development, regression, or sealed-eval. Medic is the archetype; Loop seeds the classes without rewriting existing corpora.
+classes:
+  - development
+  - regression
+  - sealed-eval
+required_fields:
+  - id
+  - class
+  - origin
+  - expected_behavior
+  - difficulty
+  - why_it_exists
+  - metrics
+  - approval_required
+difficulties:
+  - easy
+  - medium
+  - hard
+governed_root: UnitTests/testdata/fixture-classes
+deferred_roots:
+  - loop-preflight/testdata/fixtures
+  - loop-preflight/testdata/page-box-corpus
+  - loop-preflight/testdata/conversion
+  - UnitTests/testdata/budget-exhaustion
+  - UnitTests/testdata/budget_exhaustion
+  - UnitTests/testdata/lifecycle
+  - UnitTests/testdata/interaction-traces
+  - UnitTests/testdata/signatures
+  - UnitTests/testdata/canvas-parity
+rules:
+  development_approval_required: false
+  regression_approval_required: true
+  sealed_approval_required: true
+  sealed_diff_marker: sealed_output_approval
+  sealed_diff_value: human
+  sealed_lane: sealed-eval
+notes:
+  - Development fixtures may be edited while an agent iterates.
+  - Regression fixtures protect CI. Do not tune expected output to go green.
+  - Sealed-eval fixtures are held out. Agent workflows must not optimize against them.
+  - Raised-text, mixed paint, and texture evidence is the case that motivated the split.

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Hidden Layers",
+  "description": "Isolates hidden-layers for the golden corpus.",
+  "checks": [
+    {
+      "id": "hidden-layers",
+      "severity": "warning"
+    }
+  ]
+}

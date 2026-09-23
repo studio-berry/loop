@@ -65,7 +65,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         install = Path(temporary.name)
-        for relative in ("LoopEditor.exe", "PdfTool.exe", "LoopLibCore.dll", "LoopLibQuick.dll"):
+        for relative in ("LoopEditor.exe", "PdfTool.exe", "loop-pdf-worker.exe", "LoopLibCore.dll", "LoopLibQuick.dll"):
             path = install / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fixture")
@@ -97,7 +97,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         install_manifest = Path(temporary.name) / "install_manifest.txt"
         install_manifest.write_text(
-            "\n".join(str(install / name) for name in ("LoopEditor.exe", "PdfTool.exe", "LoopLibCore.dll", "LoopLibQuick.dll"))
+            "\n".join(str(install / name) for name in ("LoopEditor.exe", "PdfTool.exe", "loop-pdf-worker.exe", "LoopLibCore.dll", "LoopLibQuick.dll"))
             + "\n",
             encoding="utf-8",
         )

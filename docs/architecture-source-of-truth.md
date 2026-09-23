@@ -31,6 +31,9 @@ and applicable fixups live in
 [`preflight-check-catalog.json`](generated/preflight-check-catalog.json), and the
 prioritised gap register derived from its coverage overlay lives in
 [`preflight-coverage-backlog.json`](generated/preflight-coverage-backlog.json).
+Which golden-corpus fixtures exercise each of those checks, and which none does,
+lives in
+[`preflight-corpus-coverage.json`](generated/preflight-corpus-coverage.json).
 Per-operation correction metadata — save policy, impact, surface parity, and
 limitations — lives in
 [`correction-operation-catalog.json`](generated/correction-operation-catalog.json).
@@ -48,3 +51,8 @@ result. Product versioning is the matching input at
 [`docs/version-policy.json`](version-policy.json) (Semantic Versioning 2.0,
 current `0.2.0-alpha`). Ephemeral topic branches are not architecture facts
 and are not copied into the catalog.
+
+Proof lanes, dependency boundaries, fixture classes, and quality budgets live
+in [`architecture/`](../architecture/). `scripts/agent/check-architecture.py`
+fails when a changed subsystem has no proof lane, a sealed fixture changes
+without approval, or an enforced budget moves past its baseline.

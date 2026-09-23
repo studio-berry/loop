@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfconformanceclaim.h"
 #include "preflightprofileresolver.h"
 #include "pdfblockingthreadguard.h"
 #include "pdfpreflightverdict.h"
@@ -138,6 +139,15 @@ private slots:
     void run_restrictedPdfxDoesNotClaimDocumentWideConformance();
     void run_legacyAnalysisBoxMigratesAndDiagnoses();
     void run_unresolvedVariableIsIncomplete();
+    void conformanceClaimRegistry_neverReportsOk();
+    void parseDeclaredConformanceLevels_ordersRegistryLevels();
+    void run_conformanceClaims_declaredLevelIsUnsupported_data();
+    void run_conformanceClaims_declaredLevelIsUnsupported();
+    void run_conformanceClaims_undeclaredLevelStaysClean_data();
+    void run_conformanceClaims_undeclaredLevelStaysClean();
+    void run_conformanceClaims_infoDictionaryDeclaresPdfx5n();
+    void run_conformanceClaims_multipleLevelsStayUnsupported();
+    void run_otherCheckDoesNotInventConformanceFinding();
 };
 
 namespace
@@ -2656,6 +2666,224 @@ void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.errorCode, QStringLiteral("unresolved-variable"));
     QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+namespace
+{
+
+QByteArray conformanceXmp(const QByteArray& descriptionBody)
+{
+    return QByteArrayLiteral("<?xpacket begin=\"\"?>\n"
+                             "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF "
+                             "xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">") +
+           descriptionBody + QByteArrayLiteral("</rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>\n");
+}
+
+pdf::PDFDocument documentWithMetadata(const QByteArray& metadata)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    if (!metadata.isEmpty())
+    {
+        builder.setCatalogMetadata(metadata);
+    }
+    return builder.build();
+}
+
+pdf::PreflightResult runConformanceClaims(pdf::PDFDocument& document)
+{
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Conformance claims") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QString(pdf::PDF_CONFORMANCE_CLAIMS_CHECK_ID) } } } }
+    };
+    return engine.run(profile);
+}
+
+const pdf::PreflightCheckStatus* conformanceStatus(const pdf::PreflightResult& result)
+{
+    for (const pdf::PreflightCheckStatus& status : result.checkStatuses)
+    {
+        if (status.id == pdf::PDF_CONFORMANCE_CLAIMS_CHECK_ID)
+        {
+            return &status;
+        }
+    }
+    return nullptr;
+}
+
+}   // namespace
+
+void PreflightEngineTest::conformanceClaimRegistry_neverReportsOk()
+{
+    int count = 0;
+    const pdf::PDFConformanceClaim* rows = pdf::pdfConformanceClaimRegistry(&count);
+    QCOMPARE(count, 3);
+    const QStringList expectedLevels{ QStringLiteral("pdfx-5n"), QStringLiteral("pdfx-5g"), QStringLiteral("pdfa-3") };
+    for (int index = 0; index < count; ++index)
+    {
+        QCOMPARE(QString(rows[index].levelId), expectedLevels.at(index));
+        QVERIFY(!rows[index].produced);
+        QVERIFY(!rows[index].validated);
+        QCOMPARE(QString(rows[index].backlogRowId), QString(pdf::PDF_CONFORMANCE_CLAIM_BACKLOG_ROW));
+        QCOMPARE(QString(rows[index].catalogDisposition), QStringLiteral("landed"));
+        const QString disposition = pdf::pdfConformanceClaimReportDisposition(rows[index]);
+        QCOMPARE(disposition, QString(pdf::PDF_CONFORMANCE_CLAIM_STATUS_UNSUPPORTED));
+        QVERIFY(disposition != QStringLiteral("ok"));
+    }
+    QVERIFY(pdf::pdfConformanceClaimForLevel(QStringLiteral("pdfvt")) == nullptr);
+}
+
+void PreflightEngineTest::parseDeclaredConformanceLevels_ordersRegistryLevels()
+{
+    const QByteArray text = QByteArrayLiteral("pdfaid:part=\"3\" GTS_PDFXVersion=\"PDF/X-5g\" PDF/X-5n");
+    QCOMPARE(pdf::parseDeclaredConformanceLevels(text),
+             QStringList({ QStringLiteral("pdfx-5n"), QStringLiteral("pdfx-5g"), QStringLiteral("pdfa-3") }));
+    QCOMPARE(pdf::parseDeclaredConformanceLevels(QByteArrayLiteral("pdfxid:GTS_PDFXVersion=\"PDF/X-5\" pdfxid:GTS_PDFXConformance=\"g\"")),
+             QStringList({ QStringLiteral("pdfx-5g") }));
+    QVERIFY(pdf::parseDeclaredConformanceLevels(QByteArrayLiteral("GTS_PDFXVersion=\"PDF/X-5pg\"")).isEmpty());
+    QVERIFY(pdf::parseDeclaredConformanceLevels(QByteArrayLiteral("pdfaid:part=\"13\"")).isEmpty());
+    QVERIFY(pdf::parseDeclaredConformanceLevels(QByteArrayLiteral("GTS_PDFVTVersion=\"PDF/VT-1\"")).isEmpty());
+}
+
+void PreflightEngineTest::run_conformanceClaims_declaredLevelIsUnsupported_data()
+{
+    QTest::addColumn<QByteArray>("metadata");
+    QTest::addColumn<QString>("levelId");
+
+    QTest::newRow("pdfx-5n") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5n\"/>"))
+                             << QStringLiteral("pdfx-5n");
+    QTest::newRow("pdfx-5g") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5g\"/>"))
+                             << QStringLiteral("pdfx-5g");
+    QTest::newRow("pdfa-3-attribute") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"3\" pdfaid:conformance=\"B\"/>"))
+                                      << QStringLiteral("pdfa-3");
+    QTest::newRow("pdfa-3-element") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"><pdfaid:part>3</pdfaid:part></rdf:Description>"))
+                                    << QStringLiteral("pdfa-3");
+    QTest::newRow("pdfx-5-conformance-n") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5\" pdfxid:GTS_PDFXConformance=\"n\"/>"))
+                                          << QStringLiteral("pdfx-5n");
+}
+
+void PreflightEngineTest::run_conformanceClaims_declaredLevelIsUnsupported()
+{
+    QFETCH(QByteArray, metadata);
+    QFETCH(QString, levelId);
+
+    pdf::PDFDocument document = documentWithMetadata(metadata);
+    const pdf::PreflightResult result = runConformanceClaims(document);
+    const pdf::PreflightCheckStatus* status = conformanceStatus(result);
+    QVERIFY(status != nullptr);
+    QCOMPARE(status->status, QString(pdf::PDF_CONFORMANCE_CLAIM_STATUS_UNSUPPORTED));
+    QCOMPARE(status->reason, QStringLiteral("unsupported-conformance-level:%1").arg(levelId));
+    QVERIFY(status->status != QStringLiteral("ok"));
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QString(pdf::PDF_CONFORMANCE_CLAIM_UNSUPPORTED_TYPE));
+    QCOMPARE(result.warnings.first().scope, QStringLiteral("document"));
+    QCOMPARE(result.warnings.first().checkId, QString(pdf::PDF_CONFORMANCE_CLAIMS_CHECK_ID));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("level_id")).toString(), levelId);
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("report_disposition")).toString(), QStringLiteral("unsupported"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("produced")).toBool(), false);
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("validated")).toBool(), false);
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("catalog_disposition")).toString(), QStringLiteral("landed"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(pdf::reducePreflightVerdict(result).reasonCode, status->reason);
+}
+
+void PreflightEngineTest::run_conformanceClaims_undeclaredLevelStaysClean_data()
+{
+    QTest::addColumn<QByteArray>("metadata");
+
+    QTest::newRow("no-metadata") << QByteArray();
+    QTest::newRow("pdfx-1a") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-1a:2001\"/>"));
+    QTest::newRow("pdfx-4") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-4\"/>"));
+    QTest::newRow("pdfx-3") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-3:2002\"/>"));
+    QTest::newRow("pdfa-2") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"2\" pdfaid:conformance=\"B\"/>"));
+    QTest::newRow("pdfa-1") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"1\" pdfaid:conformance=\"B\"/>"));
+    QTest::newRow("pdfvt") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfvtid=\"http://www.npes.org/pdfvt/ns/id/\" pdfvtid:GTS_PDFVTVersion=\"PDF/VT-1\"/>"));
+    QTest::newRow("pdfx-5pg") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5pg\"/>"));
+    QTest::newRow("pdfa-part-13") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"13\"/>"));
+    QTest::newRow("bare-pdfx-5") << conformanceXmp(QByteArrayLiteral("<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5\"/>"));
+}
+
+void PreflightEngineTest::run_conformanceClaims_undeclaredLevelStaysClean()
+{
+    QFETCH(QByteArray, metadata);
+
+    pdf::PDFDocument document = documentWithMetadata(metadata);
+    const pdf::PreflightResult result = runConformanceClaims(document);
+    const pdf::PreflightCheckStatus* status = conformanceStatus(result);
+    QVERIFY(status != nullptr);
+    QCOMPARE(status->status, QStringLiteral("ok"));
+    QVERIFY(status->reason.isEmpty());
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 0);
+    QVERIFY(result.pass);
+    QVERIFY(result.inspectionComplete);
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Pass);
+}
+
+void PreflightEngineTest::run_conformanceClaims_infoDictionaryDeclaresPdfx5n()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFObjectFactory objectBuilder;
+    objectBuilder.beginDictionary();
+    objectBuilder.beginDictionaryItem("GTS_PDFXVersion");
+    objectBuilder << QStringLiteral("PDF/X-5n");
+    objectBuilder.endDictionaryItem();
+    objectBuilder.endDictionary();
+    builder.updateDocumentInfo(objectBuilder.takeObject());
+
+    pdf::PDFDocument document = builder.build();
+    const pdf::PreflightResult result = runConformanceClaims(document);
+    const pdf::PreflightCheckStatus* status = conformanceStatus(result);
+    QVERIFY(status != nullptr);
+    QCOMPARE(status->status, QStringLiteral("unsupported"));
+    QCOMPARE(status->reason, QStringLiteral("unsupported-conformance-level:pdfx-5n"));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("level_id")).toString(), QStringLiteral("pdfx-5n"));
+    QVERIFY(!result.pass);
+}
+
+void PreflightEngineTest::run_conformanceClaims_multipleLevelsStayUnsupported()
+{
+    const QByteArray metadata = conformanceXmp(QByteArrayLiteral(
+        "<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" "
+        "xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" "
+        "pdfaid:part=\"3\" pdfxid:GTS_PDFXVersion=\"PDF/X-5n\"/>"));
+    pdf::PDFDocument document = documentWithMetadata(metadata);
+    const pdf::PreflightResult result = runConformanceClaims(document);
+    const pdf::PreflightCheckStatus* status = conformanceStatus(result);
+    QVERIFY(status != nullptr);
+    QCOMPARE(status->status, QStringLiteral("unsupported"));
+    QCOMPARE(status->reason, QStringLiteral("unsupported-conformance-level:pdfx-5n,pdfa-3"));
+    QCOMPARE(result.warnings.size(), 2);
+    QCOMPARE(result.warnings.at(0).evidence.value(QStringLiteral("level_id")).toString(), QStringLiteral("pdfx-5n"));
+    QCOMPARE(result.warnings.at(1).evidence.value(QStringLiteral("level_id")).toString(), QStringLiteral("pdfa-3"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_otherCheckDoesNotInventConformanceFinding()
+{
+    pdf::PDFDocument document = documentWithMetadata(conformanceXmp(QByteArrayLiteral(
+        "<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" pdfxid:GTS_PDFXVersion=\"PDF/X-5n\"/>")));
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Bleed only") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("page-size") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().id, QStringLiteral("page-size"));
+    for (const pdf::PreflightFinding& finding : result.errors + result.warnings)
+    {
+        QVERIFY(finding.type != QString(pdf::PDF_CONFORMANCE_CLAIM_UNSUPPORTED_TYPE));
+    }
 }
 
 QTEST_GUILESS_MAIN(PreflightEngineTest)
