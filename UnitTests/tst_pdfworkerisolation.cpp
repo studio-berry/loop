@@ -157,7 +157,7 @@ void PdfWorkerIsolationTest::workerPreflightRunsIsolated()
 void PdfWorkerIsolationTest::crashingWorkerDoesNotKillSupervisor()
 {
 #ifndef Q_OS_LINUX
-    QSKIP("The crashing shell worker uses Linux process signaling.");
+    QSKIP("Release-worker crash simulation uses a POSIX shell script.");
 #endif
     QTemporaryDir temp;
     QVERIFY(temp.isValid());

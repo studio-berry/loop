@@ -623,6 +623,9 @@ void BleedFixupTest::analyzeOnly_largeFormatKeepsDocumentUnchanged()
     QVERIFY(plan.imageSize.isEmpty());
 }
 
-QTEST_APPLESS_MAIN(BleedFixupTest)
+// apply() rasterizes with QPainter and writes non-CMYK strips through QPdfWriter.
+// QTEST_MAIN constructs a QGuiApplication here (this target does not link Widgets),
+// which those paint devices require on the Windows widgets-absent release build.
+QTEST_MAIN(BleedFixupTest)
 
 #include "tst_bleedfixuptest.moc"

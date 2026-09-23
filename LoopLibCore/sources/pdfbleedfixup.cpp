@@ -435,7 +435,6 @@ QByteArray allocateBleedImageName(const PDFDocumentBuilder* builder,
                                   PDFObjectReference pageReference,
                                   const PDFDictionary& pendingXObjects)
 {
-    const PDFObjectStorage* storage = builder->getStorage();
     std::set<QByteArray> usedNames;
     const PDFObject pageObject = builder->getObjectByReference(pageReference);
     if (pageObject.isDictionary())
