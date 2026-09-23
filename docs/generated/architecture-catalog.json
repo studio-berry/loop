@@ -265,6 +265,7 @@
     "trim",
     "white-overprint"
   ],
+  "preflight_corpus_coverage": "docs/generated/preflight-corpus-coverage.json",
   "preflight_coverage": {
     "coverage_holes": [
       "bleed",
@@ -448,6 +449,7 @@
     "UnitTestsPageSurface",
     "UnitTestsPageSurfaceBudget",
     "UnitTestsPdfToolContract",
+    "UnitTestsPdfWorkerIsolation",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",

@@ -92,7 +92,7 @@
         "UnitTests/tst_documentsearchtest.cpp",
         "UnitTests/tst_filenamesanitizertest.cpp",
         "UnitTests/tst_fontencodingtest.cpp",
-        "UnitTests/tst_governedexecutiontest.cpp",
+        "UnitTests/tst_imagedecodeguardtest.cpp",
         "UnitTests/tst_imageoptimizertest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_jbig2decodertest.cpp",
@@ -132,6 +132,7 @@
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsApplicationIdentity",
         "UnitTestsIdentitySeparation",
+        "UnitTestsImageDecodeGuard",
         "UnitTestsImageOptimizer",
         "UnitTestsIncrementalSave",
         "UnitTestsJbig2Decoder",
@@ -163,8 +164,8 @@
     },
     "pdftool": {
       "paths": ["PdfTool/**"],
-      "targets": ["PdfTool"],
-      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
+      "targets": ["PdfTool", "loop-pdf-worker"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli", "UnitTestsPdfWorkerIsolation"]
     },
     "preflight": {
       "paths": ["loop-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp", "LoopLibInteraction/sources/preflight*.cpp", "LoopLibInteraction/sources/preflight*.h"],

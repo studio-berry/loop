@@ -1,0 +1,44 @@
+{
+    "checks": [
+        {
+            "id": "processing-steps",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "processing-steps",
+            "message": "No ISO 19593-1 cutting-die OCG or legacy dieline spot color was detected.",
+            "scope": "document",
+            "severity": "error",
+            "type": "dieline-missing"
+        },
+        {
+            "check_id": "processing-steps",
+            "message": "Required processing step 'cutting-die' was not detected.",
+            "scope": "document",
+            "severity": "error",
+            "type": "processing-step-missing"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Processing Steps Required",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "3a3d1604d97cff7c",
+            "fc6714d0e05755b8"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

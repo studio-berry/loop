@@ -123,7 +123,9 @@ subsystems:
       - LoopEditor/quickdocumentmodel.h
       - UnitTests/tst_documentsearchtest.cpp
       - UnitTests/tst_quickdocumentmodeltest.cpp
+      - UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
       - scripts/ci/check_search_budget_gate.py
+      - scripts/ci/test_check_search_budget_gate.py
     required:
       - kind: unit
         bind: ctest
@@ -135,13 +137,19 @@ subsystems:
         id: UnitTestsQuickDocumentModel
         policy_module: quick
         executes: binding
-      - kind: fixture
+      - kind: architecture
         bind: script
         id: scripts/ci/check_search_budget_gate.py
         executes: binding
       - kind: architecture
         bind: policy
         id: agent-policy:quick
+        executes: binding
+      - kind: fixture
+        bind: fixture
+        id: search-budget-independence
+        fixture_class: regression
+        ref: UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
         executes: binding
       - kind: packaging
         bind: workflow
@@ -214,13 +222,17 @@ subsystems:
         id: UnitTestsStandardOracle
         policy_module: preflight
         executes: binding
-      - kind: fixture
+      - kind: architecture
         bind: fixture
         id: loop-preflight/testdata/fixtures
         executes: binding
       - kind: architecture
         bind: catalog
         id: docs/generated/preflight-check-catalog.json
+        executes: binding
+      - kind: architecture
+        bind: catalog
+        id: docs/generated/preflight-corpus-coverage.json
         executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
@@ -326,6 +338,36 @@ subsystems:
         bind: policy
         id: agent-policy:pdftool
         executes: binding
+  - id: pdf-worker-isolation
+    summary: "PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618)."
+    owns_targets: true
+    paths:
+      - PdfTool/loop-pdf-worker-main.cpp
+      - PdfTool/pdfworkerruntime.cpp
+      - PdfTool/pdfworkerruntime.h
+      - PdfTool/pdfworkersandbox.cpp
+      - PdfTool/pdfworkersandbox.h
+      - PdfTool/pdfworkerprotocol.h
+      - PdfTool/pdfworkerclient.cpp
+      - PdfTool/pdfworkerclient.h
+      - PdfTool/pdftoolworker.cpp
+      - PdfTool/pdftoolworker.h
+      - UnitTests/tst_pdfworkerisolation.cpp
+      - scripts/ci/check_pdf_worker_isolation.py
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsPdfWorkerIsolation
+        policy_module: pdftool
+        executes: binding
+      - kind: security
+        bind: script
+        id: scripts/ci/check_pdf_worker_isolation.py
+        executes: binding
+      - kind: architecture
+        bind: policy
+        id: agent-policy:pdftool
+        executes: binding
   - id: pagemaster
     summary: Agent-policy pagemaster module.
     paths_from: agent-policy:pagemaster
@@ -408,6 +450,7 @@ migration:
     - UnitTestsAuthorSettings
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
+    - UnitTestsGovernedExecution
     - UnitTestsImageDecodeGuard
     - UnitTestsImageDownsampleFixup
     - UnitTestsObjectSelector

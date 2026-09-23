@@ -1,0 +1,30 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: worker-isolation-unit
+    evidence:
+      - unit:UnitTestsPdfWorkerIsolation
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:build_policy
+      - unit:agent-policy:core
+      - unit:agent-policy:plugins
+      - unit:scripts/agent/test_architecture_contracts.py
+  - id: worker-isolation-security
+    evidence:
+      - security:scripts/ci/check_pdf_worker_isolation.py
+      - security:scripts/ci/check_source_integrity.py
+  - id: worker-isolation-architecture
+    evidence:
+      - architecture:agent-policy:pdftool
+      - architecture:docs/generated/architecture-catalog.json
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: worker-isolation-differential
+    evidence:
+      - differential:UnitTestsConversionOracle
+unresolved:
+  - Windows job-object release-worker sandbox
+  - Editor migration onto loop-pdf-worker
+  - render-page / transform / sanitize worker ops beyond open/preflight prove slice
+  - scripts/ci/check_independent_validation_gate.py

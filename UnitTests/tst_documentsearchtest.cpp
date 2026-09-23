@@ -22,7 +22,8 @@ namespace
 
 pdf::PDFDocument searchableDocument()
 {
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     const QString fixturePath = QString(LOOP_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/font-embedded.pdf");
     return reader.readFromFile(fixturePath);
 }
@@ -76,8 +77,8 @@ void DocumentSearchTest::searchReportsIncompleteWhenOperationBudgetExhausted()
 
     const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("embedded"));
     // Core returns before the admission check when the budget stops the search, so
-    // the result is neither admitted nor completed; QuickDocumentModelTest covers
-    // the same contract from the Quick side.
+    // the result is neither admitted nor completed. QuickDocumentModelTest::exhaustedSearchReturnsAnIncompleteResult
+    // asserts the same contract and the render-operations kind string (#652).
     QVERIFY(!result.admitted);
     QVERIFY(!result.completed);
     QVERIFY(result.budgetExceeded);
