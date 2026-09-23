@@ -614,6 +614,9 @@
         "unite",
         "verify-redaction",
         "verify-signatures",
+        "worker-open",
+        "worker-ping",
+        "worker-preflight",
         "xml"
       ]
     }
