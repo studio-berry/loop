@@ -52,13 +52,12 @@
     },
     {
       "title": "0.5.0",
-      "github_number": 11,
+      "github_number": 12,
       "description_file": "0.5.0.md",
       "state": "open"
     },
     {
       "title": "0.6.0",
-      "github_number": 12,
       "description_file": "0.6.0.md",
       "state": "open"
     },
