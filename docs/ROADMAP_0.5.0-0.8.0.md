@@ -18,6 +18,13 @@
 > dropped. Session maps below retain their original numbering as the scope decomposition;
 > the executable GitHub issues carry the folded, resequenced numbering noted per chapter.
 
+> **2026-09-23 0.4.0 scope clarification:** The 0.4.0 product milestone is
+> **Evidence-Grounded Correction Assistance**, proven by #584/#590/#371/#686.
+> Medic is an optional, separately qualified, cross-milestone bleed-reconstruction
+> sidecar; neither 0.4.0 nor 0.5.0 acceptance requires Medic. The 0.4.0
+> finding-driven plan assembler reuses 0.3.0 Core contracts without acquiring
+> execution authority. Natural-language JobSpec and durable job context stay 0.5.0.
+
 ## 1. Position in the release train
 
 The accepted critical path through 0.4.0 is:
@@ -211,7 +218,7 @@ automation feature after it. Adoption signal: share of preflight/correction work
 a job binding; repeat-job open rate on the same spine.
 
 **Entry gate.**
-- 0.4.0 released and operator-accepted (agent alpha proven inside authority bounds).
+- 0.4.0 released and operator-accepted (evidence-grounded correction assistance proven inside the existing 0.3.0 authority bounds; Medic sidecar not required).
 - Product/package identity decision (Loop→Loop) is terminal — required before new
   persisted schema kinds and CLI command families are named.
 - Schema-evolution policy (0.1.1) operative: new persisted kinds declare kind +
