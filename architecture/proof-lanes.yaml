@@ -401,7 +401,6 @@ migration:
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
     - UnitTestsGovernedExecution
-    - UnitTestsImageDecodeGuard
     - UnitTestsImageDownsampleFixup
     - UnitTestsObjectSelector
     - UnitTestsOcrPageGate
