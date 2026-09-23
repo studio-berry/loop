@@ -13,6 +13,7 @@ claims:
       - unit:scripts/ci/test_check_governed_parity.py
       - packaging:linux-build
       - packaging:windows-build
+      - security:codeql
   - id: d5-cross-surface-identity
     evidence:
       - unit:UnitTestsGovernedExecution
