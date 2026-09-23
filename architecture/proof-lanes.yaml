@@ -73,7 +73,9 @@ subsystems:
       - LoopEditor/quickdocumentmodel.h
       - UnitTests/tst_documentsearchtest.cpp
       - UnitTests/tst_quickdocumentmodeltest.cpp
+      - UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
       - scripts/ci/check_search_budget_gate.py
+      - scripts/ci/test_check_search_budget_gate.py
     required:
       - kind: unit
         bind: ctest
@@ -85,13 +87,19 @@ subsystems:
         id: UnitTestsQuickDocumentModel
         policy_module: quick
         executes: binding
-      - kind: fixture
+      - kind: architecture
         bind: script
         id: scripts/ci/check_search_budget_gate.py
         executes: binding
       - kind: architecture
         bind: policy
         id: agent-policy:quick
+        executes: binding
+      - kind: fixture
+        bind: fixture
+        id: search-budget-independence
+        fixture_class: regression
+        ref: UnitTests/testdata/fixture-classes/regression/search-budget-independence.yaml
         executes: binding
       - kind: packaging
         bind: workflow
