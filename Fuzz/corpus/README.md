@@ -73,9 +73,11 @@ truncated Flate/LZW/ASCIIHex, a short ASCII85 string, and a RunLength EOD.
 |------|---------|------------|-----|
 | `jbig2-composition-timeout.bin` | libFuzzer timeout (>1200s), later re-confirmed at >60s locally | `PDFJBIG2Decoder::processSymbolDictionary`'s height-class loop (`pdfjbig2decoder.cpp`) makes zero progress when a height class's first delta-width decodes as out-of-band: `NSYMSDECODED` stays unchanged, the outer `while` condition is still true, and the loop spins forever on the arithmetic decoder without ever allocating a bitmap. Invisible to the pre-existing allocation budget, which only charges on allocation. | Added `PDFJBIG2Decoder::accountDecodeWork(items, pixels)`, charged once per symbol-dictionary height class (and per decoded bitmap, symbol instance, halftone grid cell) against a tight, dedicated item budget (`JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS`), independent of pixel count. |
 | `jbig2-symbol-dict-zero-progress-timeout.bin` | libFuzzer timeout (>30s), found by local fuzzing while verifying the fix above | `PDFJBIG2Decoder::readBitmap` decodes a legal-size generic-region bitmap (bounded by the allocation budget) but arithmetic-decoding it pixel-by-pixel under ASan/UBSan takes far longer than allocating it — allocation was bounded, wall-clock time was not. | Same `accountDecodeWork` call now also charges decoded/composited *pixels* against a second, independent budget (`JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS`) sized generously (4x the allocation cap) so it never rejects a legitimately large scan, while the item budget above is what actually bounds degenerate, near-zero-pixel loops. |
+| `jbig2-empty-height-classes-timeout.bin` | libFuzzer timeout (1711s), found by hosted CI mutation | An arithmetic-coded symbol dictionary repeatedly emitted empty height classes; the generic two-million-item budget allowed this no-progress loop to consume more than 28 minutes. | Limit empty height classes per symbol dictionary to 256; retain the seed in the regression corpus. |
 
-Both seeds now execute in well under 100ms (was: 1200s+ and 30s+
-respectively). See `docs/V1_RELEASE_READINESS.md` §R-003 for the full
+The first two seeds now execute in well under 100ms (was: 1200s+ and 30s+
+respectively). The empty-height-class seed is rejected after 257 classes.
+See `docs/V1_RELEASE_READINESS.md` §R-003 for the full
 investigation writeup, including the corrected diagnosis after the first
 committed fix (`8f174230`, which charged only composited pixels with a
 1-pixel floor) turned out not to reach either of these code paths.

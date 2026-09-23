@@ -156,6 +156,9 @@ void PdfWorkerIsolationTest::workerPreflightRunsIsolated()
 
 void PdfWorkerIsolationTest::crashingWorkerDoesNotKillSupervisor()
 {
+#ifndef Q_OS_LINUX
+    QSKIP("Release-worker crash simulation uses a POSIX shell script.");
+#endif
     QTemporaryDir temp;
     QVERIFY(temp.isValid());
     const QString crashWorker = temp.filePath(QStringLiteral("crash-worker.sh"));
