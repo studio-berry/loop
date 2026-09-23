@@ -156,9 +156,12 @@ so "not filed yet" is always a reviewed statement rather than an omission.
 
 ## Claim
 
-**Loop does not claim formal GWG conformance.** The matrix is a measurement
-and backlog tool. A report's `coverage_scope` object carries the same claim
-with the enabled check ids for that run.
+**Loop does not claim formal GWG conformance.** In particular, no GWG 2022 or
+2024 certificate requirements are evaluated for `sheetfed-offset` or
+`packaging`. A clean result for either family reports only on the checks enabled
+in that run; it says nothing about the family's GWG certificate. The report's
+`coverage_scope.claim` states this limit alongside the enabled check ids for
+that run.
 
 Uncovered classes currently include GWG 2022/2024 certificates, PDF/VT
 variable-data streams, per-named-colorant ink limits beyond inventory,
