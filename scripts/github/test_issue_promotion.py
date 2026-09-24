@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 from typing import Any
 
 from scripts.github import issue_promotion as module
@@ -42,6 +43,9 @@ class FakeGitHubClient:
             ],
             901: [],
         }
+        self.issues: dict[int, dict[str, Any]] = {}
+        self.stages: dict[int, str | None] = {}
+        self.writes: list[tuple[int, str]] = []
 
     def compare_commits(self, repository: str, before: str, after: str) -> list[dict[str, Any]]:
         return self.commits
@@ -55,14 +59,23 @@ class FakeGitHubClient:
     def pull_request_commits(self, repository: str, number: int) -> list[dict[str, Any]]:
         return self.pull_commits[number]
 
+    def issue(self, repository: str, number: int) -> dict[str, Any]:
+        return self.issues[number]
+
+    def promotion_stage(self, repository: str, number: int) -> str | None:
+        return self.stages.get(number)
+
+    def set_promotion_stage(self, repository: str, number: int, stage: str) -> None:
+        self.writes.append((number, stage))
+
 
 class IssuePromotionTests(unittest.TestCase):
-    repository = "studio-berry/loop"
+    repository = "studio-berry/loop2"
 
     def test_extracts_multiple_same_repository_refs_and_ignores_external_refs(self) -> None:
         text = (
-            "Closes #12, fixes studio-berry/loop#13, skips other/repo#14, "
-            "and see https://github.com/studio-berry/loop/issues/15."
+            "Closes #12, fixes studio-berry/loop2#13, skips other/repo#14, "
+            "and see https://github.com/studio-berry/loop2/issues/15."
         )
         self.assertEqual(
             module.extract_issue_references(text, self.repository), {12, 13, 15}
@@ -101,41 +114,137 @@ class IssuePromotionTests(unittest.TestCase):
 
         self.assertEqual(evidence.collect("e" * 40, "f" * 40), {104, 105})
 
-    def test_dev_labels_only_open_unqueued_issues(self) -> None:
+    def test_unstable_expands_squashed_source_commits(self) -> None:
+        evidence = module.PromotionEvidence(
+            FakeGitHubClient(), self.repository, module.UNSTABLE_BRANCH
+        )
+        self.assertEqual(evidence.collect("c" * 40, "d" * 40), {101, 102, 103})
+
+    def test_dev_sets_stage_without_changing_issue_state(self) -> None:
         issues = {
-            1: {"state": "open", "labels": []},
-            2: {
-                "state": "open",
-                "labels": [{"name": module.QUEUE_LABEL}],
-            },
-            3: {"state": "closed", "labels": []},
-            4: {"state": "open", "labels": [], "pull_request": {}},
+            1: {"state": "open"},
+            2: {"state": "open"},
+            3: {"state": "closed"},
+            4: {"state": "open", "pull_request": {}},
         }
         self.assertEqual(
-            module.plan_issue_actions(module.DEV_BRANCH, issues),
-            (module.IssueAction(1, "label", "linked work reached dev"),),
+            module.plan_issue_actions(
+                module.DEV_BRANCH,
+                issues,
+                {1: None, 2: "Dev present", 3: None},
+            ),
+            (
+                module.IssueAction(1, "Dev present"),
+                module.IssueAction(3, "Dev present"),
+            ),
         )
 
-    def test_stable_closes_only_open_queued_issues(self) -> None:
+    def test_promotion_is_monotonic_and_stable_never_closes(self) -> None:
         issues = {
-            5: {
-                "state": "open",
-                "labels": [{"name": module.QUEUE_LABEL}],
-            },
-            6: {"state": "open", "labels": []},
-            7: {
-                "state": "closed",
-                "labels": [{"name": module.QUEUE_LABEL}],
-            },
-            8: {
-                "state": "open",
-                "labels": [{"name": module.QUEUE_LABEL}],
-                "pull_request": {},
-            },
+            5: {"state": "open"},
+            6: {"state": "open"},
+            7: {"state": "closed"},
+            8: {"state": "open", "pull_request": {}},
         }
         self.assertEqual(
-            module.plan_issue_actions(module.STABLE_BRANCH, issues),
-            (module.IssueAction(5, "close", "queued work reached stable"),),
+            module.plan_issue_actions(
+                module.STABLE_BRANCH,
+                issues,
+                {5: "Dev present", 6: None, 7: "Stable present"},
+            ),
+            (
+                module.IssueAction(5, "Stable present"),
+                module.IssueAction(6, "Stable present"),
+            ),
+        )
+        self.assertEqual(
+            module.plan_issue_actions(
+                module.DEV_BRANCH, {5: issues[5]}, {5: "Stable present"}
+            ),
+            (),
+        )
+
+    def test_unknown_stage_fails_before_mutation(self) -> None:
+        with self.assertRaisesRegex(module.GitHubApiError, "unknown promotion stage"):
+            module.plan_issue_actions(
+                module.STABLE_BRANCH,
+                {1: {"state": "open"}},
+                {1: "Needs review"},
+            )
+
+    def test_stable_push_sets_field_without_closing_issue(self) -> None:
+        client = FakeGitHubClient()
+        client.commits = [
+            {"sha": "a" * 40, "commit": {"message": "fix: linked work (#15)"}}
+        ]
+        client.commit_pulls = {"a" * 40: []}
+        client.issues = {15: {"state": "open"}}
+        client.stages = {15: "Unstable present"}
+
+        self.assertEqual(
+            module.process_push(
+                client=client,
+                repository=self.repository,
+                target_branch=module.STABLE_BRANCH,
+                before="b" * 40,
+                after="c" * 40,
+            ),
+            0,
+        )
+        self.assertEqual(client.writes, [(15, "Stable present")])
+        self.assertEqual(client.issues[15]["state"], "open")
+
+    def test_failed_field_read_prevents_all_writes(self) -> None:
+        client = FakeGitHubClient()
+        client.commits = [
+            {"sha": "a" * 40, "commit": {"message": "fix: linked work (#15, #16)"}}
+        ]
+        client.commit_pulls = {"a" * 40: []}
+        client.issues = {15: {"state": "open"}, 16: {"state": "open"}}
+
+        def read_stage(repository: str, number: int) -> str | None:
+            if number == 16:
+                raise module.GitHubApiError("field API unavailable")
+            return None
+
+        with patch.object(client, "promotion_stage", side_effect=read_stage):
+            with self.assertRaisesRegex(module.GitHubApiError, "field API unavailable"):
+                module.process_push(
+                    client=client,
+                    repository=self.repository,
+                    target_branch=module.DEV_BRANCH,
+                    before="b" * 40,
+                    after="c" * 40,
+                )
+        self.assertEqual(client.writes, [])
+
+    def test_field_api_uses_additive_endpoint(self) -> None:
+        client = module.GitHubClient("fake-token")
+        calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+        def request(method: str, path: str, *, payload: dict[str, Any] | None = None) -> Any:
+            calls.append((method, path, payload))
+            if method == "GET":
+                return [
+                    {"issue_field_id": 1, "value": "High"},
+                    {
+                        "issue_field_id": module.PROMOTION_FIELD_ID,
+                        "single_select_option": {"name": "Dev present"},
+                    },
+                ]
+            return {}
+
+        with patch.object(client, "request", side_effect=request):
+            self.assertEqual(client.promotion_stage(self.repository, 15), "Dev present")
+            client.set_promotion_stage(self.repository, 15, "Unstable present")
+        self.assertEqual(calls[-1][0], "POST")
+        self.assertEqual(
+            calls[-1][2],
+            {
+                "issue_field_values": [
+                    {"field_id": module.PROMOTION_FIELD_ID, "value": "Unstable present"}
+                ]
+            },
         )
 
 
