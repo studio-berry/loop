@@ -32,7 +32,7 @@
 #include <QFileInfo>
 #include <QInputDialog>
 
-GeneratorMainWindow::GeneratorMainWindow(QWidget *parent) :
+GeneratorMainWindow::GeneratorMainWindow(QWidget* parent) :
     QMainWindow(parent),
     ui(new Ui::GeneratorMainWindow),
     m_generator(new codegen::CodeGenerator(this)),

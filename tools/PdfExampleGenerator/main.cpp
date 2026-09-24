@@ -26,7 +26,7 @@
 #include "pdfsettings.h"
 #include "pdfexamplesgenerator.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     QApplication a(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfExampleGenerator);

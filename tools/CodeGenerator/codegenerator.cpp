@@ -34,7 +34,6 @@ namespace codegen
 GeneratedCodeStorage::GeneratedCodeStorage(QObject* parent) :
     BaseClass(parent)
 {
-
 }
 
 QObjectList GeneratedCodeStorage::getFunctions() const
@@ -78,13 +77,15 @@ void GeneratedCodeStorage::removeFunction(GeneratedFunction* function)
 
 void GeneratedCodeStorage::generateCode(QTextStream& stream, CodeGeneratorParameters& parameters) const
 {
-    stream << Qt::endl << Qt::endl;
+    stream << Qt::endl
+           << Qt::endl;
 
     for (const QObject* object : m_functions)
     {
         const GeneratedFunction* generatedFunction = qobject_cast<const GeneratedFunction*>(object);
         generatedFunction->generateCode(stream, parameters);
-        stream << Qt::endl << Qt::endl;
+        stream << Qt::endl
+               << Qt::endl;
     }
 }
 
@@ -345,7 +346,6 @@ QString CodeGenerator::generateSource(QString className, int indent) const
 GeneratedFunction::GeneratedFunction(QObject* parent) :
     BaseClass(parent)
 {
-
 }
 
 QString GeneratedFunction::getFunctionTypeString() const
@@ -397,7 +397,7 @@ void GeneratedFunction::generateCode(QTextStream& stream, CodeGeneratorParameter
 {
     QStringList parameterCaptions;
     QStringList parameterTexts;
-    std::function<void (const GeneratedBase*, Pass)> gatherParameters = [&](const GeneratedBase* object, Pass pass)
+    std::function<void(const GeneratedBase*, Pass)> gatherParameters = [&](const GeneratedBase* object, Pass pass)
     {
         if (pass != Pass::Enter)
         {
@@ -475,7 +475,8 @@ void GeneratedFunction::generateCode(QTextStream& stream, CodeGeneratorParameter
         QString indent(parameters.indent, QChar(QChar::Space));
 
         stream << "{" << Qt::endl;
-        stream << indent << "PDFObjectFactory objectBuilder;" << Qt::endl << Qt::endl;
+        stream << indent << "PDFObjectFactory objectBuilder;" << Qt::endl
+               << Qt::endl;
 
         generateSourceCode(stream, parameters);
 
@@ -596,7 +597,6 @@ GeneratedAction::GeneratedAction(QObject* parent) :
     BaseClass(parent),
     m_actionType(CreateObject)
 {
-
 }
 
 bool GeneratedAction::hasField(FieldType fieldType) const
@@ -828,7 +828,7 @@ void GeneratedBase::generateSourceCode(QTextStream& stream, CodeGeneratorParamet
     generateSourceCodeImpl(stream, parameters, Pass::Leave);
 }
 
-void GeneratedBase::applyFunctor(std::function<void (const GeneratedBase*, Pass)>& functor) const
+void GeneratedBase::applyFunctor(std::function<void(const GeneratedBase*, Pass)>& functor) const
 {
     functor(this, Pass::Enter);
 
@@ -1038,7 +1038,6 @@ QStringList GeneratedBase::getFormattedTextBlock(QString firstPrefix, QString pr
 GeneratedPDFObject::GeneratedPDFObject(QObject* parent) :
     BaseClass(parent)
 {
-
 }
 
 bool GeneratedPDFObject::hasField(GeneratedBase::FieldType fieldType) const
@@ -1289,7 +1288,6 @@ void GeneratedPDFObject::generateSourceCodeImpl(QTextStream& stream, CodeGenerat
 GeneratedParameter::GeneratedParameter(QObject* parent) :
     BaseClass(parent)
 {
-
 }
 
 bool GeneratedParameter::hasField(GeneratedBase::FieldType fieldType) const
@@ -1655,9 +1653,11 @@ QString XFACodeGenerator::generateSource() const
         stream.setRealNumberPrecision(3);
         stream.setRealNumberNotation(QTextStream::FixedNotation);
 
-        stream << Qt::endl << Qt::endl;
+        stream << Qt::endl
+               << Qt::endl;
         stream << "namespace xfa" << Qt::endl;
-        stream << "{" << Qt::endl << Qt::endl;
+        stream << "{" << Qt::endl
+               << Qt::endl;
 
         // Forward declarations
         for (const Class& myClass : m_classes)
@@ -1672,7 +1672,8 @@ QString XFACodeGenerator::generateSource() const
         stream << "{" << Qt::endl;
         stream << "public:" << Qt::endl;
         stream << "    XFA_AbstractVisitor() = default;" << Qt::endl;
-        stream << "    virtual ~XFA_AbstractVisitor() = default;" << Qt::endl << Qt::endl;
+        stream << "    virtual ~XFA_AbstractVisitor() = default;" << Qt::endl
+               << Qt::endl;
         for (const Class& myClass : m_classes)
         {
             stream << QString("    virtual void visit(const XFA_%1* node) { Q_UNUSED(node); }").arg(myClass.className) << Qt::endl;
@@ -1702,7 +1703,8 @@ QString XFACodeGenerator::generateSource() const
             {
                 stream << "        " << getEnumValueName(enumValue) << "," << Qt::endl;
             }
-            stream << "    };" << Qt::endl << Qt::endl;
+            stream << "    };" << Qt::endl
+                   << Qt::endl;
         }
 
         for (const auto& typeItem : m_types)
@@ -1725,10 +1727,12 @@ QString XFACodeGenerator::generateSource() const
             }
             stream << QString("        };") << Qt::endl;
             stream << QString("        parseEnumAttribute(element, attributeFieldName, attribute, defaultValue, enumValues);") << Qt::endl;
-            stream << QString("    }") << Qt::endl << Qt::endl;
+            stream << QString("    }") << Qt::endl
+                   << Qt::endl;
         }
 
-        stream << "};" << Qt::endl << Qt::endl;
+        stream << "};" << Qt::endl
+               << Qt::endl;
 
         for (const Class& myClass : m_classes)
         {
@@ -1795,10 +1799,12 @@ QString XFACodeGenerator::generateSource() const
 
             if (myClass.valueType)
             {
-                stream << QString("    const %1* getNodeValue() const {  return m_nodeValue.getValue(); }").arg(myClass.valueType->typeName) << Qt::endl << Qt::endl;
+                stream << QString("    const %1* getNodeValue() const {  return m_nodeValue.getValue(); }").arg(myClass.valueType->typeName) << Qt::endl
+                       << Qt::endl;
             }
 
-            stream << QString("    virtual void accept(XFA_AbstractVisitor* visitor) const override { visitor->visit(this); }") << Qt::endl << Qt::endl;
+            stream << QString("    virtual void accept(XFA_AbstractVisitor* visitor) const override { visitor->visit(this); }") << Qt::endl
+                   << Qt::endl;
 
             stream << QString("    static std::optional<XFA_%1> parse(const QDomElement& element);").arg(myClass.className) << Qt::endl;
 
@@ -1827,13 +1833,19 @@ QString XFACodeGenerator::generateSource() const
                 stream << QString("    XFA_Value<%1> m_nodeValue;").arg(myClass.valueType->typeName) << Qt::endl;
             }
 
-            stream << "};" << Qt::endl << Qt::endl;
+            stream << "};" << Qt::endl
+                   << Qt::endl;
 
             // Class loader
             stream << QString("std::optional<XFA_%1> XFA_%1::parse(const QDomElement& element)").arg(myClass.className) << Qt::endl;
             stream << "{" << Qt::endl;
-            stream << "    if (element.isNull())" << Qt::endl << "    {" << Qt::endl << "        return std::nullopt;" << Qt::endl << "    }" << Qt::endl << Qt::endl;
-            stream << QString("    XFA_%1 myClass;").arg(myClass.className) << Qt::endl << Qt::endl;
+            stream << "    if (element.isNull())" << Qt::endl
+                   << "    {" << Qt::endl
+                   << "        return std::nullopt;" << Qt::endl
+                   << "    }" << Qt::endl
+                   << Qt::endl;
+            stream << QString("    XFA_%1 myClass;").arg(myClass.className) << Qt::endl
+                   << Qt::endl;
 
             // Load attributes
             stream << "    // load attributes" << Qt::endl;
@@ -1860,18 +1872,21 @@ QString XFACodeGenerator::generateSource() const
             {
                 stream << Qt::endl;
                 stream << "    // load node value" << Qt::endl;
-                stream << QString("    parseValue(element, myClass.m_nodeValue);") << Qt::endl << Qt::endl;
+                stream << QString("    parseValue(element, myClass.m_nodeValue);") << Qt::endl
+                       << Qt::endl;
             }
 
             stream << "    myClass.setOrderFromElement(element);" << Qt::endl;
             stream << "    return myClass;" << Qt::endl;
             stream << "}" << Qt::endl;
 
-            stream << Qt::endl << Qt::endl;
+            stream << Qt::endl
+                   << Qt::endl;
         }
 
         stream << "} // namespace xfa" << Qt::endl;
-        stream << Qt::endl << Qt::endl;
+        stream << Qt::endl
+               << Qt::endl;
     }
 
     return QString::fromUtf8(ba);
@@ -1906,13 +1921,15 @@ QString XFACodeGenerator::generateHeader() const
         stream.setRealNumberPrecision(3);
         stream.setRealNumberNotation(QTextStream::FixedNotation);
 
-        stream << Qt::endl << Qt::endl;
+        stream << Qt::endl
+               << Qt::endl;
         stream << "namespace xfa" << Qt::endl;
         stream << "{" << Qt::endl;
 
 
         stream << "} // namespace xfa" << Qt::endl;
-        stream << Qt::endl << Qt::endl;
+        stream << Qt::endl
+               << Qt::endl;
     }
 
     return QString::fromUtf8(ba);
