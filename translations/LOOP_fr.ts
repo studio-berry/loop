@@ -228,190 +228,190 @@
 <context>
     <name>GeneratorMainWindow</name>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="14"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="14"/>
         <source>Code Generator</source>
         <translation>Générateur de code</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="53"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="53"/>
         <source>Remove</source>
         <translation>Supprimer</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="60"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="60"/>
         <source>Clone</source>
         <translation>Clone</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="67"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="67"/>
         <source>New</source>
         <translation>Nouveau</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="80"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="80"/>
         <source>Parameters</source>
         <translation>Parameters</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="86"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="86"/>
         <source>Data type</source>
         <translation>Type de données</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="112"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="112"/>
         <source>Value</source>
         <translation>Value</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="119"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="119"/>
         <source>Item type</source>
         <translation>Type d&apos;élément</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="126"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="126"/>
         <source>Name</source>
         <translation>Nom</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="133"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="133"/>
         <source>Text description / C++ code</source>
         <translation>Description textuelle / code C++</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="181"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="181"/>
         <source>Delete</source>
         <translation>Supprimer</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="188"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="188"/>
         <source>Up</source>
         <translation>Haut</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="195"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="195"/>
         <source>Down</source>
         <translation>Bas</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="202"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="202"/>
         <source>New Child</source>
         <translation>Nouvel enfant</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="209"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="209"/>
         <source>New Sibling</source>
         <translation>Nouveau frère ou sœur</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="230"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="230"/>
         <source>File</source>
         <translation>Fichier</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="238"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="238"/>
         <source>Code</source>
         <translation>Code</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="246"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="246"/>
         <source>XFA</source>
         <translation>XFA</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="260"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="260"/>
         <source>Load</source>
         <translation>Load</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="263"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="263"/>
         <source>Ctrl+O</source>
         <translation>Ctrl+O</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="268"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="268"/>
         <source>Save</source>
         <translation>Enregistrer</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="271"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="271"/>
         <source>Ctrl+S</source>
         <translation>Ctrl+S</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="276"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="276"/>
         <source>Save As...</source>
         <translation>Enregistrer sous...</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="281"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="281"/>
         <source>Set code header (*.h)</source>
         <translation>Définir l&apos;en-tête de code (*.h)</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="286"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="286"/>
         <source>Set code source (*.cpp)</source>
         <translation>Définir la source du code (*.cpp)</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="291"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="291"/>
         <source>Generate code</source>
         <translation>Générer du code</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="294"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="294"/>
         <source>Ctrl+G</source>
         <translation>Ctrl+G</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="299"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="299"/>
         <source>Set code header XFA</source>
         <translation>Définir l&apos;en-tête de code XFA</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="304"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="304"/>
         <source>Set code source XFA</source>
         <translation>Définir la source du code XFA</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="309"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="309"/>
         <source>Generate XFA code</source>
         <translation>Générer du code XFA</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.ui" line="314"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.ui" line="314"/>
         <source>Set XFA description</source>
         <translation>Définir la description XFA</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="394"/>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="407"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="394"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="407"/>
         <source>Select XML definition file</source>
         <translation>Sélectionnez le fichier de définition XML</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="428"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="428"/>
         <source>Create function</source>
         <translation>Créer une fonction</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="428"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="428"/>
         <source>Enter function name</source>
         <translation>Saisissez le nom de la fonction</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="510"/>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="538"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="510"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="538"/>
         <source>Select cpp header</source>
         <translation>Sélectionnez l&apos;en-tête cpp</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="520"/>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="548"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="520"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="548"/>
         <source>Select cpp source</source>
         <translation>Sélectionnez la source cpp</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/generatormainwindow.cpp" line="558"/>
+        <location filename="../tools/CodeGenerator/generatormainwindow.cpp" line="558"/>
         <source>Select xml definition</source>
         <translation>Sélectionnez la définition XML</translation>
     </message>
@@ -508,62 +508,62 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="14"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="14"/>
         <source>JBIG2 Image Viewer</source>
         <translation>Visionneuse d&apos;images JBIG2</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="36"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="36"/>
         <source>Images</source>
         <translation>Images</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="74"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="74"/>
         <source>File</source>
         <translation>Fichier</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="85"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="85"/>
         <source>Add image</source>
         <translation>Ajouter une image</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="88"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="88"/>
         <location filename="../LoopPageMaster/mainwindow.ui" line="170"/>
         <source>Ctrl+O</source>
         <translation>Ctrl+O</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="93"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="93"/>
         <source>Clear</source>
         <translation>Effacer</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="96"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="96"/>
         <location filename="../LoopPageMaster/mainwindow.ui" line="518"/>
         <source>Ctrl+W</source>
         <translation>Ctrl+W</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="101"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="101"/>
         <source>Add JBIG2 image</source>
         <translation>Ajouter une image JBIG2</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.ui" line="104"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.ui" line="104"/>
         <source>Ctrl+J</source>
         <translation>Ctrl+J</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.cpp" line="61"/>
-        <location filename="../JBIG2_Viewer/mainwindow.cpp" line="133"/>
-        <location filename="../JBIG2_Viewer/mainwindow.cpp" line="142"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.cpp" line="61"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.cpp" line="133"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.cpp" line="142"/>
         <source>Error</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../JBIG2_Viewer/mainwindow.cpp" line="66"/>
-        <location filename="../JBIG2_Viewer/mainwindow.cpp" line="103"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.cpp" line="66"/>
+        <location filename="../tools/JBIG2_Viewer/mainwindow.cpp" line="103"/>
         <source>Open image</source>
         <translation>Image ouverte</translation>
     </message>
@@ -6617,32 +6617,32 @@ li.checked::marker { contenu&#xa0;: &quot;\2612&quot;&#xa0;; }
 <context>
     <name>codegen::GeneratedPDFObject</name>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1134"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1134"/>
         <source>Object</source>
         <translation>Object</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1137"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1137"/>
         <source>Array (simple)</source>
         <translation>Array (simple)</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1140"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1140"/>
         <source>Array (complex)</source>
         <translation>Tableau (complexe)</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1143"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1143"/>
         <source>Dictionary</source>
         <translation>Dictionary</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1146"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1146"/>
         <source>Item (simple), name = &apos;%1&apos;</source>
         <translation>élément (simple), nom = &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../CodeGenerator/codegenerator.cpp" line="1149"/>
+        <location filename="../tools/CodeGenerator/codegenerator.cpp" line="1149"/>
         <source>Item (complex), name = &apos;%1&apos;</source>
         <translation>élément (complexe), nom = &apos;%1&apos;</translation>
     </message>

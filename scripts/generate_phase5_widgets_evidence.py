@@ -248,11 +248,11 @@ def _profile_for_target(
         return False, "qualification target excluded from the product-surface manifest"
     if normalized.startswith("Fuzz/"):
         return False, "qualification target excluded from the product-surface manifest"
-    if normalized.startswith("QuickShellSmoke/"):
+    if normalized.startswith("tools/QuickShellSmoke/"):
         return False, "qualification target excluded from the product-surface manifest"
-    if normalized.startswith("CanvasBenchmark/"):
+    if normalized.startswith("tools/CanvasBenchmark/"):
         return False, "qualification target excluded from the product-surface manifest"
-    if normalized.startswith("ProductQuickAccessibilitySmoke/"):
+    if normalized.startswith("tools/ProductQuickAccessibilitySmoke/"):
         return False, "qualification target excluded from the product-surface manifest"
     return True, "target is reachable from the maintained product graph"
 

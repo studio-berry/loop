@@ -35,10 +35,10 @@ from scripts.ci.check_preflight_truth_source import (  # noqa: E402
 )
 
 
-PREFLIGHT_PANE = "ProductQuickAccessibilitySmoke/qml/PreflightPane.qml"
+PREFLIGHT_PANE = "tools/ProductQuickAccessibilitySmoke/qml/PreflightPane.qml"
 MAIN_QML = "LoopEditor/qml/Main.qml"
 EDITOR_HOST = "LoopEditor/editorhost.cpp"
-SMOKE_MAIN = "ProductQuickAccessibilitySmoke/main.cpp"
+SMOKE_MAIN = "tools/ProductQuickAccessibilitySmoke/main.cpp"
 
 # Every file the guard is expected to scan in this tree. The guard discovers
 # them (`*.qml` under the two QML roots, plus the two host files), so adding a
@@ -63,22 +63,22 @@ EXPECTED_GUI_SOURCES = frozenset(
         "LoopEditor/qml/StateBadge.qml",
         "LoopEditor/qml/Workspace.qml",
         "LoopEditor/qml/WorkspacePlaceholderPane.qml",
-        "ProductQuickAccessibilitySmoke/main.cpp",
-        "ProductQuickAccessibilitySmoke/qml/ActionListPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/CanvasPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/DocumentPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/InspectPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/InspectorPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/Main.qml",
-        "ProductQuickAccessibilitySmoke/qml/MenuModel.qml",
-        "ProductQuickAccessibilitySmoke/qml/PagesProductionPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/PreflightPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/ProductionPreviewPane.qml",
-        "ProductQuickAccessibilitySmoke/qml/ShellMenuBar.qml",
-        "ProductQuickAccessibilitySmoke/qml/ShellToolBar.qml",
-        "ProductQuickAccessibilitySmoke/qml/StateBadge.qml",
-        "ProductQuickAccessibilitySmoke/qml/Workspace.qml",
-        "ProductQuickAccessibilitySmoke/qml/WorkspacePlaceholderPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/main.cpp",
+        "tools/ProductQuickAccessibilitySmoke/qml/ActionListPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/CanvasPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/DocumentPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/InspectPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/InspectorPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/Main.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/MenuModel.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/PagesProductionPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/PreflightPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/ProductionPreviewPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/ShellMenuBar.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/ShellToolBar.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/StateBadge.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/Workspace.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/WorkspacePlaceholderPane.qml",
     }
 )
 
@@ -253,8 +253,8 @@ class PreflightTruthSourceTest(unittest.TestCase):
     def test_scope_file_list_is_exactly_the_expected_set(self) -> None:
         """The discovered file list equals the expected names, not a count.
 
-        `gui_sources()` globs `*.qml` under `ProductQuickAccessibilitySmoke/qml`
-        and `LoopEditor/qml` and adds `ProductQuickAccessibilitySmoke/main.cpp`
+        `gui_sources()` globs `*.qml` under `tools/ProductQuickAccessibilitySmoke/qml`
+        and `LoopEditor/qml` and adds `tools/ProductQuickAccessibilitySmoke/main.cpp`
         and `LoopEditor/editorhost.cpp`. A new pane under either root is picked
         up by discovery, which makes this assertion fail until the name is added
         to `EXPECTED_GUI_SOURCES` -- deliberate, so the new pane is placed in

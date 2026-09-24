@@ -54,13 +54,14 @@ LEGACY_TOKEN_ALLOWLIST = frozenset(
 ENTRYPOINT_SURFACES = {
     "LoopEditor/main.cpp": "LoopEditor",
     "PdfTool/main.cpp": "PdfTool",
-    "CodeGenerator/main.cpp": "CodeGenerator",
-    "JBIG2_Viewer/main.cpp": "Jbig2Viewer",
-    "PdfExampleGenerator/main.cpp": "PdfExampleGenerator",
+    "PdfTool/loop-pdf-worker-main.cpp": "LoopPdfWorker",
+    "tools/CodeGenerator/main.cpp": "CodeGenerator",
+    "tools/JBIG2_Viewer/main.cpp": "Jbig2Viewer",
+    "tools/PdfExampleGenerator/main.cpp": "PdfExampleGenerator",
     "loop-preflight/tools/generate_fixtures.cpp": "LoopPreflightFixtureGenerator",
-    "QuickShellSmoke/main.cpp": "QuickShellSmoke",
-    "ProductQuickAccessibilitySmoke/main.cpp": "ProductQuickAccessibilitySmoke",
-    "CanvasBenchmark/main.cpp": "CanvasBenchmark",
+    "tools/QuickShellSmoke/main.cpp": "QuickShellSmoke",
+    "tools/ProductQuickAccessibilitySmoke/main.cpp": "ProductQuickAccessibilitySmoke",
+    "tools/CanvasBenchmark/main.cpp": "CanvasBenchmark",
 }
 
 

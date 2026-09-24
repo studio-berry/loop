@@ -41,7 +41,7 @@ Comment and string awareness. Each rule scans a view of the line selected by its
     contents are kept, because a string literal is exactly where user-visible
     verdict copy lives and rendering it is the violation regardless of quoting.
 
-Scope: `ProductQuickAccessibilitySmoke/qml/**`, `ProductQuickAccessibilitySmoke/
+Scope: `tools/ProductQuickAccessibilitySmoke/qml/**`, `tools/ProductQuickAccessibilitySmoke/
 main.cpp`, `LoopEditor/qml/**` and `LoopEditor/editorhost.cpp`. The whole of
 editorhost.cpp is in scope on purpose: it is the QML-facing host, and it holds no
 Core reducer call (`grep -n reducePreflightVerdict LoopEditor/editorhost.cpp` is
@@ -68,17 +68,17 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # The GUI layers. `*` also covers a nested directory under either qml root.
 SCOPE_PATTERNS = (
-    "ProductQuickAccessibilitySmoke/qml/*.qml",
-    "ProductQuickAccessibilitySmoke/main.cpp",
+    "tools/ProductQuickAccessibilitySmoke/qml/*.qml",
+    "tools/ProductQuickAccessibilitySmoke/main.cpp",
     "LoopEditor/qml/*.qml",
     "LoopEditor/editorhost.cpp",
 )
 SCOPE_DIRECTORIES = (
-    "ProductQuickAccessibilitySmoke/qml",
+    "tools/ProductQuickAccessibilitySmoke/qml",
     "LoopEditor/qml",
 )
 SCOPE_FILES = (
-    "ProductQuickAccessibilitySmoke/main.cpp",
+    "tools/ProductQuickAccessibilitySmoke/main.cpp",
     "LoopEditor/editorhost.cpp",
 )
 
@@ -164,7 +164,7 @@ RULES = (
 #                                preflight Q_INVOKABLE commands; they ask Core, they do not decide
 #
 # Controller-owned and bound read-only by the shipped pane
-# (ProductQuickAccessibilitySmoke/qml/PreflightPane.qml and its LoopEditor/qml mirror):
+# (tools/ProductQuickAccessibilitySmoke/qml/PreflightPane.qml and its LoopEditor/qml mirror):
 #   findingsModel                the findings list model (:11, used at :148) -- render its
 #                                rows and navigate them; do not count it to pick a verdict
 #   progress                     the job's own progress value (:135), already Core's

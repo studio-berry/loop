@@ -2,14 +2,14 @@ qt_policy(SET QTP0001 NEW)
 
 qt_add_executable(ProductQuickAccessibilitySmoke
     main.cpp
-    ../LoopEditor/editorhost.cpp
-    ../LoopEditor/editorhost.h
-    ../LoopEditor/focusrestoration.cpp
-    ../LoopEditor/focusrestoration.h
-    ../LoopEditor/quickdocumentmodel.cpp
-    ../LoopEditor/quickdocumentmodel.h
-    ../LoopEditor/documentviewsession.cpp
-    ../LoopEditor/documentviewsession.h
+    ../../LoopEditor/editorhost.cpp
+    ../../LoopEditor/editorhost.h
+    ../../LoopEditor/focusrestoration.cpp
+    ../../LoopEditor/focusrestoration.h
+    ../../LoopEditor/quickdocumentmodel.cpp
+    ../../LoopEditor/quickdocumentmodel.h
+    ../../LoopEditor/documentviewsession.cpp
+    ../../LoopEditor/documentviewsession.h
 )
 
 # The QML sources below intentionally mirror LoopEditor/qml/ file-for-file.

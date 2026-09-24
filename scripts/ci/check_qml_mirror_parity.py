@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Guard that the accessibility-smoke QML mirrors stay byte-identical.
 
-`ProductQuickAccessibilitySmoke/CMakeLists.txt` states the contract:
+`tools/ProductQuickAccessibilitySmoke/CMakeLists.txt` states the contract:
 
     LoopEditor/qml/ remains the single source of truth; keep every mirror
     byte-identical when either side changes.
@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = "LoopEditor/qml"
-MIRROR_ROOT = "ProductQuickAccessibilitySmoke/qml"
+MIRROR_ROOT = "tools/ProductQuickAccessibilitySmoke/qml"
 
 
 @dataclass(frozen=True)

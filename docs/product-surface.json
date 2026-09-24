@@ -611,7 +611,7 @@
   "ui": {
     "contract": "docs/loop-shell.json",
     "entrypoint_surface": "loop-editor",
-    "legacy_forms": ["CodeGenerator/generatormainwindow.ui", "JBIG2_Viewer/mainwindow.ui"]
+    "legacy_forms": ["tools/CodeGenerator/generatormainwindow.ui", "tools/JBIG2_Viewer/mainwindow.ui"]
   },
   "shell_contract": "docs/loop-shell.json"
 }

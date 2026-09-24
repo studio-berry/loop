@@ -715,7 +715,7 @@ endif()
 # Qt Quick/Qml, and linking the SHARED LoopLibQuick library from a plain
 # add_executable() test would be the first such link edge in this file --
 # every other LoopLibQuick consumer uses qt_add_executable() plus
-# qt_import_qml_plugins() (see ProductQuickAccessibilitySmoke/CMakeLists.txt),
+# qt_import_qml_plugins() (see tools/ProductQuickAccessibilitySmoke/CMakeLists.txt),
 # neither of which this test needs.
 if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY AND LOOP_BUILD_QUICK_CANVAS)
     add_executable(UnitTestsLoopStateVisual

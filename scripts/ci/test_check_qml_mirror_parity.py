@@ -34,7 +34,7 @@ class QmlMirrorParityTest(unittest.TestCase):
         self.assertEqual(
             violations[0].format(),
             "LoopEditor/qml/PreflightPane.qml:2: mirror-drift vs "
-            "ProductQuickAccessibilitySmoke/qml/PreflightPane.qml (source 2 lines, mirror 1 lines)",
+            "tools/ProductQuickAccessibilitySmoke/qml/PreflightPane.qml (source 2 lines, mirror 1 lines)",
         )
 
     def test_flags_a_mirror_that_only_lost_its_line_endings(self) -> None:
@@ -48,7 +48,7 @@ class QmlMirrorParityTest(unittest.TestCase):
         self.assertEqual(
             violations[0].format(),
             "LoopEditor/qml/NewPane.qml:1: mirror-missing "
-            "(no ProductQuickAccessibilitySmoke/qml/NewPane.qml twin)",
+            "(no tools/ProductQuickAccessibilitySmoke/qml/NewPane.qml twin)",
         )
 
     def test_flags_a_mirror_without_a_source(self) -> None:
@@ -56,7 +56,7 @@ class QmlMirrorParityTest(unittest.TestCase):
         self.assertEqual([violation.rule for violation in violations], ["mirror-orphan"])
         self.assertEqual(
             violations[0].format(),
-            "ProductQuickAccessibilitySmoke/qml/RetiredPane.qml:1: mirror-orphan "
+            "tools/ProductQuickAccessibilitySmoke/qml/RetiredPane.qml:1: mirror-orphan "
             "(no LoopEditor/qml/RetiredPane.qml source)",
         )
 
@@ -92,7 +92,7 @@ class QmlMirrorParityTest(unittest.TestCase):
     # -- the real tree ----------------------------------------------------------
     def test_the_two_roots_are_the_documented_contract_ends(self) -> None:
         self.assertEqual(SOURCE_ROOT, "LoopEditor/qml")
-        self.assertEqual(MIRROR_ROOT, "ProductQuickAccessibilitySmoke/qml")
+        self.assertEqual(MIRROR_ROOT, "tools/ProductQuickAccessibilitySmoke/qml")
 
     def test_both_roots_are_populated_with_the_same_names(self) -> None:
         sources = source_texts()

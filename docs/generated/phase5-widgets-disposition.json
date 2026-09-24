@@ -64,9 +64,9 @@
       "follow_up_issue": null
     },
     {
-      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "id": "ui:tools/CodeGenerator/generatormainwindow.ui",
       "kind": "ui-form",
-      "path": "CodeGenerator/generatormainwindow.ui",
+      "path": "tools/CodeGenerator/generatormainwindow.ui",
       "owner_target": "CodeGenerator",
       "consumer": "loop-cli",
       "rationale": "Developer fixture generator; not a product surface.",
@@ -77,9 +77,9 @@
       "replacement_target": "loop-cli"
     },
     {
-      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "id": "ui:tools/JBIG2_Viewer/mainwindow.ui",
       "kind": "ui-form",
-      "path": "JBIG2_Viewer/mainwindow.ui",
+      "path": "tools/JBIG2_Viewer/mainwindow.ui",
       "owner_target": "JBIG2_VIEWER",
       "consumer": "loop-inspect",
       "rationale": "Developer JBIG2 probe; not a product surface.",
@@ -357,14 +357,14 @@
     ],
     "legacy_surface_disposition": [
       {
-        "path": "CodeGenerator/generatormainwindow.ui",
-        "surface_id": "ui:CodeGenerator/generatormainwindow.ui",
+        "path": "tools/CodeGenerator/generatormainwindow.ui",
+        "surface_id": "ui:tools/CodeGenerator/generatormainwindow.ui",
         "status": "matched",
         "shell_disposition": "HEADLESS"
       },
       {
-        "path": "JBIG2_Viewer/mainwindow.ui",
-        "surface_id": "ui:JBIG2_Viewer/mainwindow.ui",
+        "path": "tools/JBIG2_Viewer/mainwindow.ui",
+        "surface_id": "ui:tools/JBIG2_Viewer/mainwindow.ui",
         "status": "matched",
         "shell_disposition": "HEADLESS"
       }

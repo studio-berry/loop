@@ -228,17 +228,17 @@
         "UnitTests/tst_quickaccessibilitytest.cpp",
         "UnitTests/tst_shellkeyboardtest.cpp",
         "UnitTests/tst_loopstatevisualtest.cpp",
-        "ProductQuickAccessibilitySmoke/**"
+        "tools/ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoopLibQuick", "LoopEditor", "ProductQuickAccessibilitySmoke"],
       "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
     },
     "developer_widgets": {
       "paths": [
-        "CodeGenerator/**",
-        "JBIG2_Viewer/**",
-        "PdfExampleGenerator/**",
-        "CanvasBenchmark/**"
+        "tools/CodeGenerator/**",
+        "tools/JBIG2_Viewer/**",
+        "tools/PdfExampleGenerator/**",
+        "tools/CanvasBenchmark/**"
       ],
       "targets": ["CodeGenerator", "JBIG2_VIEWER", "PdfExampleGenerator", "CanvasBenchmark"],
       "tests": []
