@@ -1,13 +1,15 @@
-name: Track issue promotion
+name: Track issue promotion stage
 
 on:
   push:
     branches:
       - dev
+      - unstable
       - stable
 
 concurrency:
-  group: issue-promotion-${{ github.ref }}
+  group: loop-issue-promotion
+  queue: max
   cancel-in-progress: false
 
 permissions:

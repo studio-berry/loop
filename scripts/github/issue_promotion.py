@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Track GitHub issues as changes move through the dev and stable branches.
+"""Track the highest promotion branch containing linked issue work.
 
-The workflow that invokes this module runs on push events for both protected
-promotion branches. Evidence is collected from the exact ``before...after``
-push range, together with merged pull-request metadata and source commits for
-promotion PRs. Mutations happen only after the complete evidence set has been
-collected so a partial API read cannot cause a partial promotion claim.
+The workflow runs on pushes to dev, unstable, and stable. Evidence is collected
+from the exact ``before...after`` push range, merged pull-request metadata,
+and source commits for promotion PRs. Mutations happen after all issue and
+field reads complete, so a partial API read cannot cause a partial promotion
+claim. Issue state is never changed by this workflow.
 """
 
 from __future__ import annotations
@@ -19,14 +19,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-QUEUE_LABEL = "in promotion queue"
+PROMOTION_FIELD_ID = 47367010
 DEV_BRANCH = "dev"
+UNSTABLE_BRANCH = "unstable"
 STABLE_BRANCH = "stable"
-SUPPORTED_BRANCHES = frozenset({DEV_BRANCH, STABLE_BRANCH})
+STAGE_BY_BRANCH = {
+    DEV_BRANCH: "Dev present",
+    UNSTABLE_BRANCH: "Unstable present",
+    STABLE_BRANCH: "Stable present",
+}
+STAGE_RANK = {stage: rank for rank, stage in enumerate(STAGE_BY_BRANCH.values())}
+SUPPORTED_BRANCHES = frozenset(STAGE_BY_BRANCH)
 ZERO_SHA = "0" * 40
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 
@@ -120,7 +127,7 @@ class GitHubClient:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "User-Agent": "loop-issue-promotion",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
         }
 
     def request(
@@ -234,25 +241,29 @@ class GitHubClient:
             raise GitHubApiError(f"issue #{number} returned a non-object response")
         return response
 
-    def add_label(self, repository: str, number: int, label: str) -> None:
+    def promotion_stage(self, repository: str, number: int) -> str | None:
+        path = f"repos/{repository}/issues/{number}/issue-field-values"
+        values = self.request("GET", path)
+        if not isinstance(values, list):
+            raise GitHubApiError(f"issue #{number} field values returned a non-list response")
+        matches = [
+            value for value in values
+            if isinstance(value, dict) and value.get("issue_field_id") == PROMOTION_FIELD_ID
+        ]
+        if not matches:
+            return None
+        if len(matches) != 1:
+            raise GitHubApiError(f"issue #{number} has duplicate promotion field values")
+        option = matches[0].get("single_select_option")
+        if not isinstance(option, dict) or not isinstance(option.get("name"), str):
+            raise GitHubApiError(f"issue #{number} has an invalid promotion field value")
+        return option["name"]
+
+    def set_promotion_stage(self, repository: str, number: int, stage: str) -> None:
         self.request(
             "POST",
-            f"repos/{repository}/issues/{number}/labels",
-            payload={"labels": [label]},
-        )
-
-    def close_issue(self, repository: str, number: int) -> None:
-        self.request(
-            "PATCH",
-            f"repos/{repository}/issues/{number}",
-            payload={"state": "closed", "state_reason": "completed"},
-        )
-
-    def remove_label(self, repository: str, number: int, label: str) -> None:
-        encoded_label = quote(label, safe="")
-        self.request(
-            "DELETE",
-            f"repos/{repository}/issues/{number}/labels/{encoded_label}",
+            f"repos/{repository}/issues/{number}/issue-field-values",
+            payload={"issue_field_values": [{"field_id": PROMOTION_FIELD_ID, "value": stage}]},
         )
 
 
@@ -300,11 +311,11 @@ class PromotionEvidence:
         )
         self.issue_numbers.update(pull_refs)
 
-        # A stable promotion may be merged as a squash commit. Its push range
+        # A promotion may be merged as a squash commit. Its push range
         # then contains only the new squash SHA, so inspect the promotion PR's
         # source commits and their merged topic PRs as well. A dev squash PR
         # is expanded only when its title/body had no usable issue link.
-        expand_source = self.target_branch == STABLE_BRANCH or not pull_refs
+        expand_source = self.target_branch != DEV_BRANCH or not pull_refs
         if not expand_source:
             return
         for commit in self.client.pull_request_commits(self.repository, number):
@@ -314,45 +325,32 @@ class PromotionEvidence:
 @dataclass(frozen=True)
 class IssueAction:
     number: int
-    kind: str
-    reason: str
-
-
-def _label_names(issue: Mapping[str, Any]) -> set[str]:
-    labels = issue.get("labels", [])
-    if not isinstance(labels, list):
-        return set()
-    names: set[str] = set()
-    for label in labels:
-        if isinstance(label, dict) and isinstance(label.get("name"), str):
-            names.add(label["name"])
-        elif isinstance(label, str):
-            names.add(label)
-    return names
+    stage: str
 
 
 def plan_issue_actions(
-    target_branch: str, issues: Mapping[int, Mapping[str, Any]]
+    target_branch: str,
+    issues: Mapping[int, Mapping[str, Any]],
+    current_stages: Mapping[int, str | None],
 ) -> tuple[IssueAction, ...]:
-    """Plan idempotent actions while enforcing the stable queue guard."""
+    """Plan monotonic field updates without changing issue state."""
 
     if target_branch not in SUPPORTED_BRANCHES:
         raise ValueError(f"unsupported promotion branch: {target_branch!r}")
 
     actions: list[IssueAction] = []
+    target_stage = STAGE_BY_BRANCH[target_branch]
     for number in sorted(issues):
         issue = issues[number]
         if "pull_request" in issue:
             continue
-        if issue.get("state") != "open":
-            continue
-        labels = _label_names(issue)
-        if target_branch == DEV_BRANCH:
-            if QUEUE_LABEL not in labels:
-                actions.append(IssueAction(number, "label", "linked work reached dev"))
-            continue
-        if QUEUE_LABEL in labels:
-            actions.append(IssueAction(number, "close", "queued work reached stable"))
+        current_stage = current_stages[number]
+        if current_stage is not None and current_stage not in STAGE_RANK:
+            raise GitHubApiError(
+                f"issue #{number} has unknown promotion stage {current_stage!r}"
+            )
+        if current_stage is None or STAGE_RANK[current_stage] < STAGE_RANK[target_stage]:
+            actions.append(IssueAction(number, target_stage))
     return tuple(actions)
 
 
@@ -362,19 +360,8 @@ def apply_issue_actions(
     actions: Iterable[IssueAction],
 ) -> None:
     for action in actions:
-        if action.kind == "label":
-            client.add_label(repository, action.number, QUEUE_LABEL)
-            print(f"issue #{action.number}: added {QUEUE_LABEL!r}")
-        elif action.kind == "close":
-            client.close_issue(repository, action.number)
-            try:
-                client.remove_label(repository, action.number, QUEUE_LABEL)
-            except GitHubApiError as exc:
-                if exc.status_code != 404:
-                    raise
-            print(f"issue #{action.number}: closed as completed")
-        else:
-            raise ValueError(f"unknown issue action: {action.kind!r}")
+        client.set_promotion_stage(repository, action.number, action.stage)
+        print(f"issue #{action.number}: promotion stage set to {action.stage!r}")
 
 
 def process_push(
@@ -403,6 +390,7 @@ def process_push(
         return 0
 
     issues: dict[int, Mapping[str, Any]] = {}
+    current_stages: dict[int, str | None] = {}
     for number in sorted(numbers):
         try:
             issues[number] = client.issue(repository, number)
@@ -411,8 +399,10 @@ def process_push(
                 print(f"issue #{number}: not found; skipped", file=sys.stderr)
                 continue
             raise
+        if "pull_request" not in issues[number]:
+            current_stages[number] = client.promotion_stage(repository, number)
 
-    actions = plan_issue_actions(target_branch, issues)
+    actions = plan_issue_actions(target_branch, issues, current_stages)
     print(
         f"Found {len(numbers)} issue link(s); planned {len(actions)} action(s) "
         f"for {target_branch}."
