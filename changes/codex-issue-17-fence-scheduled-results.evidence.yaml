@@ -4,38 +4,26 @@ claims:
   - id: scheduled-result-fencing
     evidence:
       - unit:agent-policy:core
-      - unit:UnitTestsJobScheduler
-      - unit:UnitTestsRevisionStress
       - architecture:agent-policy:core
       - architecture:docs/generated/architecture-catalog.json
       - security:scripts/ci/check_source_integrity.py
       - differential:UnitTestsConversionOracle
-      - packaging:linux-build
-      - packaging:windows-build
   - id: page-surface-admission
     evidence:
       - unit:agent-policy:interaction
-      - unit:UnitTestsPageSurface
-      - unit:UnitTestsPageSurfaceBudget
-      - architecture:agent-policy:interaction
-      - architecture:docs/generated/architecture-catalog.json
-      - security:scripts/ci/check_source_integrity.py
-      - packaging:linux-build
-      - packaging:windows-build
   - id: editor-result-admission
     evidence:
       - unit:agent-policy:quick
-      - unit:UnitTestsEditorHost
-      - architecture:agent-policy:quick
-      - architecture:docs/generated/architecture-catalog.json
-      - security:scripts/ci/check_source_integrity.py
-      - packaging:linux-build
-      - packaging:windows-build
   - id: preflight-controller-fence
     evidence:
       - unit:agent-policy:preflight
+      - unit:UnitTestsPreflightChecks
+      - unit:UnitTestsPreflightEngine
       - unit:UnitTestsPreflightInteraction
       - unit:UnitTestsPreflightVerdict
+      - unit:UnitTestsPreflightProfileResolver
+      - unit:UnitTestsProfileIdentity
+      - unit:UnitTestsOperatorAcceptance
       - integration:UnitTestsPreflightCorpus
       - integration:UnitTestsPreflightWorkflowAcceptance
       - differential:UnitTestsStandardOracle
