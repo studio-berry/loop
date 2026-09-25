@@ -6,6 +6,9 @@ claims:
       - unit:agent-policy:core
       - unit:UnitTestsPreflightVerdict
       - architecture:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
       - packaging:linux-build
       - packaging:windows-build
   - id: preflight-coverage-and-verdict
@@ -24,4 +27,5 @@ claims:
       - architecture:loop-preflight/testdata/fixtures
       - architecture:docs/generated/preflight-check-catalog.json
       - architecture:docs/generated/preflight-corpus-coverage.json
-unresolved: []
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
