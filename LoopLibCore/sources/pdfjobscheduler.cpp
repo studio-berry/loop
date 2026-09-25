@@ -163,6 +163,7 @@ void PDFJobContext::setOutputArtifact(PDFArtifactIdentity artifact)
 struct PDFJobScheduler::JobEntry
 {
     PDFJobSpec spec;
+    quint64 revisionEpoch = 0;
     PDFJobWork work;
     PDFJobCancellationTokenPtr cancellationToken;
     quint64 sequence = 0;
@@ -275,6 +276,13 @@ QString PDFJobScheduler::submit(PDFJobSpec spec,
         }
 
         job->sequence = ++m_sequence;
+        const QString documentKey = resolvedDocumentKey(job->spec);
+        const auto revision = m_currentRevisions.find(documentKey);
+        if (!documentKey.isEmpty() && revision != m_currentRevisions.end() &&
+            revision->second.revision == job->spec.documentRevision)
+        {
+            job->revisionEpoch = revision->second.epoch;
+        }
         job->queueDepth = static_cast<int>(m_queue.size());
         m_jobs.emplace(job->spec.jobId, job);
         m_queue.push(job);
@@ -408,7 +416,16 @@ void PDFJobScheduler::setCurrentRevision(QString documentKey, QString documentRe
         return;
     }
     std::lock_guard lock(m_mutex);
-    m_currentRevisions[std::move(documentKey)] = std::move(documentRevision);
+    if (documentRevision.isEmpty())
+    {
+        m_currentRevisions.erase(documentKey);
+        return;
+    }
+    auto& current = m_currentRevisions[std::move(documentKey)];
+    if (current.revision != documentRevision)
+    {
+        current = CurrentRevision{ std::move(documentRevision), ++m_sequence };
+    }
 }
 
 void PDFJobScheduler::clearCurrentRevision(const QString& documentKey)
@@ -488,7 +505,12 @@ void PDFJobScheduler::workerLoop()
 
         Q_EMIT jobStarted(startedSnapshot);
 
-        if (isStale(job->spec) && job->spec.staleResultPolicy == PDFJobStaleResultPolicy::Discard)
+        bool staleBeforeWork = false;
+        {
+            std::lock_guard lock(m_mutex);
+            staleBeforeWork = isStaleLocked(*job);
+        }
+        if (staleBeforeWork && job->spec.staleResultPolicy == PDFJobStaleResultPolicy::Discard)
         {
             finishJob(job, PDFJobStatus::Stale, QStringLiteral("Document revision is no longer current."));
             continue;
@@ -542,10 +564,6 @@ void PDFJobScheduler::workerLoop()
         {
             finishJob(job, PDFJobStatus::Failed, std::move(errorMessage));
         }
-        else if (isStale(job->spec) && job->spec.staleResultPolicy == PDFJobStaleResultPolicy::Discard)
-        {
-            finishJob(job, PDFJobStatus::Stale, QStringLiteral("Document revision changed while the job was running."));
-        }
         else
         {
             finishJob(job, PDFJobStatus::Succeeded);
@@ -565,6 +583,18 @@ void PDFJobScheduler::finishJob(const std::shared_ptr<JobEntry>& job,
             return;
         }
 
+        if (status == PDFJobStatus::Succeeded && job->cancellationToken->isCancellationRequested())
+        {
+            status = PDFJobStatus::Cancelled;
+            errorMessage = QStringLiteral("Cancellation requested during execution.");
+        }
+        else if (status == PDFJobStatus::Succeeded &&
+                 job->spec.staleResultPolicy == PDFJobStaleResultPolicy::Discard && isStaleLocked(*job))
+        {
+            status = PDFJobStatus::Stale;
+            errorMessage = QStringLiteral("Document revision changed while the job was running.");
+        }
+
         if (job->slotAcquired)
         {
             job->slotAcquired = false;
@@ -575,6 +605,11 @@ void PDFJobScheduler::finishJob(const std::shared_ptr<JobEntry>& job,
         }
         job->status = status;
         job->errorMessage = std::move(errorMessage);
+        if (status != PDFJobStatus::Succeeded)
+        {
+            job->resultSummary.clear();
+            job->outputArtifact = {};
+        }
         job->finishedAtUtc = QDateTime::currentDateTimeUtc();
         if (job->startedAtUtc.isValid())
         {
@@ -660,16 +695,16 @@ void PDFJobScheduler::appendTrace(const std::shared_ptr<JobEntry>& job,
     }
 }
 
-bool PDFJobScheduler::isStale(const PDFJobSpec& spec) const
+bool PDFJobScheduler::isStaleLocked(const JobEntry& job) const
 {
-    const QString key = resolvedDocumentKey(spec);
+    const QString key = resolvedDocumentKey(job.spec);
     if (key.isEmpty())
     {
         return false;
     }
-    std::lock_guard lock(m_mutex);
     const auto it = m_currentRevisions.find(key);
-    return it != m_currentRevisions.end() && it->second != spec.documentRevision;
+    return it == m_currentRevisions.end() || job.revisionEpoch == 0 ||
+           it->second.epoch != job.revisionEpoch || it->second.revision != job.spec.documentRevision;
 }
 
 PDFJobSnapshot PDFJobScheduler::snapshotLocked(const JobEntry& job) const
