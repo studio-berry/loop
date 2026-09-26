@@ -44,6 +44,8 @@ private slots:
     void allWorkKindsUseOneSubmissionApi();
     void cancellationIsTerminalAndMeasured();
     void staleRevisionIsDiscardedBeforeWorkRuns();
+    void missingFenceDoesNotRunDocumentWork();
+    void supersededAndReopenedJobsNeverSucceed();
     void progressAndOperationMetadataAreObservable();
     void waitTimeoutCancelJoinsBeforeTerminalSnapshot();
     void cancelledPreflightAndExportJobsAreNotSuccess();
@@ -267,9 +269,59 @@ void JobSchedulerTest::staleRevisionIsDiscardedBeforeWorkRuns()
     QVERIFY(!ran.load(std::memory_order_acquire));
 }
 
+void JobSchedulerTest::missingFenceDoesNotRunDocumentWork()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    std::atomic_bool ran = false;
+    pdf::PDFJobSpec spec;
+    spec.documentKey = QStringLiteral("document-1");
+    spec.documentRevision = QStringLiteral("revision-1");
+    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
+                                           { ran = true; });
+
+    QVERIFY(scheduler.waitForFinished(jobId, 1000));
+    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
+    QVERIFY(!ran.load(std::memory_order_acquire));
+}
+
+void JobSchedulerTest::supersededAndReopenedJobsNeverSucceed()
+{
+    pdf::PDFJobScheduler scheduler(2);
+    const QString key = QStringLiteral("document-1");
+    const QString revision = QStringLiteral("revision-1");
+    scheduler.setCurrentRevision(key, revision);
+
+    std::atomic_bool releaseOld = false;
+    std::atomic_bool oldStarted = false;
+    pdf::PDFJobSpec spec;
+    spec.documentKey = key;
+    spec.documentRevision = revision;
+    spec.priority = pdf::PDFJobPriority::VisiblePage;
+    const QString oldId = scheduler.submit(spec, [&releaseOld, &oldStarted](pdf::PDFJobContext&)
+                                           {
+        oldStarted = true;
+        while (!releaseOld.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        } });
+    QTRY_VERIFY_WITH_TIMEOUT(oldStarted.load(std::memory_order_acquire), 1000);
+    QVERIFY(!scheduler.waitForFinished(oldId, 10));
+
+    scheduler.clearCurrentRevision(key);
+    scheduler.setCurrentRevision(key, revision);
+    const QString retryId = scheduler.submit(spec, [](pdf::PDFJobContext&) {});
+    QVERIFY(scheduler.waitForFinished(retryId, 1000));
+    QCOMPARE(scheduler.snapshot(retryId).status, pdf::PDFJobStatus::Succeeded);
+
+    releaseOld = true;
+    QVERIFY(scheduler.waitForFinished(oldId, 1000));
+    QCOMPARE(scheduler.snapshot(oldId).status, pdf::PDFJobStatus::Stale);
+}
+
 void JobSchedulerTest::progressAndOperationMetadataAreObservable()
 {
     pdf::PDFJobScheduler scheduler(1);
+    scheduler.setCurrentRevision(QStringLiteral("document-2"), QStringLiteral("revision-4"));
     pdf::PDFJobSpec spec;
     spec.jobId = QStringLiteral("render-tile");
     spec.kind = pdf::PDFJobKind::Rendering;
@@ -367,6 +419,7 @@ void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()
 void JobSchedulerTest::test_finishedJobReleasesItsWorkClosure()
 {
     pdf::PDFJobScheduler scheduler(1);
+    scheduler.setCurrentRevision(QStringLiteral("doc-1"), QStringLiteral("1"));
 
     pdf::PDFJobSpec spec;
     spec.kind = pdf::PDFJobKind::Preflight;
@@ -393,6 +446,7 @@ void JobSchedulerTest::test_finishedJobReleasesItsWorkClosure()
 void JobSchedulerTest::test_terminalJobRetentionIsBounded()
 {
     pdf::PDFJobScheduler scheduler(1);
+    scheduler.setCurrentRevision(QStringLiteral("doc-1"), QStringLiteral("1"));
 
     QList<QString> jobIds;
     for (int index = 0; index < 300; ++index)

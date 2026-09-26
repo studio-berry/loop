@@ -39,7 +39,6 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
@@ -241,6 +240,11 @@ signals:
 
 private:
     struct JobEntry;
+    struct CurrentRevision
+    {
+        QString revision;
+        quint64 epoch = 0;
+    };
     struct JobCompare
     {
         bool operator()(const std::shared_ptr<JobEntry>& left,
@@ -251,7 +255,7 @@ private:
     void ensureWorkersStarted();
     void finishJob(const std::shared_ptr<JobEntry>& job, PDFJobStatus status, QString errorMessage = {});
     void appendTrace(const std::shared_ptr<JobEntry>& job, PDFJobStatus status, qint64 elapsedMs = 0);
-    bool isStale(const PDFJobSpec& spec) const;
+    bool isStaleLocked(const JobEntry& job) const;
     PDFJobSnapshot snapshotLocked(const JobEntry& job) const;
     static QString resolvedDocumentKey(const PDFJobSpec& spec);
 
@@ -264,7 +268,7 @@ private:
     int m_activeBackgroundJobs = 0;
     std::priority_queue<std::shared_ptr<JobEntry>, std::vector<std::shared_ptr<JobEntry>>, JobCompare> m_queue;
     std::unordered_map<QString, std::shared_ptr<JobEntry>, PDFJobStringHash> m_jobs;
-    std::unordered_map<QString, QString, PDFJobStringHash> m_currentRevisions;
+    std::unordered_map<QString, CurrentRevision, PDFJobStringHash> m_currentRevisions;
     std::unordered_map<QString, QList<PDFJobTraceEvent>, PDFJobStringHash> m_traces;
     std::vector<std::thread> m_workers;
     std::once_flag m_workersOnce;

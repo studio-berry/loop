@@ -232,13 +232,17 @@ void InteractionBoundaryTest::submitterCancellationIsTerminalAndNotSuccess()
 {
     pdf::PDFJobScheduler scheduler(1);
     pdfinteraction::PDFJobSchedulerSubmitter submitter(scheduler);
+    pdf::PDFDocumentContext context(nullptr);
+    const QString documentKey = QStringLiteral("doc-under-test");
+    submitter.publishCurrentRevision(documentKey, context.getRevision());
 
     std::atomic_bool started = false;
     pdf::PDFJobSpec spec;
     spec.jobId = QStringLiteral("interaction-cancel-me");
     spec.kind = pdf::PDFJobKind::Rendering;
     spec.priority = pdf::PDFJobPriority::Interaction;
-    spec.documentKey = QStringLiteral("doc-under-test");
+    spec.documentKey = documentKey;
+    spec.documentRevision = context.getRevision().toString();
 
     // Cancel a running job cooperatively, as UnitTestsJobScheduler does. The work
     // exits on the cancellation token rather than on a flag this slot must live

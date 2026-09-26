@@ -292,6 +292,10 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 struct EditorHost::PreflightWorkerOutcome
 {
     pdf::PreflightResult result;
+    QString effectiveProfileDigest;
+    QString documentPath;
+    QByteArray auditBytes;
+    QJsonObject auditSummary;
 };
 
 EditorHost::EditorHost(QObject* parent) :
@@ -1449,6 +1453,7 @@ bool EditorHost::runPreflight()
             profile.effectiveDigest = pdf::computeProfileDigest(bound.profile);
             profile.profileIdentity = imported.identity.toJson();
             profile.profileIdentity.insert(QStringLiteral("effective_digest"), profile.effectiveDigest);
+            outcome->effectiveProfileDigest = profile.effectiveDigest;
             context.reportProgress(5);
 
             std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
@@ -1481,26 +1486,9 @@ bool EditorHost::runPreflight()
             context.reportProgress(15);
             outcome->result = engine.run(profile);
             pdf::finalizePreflightResult(outcome->result, revisionHash, resolved);
-
-            pdf::PDFOperationHistoryStatus auditStatus = pdf::PDFOperationHistoryStatus::Accepted;
-            if (context.isCancellationRequested())
-                auditStatus = pdf::PDFOperationHistoryStatus::Cancelled;
-            else if (pdf::reducePreflightVerdict(outcome->result).state == pdf::PreflightVerdictState::Error)
-                auditStatus = pdf::PDFOperationHistoryStatus::Failed;
-
-            const QJsonObject auditSummary =
-                pdf::preflightAuditReportSummary(outcome->result, documentPath);
-            if (const pdf::PDFOperationResult auditResult =
-                    pdf::appendPreflightAuditRun(documentPath,
-                                                 auditBytes,
-                                                 outcome->result,
-                                                 auditStatus,
-                                                 QStringLiteral("LoopEditor"),
-                                                 auditSummary);
-                !auditResult)
-            {
-                throw std::runtime_error(auditResult.getErrorMessage().toStdString());
-            }
+            outcome->documentPath = documentPath;
+            outcome->auditBytes = std::move(auditBytes);
+            outcome->auditSummary = pdf::preflightAuditReportSummary(outcome->result, documentPath);
 
             if (context.isCancellationRequested())
                 return;
@@ -3209,11 +3197,47 @@ void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
         return;
     }
 
+    const auto profile = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                      [this](const PreflightProfileChoice& choice)
+                                      { return choice.id == m_selectedPreflightProfileId; });
+    if (!hasDocument() || !m_session->revisionSource() || snapshot.kind != pdf::PDFJobKind::Preflight ||
+        snapshot.documentKey != m_preflight.documentKey() ||
+        snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != m_preflight.documentRevision() ||
+        snapshot.documentRevision != m_session->facade().currentRevision().toString() ||
+        profile == m_preflightProfiles.cend() || !profile->valid ||
+        profile->digest != m_preflight.profileDigest() ||
+        snapshot.operationId != QStringLiteral("preflight.%1").arg(profile->id))
+    {
+        m_preflight.markProfileStale();
+        return;
+    }
+
     switch (snapshot.status)
     {
         case pdf::PDFJobStatus::Succeeded:
             if (outcome)
             {
+                if (outcome->effectiveProfileDigest.isEmpty() ||
+                    outcome->result.effectiveProfileDigest != outcome->effectiveProfileDigest ||
+                    outcome->documentPath != m_session->facade().source().path)
+                {
+                    m_preflight.failRun(snapshot.jobId, snapshot.documentRevision,
+                                        tr("Preflight result identity did not match the request."));
+                    break;
+                }
+                const pdf::PDFOperationHistoryStatus auditStatus =
+                    pdf::reducePreflightVerdict(outcome->result).state == pdf::PreflightVerdictState::Error
+                        ? pdf::PDFOperationHistoryStatus::Failed
+                        : pdf::PDFOperationHistoryStatus::Accepted;
+                const pdf::PDFOperationResult auditResult = pdf::appendPreflightAuditRun(
+                    outcome->documentPath, outcome->auditBytes, outcome->result, auditStatus,
+                    QStringLiteral("LoopEditor"), outcome->auditSummary);
+                if (!auditResult)
+                {
+                    m_preflight.failRun(snapshot.jobId, snapshot.documentRevision, auditResult.getErrorMessage());
+                    break;
+                }
                 acceptPreflightResult(snapshot.jobId, snapshot.documentRevision, outcome->result);
             }
             else
@@ -3254,6 +3278,21 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
         return;
     }
 
+    const pdfinteraction::ActionListRecipeEntry* recipe = m_actionListCatalog.recipe(m_selectedActionListRecipeId);
+    if (!hasDocument() || !m_session->revisionSource() || snapshot.kind != pdf::PDFJobKind::Other ||
+        snapshot.documentKey != m_actionListController.documentKey() ||
+        snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != m_actionListController.documentRevision() ||
+        snapshot.documentRevision != m_session->facade().currentRevision().toString() ||
+        m_selectedActionListRecipeId != m_actionListController.recipeId() ||
+        !recipe || !recipe->valid ||
+        snapshot.operationId != QStringLiteral("action-list.%1").arg(recipe->actionList.id) ||
+        snapshot.checkId != recipe->actionList.name)
+    {
+        m_actionListController.markRecipeStale();
+        return;
+    }
+
     switch (snapshot.status)
     {
         case pdf::PDFJobStatus::Succeeded:
@@ -3261,6 +3300,13 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
             {
                 m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
                                                tr("Action List result was unavailable."));
+                break;
+            }
+            if (state != pdfinteraction::ActionListController::State::Validating &&
+                outcome->executionResult.recipeHash != recipe->recipeHash)
+            {
+                m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
+                                               tr("Action List result did not match the recipe."));
                 break;
             }
             if (state == pdfinteraction::ActionListController::State::Validating)
@@ -3286,9 +3332,14 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
             }
             else if (state == pdfinteraction::ActionListController::State::Running)
             {
+                if (!outcome->candidate)
+                {
+                    m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
+                                                   tr("Action List produced no document."));
+                    break;
+                }
                 if (m_acceptActionListResults &&
-                    m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult) &&
-                    outcome->candidate)
+                    m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult))
                 {
                     m_session->context().setDocument(outcome->candidate);
                     m_preflight.markProfileStale();
