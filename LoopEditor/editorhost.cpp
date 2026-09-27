@@ -2476,19 +2476,23 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
+    // The restored revision and its rolled-back event are already published, so a retention
+    // failure is reported alongside them rather than hiding the new revision.
     const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
-    if (!retention.success)
+    const QString revision = point->documentRevisionDigest.left(12);
+    const QString destinationName = QFileInfo(destination).fileName();
+    if (retention.success)
     {
-        announceDocumentState(tr("The revision was restored, but history retention could not be enforced: %1")
-                                  .arg(retention.errorMessage));
-        return false;
+        announceDocumentState(tr("Returned to revision %1 as %2.").arg(revision, destinationName));
     }
-
-    announceDocumentState(tr("Returned to revision %1 as %2.")
-                              .arg(point->documentRevisionDigest.left(12), QFileInfo(destination).fileName()));
+    else
+    {
+        announceDocumentState(tr("Returned to revision %1 as %2, but history retention could not be enforced: %3")
+                                  .arg(revision, destinationName, retention.errorMessage));
+    }
     openFileUrl(QUrl::fromLocalFile(destination));
     refreshFixRollbackPoints();
-    return true;
+    return retention.success;
 }
 
 void EditorHost::discardActionListPlan()
