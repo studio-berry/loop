@@ -38,10 +38,20 @@ class WorkloadEnvelopeTest : public QObject
 
 private slots:
     void identityFieldsArePresent();
+    void rssHighWaterIsMeasuredOnSupportedPlatforms();
     void shedPrefetchAndQualityBeforeInteraction();
     void pageHeavyEnvelopeRecordsIdentity();
     void interactionSlotRunsWhenBackgroundIsSaturated();
 };
+
+void WorkloadEnvelopeTest::rssHighWaterIsMeasuredOnSupportedPlatforms()
+{
+#if defined(Q_OS_LINUX) || defined(Q_OS_WIN)
+    QVERIFY(pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes() > 0);
+#else
+    QCOMPARE(pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes(), qint64(-1));
+#endif
+}
 
 void WorkloadEnvelopeTest::identityFieldsArePresent()
 {

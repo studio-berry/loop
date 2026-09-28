@@ -103,4 +103,4 @@ private:
 
 }   // namespace pdftool
 
-#endif // PDFTOOLRENDER_H
+#endif   // PDFTOOLRENDER_H
