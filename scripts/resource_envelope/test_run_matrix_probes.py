@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.resource_envelope.run_matrix import matrix_passes, run_cancellation_probe, run_fixture, run_hostile_corpus
+from scripts.resource_envelope.run_matrix import matrix_failure_reasons, matrix_passes, run_cancellation_probe, run_fixture, run_hostile_corpus
 from scripts.resource_envelope.validate_envelope import POOL_NAMES
 
 CANDIDATE = "candidate-sha"
@@ -197,6 +197,29 @@ class MatrixPassTest(unittest.TestCase):
 
     def test_uncontained_hostile_case_fails_even_without_strict(self) -> None:
         self.assertFalse(matrix_passes(self._matrix(contained=1), strict=False))
+
+
+class FailureReasonTest(unittest.TestCase):
+    def test_names_every_failing_record_probe_and_hostile_case(self) -> None:
+        matrix = {
+            "fixtures": [
+                {"fixture_id": "office-2mb", "status": "measured", "required": True, "validation_errors": []},
+                {"fixture_id": "image-heavy-500mb", "status": "flagged", "required": True, "validation_errors": ["run 1: process exit code 1 is not success"]},
+                {"fixture_id": "ten-thousand-page", "status": "unavailable", "required": True, "validation_errors": [], "reason": "fixture-not-found"},
+                {"fixture_id": "multi-gb", "status": "unavailable", "required": False, "validation_errors": [], "reason": "fixture-not-supplied-optional"},
+            ],
+            "cancellation_recovery_probe": {"status": "failed", "validation_errors": ["recovery probe process-crashed:-11"]},
+            "hostile": {"cases": [
+                {"case_id": "ok", "status": "contained", "validation_errors": []},
+                {"case_id": "deep-tree", "status": "failed", "process_exit_code": 0, "validation_errors": ["RSS 9 exceeds resident policy 4"]},
+            ]},
+        }
+        self.assertEqual(matrix_failure_reasons(matrix), [
+            "fixture image-heavy-500mb flagged: run 1: process exit code 1 is not success",
+            "fixture ten-thousand-page unavailable: fixture-not-found",
+            "probe failed: recovery probe process-crashed:-11",
+            "hostile deep-tree (exit 0): RSS 9 exceeds resident policy 4",
+        ])
 
 
 if __name__ == "__main__":

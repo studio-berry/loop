@@ -697,6 +697,22 @@ def matrix_passes(matrix: Mapping[str, Any], strict: bool) -> bool:
     )
 
 
+def matrix_failure_reasons(matrix: Mapping[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    for record in matrix["fixtures"]:
+        if record["status"] in {"failed", "flagged"} or (record.get("required") and record["status"] == "unavailable"):
+            details = record["validation_errors"] or [record.get("reason", "no detail recorded")]
+            reasons.extend(f"fixture {record['fixture_id']} {record['status']}: {error}" for error in details)
+    probe = matrix.get("cancellation_recovery_probe")
+    if probe is not None and probe["status"] != "measured":
+        reasons.extend(f"probe {probe['status']}: {error}" for error in probe["validation_errors"])
+    for case in (matrix.get("hostile") or {}).get("cases", []):
+        if case["status"] != "contained":
+            exit_code = case.get("process_exit_code")
+            reasons.extend(f"hostile {case['case_id']} (exit {exit_code}): {error}" for error in case["validation_errors"])
+    return reasons
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pdf-tool", type=Path, required=True)
@@ -750,6 +766,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     print(json.dumps(matrix["summary"], indent=2))
+    for reason in matrix_failure_reasons(matrix):
+        print(reason, file=sys.stderr)
     return 0 if matrix_passes(matrix, args.strict) else 1
 
 
