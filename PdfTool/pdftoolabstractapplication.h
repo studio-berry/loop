@@ -431,6 +431,7 @@ public:
         EvidenceBundleExport = 0x80000000000ULL,   ///< Export a portable proof-of-preflight bundle
         EvidenceBundleVerify = 0x100000000000ULL,   ///< Verify a portable proof-of-preflight bundle
         PreflightReportFile = 0x200000000000ULL,   ///< Preflight --report-file output path
+        BenchmarkPreflightProfile = 0x400000000000ULL,   ///< Benchmark --profile for a measured preflight phase
     };
     Q_DECLARE_FLAGS(Options, Option)
 

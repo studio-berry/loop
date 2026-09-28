@@ -388,6 +388,10 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
     {
         add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
     }
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
+    }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -898,6 +902,11 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     if (optionFlags.testFlag(PreflightReportFile))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("report-file"), QStringLiteral("Write the preflight report JSON this run is certified over to this file."));
+    }
+
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Run a preflight phase with this profile before rendering and record its memory high-water."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1481,6 +1490,11 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(PreflightReportFile))
     {
         options.preflightReportPath = parser->value("report-file");
+    }
+
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        options.preflightProfilePath = parser->value("profile");
     }
 
     if (optionFlags.testFlag(VerifyPreflightCertificate))

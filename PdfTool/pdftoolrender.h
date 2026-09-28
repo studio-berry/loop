@@ -82,10 +82,23 @@ class PDFToolBenchmark : public PDFToolRenderBase
 public:
     virtual QString getStandardString(StandardString standardString) const override;
     virtual Options getOptionsFlags() const override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
 
 protected:
     virtual void finish(const PDFToolOptions& options) override;
     virtual void onPageRendered(const PDFToolOptions& options, pdf::PDFRenderedPageImage& renderedPageImage) override;
+
+private:
+    /// Preflight runs before rendering, so the process high-water recorded when
+    /// it ends is the peak of open plus preflight, independent of rendering.
+    struct PreflightPhase
+    {
+        bool requested = false;
+        bool inspected = false;
+        qint64 highWaterBytes = -1;
+    };
+
+    PreflightPhase m_preflightPhase;
 };
 
 }   // namespace pdftool

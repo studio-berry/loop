@@ -84,9 +84,10 @@ unsupported, budget-exceeded, or incomplete.
 The envelope is schema version 2. `resources` is produced by the shared
 `PDFResourceBudget` authority and contains the resident ceiling plus all seven
 named pool records. `pages_materialized` reports pages actually processed by a
-runner; it is not the catalog page count. `preflight_high_water_bytes` remains
-`-1` until a run includes the preflight phase, and such a record is explicitly
-`incomplete` rather than being promoted to a passing result. The deterministic
+runner; it is not the catalog page count. `preflight_high_water_bytes` is the process high-water when the
+`benchmark --profile <profile.json>` preflight phase ends; without `--profile`
+it stays `-1` and the record is explicitly `incomplete` rather than being
+promoted to a passing result. The deterministic
 pathological and transparency/spot fixtures can be generated without the
 external DIV2K corpus:
 
@@ -166,6 +167,12 @@ reported as a passing complete run. Add
 `--baseline C:\previous\resource-envelope-matrix.json` to compare matching
 fixture digests and platform/toolchain identities. The default regression
 margin is `2.0`; use a narrower margin only after collecting stable platform
-baselines. Add `--cancel-fixture pathological-vector
---cancel-after-seconds 1` to send an interrupt to one controlled probe and
-record the application's cancellation latency.
+baselines. The runner passes `--profile` (default
+`loop-preflight/profiles/loop-default.json`) so every run measures the
+preflight phase. Add `--cancel-fixture ten-thousand-page
+--cancel-after-seconds 3` for the separate cancellation probe, which interrupts
+one extra run and then times a fresh process reopening the fixture and
+rendering its first page (`recovery_ms`). `--strict` requires that probe and
+also runs the hostile lane over `UnitTests/testdata/budget_exhaustion/`. For
+the hosted, synthetic-fixture version of this run, see
+`docs/RESOURCE_ENVELOPE_QUALIFICATION.md`.
