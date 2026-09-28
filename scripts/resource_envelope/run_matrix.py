@@ -98,6 +98,35 @@ def _envelope_from_process(completed: subprocess.CompletedProcess[str]) -> dict[
     return _envelope_from_output(payload) if payload else None
 
 
+def _find_key(value: Any, key: str) -> Any:
+    if isinstance(value, Mapping):
+        if key in value:
+            return value[key]
+        children: Sequence[Any] = list(value.values())
+    elif isinstance(value, list):
+        children = value
+    else:
+        return None
+    for child in children:
+        found = _find_key(child, key)
+        if found is not None:
+            return found
+    return None
+
+
+def _failure_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    """Short, log-sized account of why a PdfTool run did not succeed."""
+    payload = _extract_json(completed.stdout or "")
+    errors = _find_key(payload, "rendering-errors") if payload else None
+    parts = []
+    if errors is not None:
+        parts.append("rendering-errors=" + json.dumps(errors)[:800])
+    stderr = (completed.stderr or "").strip()
+    if stderr:
+        parts.append("stderr=" + stderr[-400:])
+    return "; ".join(parts)
+
+
 def _git_head() -> str:
     try:
         return subprocess.run(
@@ -361,12 +390,14 @@ def run_fixture(
             run: dict[str, Any] = {"run": index, "status": "unavailable", "reason": reason, "process_exit_code": exit_code, "process_wall_ms": wall_ms}
             if completed is not None:
                 run["stderr"] = (completed.stderr or "")[-2000:]
+                run["detail"] = _failure_detail(completed)
             runs.append(run)
             validation_errors.append(f"run {index}: {reason}")
             continue
         envelopes.append(envelope)
         runs.append({"run": index, "status": "recorded", "process_exit_code": exit_code, "process_wall_ms": wall_ms, "result": envelope})
         if exit_code != EXIT_SUCCESS:
+            runs[-1]["detail"] = _failure_detail(completed)
             validation_errors.append(f"run {index}: process exit code {exit_code} is not success")
         for error in validate_envelope(envelope, budgets, workload):
             validation_errors.append(f"run {index}: {error}")
@@ -703,6 +734,9 @@ def matrix_failure_reasons(matrix: Mapping[str, Any]) -> list[str]:
         if record["status"] in {"failed", "flagged"} or (record.get("required") and record["status"] == "unavailable"):
             details = record["validation_errors"] or [record.get("reason", "no detail recorded")]
             reasons.extend(f"fixture {record['fixture_id']} {record['status']}: {error}" for error in details)
+            detailed = next((run for run in record.get("runs", []) if run.get("detail")), None)
+            if detailed is not None:
+                reasons.append(f"fixture {record['fixture_id']} run {detailed['run']} detail: {detailed['detail']}")
     probe = matrix.get("cancellation_recovery_probe")
     if probe is not None and probe["status"] != "measured":
         reasons.extend(f"probe {probe['status']}: {error}" for error in probe["validation_errors"])
