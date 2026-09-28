@@ -1,0 +1,22 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: benchmark-preflight-phase-and-cancellation
+    evidence:
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: hosted-qualification-workflow
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+  - id: agent-policy-bindings
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+unresolved:
+  - Native PdfTool and UnitTestsPdfToolContract were not built locally (no configured build directory for this worktree); the linux-build and windows-build CI lanes compile and run them.
+  - Hosted qualification measurements come from the resource-envelope-qualification workflow run on this PR and are recorded under docs/evidence/issue-19-resource-envelope/ after that run.
