@@ -60,9 +60,14 @@ $env:QT_QPA_PLATFORM = "offscreen"
 $env:QT_PLUGIN_PATH = "C:\path\to\qt\plugins"
 PdfTool.exe benchmark C:\temp\loop-div2k-10000-pages.pdf `
   --render-hw-accel 0 `
-  --render-rasterizers 8 `
+  --render-rasterizers 3 `
   --console-format json
 ```
+
+Rasterizers are pinned to 3 because the benchmark renders at the default 300 DPI: a Letter page
+image is 33.7 MB, each rasterizer holds one at a time, and the 128 MiB `raster-tile-cache` pool
+admits three. A fourth concurrent page is rejected as budget-exceeded and the run exits with
+`PartialOutput`.
 
 The JSON result includes the `workload_envelope` object. A successful
 Windows software-renderer run on the local 0.2.0 candidate rendered all
@@ -155,7 +160,7 @@ recommended cold-process timing/RSS sample:
 python scripts/resource_envelope/run_matrix.py `
   --pdf-tool C:\path\to\PdfTool.exe `
   --manifest C:\temp\resource-envelope-fixtures.json `
-  --repetitions 3 --rasterizers 8 --strict `
+  --repetitions 3 --rasterizers 3 --strict `
   --output C:\temp\resource-envelope-matrix.json
 ```
 

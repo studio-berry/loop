@@ -35,7 +35,11 @@ DEFAULT_BUDGETS = ROOT / "docs" / "RESOURCE_ENVELOPE_BUDGETS.json"
 DEFAULT_PREFLIGHT_PROFILE = ROOT / "loop-preflight" / "profiles" / "loop-default.json"
 DEFAULT_HOSTILE_CORPUS = ROOT / "UnitTests" / "testdata" / "budget_exhaustion"
 MATRIX_KIND = "loop-resource-envelope-matrix"
-DEFAULT_RASTERIZERS = 8
+# Each rasterizer holds one page image at a time. A 300 DPI Letter page is
+# 33.7 MB, so three fit the 128 MiB raster-tile-cache pool and a fourth is
+# rejected as budget-exceeded, leaving pages unrendered (exit code 5).
+DEFAULT_RASTERIZERS = 3
+TIMEOUT_REASON = "benchmark-timeout"
 # PdfTool's defined terminal exit codes (pdftoolresult.h) except InternalError
 # (7). Anything else, including a negative POSIX signal or a Windows exception
 # status, means the process did not reach a controlled disposition.
@@ -158,9 +162,9 @@ def _benchmark_command(
     preflight_profile: Path | None,
     first_page_only: bool = False,
 ) -> list[str]:
-    # Pin rasterizers to a fixed value (8) so the same code and fixtures
-    # produce comparable RSS and elapsed time across hosts with different
-    # CPU counts. The value is recorded in the result profile.
+    # Pin rasterizers to a fixed value so the same code and fixtures produce
+    # comparable RSS and elapsed time across hosts with different CPU counts.
+    # The value is recorded in the result profile.
     command = [str(pdf_tool), "benchmark", str(fixture_path), "--render-hw-accel", "0", "--render-rasterizers", str(rasterizers), "--console-format", "json"]
     if preflight_profile is not None:
         command += ["--profile", str(preflight_profile)]
@@ -223,7 +227,7 @@ def _timed_run(runner: Runner, command: list[str], timeout_seconds: float) -> tu
     try:
         completed = runner(command, cwd=ROOT, check=False, capture_output=True, text=True, timeout=timeout_seconds)
     except subprocess.TimeoutExpired:
-        return None, "benchmark-timeout", int((time.monotonic() - started) * 1000)
+        return None, TIMEOUT_REASON, int((time.monotonic() - started) * 1000)
     except OSError as exc:
         return None, f"benchmark-launch-failed:{exc}", -1
     wall_ms = int((time.monotonic() - started) * 1000)
@@ -393,6 +397,8 @@ def run_fixture(
                 run["detail"] = _failure_detail(completed)
             runs.append(run)
             validation_errors.append(f"run {index}: {reason}")
+            if failure == TIMEOUT_REASON:
+                break
             continue
         envelopes.append(envelope)
         runs.append({"run": index, "status": "recorded", "process_exit_code": exit_code, "process_wall_ms": wall_ms, "result": envelope})

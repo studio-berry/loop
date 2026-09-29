@@ -94,6 +94,18 @@ class MeasuredRunTest(unittest.TestCase):
             self.assertEqual(record["status"], "failed")
             self.assertIn("run 1: benchmark-timeout", record["validation_errors"])
 
+    def test_timeout_is_not_repeated(self) -> None:
+        calls = []
+
+        def runner(command, **kwargs):
+            calls.append(command)
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+        with _Fixture() as fixture:
+            record = fixture.measure(runner, repetitions=3)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(record["runs"]), 1)
+
     def test_partial_output_exit_is_flagged_not_measured(self) -> None:
         with _Fixture() as fixture:
             record = fixture.measure(lambda command, **_: _process(command, 5, _envelope(fixture.digest)))
