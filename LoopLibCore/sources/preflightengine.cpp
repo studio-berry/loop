@@ -6196,6 +6196,9 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     {
         PDFEvidenceCollectSettings evidenceSettings = evidenceSettingsForProfile(profile);
         evidenceSettings.operationControl = m_operationControl;
+        // Records outside the profile's page scope are dropped below, so do not
+        // spend the render and content walk on those pages.
+        evidenceSettings.pageIndices = profile.restrictions.pages;
         m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettings);
         if (profile.restrictions.pages.has_value() || (!plan.full && !plan.pages.isEmpty()))
         {

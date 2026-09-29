@@ -29,7 +29,10 @@
 
 #include <QColor>
 #include <QList>
+#include <QSet>
 #include <QString>
+
+#include <optional>
 
 namespace pdf
 {
@@ -70,6 +73,8 @@ struct LOOPLIBCORESHARED_EXPORT PDFColorInventorySettings
     int probeDpi = 150;
     qreal richBlackKThreshold = 0.10;
     const PDFOperationControl* operationControl = nullptr;
+    /// Zero-based indices of the pages to probe; unset probes every page.
+    std::optional<QSet<int>> pageIndices;
 };
 
 /// Shared rich-black predicate used by preflight and Output Preview.

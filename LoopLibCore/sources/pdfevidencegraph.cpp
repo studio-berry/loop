@@ -1290,6 +1290,7 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
     inventorySettings.probeDpi = settings.colorProbeDpi;
     inventorySettings.richBlackKThreshold = settings.richBlackKThreshold;
     inventorySettings.operationControl = settings.operationControl;
+    inventorySettings.pageIndices = settings.pageIndices;
     PDFColorInventory inventory(session);
     const PDFColorInventoryResult result = inventory.inspect(inventorySettings);
     if (result.cancelled)
@@ -1411,6 +1412,10 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                     graph.complete = false;
                     graph.incompleteReason = QString::fromLatin1(EVIDENCE_CANCELLED_REASON);
                     return graph;
+                }
+                if (settings.pageIndices && !settings.pageIndices->contains(int(pageIndex)))
+                {
+                    continue;
                 }
 
                 const PDFPage* page = catalog->getPage(pageIndex);

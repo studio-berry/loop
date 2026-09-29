@@ -31,7 +31,10 @@ job:
 3. Runs `run_matrix.py --strict --repetitions 3` with:
    - a measured preflight phase (`benchmark --profile`, default
      `loop-preflight/profiles/loop-default.json`), so a clean run reports
-     `status: complete` with a real `preflight_high_water_bytes`;
+     `status: complete` with a real `preflight_high_water_bytes`. Fixtures
+     above 1,000 pages (the 10,000-page one) preflight their first 256 pages
+     only (`--preflight-page-last 256`, recorded as
+     `profile.preflight_page_last`); rendering still covers every page;
    - a cancellation probe on `ten-thousand-page`, which interrupts the run
      and requires a `cancelled` envelope within the workload's
      `cancellation_latency_ms`;

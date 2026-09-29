@@ -79,6 +79,26 @@ class MeasuredRunTest(unittest.TestCase):
             record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest)), preflight_profile=Path("profile.json"))
             self.assertEqual(record["command"][-2:], ["--profile", "profile.json"])
 
+    def test_small_document_preflight_covers_every_page(self) -> None:
+        with _Fixture() as fixture:
+            record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest)), preflight_profile=Path("profile.json"))
+            self.assertNotIn("--preflight-page-last", record["command"])
+            self.assertIsNone(record["profile"]["preflight_page_last"])
+
+    def test_large_document_preflight_is_sampled(self) -> None:
+        with _Fixture() as fixture:
+            fixture.metadata["page_count"] = 10000
+            record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest)), preflight_profile=Path("profile.json"))
+            self.assertEqual(record["command"][-4:], ["--profile", "profile.json", "--preflight-page-last", "256"])
+            self.assertEqual(record["profile"]["preflight_page_last"], 256)
+
+    def test_sampling_needs_a_preflight_profile(self) -> None:
+        with _Fixture() as fixture:
+            fixture.metadata["page_count"] = 10000
+            record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest)))
+            self.assertNotIn("--preflight-page-last", record["command"])
+            self.assertIsNone(record["profile"]["preflight_page_last"])
+
     def test_crashed_process_fails_even_with_an_envelope(self) -> None:
         with _Fixture() as fixture:
             record = fixture.measure(lambda command, **_: _process(command, -11, _envelope(fixture.digest)))

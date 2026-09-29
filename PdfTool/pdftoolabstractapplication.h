@@ -256,6 +256,9 @@ struct PDFToolOptions
     // figures" is a legitimate answer - so the fail-closed reading is opt-in.
     bool failIfEmpty = false;
 
+    // For option 'BenchmarkPreflightProfile': last page of the preflight phase, 0 for all pages.
+    int preflightPageLast = 0;
+
     // For option 'PreflightProfile'
     QString preflightProfilePath;
     QString preflightJobContextPath;

@@ -214,7 +214,7 @@ PDFToolExitCode PDFToolBenchmark::execute(const PDFToolOptions& options)
     request.plan.full = true;
     request.plan.reason = QStringLiteral("benchmark-preflight-phase");
     request.firstPage = options.pageSelectorFirstPage;
-    request.lastPage = options.pageSelectorLastPage;
+    request.lastPage = options.preflightPageLast > 0 ? QString::number(options.preflightPageLast) : options.pageSelectorLastPage;
     request.selectedPages = options.pageSelectorSelection;
     request.cancellation = &cancellationControl;
 

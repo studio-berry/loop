@@ -46,6 +46,7 @@ private slots:
     void emptyPage_isComplete();
     void cancelledCollection_isIncompleteAndCancelled();
     void cancelledPreflight_reportsCancelled();
+    void pageScope_skipsUnselectedPages();
     void incompleteGraphCannotPass();
     void imageFamilyDualRunMatchesEngine();
     void colorantsFamilyDualRunMatchesEngine();
@@ -188,6 +189,26 @@ void EvidenceGraphTest::cancelledPreflight_reportsCancelled()
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.errorCode, QStringLiteral("cancelled"));
+}
+
+void EvidenceGraphTest::pageScope_skipsUnselectedPages()
+{
+    pdf::PDFDocument document = loadFixtureDocument("rich-black.pdf");
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph all = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants);
+    QVERIFY(!all.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).isEmpty());
+
+    pdf::PDFEvidenceCollectSettings settings;
+    settings.pageIndices = QSet<int>();
+    const pdf::PDFEvidenceGraph none = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants, settings);
+    QVERIFY(none.isComplete());
+    QVERIFY(none.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).isEmpty());
+
+    settings.pageIndices = QSet<int>{ 0 };
+    const pdf::PDFEvidenceGraph first = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants, settings);
+    QCOMPARE(first.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).size(),
+             all.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).size());
 }
 
 void EvidenceGraphTest::incompleteGraphCannotPass()

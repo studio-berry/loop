@@ -131,6 +131,11 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
             break;
         }
 
+        if (settings.pageIndices && !settings.pageIndices->contains(int(pageIndex)))
+        {
+            continue;
+        }
+
         const PDFPage* page = catalog->getPage(pageIndex);
         if (!page)
         {

@@ -92,7 +92,12 @@ named pool records. `pages_materialized` reports pages actually processed by a
 runner; it is not the catalog page count. `preflight_high_water_bytes` is the process high-water when the
 `benchmark --profile <profile.json>` preflight phase ends; without `--profile`
 it stays `-1` and the record is explicitly `incomplete` rather than being
-promoted to a passing result. The deterministic
+promoted to a passing result. `--preflight-page-last <n>` limits that phase to
+pages 1 through `n` while rendering still covers every selected page; the
+runner passes it (256) for fixtures above 1,000 pages, because preflight costs
+roughly 0.5-0.7 s per page on a hosted runner, and records it as
+`profile.preflight_page_last`. A sampled record's `preflight_high_water_bytes`
+covers the sampled pages, not the whole document. The deterministic
 pathological and transparency/spot fixtures can be generated without the
 external DIV2K corpus:
 

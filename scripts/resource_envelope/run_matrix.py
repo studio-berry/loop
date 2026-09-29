@@ -39,6 +39,12 @@ MATRIX_KIND = "loop-resource-envelope-matrix"
 # 33.7 MB, so three fit the 128 MiB raster-tile-cache pool and a fourth is
 # rejected as budget-exceeded, leaving pages unrendered (exit code 5).
 DEFAULT_RASTERIZERS = 3
+# Preflight renders and walks every page it covers (about 0.5-0.7 s per page on
+# a hosted runner), so a full pass over a very large document outlives any
+# practical timeout. Documents above the threshold get a preflight phase over
+# their first pages only; rendering still covers every page.
+PREFLIGHT_SAMPLE_THRESHOLD_PAGES = 1000
+PREFLIGHT_SAMPLE_PAGES = 256
 TIMEOUT_REASON = "benchmark-timeout"
 # PdfTool's defined terminal exit codes (pdftoolresult.h) except InternalError
 # (7). Anything else, including a negative POSIX signal or a Windows exception
@@ -161,6 +167,7 @@ def _benchmark_command(
     rasterizers: int,
     preflight_profile: Path | None,
     first_page_only: bool = False,
+    preflight_page_last: int | None = None,
 ) -> list[str]:
     # Pin rasterizers to a fixed value so the same code and fixtures produce
     # comparable RSS and elapsed time across hosts with different CPU counts.
@@ -168,9 +175,18 @@ def _benchmark_command(
     command = [str(pdf_tool), "benchmark", str(fixture_path), "--render-hw-accel", "0", "--render-rasterizers", str(rasterizers), "--console-format", "json"]
     if preflight_profile is not None:
         command += ["--profile", str(preflight_profile)]
+        if preflight_page_last is not None:
+            command += ["--preflight-page-last", str(preflight_page_last)]
     if first_page_only:
         command += ["--page-first", "1", "--page-last", "1"]
     return command
+
+
+def _preflight_page_last(page_count: int | None) -> int | None:
+    """Last page of the preflight phase, or None when it covers the whole document."""
+    if page_count is not None and page_count > PREFLIGHT_SAMPLE_THRESHOLD_PAGES:
+        return PREFLIGHT_SAMPLE_PAGES
+    return None
 
 
 def _identity_errors(envelope: Mapping[str, Any], candidate_sha: str, fixture_sha256: str) -> list[str]:
@@ -368,13 +384,15 @@ def run_fixture(
     spec = FIXTURE_SPECS[fixture_id]
     workload = _fixture_workload(fixture_id, metadata)
     fixture_details, provenance_errors = _fixture_metadata(fixture_id, fixture_path, metadata, require_provenance)
-    command = _benchmark_command(pdf_tool, fixture_path, rasterizers, preflight_profile)
+    expected_page_count = metadata.get("page_count", spec["expected_page_count"]) if metadata else spec["expected_page_count"]
+    preflight_page_last = _preflight_page_last(expected_page_count)
+    command = _benchmark_command(pdf_tool, fixture_path, rasterizers, preflight_profile, preflight_page_last=preflight_page_last)
     record: dict[str, Any] = {
         "fixture_id": fixture_id,
         "path": str(fixture_path),
-        "expected_page_count": metadata.get("page_count", spec["expected_page_count"]) if metadata else spec["expected_page_count"],
+        "expected_page_count": expected_page_count,
         "workload": workload,
-        "profile": {"render_hw_accel": False, "render_rasterizers": rasterizers, "preflight_profile": str(preflight_profile) if preflight_profile else None},
+        "profile": {"render_hw_accel": False, "render_rasterizers": rasterizers, "preflight_profile": str(preflight_profile) if preflight_profile else None, "preflight_page_last": preflight_page_last if preflight_profile else None},
         "command": command,
         **fixture_details,
     }
@@ -467,7 +485,8 @@ def run_cancellation_probe(
     limits = budgets.get("workloads", {}).get(workload, {}) if workload else {}
     errors: list[str] = []
 
-    cancel_command = _benchmark_command(pdf_tool, fixture_path, rasterizers, preflight_profile)
+    cancel_command = _benchmark_command(pdf_tool, fixture_path, rasterizers, preflight_profile,
+                                        preflight_page_last=_preflight_page_last(FIXTURE_SPECS.get(fixture_id, {}).get("expected_page_count")))
     cancellation: dict[str, Any] = {"command": cancel_command, "requested_after_seconds": cancel_after_seconds, "cancellation_latency_ms": -1}
     try:
         completed = cancel_runner(cancel_command, timeout_seconds, cancel_after_seconds)
