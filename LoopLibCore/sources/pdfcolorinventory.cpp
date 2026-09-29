@@ -125,6 +125,12 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
+        if (PDFOperationControl::isOperationCancelled(settings.operationControl))
+        {
+            result.cancelled = true;
+            break;
+        }
+
         const PDFPage* page = catalog->getPage(pageIndex);
         if (!page)
         {

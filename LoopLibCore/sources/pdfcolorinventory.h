@@ -24,6 +24,7 @@
 #define PDFCOLORINVENTORY_H
 
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QColor>
@@ -59,18 +60,22 @@ struct LOOPLIBCORESHARED_EXPORT PDFColorInventoryResult
     QList<PDFColorInventoryInk> spotColors;
     QList<PDFRichBlackInventory> richBlackPages;
     PDFRenderDiagnostics diagnostics;
+    /// True when the inspection stopped early because the operation was cancelled;
+    /// the lists above then cover only the pages probed before the stop.
+    bool cancelled = false;
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFColorInventorySettings
 {
     int probeDpi = 150;
     qreal richBlackKThreshold = 0.10;
+    const PDFOperationControl* operationControl = nullptr;
 };
 
 /// Shared rich-black predicate used by preflight and Output Preview.
 LOOPLIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
-                                                const PDFPixelFormat& format,
-                                                PDFColorComponent kThreshold);
+                                               const PDFPixelFormat& format,
+                                               PDFColorComponent kThreshold);
 
 class LOOPLIBCORESHARED_EXPORT PDFColorInventory
 {

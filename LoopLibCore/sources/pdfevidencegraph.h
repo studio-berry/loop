@@ -26,6 +26,7 @@
 #include "pdfartifactidentity.h"
 #include "pdfdocumentcontext.h"
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 
 #include <QFlags>
 #include <QJsonObject>
@@ -100,6 +101,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFEvidenceCollectSettings
     qreal richBlackKThreshold = 0.10;
     qreal minEffectiveStrokeWidthPt = 0.0;
     qreal zeroWidthEpsilonPt = 1.0e-6;
+    /// Polled between pages; a cancelled collection returns an incomplete graph
+    /// with incompleteReason "cancelled".
+    const PDFOperationControl* operationControl = nullptr;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFEvidenceCollector

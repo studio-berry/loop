@@ -6194,7 +6194,9 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     const PDFEvidenceDomains graphDomains = effectivePlan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(effectivePlan.checkIds);
     if (graphDomains != PDFEvidenceDomains())
     {
-        m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
+        PDFEvidenceCollectSettings evidenceSettings = evidenceSettingsForProfile(profile);
+        evidenceSettings.operationControl = m_operationControl;
+        m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettings);
         if (profile.restrictions.pages.has_value() || (!plan.full && !plan.pages.isEmpty()))
         {
             QList<PDFEvidenceRecord> kept;
@@ -6214,7 +6216,12 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         if (!m_activeGraph.isComplete())
         {
             result.inspectionComplete = false;
-            if (!m_activeGraph.budgetKind.isEmpty())
+            if (PDFOperationControl::isOperationCancelled(m_operationControl))
+            {
+                result.errorCode = QStringLiteral("cancelled");
+                result.errorMessage = PDFTranslationContext::tr("Preflight was cancelled.");
+            }
+            else if (!m_activeGraph.budgetKind.isEmpty())
             {
                 result.errorCode = QStringLiteral("budget-exceeded");
                 result.errorMessage = PDFTranslationContext::tr("Evidence collection exceeded the %1 processing budget.")
