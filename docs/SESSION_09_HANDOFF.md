@@ -49,9 +49,9 @@ Deleted Phase 5 identities remain recorded in `docs/product-surface.json` with
 packaging and budget work beyond this ledger-closeout diff; qualification lanes
 should not treat it as the Session 09 ledger baseline.
 
-**Dev integration:** merged via [PR #535](https://github.com/studio-berry/loop/pull/535) @
+**Dev integration:** merged via legacy PR #535 @
 `1f69bdf8bff037e5cae2d37e3c2e3eae8b2ca6b5`. Session 13 scaffolding landed on
-`dev` via [PR #539](https://github.com/studio-berry/loop/pull/539) @
+`dev` via legacy PR #539 @
 `ebde8661bff037e5cae2d37e3c2e3eae8b2ca6b5` (current qualification
 `candidate_sha`).
 

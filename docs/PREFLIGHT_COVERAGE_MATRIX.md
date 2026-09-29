@@ -143,12 +143,34 @@ State and closure (`state_rule` in the generated file):
 
 `closed_by` is a verified GitHub issue (`#<number>`), a registered check id, or
 the literal `unfiled` when neither exists. Issue numbers are never inferred: the
-overlay records each one in `github_issues` with the number, title, state, and
-milestone read back from `gh issue view`, the generator refuses a reference with
-no verified record, and it refuses a row whose `state` disagrees with the
-recorded issue state — so a closed issue forces a row to be re-triaged rather
-than left stale. Every `not_covered` class must appear in a P1 row's `gap`, and
-no P1 row may invent a class the matrix does not list.
+overlay records each one in `github_issues` with the number, title, state,
+milestone, and `repository` read back from `gh issue view`, the generator
+refuses a reference with no verified record, and it refuses a row whose `state`
+disagrees with the recorded issue state — so a closed issue forces a row to be
+re-triaged rather than left stale. Every `not_covered` class must appear in a P1
+row's `gap`, and no P1 row may invent a class the matrix does not list.
+
+`github_issues` holds two kinds of record, keyed by how they are written:
+
+- `#<number>` is an issue in `studio-berry/loop`. It may be a row's `closed_by`
+  and can be read back at any time.
+- `legacy#<number>` is a frozen snapshot from the retired repository, whose
+  numbers overlap the live ones and can no longer be read back (see
+  [`LEGACY_ISSUE_PROVENANCE.md`](LEGACY_ISSUE_PROVENANCE.md)). It may document a
+  row that was closed there, in `closed_by` or in `gap` text, but the generator
+  refuses a legacy record that is still `OPEN` as a row's `closed_by`, and a
+  bare `#<number>` in `gap` text never satisfies a `legacy#<number>` record.
+
+Issue and pull-request numbers share one sequence, so a live record can drift or
+collide as the repository grows. `--check` stays offline; run
+
+```text
+python3 scripts/generate-architecture-catalogs.py --check --verify-github
+```
+
+to read every live record back with `gh` and fail on a missing issue, a pull
+request, or a changed title, state, or milestone. Run it before a promotion and
+after retitling or closing a cited issue.
 
 A row that is not filed carries a `deferral` reason instead, and the generator
 refuses both an unfiled row without one and a filed row that still carries one —

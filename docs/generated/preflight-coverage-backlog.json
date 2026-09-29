@@ -15,87 +15,136 @@
   "format_version": 1,
   "generated_by": "scripts/generate-architecture-catalogs.py",
   "github_issues": {
-    "#12": {
+    "#113": {
+      "milestone": "L01 - Evidence Core",
+      "number": 113,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-08 \u2014 Classify ICC-based color by its painted space"
+    },
+    "#114": {
+      "milestone": "L01 - Evidence Core",
+      "number": 114,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-09 \u2014 Audit glyph coverage in embedded fonts"
+    },
+    "#115": {
+      "milestone": "L01 - Evidence Core",
+      "number": 115,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-10 \u2014 Evaluate optional-content membership for hidden content"
+    },
+    "#116": {
+      "milestone": "L01 - Evidence Core",
+      "number": 116,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-11 \u2014 Stop isolated over-limit ink regions passing ink coverage"
+    },
+    "#117": {
+      "milestone": "L01 - Evidence Core",
+      "number": 117,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-12 \u2014 Broaden invisible-content detection"
+    },
+    "#118": {
+      "milestone": "L01 - Evidence Core",
+      "number": 118,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-13 \u2014 Make off-page and obscured-content geometry clip-aware"
+    },
+    "#119": {
+      "milestone": "L01 - Evidence Core",
+      "number": 119,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-14 \u2014 Judge white overprint and transparency interaction on the authoritative renderer"
+    },
+    "#120": {
+      "milestone": "L01 - Evidence Core",
+      "number": 120,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "L01-15 \u2014 Close the sparse-mark bleed raster false pass"
+    },
+    "#141": {
+      "milestone": null,
+      "number": 141,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "X00-02 \u2014 Re-file parked legacy expansion candidates with value cases"
+    },
+    "#142": {
+      "milestone": null,
+      "number": 142,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "X00-03 \u2014 Per-named-colorant ink limits for DeviceN and spot separations"
+    },
+    "#143": {
+      "milestone": null,
+      "number": 143,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "X00-04 \u2014 Barcode, slug, Braille, and dieline geometry validation"
+    },
+    "#144": {
+      "milestone": null,
+      "number": 144,
+      "repository": "studio-berry/loop",
+      "state": "OPEN",
+      "title": "X00-05 \u2014 Standards currency: PDF/X-6, PDF 2.0 output intents, and GWG 2022 check sets"
+    },
+    "legacy#12": {
       "milestone": "0.0.1",
       "number": 12,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "Validate output-intent and ICC-profile presence, identity, and color-space consistency"
     },
-    "#124": {
+    "legacy#124": {
       "milestone": null,
       "number": 124,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "Detect hidden, invisible, and off-page content in preflight"
     },
-    "#130": {
+    "legacy#130": {
       "milestone": null,
       "number": 130,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "Detect corrupt fonts, not just embedded/unembedded status"
     },
-    "#131": {
+    "legacy#131": {
       "milestone": null,
       "number": 131,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "Extend thin-part detection beyond simple strokes (expand #23)"
     },
-    "#47": {
-      "milestone": null,
-      "number": 47,
-      "state": "OPEN",
-      "title": "[Residual] Tier-2 bleed raster golden corpus + strip calibration"
-    },
-    "#49": {
-      "milestone": "0.8.0",
-      "number": 49,
-      "state": "OPEN",
-      "title": "[0.8.0] Overprint-correct rendering in standard and advanced renderers"
-    },
-    "#600": {
-      "milestone": null,
-      "number": 600,
-      "state": "OPEN",
-      "title": "Ink Manager: separation management and spot-color library"
-    },
-    "#603": {
-      "milestone": null,
-      "number": 603,
-      "state": "OPEN",
-      "title": "Imposition: n-up, gang-up, booklets, creep, and sheet furniture"
-    },
-    "#604": {
-      "milestone": null,
-      "number": 604,
-      "state": "OPEN",
-      "title": "Packaging production semantics: ISO 19593 Processing Steps, dielines, varnish/foil/white, barcode validation"
-    },
-    "#605": {
-      "milestone": null,
-      "number": 605,
-      "state": "OPEN",
-      "title": "PDF/VT variable-data production: understanding, validation, and preservation"
-    },
-    "#628": {
+    "legacy#628": {
       "milestone": "0.3.0",
       "number": 628,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)"
     },
-    "#664": {
-      "milestone": null,
-      "number": 664,
-      "state": "OPEN",
-      "title": "[0.3.0] No check inspects formal GWG 2022/2024 sheetfed or packaging conformance"
-    },
-    "#665": {
+    "legacy#665": {
       "milestone": null,
       "number": 665,
+      "repository": "legacy",
       "state": "OPEN",
       "title": "[0.3.0] No check validates or produces PDF/X-5 and PDF/A-3 output"
     },
-    "#70": {
+    "legacy#70": {
       "milestone": null,
       "number": 70,
+      "repository": "legacy",
       "state": "CLOSED",
       "title": "Traverse nested Form XObjects, inherited resources, and appearance streams for embedded fonts"
     }
@@ -111,7 +160,7 @@
   "priority_rule": "P1 - no registered check inspects the defect class at all (a matrix not_covered entry), so a clean run is silent about it; P2 - a registered check inspects the class but its named limitation can suppress or misclassify a finding on defective content, which would be a false clean pass; P3 - a registered check inspects the class and the named limitation only narrows reported detail or fails closed as incomplete, so it cannot turn a defect into a silent pass.",
   "rows": [
     {
-      "closed_by": "#604",
+      "closed_by": "#143",
       "deferral": null,
       "families": [
         "packaging",
@@ -124,7 +173,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#600",
+      "closed_by": "#142",
       "deferral": null,
       "families": [
         "packaging",
@@ -138,7 +187,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#664",
+      "closed_by": "#144",
       "deferral": null,
       "families": [
         "sheetfed-offset",
@@ -150,7 +199,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#603",
+      "closed_by": "#141",
       "deferral": null,
       "families": [
         "sheetfed-offset",
@@ -163,7 +212,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#605",
+      "closed_by": "#141",
       "deferral": null,
       "families": [
         "web-offset",
@@ -176,7 +225,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#47",
+      "closed_by": "#120",
       "deferral": null,
       "families": [
         "sheetfed-offset",
@@ -189,8 +238,8 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture whose ICC space resolves to an allowed alternate, so the false pass is reproducible rather than argued.",
+      "closed_by": "#113",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -210,13 +259,13 @@
         "sheetfed-offset",
         "digital"
       ],
-      "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as #130)",
+      "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as legacy#130)",
       "id": "corrupt-embedded-fonts",
       "priority": "P2",
       "state": "landed"
     },
     {
-      "closed_by": "#628",
+      "closed_by": "legacy#628",
       "deferral": null,
       "families": [
         "packaging"
@@ -227,7 +276,7 @@
       "state": "closed"
     },
     {
-      "closed_by": "#604",
+      "closed_by": "#143",
       "deferral": null,
       "families": [
         "packaging"
@@ -238,8 +287,8 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture with a parsable embedded program that is missing a used glyph.",
+      "closed_by": "#114",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
@@ -262,8 +311,8 @@
       "state": "landed"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture with an optional-content membership configuration that hides print content.",
+      "closed_by": "#115",
+      "deferral": null,
       "families": [
         "packaging"
       ],
@@ -273,8 +322,8 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture with an isolated over-limit element below min_region_area_pct.",
+      "closed_by": "#116",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
@@ -286,13 +335,13 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture painting an invisible class outside text render mode 3 and zero-alpha graphics state.",
+      "closed_by": "#117",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
       ],
-      "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as #124)",
+      "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as legacy#124)",
       "id": "invisible-content-breadth",
       "priority": "P2",
       "state": "open"
@@ -307,14 +356,14 @@
         "newspaper",
         "digital"
       ],
-      "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as #70)",
+      "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as legacy#70)",
       "id": "nested-font-resources",
       "priority": "P2",
       "state": "landed"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture where a bounding-box heuristic cannot see the occlusion a RIP would.",
+      "closed_by": "#118",
+      "deferral": null,
       "families": [
         "sheetfed-offset"
       ],
@@ -324,8 +373,8 @@
       "state": "open"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture whose clipped mark exposes the pre-clip bounds comparison.",
+      "closed_by": "#118",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
@@ -344,7 +393,7 @@
         "packaging",
         "digital"
       ],
-      "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as #12)",
+      "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as legacy#12)",
       "id": "output-intent-identity",
       "priority": "P2",
       "state": "landed"
@@ -355,14 +404,14 @@
       "families": [
         "packaging"
       ],
-      "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as #131)",
+      "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as legacy#131)",
       "id": "thin-filled-parts",
       "priority": "P2",
       "state": "landed"
     },
     {
-      "closed_by": "unfiled",
-      "deferral": "Deferred: filing needs a fixture reproducing an overprint-plus-transparency interaction only a RIP flattens.",
+      "closed_by": "#119",
+      "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
@@ -374,7 +423,7 @@
       "state": "open"
     },
     {
-      "closed_by": "#49",
+      "closed_by": "#119",
       "deferral": null,
       "families": [
         "sheetfed-offset",
@@ -419,7 +468,7 @@
         "packaging",
         "digital"
       ],
-      "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as #665)",
+      "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as legacy#665)",
       "id": "pdfx5-pdfa3-output",
       "priority": "P3",
       "state": "landed"

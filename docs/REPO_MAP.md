@@ -26,7 +26,7 @@ tooling. Do not infer Loop branch policy from upstream's `master` branch.
 
 The reviewed machine-readable policy is
 [`branch-policy.json`](branch-policy.json). The current factual branch and
-workflow audit is tracked in GitHub issue [#232](https://github.com/studio-berry/loop/issues/232).
+workflow audit is tracked in legacy issue #232.
 
 ## Versioning
 

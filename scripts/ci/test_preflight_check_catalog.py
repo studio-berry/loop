@@ -165,11 +165,103 @@ class PreflightCheckCatalogTest(unittest.TestCase):
     def test_state_disagreeing_with_issue_state_fails(self) -> None:
         def mismatch(overlay: dict) -> None:
             for row in overlay["backlog"]:
-                if row["closed_by"] == "#605":
+                if row["closed_by"] == "#141":
                     row["state"] = "closed"
                     break
 
-        self.assert_overlay_fails(mismatch, "disagrees with #605", target="backlog")
+        self.assert_overlay_fails(mismatch, "disagrees with #141", target="backlog")
+
+    def test_record_without_a_repository_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["github_issues"]["#141"].pop("repository"),
+            "github_issues entry '#141' missing repository",
+            target="backlog",
+        )
+
+    def test_live_record_naming_another_repository_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["github_issues"]["#141"].__setitem__("repository", "legacy"),
+            "'#141' must record repository 'studio-berry/loop'",
+            target="backlog",
+        )
+
+    def test_legacy_record_naming_the_live_repository_fails(self) -> None:
+        self.assert_overlay_fails(
+            lambda overlay: overlay["github_issues"]["legacy#124"].__setitem__(
+                "repository", "studio-berry/loop"
+            ),
+            "'legacy#124' must record repository 'legacy'",
+            target="backlog",
+        )
+
+    def test_open_legacy_issue_cannot_track_a_gap_fails(self) -> None:
+        def reopen(overlay: dict) -> None:
+            overlay["github_issues"]["legacy#124"]["state"] = "OPEN"
+            for row in overlay["backlog"]:
+                if row["id"] == "devicen-dieline-detection":
+                    row["closed_by"] = "legacy#124"
+                    row["state"] = "open"
+
+        self.assert_overlay_fails(reopen, "cites open legacy issue legacy#124", target="backlog")
+
+    def test_bare_number_does_not_satisfy_a_legacy_record_fails(self) -> None:
+        def collide(overlay: dict) -> None:
+            for row in overlay["backlog"]:
+                if row["id"] == "invisible-content-breadth":
+                    row["gap"] += " (see #124)"
+
+        self.assert_overlay_fails(collide, "cite issues with no verified record: #124", target="backlog")
+
+    def test_gap_text_citing_an_unrecorded_issue_fails(self) -> None:
+        def cite(overlay: dict) -> None:
+            overlay["backlog"][0]["gap"] += " (filed as #98765)"
+
+        self.assert_overlay_fails(cite, "cite issues with no verified record: #98765", target="backlog")
+
+    def test_committed_overlay_records_the_live_repository_only_for_live_numbers(self) -> None:
+        for reference, entry in self.overlay()["github_issues"].items():
+            expected = "legacy" if reference.startswith("legacy#") else "studio-berry/loop"
+            self.assertEqual(entry["repository"], expected, reference)
+
+    def test_github_read_back_accepts_matching_records(self) -> None:
+        live = {"title": "t", "state": "OPEN", "milestone": None, "is_pull_request": False}
+        records = {"#7": {"number": 7, "title": "t", "state": "OPEN", "milestone": None, "repository": "studio-berry/loop"}}
+        self.assertEqual(generator.verify_issue_records_against_github(records, lambda number: live), [])
+
+    def test_github_read_back_skips_legacy_snapshots(self) -> None:
+        def unreachable(number: int) -> dict:
+            raise AssertionError("a legacy snapshot must not be read back")
+
+        records = {
+            "legacy#7": {"number": 7, "title": "t", "state": "CLOSED", "milestone": None, "repository": "legacy"}
+        }
+        self.assertEqual(generator.verify_issue_records_against_github(records, unreachable), [])
+
+    def test_github_read_back_reports_every_collision_kind(self) -> None:
+        live = {
+            1: {"title": "other", "state": "OPEN", "milestone": None, "is_pull_request": False},
+            2: {"title": "t", "state": "CLOSED", "milestone": None, "is_pull_request": False},
+            3: {"title": "t", "state": "OPEN", "milestone": "L01", "is_pull_request": False},
+            4: {"title": "t", "state": "OPEN", "milestone": None, "is_pull_request": True},
+            5: None,
+        }
+        records = {
+            f"#{number}": {
+                "number": number,
+                "title": "t",
+                "state": "OPEN",
+                "milestone": None,
+                "repository": "studio-berry/loop",
+            }
+            for number in live
+        }
+        problems = generator.verify_issue_records_against_github(records, live.__getitem__)
+        self.assertEqual(len(problems), 5)
+        self.assertIn("#1: title is 'other'", problems[0])
+        self.assertIn("#2: state is 'CLOSED'", problems[1])
+        self.assertIn("#3: milestone is 'L01'", problems[2])
+        self.assertIn("#4: resolves to a pull request", problems[3])
+        self.assertIn("#5: no such issue", problems[4])
 
     def test_uncovered_class_missing_from_backlog_fails(self) -> None:
         def drop(overlay: dict) -> None:
