@@ -19,6 +19,7 @@ def _policy() -> dict:
         "workloads": {
             "pathological-vector": {"page_count": 256, "wall_time_ms": 100, "rss_high_water_bytes": 200, "cancellation_latency_ms": 50, "recovery_ms": 60000},
             "synthetic-image-heavy": {"page_count": 256, "wall_time_ms": 100, "rss_high_water_bytes": 200},
+            "large-document": {"wall_time_ms": 100, "rss_high_water_bytes": 2000},
         },
     }
 
@@ -98,6 +99,19 @@ class MeasuredRunTest(unittest.TestCase):
             record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest)))
             self.assertNotIn("--preflight-page-last", record["command"])
             self.assertIsNone(record["profile"]["preflight_page_last"])
+
+    def test_workload_rss_cap_replaces_the_resident_limit(self) -> None:
+        with _Fixture() as fixture:
+            fixture.metadata["workload"] = "large-document"
+            record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest, rss=1000)))
+            self.assertEqual(record["status"], "measured", record["validation_errors"])
+
+    def test_workload_rss_cap_still_binds(self) -> None:
+        with _Fixture() as fixture:
+            fixture.metadata["workload"] = "large-document"
+            record = fixture.measure(lambda command, **_: _process(command, 0, _envelope(fixture.digest, rss=2500)))
+            self.assertEqual(record["status"], "failed")
+            self.assertIn("run 1: RSS 2500 exceeds resident policy 2000", record["validation_errors"])
 
     def test_crashed_process_fails_even_with_an_envelope(self) -> None:
         with _Fixture() as fixture:

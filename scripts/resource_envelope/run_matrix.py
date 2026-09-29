@@ -60,7 +60,7 @@ HARD_ERROR_MARKERS = ("does not match", "exceeds", "identity", "fixture SHA", "m
 # addressability and available disk are environment-dependent.
 FIXTURE_SPECS: dict[str, dict[str, Any]] = {
     "office-2mb": {"required": True, "expected_page_count": None, "workload": None, "min_bytes": 1_500_000, "max_bytes": 2_500_000},
-    "image-heavy-500mb": {"required": True, "expected_page_count": None, "workload": None, "min_bytes": 450_000_000, "max_bytes": 550_000_000},
+    "image-heavy-500mb": {"required": True, "expected_page_count": None, "workload": "large-document-500mb", "min_bytes": 450_000_000, "max_bytes": 550_000_000},
     "multi-gb": {"required": False, "expected_page_count": None, "workload": None, "min_bytes": 1_000_000_000, "max_bytes": None},
     "ten-thousand-page": {"required": True, "expected_page_count": 10000, "workload": "div2k-image-heavy", "min_bytes": None, "max_bytes": None},
     "pathological-vector": {"required": True, "expected_page_count": 256, "workload": "pathological-vector", "min_bytes": None, "max_bytes": None},
@@ -336,6 +336,19 @@ def _fixture_workload(fixture_id: str, metadata: Mapping[str, Any] | None) -> st
     return FIXTURE_SPECS[fixture_id]["workload"]
 
 
+def _rss_limit(budgets: Mapping[str, Any], workload: str | None) -> int | None:
+    """Process RSS ceiling: the workload's own cap when it declares one, else the resident limit.
+
+    The reader holds a whole document in memory, so a very large document's
+    process RSS is a multiple of its file size and cannot fit the resident
+    limit that governs the accounted pools.
+    """
+    workload_limit = budgets.get("workloads", {}).get(workload, {}).get("rss_high_water_bytes") if workload else None
+    if isinstance(workload_limit, int):
+        return workload_limit
+    return budgets.get("resource_budget", {}).get("resident_limit_bytes")
+
+
 def _aggregate_envelopes(envelopes: list[Mapping[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
     # Use the highest-RSS run as the safety representative and the median
     # elapsed time. This keeps peak-memory validation conservative while
@@ -429,9 +442,9 @@ def run_fixture(
         if expected_page_count is not None and envelope.get("page_count") != expected_page_count:
             validation_errors.append(f"run {index}: page_count {envelope.get('page_count')} does not match expected {expected_page_count}")
         rss = envelope.get("rss_high_water_bytes")
-        resident_limit = budgets.get("resource_budget", {}).get("resident_limit_bytes")
-        if isinstance(rss, int) and rss >= 0 and isinstance(resident_limit, int) and rss > resident_limit:
-            validation_errors.append(f"run {index}: RSS {rss} exceeds resident policy {resident_limit}")
+        rss_limit = _rss_limit(budgets, workload)
+        if isinstance(rss, int) and rss >= 0 and isinstance(rss_limit, int) and rss > rss_limit:
+            validation_errors.append(f"run {index}: RSS {rss} exceeds resident policy {rss_limit}")
         validation_errors.extend(f"run {index}: {error}" for error in _identity_errors(envelope, candidate_sha, record["fixture_sha256"]))
 
     record["runs"] = runs

@@ -37,6 +37,11 @@ job:
      above 1,000 pages (the 10,000-page one) preflight their first 256 pages
      only (`--preflight-page-last 256`, recorded as
      `profile.preflight_page_last`); rendering still covers every page;
+   - a `large-document-500mb` workload for the 500 MB fixture, whose process
+     RSS cap is 2 GiB instead of the 768 MiB resident limit: the reader holds
+     the whole file plus its object model in memory, so the peak is about 3.3
+     times the file size (1.7 GB measured on both platforms), while the
+     accounted pools stay under the resident limit;
    - a cancellation probe on `ten-thousand-page`, which interrupts a render-only
      run (no preflight phase, whose document-wide setup does not poll for
      cancellation)
