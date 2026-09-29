@@ -469,11 +469,15 @@ def run_cancellation_probe(
     candidate_sha: str,
     workload: str | None = None,
     rasterizers: int = DEFAULT_RASTERIZERS,
-    preflight_profile: Path | None = None,
     cancel_runner: CancelRunner = _run_benchmark_process,
     runner: Runner = subprocess.run,
 ) -> dict[str, Any]:
-    """Interrupts one run, then times a fresh process reopening the fixture.
+    """Interrupts one render run, then times a fresh process reopening the fixture.
+
+    The interrupted run has no preflight phase: preflight setup (fonts, ink
+    mapper, resource scan) is document-wide and does not poll for cancellation,
+    so on a very large document it would dominate the latency this probe
+    measures. Preflight cancellation is covered by the evidence-graph tests.
 
     ``recovery_ms`` is the wall time from launching that fresh process until it
     exits having rendered the first page: the time an operator waits to get the
@@ -485,8 +489,7 @@ def run_cancellation_probe(
     limits = budgets.get("workloads", {}).get(workload, {}) if workload else {}
     errors: list[str] = []
 
-    cancel_command = _benchmark_command(pdf_tool, fixture_path, rasterizers, preflight_profile,
-                                        preflight_page_last=_preflight_page_last(FIXTURE_SPECS.get(fixture_id, {}).get("expected_page_count")))
+    cancel_command = _benchmark_command(pdf_tool, fixture_path, rasterizers, None)
     cancellation: dict[str, Any] = {"command": cancel_command, "requested_after_seconds": cancel_after_seconds, "cancellation_latency_ms": -1}
     try:
         completed = cancel_runner(cancel_command, timeout_seconds, cancel_after_seconds)
@@ -705,7 +708,7 @@ def run_matrix(
         else:
             fixture_path, metadata = resolved[cancel_fixture]
             probe = run_cancellation_probe(pdf_tool, cancel_fixture, fixture_path, budgets, timeout_seconds, cancel_after_seconds or 1.0, candidate_sha,
-                                           _fixture_workload(cancel_fixture, metadata), rasterizers, preflight_profile, cancel_runner, runner)
+                                           _fixture_workload(cancel_fixture, metadata), rasterizers, cancel_runner, runner)
 
     hostile = None
     if hostile_corpus is not None:

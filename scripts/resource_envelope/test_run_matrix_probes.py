@@ -153,6 +153,7 @@ class CancellationProbeTest(unittest.TestCase):
             )
             self.assertEqual(probe["status"], "measured", probe["validation_errors"])
             self.assertEqual(probe["cancellation"]["cancellation_latency_ms"], 20)
+            self.assertNotIn("--profile", probe["cancellation"]["command"])
             self.assertGreaterEqual(probe["recovery"]["recovery_ms"], 0)
             self.assertEqual(probe["recovery"]["command"][-4:], ["--page-first", "1", "--page-last", "1"])
 

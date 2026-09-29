@@ -35,7 +35,9 @@ job:
      above 1,000 pages (the 10,000-page one) preflight their first 256 pages
      only (`--preflight-page-last 256`, recorded as
      `profile.preflight_page_last`); rendering still covers every page;
-   - a cancellation probe on `ten-thousand-page`, which interrupts the run
+   - a cancellation probe on `ten-thousand-page`, which interrupts a render-only
+     run (no preflight phase, whose document-wide setup does not poll for
+     cancellation)
      and requires a `cancelled` envelope within the workload's
      `cancellation_latency_ms`;
    - a recovery probe, which times a fresh process reopening the same

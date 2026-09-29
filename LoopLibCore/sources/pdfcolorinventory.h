@@ -72,6 +72,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFColorInventorySettings
 {
     int probeDpi = 150;
     qreal richBlackKThreshold = 0.10;
+    /// Largest probe raster in pixels; larger pages are probed at a proportionally lower DPI.
+    /// A letter page at the default 150 DPI is about 1.9 million pixels.
+    qint64 maxProbePixels = 2'500'000;
     const PDFOperationControl* operationControl = nullptr;
     /// Zero-based indices of the pages to probe; unset probes every page.
     std::optional<QSet<int>> pageIndices;
