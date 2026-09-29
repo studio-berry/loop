@@ -49,9 +49,10 @@ Rules:
 
 1. **Never link a legacy number.** No `github.com/studio-berry/loop/issues/<n>` URL may
    point at a legacy issue. Existing ones were rewritten to `legacy #<n>` text, except
-   the link to legacy #656 in `docs/GOVERNED_EXECUTION.md`: that file belongs to the
+   the links to legacy #656 and #675 in `docs/GOVERNED_EXECUTION.md` and
+   `docs/adr/adr-011-architecture-contracts-d1-d5.md`: both belong to the
    governed-execution subsystem, whose binding proof lanes (build, packaging, unit)
-   cannot be produced by a documentation change, so it is rewritten with the next
+   cannot be produced by a documentation change, so they are rewritten with the next
    change that carries them.
 2. **Machine-read records name their repository.** `github_issues` entries in
    `docs/preflight-check-catalog-overlay.json` carry `repository`. Live records are
