@@ -27,7 +27,9 @@ job:
    image-heavy, and 10,000-page fixtures are deterministic synthetic PDFs
    (SHAKE-256 noise images stored with FlateDecode), so hosted runners need
    no external corpus. The 10,000-page fixture uses the
-   `synthetic-image-heavy` workload caps, which equal the DIV2K caps.
+   `synthetic-image-heavy` workload caps, which equal the DIV2K caps except
+   `wall_time_ms` (600 s): three rasterizers on a hosted runner render the
+   10,000 pages in about 350 s (Linux) to 510 s (Windows).
 3. Runs `run_matrix.py --strict --repetitions 3` with:
    - a measured preflight phase (`benchmark --profile`, default
      `loop-preflight/profiles/loop-default.json`), so a clean run reports
