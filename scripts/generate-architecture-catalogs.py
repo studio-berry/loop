@@ -13,6 +13,7 @@ import argparse
 import difflib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -23,6 +24,11 @@ CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
 PREFLIGHT_BACKLOG_PATH = ROOT / "docs" / "generated" / "preflight-coverage-backlog.json"
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
+CORPUS_MANIFEST_REL = "loop-preflight/testdata/fixtures/manifest.json"
+CORPUS_SNAPSHOT_DIR_REL = "loop-preflight/testdata/snapshots"
+CORPUS_MANIFEST_PATH = ROOT / CORPUS_MANIFEST_REL
+CORPUS_SNAPSHOT_DIR = ROOT / CORPUS_SNAPSHOT_DIR_REL
+PREFLIGHT_CORPUS_COVERAGE_PATH = ROOT / "docs" / "generated" / "preflight-corpus-coverage.json"
 CORRECTION_CATALOG_PATH = ROOT / "docs" / "generated" / "correction-operation-catalog.json"
 CORRECTION_OVERLAY_PATH = ROOT / "docs" / "correction-operation-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
@@ -126,6 +132,22 @@ def parse_preflight_checks() -> list[str]:
     return checks
 
 
+def parse_engine_matrix_id() -> str:
+    """The matrix id the engine stamps into every report's coverage_scope."""
+    source = read(ROOT / "LoopLibCore" / "sources" / "preflightengine.cpp")
+    match = re.search(
+        r"QJsonObject\s+preflightCoverageScopeFor\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("could not find PreflightEngine's coverage scope builder")
+    matrix = re.search(r'"matrix_id"\)\s*,\s*QStringLiteral\("([^"]+)"\)', match.group("body"))
+    if not matrix:
+        raise ValueError("the engine's coverage scope does not stamp a matrix_id")
+    return matrix.group(1)
+
+
 PREFLIGHT_CHECK_ENVELOPE_FIELDS = {"id", "severity", "enabled"}
 PREFLIGHT_PARAMETER_TYPES = {"number", "integer", "boolean", "string", "string-list", "object"}
 PREFLIGHT_PARAMETER_FIELDS = ("id", "type", "default", "range", "meaning")
@@ -142,11 +164,16 @@ PREFLIGHT_FINDING_FIELDS = {
     "bbox",
     "evidence_ids",
 }
-PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "closed_by")
+PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "closed_by", "deferral")
 PREFLIGHT_BACKLOG_PRIORITIES = {"P1", "P2", "P3"}
 PREFLIGHT_BACKLOG_STATES = {"open", "landed", "closed"}
 PREFLIGHT_BACKLOG_UNFILED = "unfiled"
+GITHUB_ISSUE_REPOSITORY = "studio-berry/loop"
+LEGACY_ISSUE_REPOSITORY = "legacy"
 GITHUB_ISSUE_REF = re.compile(r"#[1-9][0-9]*")
+LEGACY_ISSUE_REF = re.compile(r"legacy#[1-9][0-9]*")
+ISSUE_RECORD_KEY = re.compile(r"(?:legacy)?#[1-9][0-9]*")
+ISSUE_REF_IN_TEXT = re.compile(r"(?<![\w/])(?:legacy)?#[1-9][0-9]*")
 CHECK_ID = re.compile(r"^[a-z][a-z0-9-]*$")
 
 
@@ -345,24 +372,39 @@ def build_preflight_backlog(
     """Validate the prioritised coverage backlog and emit it as its own artifact.
 
     Every gap row is cross-referenced: ``closed_by`` is the literal ``unfiled``,
-    a GitHub issue number the overlay recorded from ``gh issue view``, or a
-    registered check id. Nothing here is inferred -- an unverified issue number
-    fails the build, and a state that disagrees with the recorded issue state
-    fails the build, so the backlog cannot rot into a wish list.
+    an issue the overlay recorded, or a registered check id. Nothing here is
+    inferred -- an unverified issue number fails the build, and a state that
+    disagrees with the recorded issue state fails the build, so the backlog
+    cannot rot into a wish list.
+
+    The overlay holds two kinds of record. ``#<n>`` is an issue in
+    ``studio-berry/loop`` that ``--verify-github`` can read back. ``legacy#<n>``
+    is a frozen snapshot from the retired repository, whose numbers overlap the
+    live ones and can no longer be read back: it may document a row that was
+    closed there, but it can never be the open tracker of a gap.
     """
     issues = overlay.get("github_issues")
     if not isinstance(issues, dict) or not issues:
         raise ValueError("preflight catalog overlay is missing github_issues")
     verified: dict[str, dict[str, Any]] = {}
     for reference, entry in issues.items():
-        if not isinstance(reference, str) or not GITHUB_ISSUE_REF.fullmatch(reference):
-            raise ValueError(f"github_issues key '{reference}' is not a '#<number>' reference")
+        if not isinstance(reference, str) or not ISSUE_RECORD_KEY.fullmatch(reference):
+            raise ValueError(
+                f"github_issues key '{reference}' is not a '#<number>' or 'legacy#<number>' reference"
+            )
         if not isinstance(entry, dict):
             raise ValueError(f"github_issues entry '{reference}' must be an object")
-        absent = sorted({"number", "title", "state", "milestone"} - set(entry))
+        absent = sorted({"number", "title", "state", "milestone", "repository"} - set(entry))
         if absent:
             raise ValueError(f"github_issues entry '{reference}' missing {', '.join(absent)}")
-        if entry["number"] != int(reference[1:]):
+        expected_repository = (
+            LEGACY_ISSUE_REPOSITORY if LEGACY_ISSUE_REF.fullmatch(reference) else GITHUB_ISSUE_REPOSITORY
+        )
+        if entry["repository"] != expected_repository:
+            raise ValueError(
+                f"github_issues entry '{reference}' must record repository '{expected_repository}'"
+            )
+        if entry["number"] != int(reference.split("#")[1]):
             raise ValueError(f"github_issues entry '{reference}' records a different number")
         if entry["state"] not in {"OPEN", "CLOSED"}:
             raise ValueError(f"github_issues entry '{reference}' must record the GitHub state verbatim")
@@ -413,11 +455,16 @@ def build_preflight_backlog(
         if closed_by == PREFLIGHT_BACKLOG_UNFILED:
             if state != "open":
                 raise ValueError(f"backlog row '{identifier}' is unfiled but its state is '{state}'")
-        elif isinstance(closed_by, str) and GITHUB_ISSUE_REF.fullmatch(closed_by):
+        elif isinstance(closed_by, str) and ISSUE_RECORD_KEY.fullmatch(closed_by):
             if closed_by not in verified:
                 raise ValueError(
                     f"backlog row '{identifier}' references unverified issue {closed_by}; "
                     "confirm it with 'gh issue view' and record it in github_issues first"
+                )
+            if LEGACY_ISSUE_REF.fullmatch(closed_by) and verified[closed_by]["state"] != "CLOSED":
+                raise ValueError(
+                    f"backlog row '{identifier}' cites open legacy issue {closed_by}, which can no "
+                    "longer be read back; re-point it to a live issue or unfile it with a deferral"
                 )
             if state == "landed":
                 raise ValueError(f"backlog row '{identifier}' is landed by a check, not by {closed_by}")
@@ -435,6 +482,16 @@ def build_preflight_backlog(
                 f"backlog row '{identifier}' closed_by must be '{PREFLIGHT_BACKLOG_UNFILED}', "
                 "a verified '#<issue>' or a registered check id"
             )
+        deferral = row["deferral"]
+        if deferral is not None and (not isinstance(deferral, str) or not deferral.strip()):
+            raise ValueError(f"backlog row '{identifier}' deferral must be null or a non-empty string")
+        if closed_by == PREFLIGHT_BACKLOG_UNFILED and deferral is None:
+            raise ValueError(
+                f"backlog row '{identifier}' is unfiled without a deferral reason: "
+                "state why it is not filed, or file it"
+            )
+        if closed_by != PREFLIGHT_BACKLOG_UNFILED and deferral is not None:
+            raise ValueError(f"backlog row '{identifier}' is filed but carries a deferral reason")
         parsed.append(
             {
                 "id": identifier,
@@ -443,6 +500,7 @@ def build_preflight_backlog(
                 "families": families,
                 "state": state,
                 "closed_by": closed_by,
+                "deferral": deferral,
             }
         )
 
@@ -455,9 +513,9 @@ def build_preflight_backlog(
 
     referenced: set[str] = set()
     for row in parsed:
-        if GITHUB_ISSUE_REF.fullmatch(row["closed_by"]):
+        if ISSUE_RECORD_KEY.fullmatch(row["closed_by"]):
             referenced.add(row["closed_by"])
-        referenced.update(re.findall(GITHUB_ISSUE_REF, row["gap"]))
+        referenced.update(ISSUE_REF_IN_TEXT.findall(row["gap"]))
     unused = sorted(reference for reference in verified if reference not in referenced)
     if unused:
         raise ValueError("github_issues entries cited by no backlog row: " + ", ".join(unused))
@@ -486,6 +544,156 @@ def build_preflight_backlog(
         "rows": parsed,
     }
 
+
+CORPUS_INSPECTION_FAILURE_TYPES = {
+    "budget-exceeded",
+    "check-error",
+    "check-incomplete",
+    "evidence-incomplete",
+}
+CORPUS_UNINSPECTED_STATUSES = {"incomplete", "not_inspected", "skipped", "not_applicable"}
+
+CORPUS_COVERAGE_DEFINITION = (
+    "A matrix row is exercised by a corpus fixture when that fixture's committed report snapshot "
+    "carries at least one finding in errors[] or warnings[] whose check_id is the row and whose type "
+    f"is not an inspection-failure type ({', '.join(sorted(CORPUS_INSPECTION_FAILURE_TYPES))}). "
+    "A check that is merely enabled, that reports incomplete, skipped, non-inspected or "
+    "non-applicable inspection, or that the fixture's profile disables does not count as exercising "
+    "its row; those fixtures are listed in uninspected_fixtures. A finding that reports an inspection "
+    "failure is not evidence that the check detects the defect."
+)
+
+
+def load_corpus_snapshots() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Read the corpus manifest and every fixture's committed report snapshot."""
+    manifest = json.loads(read(CORPUS_MANIFEST_PATH))
+    if not isinstance(manifest, list) or not manifest:
+        raise ValueError("corpus manifest must be a non-empty array")
+    snapshots: dict[str, dict[str, Any]] = {}
+    for entry in manifest:
+        fixture = entry.get("id")
+        if not isinstance(fixture, str) or not fixture:
+            raise ValueError("corpus manifest entry has no id")
+        if fixture in snapshots:
+            raise ValueError(f"duplicate corpus fixture id: {fixture}")
+        path = CORPUS_SNAPSHOT_DIR / f"{fixture}.json"
+        if not path.exists():
+            raise ValueError(f"corpus fixture '{fixture}' has no committed snapshot")
+        snapshots[fixture] = json.loads(read(path))
+    orphans = sorted(
+        path.stem for path in CORPUS_SNAPSHOT_DIR.glob("*.json") if path.stem not in snapshots
+    )
+    if orphans:
+        raise ValueError("snapshots with no corpus manifest entry: " + ", ".join(orphans))
+    return sorted(manifest, key=lambda entry: entry["id"]), snapshots
+
+
+def build_preflight_corpus_coverage(registry: list[str]) -> dict[str, Any]:
+    """Record, per catalog row, the corpus fixtures whose reports exercise it.
+
+    ``coverage: covered`` is a claim about what the check catches, so it must be
+    backed by a fixture that produced one of the check's findings. A finding whose
+    type reports an inspection failure is the check reporting on itself rather
+    than on the document, and does not count. A row with no such fixture carries a
+    hand-written ``corpus_gap`` reason in the overlay instead of reading as
+    proven. Failures are collected so one run names every hole rather than
+    stopping at the first.
+    """
+    overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
+    rows = overlay["checks"]
+    missing_rows = sorted(set(registry) - set(rows))
+    if missing_rows:
+        raise ValueError("catalog overlay has no row for: " + ", ".join(missing_rows))
+    manifest, snapshots = load_corpus_snapshots()
+    finding_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
+    uninspected_fixtures: dict[str, set[str]] = {check_id: set() for check_id in registry}
+    clean_fixtures: dict[str, int] = {check_id: 0 for check_id in registry}
+    unattributed_findings = 0
+    for entry in manifest:
+        fixture = entry["id"]
+        report = snapshots[fixture]
+        statuses: dict[str, str | None] = {}
+        for status in report.get("checks") or []:
+            check_id = status.get("id")
+            if check_id not in finding_fixtures:
+                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
+            statuses[check_id] = status.get("status")
+        findings_for_check: dict[str, list[dict[str, Any]]] = {check_id: [] for check_id in registry}
+        for finding in list(report.get("errors") or []) + list(report.get("warnings") or []):
+            check_id = finding.get("check_id")
+            if check_id is None:
+                # Engine-level findings such as evidence-incomplete belong to no check row.
+                unattributed_findings += 1
+                continue
+            if check_id not in finding_fixtures:
+                raise ValueError(f"snapshot '{fixture}' reports unregistered check '{check_id}'")
+            findings_for_check[check_id].append(finding)
+        for check_id in registry:
+            check_status = statuses.get(check_id)
+            check_findings = findings_for_check[check_id]
+            if check_status in CORPUS_UNINSPECTED_STATUSES:
+                uninspected_fixtures[check_id].add(fixture)
+            if any(finding.get("type") in CORPUS_INSPECTION_FAILURE_TYPES for finding in check_findings):
+                uninspected_fixtures[check_id].add(fixture)
+            substantive_findings = [
+                finding
+                for finding in check_findings
+                if finding.get("type") not in CORPUS_INSPECTION_FAILURE_TYPES
+            ]
+            if substantive_findings and check_status not in CORPUS_UNINSPECTED_STATUSES:
+                finding_fixtures[check_id].add(fixture)
+            if check_status == "ok" and not check_findings:
+                clean_fixtures[check_id] += 1
+    errors: list[str] = []
+    for check_id in registry:
+        row = rows[check_id]
+        coverage = row["coverage"]
+        corpus_gap_present = "corpus_gap" in row
+        reason = row.get("corpus_gap")
+        has_valid_reason = isinstance(reason, str) and bool(reason.strip())
+        exercised = bool(finding_fixtures[check_id])
+        if coverage == "covered" and not exercised:
+            errors.append(f"covered check '{check_id}' has no corpus fixture exercising it")
+        elif not exercised:
+            if not has_valid_reason:
+                if corpus_gap_present and not has_valid_reason:
+                    errors.append(f"check '{check_id}' has a malformed corpus_gap reason")
+                else:
+                    errors.append(
+                        f"check '{check_id}' has no corpus fixture and no recorded corpus_gap reason"
+                    )
+        if exercised and corpus_gap_present:
+            errors.append(f"check '{check_id}' has corpus fixtures but a recorded corpus_gap reason")
+    engine_matrix_id = parse_engine_matrix_id()
+    if engine_matrix_id != overlay["matrix_id"]:
+        errors.append(
+            f"the engine's coverage scope stamps matrix_id '{engine_matrix_id}' but the overlay "
+            f"publishes '{overlay['matrix_id']}'"
+        )
+    if errors:
+        raise ValueError("; ".join(errors))
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "definition": CORPUS_COVERAGE_DEFINITION,
+        "manifest": CORPUS_MANIFEST_REL,
+        "snapshot_dir": CORPUS_SNAPSHOT_DIR_REL,
+        "source_fixtures": len(manifest),
+        "unattributed_findings": unattributed_findings,
+        "corpus_gaps": sorted(check_id for check_id in registry if not finding_fixtures[check_id]),
+        "rows": {
+            check_id: {
+                "coverage": rows[check_id]["coverage"],
+                "corpus_gap": rows[check_id].get("corpus_gap"),
+                "finding_fixtures": sorted(finding_fixtures[check_id]),
+                "uninspected_fixtures": sorted(uninspected_fixtures[check_id]),
+                "clean_fixture_count": clean_fixtures[check_id],
+            }
+            for check_id in registry
+        },
+    }
 
 
 SAVE_POLICY_MODES = {
@@ -947,6 +1155,7 @@ def build_catalog() -> dict[str, Any]:
         "preflight_checks": registry,
         "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
         "preflight_coverage_backlog": "docs/generated/preflight-coverage-backlog.json",
+        "preflight_corpus_coverage": "docs/generated/preflight-corpus-coverage.json",
         "registered_operations": [
             {"id": operation["id"], "implementation": operation["implementation"]}
             for operation in repair_registry
@@ -987,11 +1196,68 @@ def serialized_preflight_catalog() -> str:
     return json.dumps(build_preflight_check_catalog(registry, parse_repair_operations()), indent=2, sort_keys=True) + "\n"
 
 
+def fetch_github_issue(number: int) -> dict[str, Any] | None:
+    """Read one issue back from GitHub, or None when the number does not exist."""
+    result = subprocess.run(
+        ["gh", "api", f"repos/{GITHUB_ISSUE_REPOSITORY}/issues/{number}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if result.returncode != 0:
+        if "Not Found" in result.stdout or "Not Found" in result.stderr:
+            return None
+        raise OSError(f"gh api issue {number} failed: {result.stderr.strip()}")
+    live = json.loads(result.stdout)
+    return {
+        "title": live["title"],
+        "state": live["state"].upper(),
+        "milestone": (live.get("milestone") or {}).get("title"),
+        "is_pull_request": "pull_request" in live,
+    }
+
+
+def verify_issue_records_against_github(
+    records: dict[str, dict[str, Any]], fetch: Any = fetch_github_issue
+) -> list[str]:
+    """Compare every live ``#<n>`` record with GitHub; legacy snapshots are not re-read.
+
+    Issue and pull-request numbers share one sequence, so a record that resolves
+    to a pull request, or to an issue with another title, is a collision rather
+    than a verified reference.
+    """
+    problems: list[str] = []
+    live_records = [
+        (reference, entry)
+        for reference, entry in records.items()
+        if entry["repository"] == GITHUB_ISSUE_REPOSITORY
+    ]
+    for reference, entry in sorted(live_records, key=lambda item: item[1]["number"]):
+        live = fetch(entry["number"])
+        if live is None:
+            problems.append(f"{reference}: no such issue in {GITHUB_ISSUE_REPOSITORY}")
+            continue
+        if live["is_pull_request"]:
+            problems.append(f"{reference}: resolves to a pull request, not an issue")
+            continue
+        for field in ("title", "state", "milestone"):
+            if live[field] != entry[field]:
+                problems.append(f"{reference}: {field} is {live[field]!r} on GitHub, recorded {entry[field]!r}")
+    return problems
+
+
 def serialized_preflight_backlog() -> str:
     overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
     registry = parse_preflight_checks()
     backlog = build_preflight_backlog(overlay, registry, parse_repair_operations())
     return json.dumps(backlog, indent=2, sort_keys=True) + "\n"
+
+
+def serialized_preflight_corpus_coverage() -> str:
+    return json.dumps(
+        build_preflight_corpus_coverage(parse_preflight_checks()), indent=2, sort_keys=True
+    ) + "\n"
 
 
 def serialized_correction_catalog() -> str:
@@ -1023,6 +1289,11 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="validate ADRs and the committed catalog")
     mode.add_argument("--write", action="store_true", help="validate ADRs and write the catalog")
+    parser.add_argument(
+        "--verify-github",
+        action="store_true",
+        help="read every live github_issues record back from GitHub (needs gh; not run in CI)",
+    )
     args = parser.parse_args()
 
     errors = validate_adrs()
@@ -1035,22 +1306,40 @@ def main() -> int:
         expected = serialized_catalog()
         expected_preflight = serialized_preflight_catalog()
         expected_backlog = serialized_preflight_backlog()
+        expected_corpus = serialized_preflight_corpus_coverage()
         expected_correction = serialized_correction_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
         return 1
+
+    if args.verify_github:
+        try:
+            problems = verify_issue_records_against_github(
+                json.loads(read(PREFLIGHT_OVERLAY_PATH))["github_issues"]
+            )
+        except OSError as error:
+            print(f"error: cannot read issues back from GitHub: {error}", file=sys.stderr)
+            return 1
+        if problems:
+            for problem in problems:
+                print(f"error: github_issues {problem}", file=sys.stderr)
+            return 1
 
     if args.write:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
         PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
         PREFLIGHT_BACKLOG_PATH.write_text(expected_backlog, encoding="utf-8", newline="\n")
+        PREFLIGHT_CORPUS_COVERAGE_PATH.write_text(expected_corpus, encoding="utf-8", newline="\n")
         CORRECTION_CATALOG_PATH.write_text(expected_correction, encoding="utf-8", newline="\n")
         return 0
     return (
         check_generated(CATALOG_PATH, expected, "architecture catalog")
         or check_generated(PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog")
         or check_generated(PREFLIGHT_BACKLOG_PATH, expected_backlog, "preflight coverage backlog")
+        or check_generated(
+            PREFLIGHT_CORPUS_COVERAGE_PATH, expected_corpus, "preflight corpus coverage"
+        )
         or check_generated(CORRECTION_CATALOG_PATH, expected_correction, "correction operation catalog")
     )
 

@@ -172,15 +172,17 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
         return -1;
     }
 
-    while (!status.atEnd())
+    // procfs reports size 0, so QFile::atEnd() is true before the first read.
+    const QList<QByteArray> lines = status.readAll().split('\n');
+    for (const QByteArray& rawLine : lines)
     {
-        const QByteArray line = status.readLine().trimmed();
+        const QByteArray line = rawLine.trimmed();
         if (!line.startsWith("VmHWM:"))
         {
             continue;
         }
 
-        const QList<QByteArray> parts = line.split(' ');
+        const QList<QByteArray> parts = line.mid(6).simplified().split(' ');
         for (const QByteArray& part : parts)
         {
             bool ok = false;

@@ -1,0 +1,53 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: d1-canonical-json
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - fixture:regression:canonical-json-golden
+      - budget:canonical-json-digest-stability
+      - architecture:agent-policy:core
+  - id: d2-d4-governed-execution
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+  - id: d5-cross-surface-identity
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+  - id: architecture-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: pdf-worker-cross-platform-regressions
+    evidence:
+      - unit:UnitTestsPdfWorkerIsolation
+      - security:scripts/ci/check_pdf_worker_isolation.py
+      - architecture:agent-policy:pdftool
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: regression-fixtures
+    evidence:
+      - fixture:regression:bleed-box-margin
+      - fixture:regression:canonical-json-golden
+  - id: sealed-holdout
+    lane: sealed-eval
+    evidence:
+      - sealed-eval:mixed-surface-holdout
+      - budget:sealed-rendering-channel-delta
+unresolved:
+  - canonical-json-digest-stability harness artifact count
+  - d1-d5 static call-site architecture checkers
+  - UnitTestsBleedFixup writer-byte flake tracked in issue 656
+  - UnitTestsImageDecodeGuard deferred proof-lane migration
+  - sealed-rendering-channel-delta harness
+  - scripts/ci/check_independent_validation_gate.py
+sealed_output_approval: human

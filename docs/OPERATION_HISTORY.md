@@ -43,8 +43,10 @@ byte count, operation id, plan summary, approval protection, and visible evictio
 registered as a protected point before the first operation. The artifact file is never embedded in the PDF.
 
 `PDFHistoryRetentionPolicy` defaults to 20 points, 2 GiB, 90 days, and protection for the original input and
-approved outputs. Eviction removes only the digest-addressed artifact; the immutable event and rollback point
-remain and are marked `artifact_evicted`. Shared artifacts are retained until their last point is evicted.
+approved outputs. Each production workflow enforces this policy after appending an accepted output or rollback
+event. Eviction removes only the digest-addressed artifact; the immutable event and rollback point remain and are
+marked `artifact_evicted`. Shared artifacts are retained until their last point is evicted. A retention failure is
+reported by the workflow after preserving the accepted event and output.
 
 `rollbackTo()` accepts only a non-evicted artifact referenced by an accepted event. It verifies the digest before
 opening the destination `QSaveFile`, then appends a new `history.rollback` execution and `rolled-back` event.

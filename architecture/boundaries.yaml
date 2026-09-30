@@ -143,6 +143,22 @@ separations:
       - QNetworkAccessManager
       - QSettings
       - QSqlDatabase
+  - id: pdf-worker-no-telemetry
+    paths:
+      - PdfTool/loop-pdf-worker-main.cpp
+      - PdfTool/pdfworkerruntime.cpp
+      - PdfTool/pdfworkerruntime.h
+      - PdfTool/pdfworkersandbox.cpp
+      - PdfTool/pdfworkersandbox.h
+      - PdfTool/pdfworkerprotocol.h
+    forbidden_includes:
+      - "^pdfsentry\\.h$"
+      - "^sentry\\.h$"
+    forbidden_tokens:
+      - PDFSentrySession
+      - sentry_init
+      - crashpad
+      - loop_deploy_sentry_crashpad
   - id: interaction-storage
     paths:
       - LoopLibInteraction/sources

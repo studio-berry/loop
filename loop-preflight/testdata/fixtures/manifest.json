@@ -816,5 +816,104 @@
     },
     "source": "generated",
     "notes": "Deliberately unsupported or empty effective scope must produce an incomplete verdict rather than a clean pass."
+  },
+  {
+    "id": "off-page-content",
+    "pdf": "off-page-content.pdf",
+    "profile": "testdata/profiles/test-off-page-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["off-page-content"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: mark painted outside the page MediaBox with amount_pt 0."
+  },
+  {
+    "id": "invisible-content",
+    "pdf": "invisible-content.pdf",
+    "profile": "testdata/profiles/test-invisible-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["invisible-content"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: fill with ExtGState fill alpha 0."
+  },
+  {
+    "id": "obscured-content",
+    "pdf": "obscured-content.pdf",
+    "profile": "testdata/profiles/test-obscured-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["obscured-content"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: small opaque mark fully covered by later opaque paint."
+  },
+  {
+    "id": "hidden-layers",
+    "pdf": "hidden-layers.pdf",
+    "profile": "testdata/profiles/test-hidden-layers.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["hidden-layers"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: optional-content group OFF by default with OC-marked content."
+  },
+  {
+    "id": "font-integrity-corrupt",
+    "pdf": "font-integrity-corrupt.pdf",
+    "profile": "testdata/profiles/test-font-integrity.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["font-integrity"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: embedded FontFile2 truncated so inspectPDFFontIntegrity reports TruncatedProgram."
+  },
+  {
+    "id": "thin-parts-clear",
+    "pdf": "thin-parts-clear.pdf",
+    "profile": "testdata/profiles/test-thin-parts-clear.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["thin-parts"]
+    },
+    "source": "generated",
+    "notes": "#668 corpus gap: hairline stroke clearly below the thin-parts threshold (unlike thin-parts-fill which is near-threshold incomplete)."
+  },
+  {
+    "id": "dieline-missing",
+    "pdf": "blank-page.pdf",
+    "profile": "testdata/profiles/test-dieline-required.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["dieline"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: blank page under dieline required:true produces dieline-missing."
+  },
+  {
+    "id": "processing-steps-missing",
+    "pdf": "blank-page.pdf",
+    "profile": "testdata/profiles/test-processing-steps-required.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["processing-steps"]
+    },
+    "source": "hand-built",
+    "notes": "#668 corpus gap: blank page under processing-steps required:true and required_types cutting-die."
+  },
+  {
+    "id": "conformance-pdfx5n",
+    "pdf": "conformance-pdfx5n.pdf",
+    "profile": "testdata/profiles/test-conformance-claims.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["conformance-claims"]
+    },
+    "source": "hand-built",
+    "notes": "DocInfo GTS_PDFXVersion PDF/X-5n so conformance-claims reports check-unsupported (closes the post-#665 corpus gap)."
   }
 ]

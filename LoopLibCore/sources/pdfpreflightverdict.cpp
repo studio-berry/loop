@@ -28,10 +28,13 @@
 #include "preflightprofileresolver.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QJsonArray>
+#include <QSet>
 #include <QTemporaryDir>
 
 #include <algorithm>
+#include <iterator>
 
 namespace pdf
 {
@@ -481,6 +484,198 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     }
 
     return verdict;
+}
+
+bool buildPreflightInspectionReceipt(const PreflightResult& result,
+                                     const PreflightProfileData& profile,
+                                     const PDFRevisionIdentity& revision,
+                                     const PDFEvidenceGraph& evidence,
+                                     PreflightInspectionReceipt& receipt,
+                                     QString& errorMessage)
+{
+    receipt = {};
+    if (!isPDFSha256(result.documentRevisionDigest) || !isPDFSha256(profile.effectiveDigest) ||
+        result.effectiveProfileDigest.compare(profile.effectiveDigest, Qt::CaseInsensitive) != 0 ||
+        !revision.isValid())
+    {
+        errorMessage = QStringLiteral("Inspection receipt requires a valid input digest, matching effective profile digest and document revision.");
+        return false;
+    }
+    if ((!evidence.artifact.sha256.isEmpty() &&
+         evidence.artifact.sha256.compare(result.documentRevisionDigest, Qt::CaseInsensitive) != 0) ||
+        (evidence.revision.isValid() && evidence.revision != revision))
+    {
+        errorMessage = QStringLiteral("Inspection evidence belongs to a different input or revision.");
+        return false;
+    }
+
+    PreflightInspectionReceipt candidate;
+    candidate.inputDigest = result.documentRevisionDigest.toLower();
+    candidate.revision = revision;
+    candidate.effectiveProfileDigest = profile.effectiveDigest.toLower();
+    candidate.profileIdentity = result.profileIdentity.isEmpty() ? profile.profileIdentity : result.profileIdentity;
+    candidate.coverageScope = result.coverageScope;
+    candidate.verdict = reducePreflightVerdict(result, &profile);
+
+    bool incompleteCoverage = false;
+    QSet<QString> declaredChecks;
+    const auto appendCheck = [&](const QString& id, bool required)
+    {
+        PreflightReceiptCheck check;
+        check.id = id;
+        check.required = required;
+        const auto status = std::find_if(result.checkStatuses.cbegin(), result.checkStatuses.cend(),
+                                         [&id](const PreflightCheckStatus& value)
+                                         { return value.id == id; });
+        if (status != result.checkStatuses.cend())
+        {
+            check.status = status->status;
+            check.reason = status->reason;
+            const bool unique = std::find_if(std::next(status), result.checkStatuses.cend(),
+                                             [&id](const PreflightCheckStatus& value)
+                                             { return value.id == id; }) == result.checkStatuses.cend();
+            check.complete = unique && status->budgetKind.isEmpty() &&
+                             (status->status == QLatin1String("ok") ||
+                              status->status == QLatin1String("warning") ||
+                              status->status == QLatin1String("failed"));
+        }
+        if (!check.complete)
+        {
+            incompleteCoverage = true;
+            QString reason = check.reason;
+            if (reason.isEmpty())
+            {
+                reason = check.status.isEmpty() ? QStringLiteral("no status") : check.status;
+            }
+            candidate.limitations.append(QStringLiteral("Check '%1' did not complete: %2")
+                                             .arg(id, reason));
+        }
+        candidate.checks.append(std::move(check));
+    };
+
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (!check.enabled)
+        {
+            continue;
+        }
+        if (check.id.isEmpty() || declaredChecks.contains(check.id))
+        {
+            errorMessage = QStringLiteral("Inspection profile has an empty or duplicate enabled check ID.");
+            return false;
+        }
+        declaredChecks.insert(check.id);
+        appendCheck(check.id, check.required);
+    }
+    if (profile.pdfx.has_value())
+    {
+        appendCheck(QStringLiteral("pdfx"), true);
+    }
+    if (candidate.checks.isEmpty() || candidate.coverageScope.isEmpty())
+    {
+        incompleteCoverage = true;
+        candidate.limitations.append(QStringLiteral("Inspection check coverage or scope was not recorded."));
+    }
+    for (const PreflightCheckStatus& status : result.checkStatuses)
+    {
+        if (!declaredChecks.contains(status.id) && status.id != QLatin1String("pdfx") &&
+            (!status.budgetKind.isEmpty() || status.status == QLatin1String("incomplete") ||
+             status.status == QLatin1String("unsupported") || status.status == QLatin1String("skipped") ||
+             status.status == QLatin1String("not_inspected")))
+        {
+            incompleteCoverage = true;
+            candidate.limitations.append(QStringLiteral("Inspection status '%1' did not complete.").arg(status.id));
+        }
+    }
+
+    QSet<QString> evidenceIds;
+    int fidelityRank = 3;
+    for (const PDFEvidenceRecord& record : evidence.records)
+    {
+        if ((!record.artifact.sha256.isEmpty() &&
+             record.artifact.sha256.compare(result.documentRevisionDigest, Qt::CaseInsensitive) != 0) ||
+            (record.revision.isValid() && record.revision != revision))
+        {
+            errorMessage = QStringLiteral("Inspection evidence record belongs to a different input or revision.");
+            return false;
+        }
+        if (!record.id.isEmpty())
+        {
+            evidenceIds.insert(record.id);
+        }
+        if (!record.incompleteReason.isEmpty())
+        {
+            incompleteCoverage = true;
+            candidate.limitations.append(record.incompleteReason);
+        }
+        if (record.fidelity == QLatin1String("catalog"))
+        {
+            fidelityRank = std::min(fidelityRank, 1);
+        }
+        else if (record.fidelity == QLatin1String("sampled"))
+        {
+            fidelityRank = std::min(fidelityRank, 2);
+        }
+        else if (record.fidelity != QLatin1String("exact"))
+        {
+            fidelityRank = 0;
+            incompleteCoverage = true;
+            candidate.limitations.append(QStringLiteral("Evidence fidelity is unsupported or unknown."));
+        }
+    }
+    const auto appendFindingEvidence = [&evidenceIds](const QList<PreflightFinding>& findings)
+    {
+        for (const PreflightFinding& finding : findings)
+        {
+            for (const QString& id : finding.evidenceIds)
+            {
+                if (!id.isEmpty())
+                {
+                    evidenceIds.insert(id);
+                }
+            }
+        }
+    };
+    appendFindingEvidence(result.errors);
+    appendFindingEvidence(result.warnings);
+    candidate.evidenceRefs = evidenceIds.values();
+    candidate.evidenceRefs.sort();
+    candidate.fidelity = evidence.records.isEmpty() ? QStringLiteral("not-recorded")
+                         : fidelityRank == 3        ? QStringLiteral("exact")
+                         : fidelityRank == 2        ? QStringLiteral("sampled")
+                         : fidelityRank == 1        ? QStringLiteral("catalog")
+                                                    : QStringLiteral("unsupported");
+    if (!evidence.isComplete())
+    {
+        incompleteCoverage = true;
+        candidate.limitations.append(evidence.incompleteReason.isEmpty()
+                                         ? QStringLiteral("Evidence collection did not complete.")
+                                         : evidence.incompleteReason);
+    }
+    const QString coverageClaim = candidate.coverageScope.value(QStringLiteral("claim")).toString();
+    if (!coverageClaim.isEmpty())
+    {
+        candidate.limitations.append(coverageClaim);
+    }
+    candidate.limitations.removeDuplicates();
+    if (candidate.verdict.isPass() && incompleteCoverage)
+    {
+        candidate.verdict.state = PreflightVerdictState::Incomplete;
+        candidate.verdict.reasonCode = QStringLiteral("receipt-evidence-incomplete");
+        candidate.verdict.reason = QStringLiteral("Required inspection coverage or evidence did not complete.");
+    }
+
+    const QJsonObject identityData{
+        { QStringLiteral("kind"), QStringLiteral("loop.inspection-receipt-identity.v1") },
+        { QStringLiteral("input_digest"), candidate.inputDigest },
+        { QStringLiteral("effective_profile_digest"), candidate.effectiveProfileDigest },
+        { QStringLiteral("coverage_scope"), candidate.coverageScope }
+    };
+    candidate.identity = QString::fromLatin1(
+        QCryptographicHash::hash(canonicalJson(identityData), QCryptographicHash::Sha256).toHex());
+    receipt = std::move(candidate);
+    errorMessage.clear();
+    return true;
 }
 
 PDFOperationResult runMandatoryPostflight(PDFDocument* document,

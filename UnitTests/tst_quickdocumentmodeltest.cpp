@@ -56,25 +56,48 @@ void QuickDocumentModelTest::searchResultsExposeOnlyValueRoles()
 
 void QuickDocumentModelTest::searchesUseAnIndependentProcessingBudget()
 {
+    // #652 decision: searchDocumentText builds an operation-scoped budget from
+    // the session limits and must not share the session counters. Content
+    // "q\nQ\n" lexes as three tokens and therefore charges three render
+    // operations (empty pages charge zero and cannot falsify session reuse).
+    // Exhaust the session budget first; leave the shared limit high enough
+    // that a fresh search budget still completes.
     pdf::PDFDocumentBuilder builder;
-    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
+    QByteArray content("q\nQ\n");
+    pdf::PDFDictionary streamDictionary;
+    streamDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
+                              pdf::PDFObject::createInteger(content.size()));
+    const pdf::PDFObjectReference streamReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+            std::move(streamDictionary), std::move(content))));
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
+    builder.mergeTo(pageReference,
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(
+                        std::move(pageUpdate))));
 
     pdf::PDFDocumentContext context(pdf::PDFDocumentPointer(new pdf::PDFDocument(builder.build())));
     pdf::PDFProcessingLimits limits = context.getSession()->getProcessingLimits();
-    limits.maxRenderOperations = 2;
+    limits.maxRenderOperations = 8;
     context.getSession()->setProcessingLimits(limits);
-    context.getSession()->getProcessingBudget()->chargeRenderOperation(2, QStringLiteral("previous search"));
+    context.getSession()->getProcessingBudget()->chargeRenderOperation(8, QStringLiteral("previous search"));
 
     const pdf::PDFDocumentSearchResult first = pdf::searchDocumentText(&context, QStringLiteral("absent"));
     const pdf::PDFDocumentSearchResult second = pdf::searchDocumentText(&context, QStringLiteral("absent"));
     QVERIFY(first.completed);
     QVERIFY(first.admitted);
+    QVERIFY(!first.budgetExceeded);
     QVERIFY(second.completed);
     QVERIFY(second.admitted);
+    QVERIFY(!second.budgetExceeded);
 }
 
 void QuickDocumentModelTest::exhaustedSearchReturnsAnIncompleteResult()
 {
+    // #652 decision: when the operation-scoped search budget is exhausted,
+    // Core returns an incomplete, non-admitted result and surfaces the budget
+    // kind name (render-operations) via PDFException::getMessage().
     pdf::PDFDocumentBuilder builder;
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
     QByteArray content("q\n");
@@ -98,6 +121,7 @@ void QuickDocumentModelTest::exhaustedSearchReturnsAnIncompleteResult()
     const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(&context, QStringLiteral("absent"));
     QVERIFY(!result.completed);
     QVERIFY(!result.admitted);
+    QVERIFY(result.budgetExceeded);
     QVERIFY(result.matches.isEmpty());
     QVERIFY(result.errorMessage.contains(QStringLiteral("render-operations")));
 }

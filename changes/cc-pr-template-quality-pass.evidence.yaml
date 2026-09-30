@@ -1,0 +1,12 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: policy-handoff-quality-summary
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: pr-template-quality-pass
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved: []

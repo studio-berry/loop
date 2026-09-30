@@ -245,6 +245,7 @@ public:
     bool runInline = true;
     bool refuseSubmission = false;
     bool cancelStopsQueuedWork = true;
+    pdf::PDFJobStatus terminalStatus = pdf::PDFJobStatus::Succeeded;
     QList<pdf::PDFJobSpec> submittedSpecs;
     QStringList cancelledJobs;
     QHash<QString, pdf::PDFRevisionIdentity> publishedRevisions;
@@ -262,7 +263,7 @@ private:
 
         pdf::PDFJobContext context(token, pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
         work(context);
-        m_status.insert(jobId, pdf::PDFJobStatus::Succeeded);
+        m_status.insert(jobId, terminalStatus);
     }
 
     quint64 m_sequence = 0;
@@ -288,6 +289,10 @@ public:
         pdfinteraction::PageSurfaceResult result;
         result.key = request.key;
         result.token = request.token;
+        if (returnWrongPage)
+        {
+            ++result.key.pageIndex;
+        }
 
         if (jobContext.isCancellationRequested())
         {
@@ -317,6 +322,7 @@ public:
     int renderCount = 0;
     int shedCount = 0;
     bool reentered = false;
+    bool returnWrongPage = false;
     QList<pdfinteraction::PageSurfaceKey> renderedKeys;
     pdfinteraction::SurfaceTerminalState nextState = pdfinteraction::SurfaceTerminalState::Complete;
 
@@ -345,7 +351,10 @@ private slots:
     void supersededDemandIsCancelledBeforeNewWorkIsSubmitted();
     void completionForASupersededRequestIsRejected();
     void completionAgainstAnOldRevisionIsRejected();
+    void workerSuccessWithWrongRequestIdentityIsRejected();
+    void schedulerFailureCannotAdmitRenderedPixels();
     void revisionReplacementDropsEveryStaleSurface();
+    void documentKeyChangeDropsAdmittedSurfaces();
     void cancellationIsTerminalAndNotSuccess();
     void completionAfterDestructionReachesNobody();
     void budgetExhaustionIsItsOwnTerminalState();
@@ -664,6 +673,30 @@ void PageSurfaceTest::completionAgainstAnOldRevisionIsRejected()
     QVERIFY(fixture.coordinator->snapshot().tiles.isEmpty());
 }
 
+void PageSurfaceTest::workerSuccessWithWrongRequestIdentityIsRejected()
+{
+    Fixture fixture;
+    fixture.renderer.returnWrongPage = true;
+    fixture.coordinator->requestSurfaces();
+    Fixture::drain();
+
+    QCOMPARE(fixture.coordinator->counters().admitted, 0);
+    QVERIFY(fixture.coordinator->counters().rejectedSuperseded > 0);
+    QVERIFY(fixture.coordinator->snapshot().tiles.isEmpty());
+}
+
+void PageSurfaceTest::schedulerFailureCannotAdmitRenderedPixels()
+{
+    Fixture fixture;
+    fixture.submitter.terminalStatus = pdf::PDFJobStatus::Failed;
+    fixture.coordinator->requestSurfaces();
+    Fixture::drain();
+
+    QCOMPARE(fixture.coordinator->counters().admitted, 0);
+    QVERIFY(fixture.coordinator->counters().failed > 0);
+    QVERIFY(fixture.coordinator->snapshot().tiles.isEmpty());
+}
+
 void PageSurfaceTest::revisionReplacementDropsEveryStaleSurface()
 {
     Fixture fixture;
@@ -677,6 +710,18 @@ void PageSurfaceTest::revisionReplacementDropsEveryStaleSurface()
 
     // Nothing rendered for the previous state survives, and nothing from it can
     // be drawn.
+    QCOMPARE(fixture.coordinator->counters().admittedBytes, qint64(0));
+    QVERIFY(fixture.coordinator->snapshot().tiles.isEmpty());
+}
+
+void PageSurfaceTest::documentKeyChangeDropsAdmittedSurfaces()
+{
+    Fixture fixture;
+    fixture.coordinator->requestSurfaces();
+    Fixture::drain();
+    QVERIFY(fixture.coordinator->counters().admittedBytes > 0);
+
+    fixture.coordinator->setDocumentKey(QStringLiteral("doc-2"));
     QCOMPARE(fixture.coordinator->counters().admittedBytes, qint64(0));
     QVERIFY(fixture.coordinator->snapshot().tiles.isEmpty());
 }

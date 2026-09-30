@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Off-page Content",
+  "description": "Isolates off-page-content for the golden corpus.",
+  "checks": [
+    {
+      "id": "off-page-content",
+      "severity": "warning",
+      "amount_pt": 0
+    }
+  ]
+}

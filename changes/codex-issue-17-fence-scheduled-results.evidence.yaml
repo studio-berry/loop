@@ -1,0 +1,34 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: scheduled-result-fencing
+    evidence:
+      - unit:agent-policy:core
+      - architecture:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: page-surface-admission
+    evidence:
+      - unit:agent-policy:interaction
+  - id: editor-result-admission
+    evidence:
+      - unit:agent-policy:quick
+  - id: preflight-controller-fence
+    evidence:
+      - unit:agent-policy:preflight
+      - unit:UnitTestsPreflightChecks
+      - unit:UnitTestsPreflightEngine
+      - unit:UnitTestsPreflightInteraction
+      - unit:UnitTestsPreflightVerdict
+      - unit:UnitTestsPreflightProfileResolver
+      - unit:UnitTestsProfileIdentity
+      - unit:UnitTestsOperatorAcceptance
+      - integration:UnitTestsPreflightCorpus
+      - integration:UnitTestsPreflightWorkflowAcceptance
+      - differential:UnitTestsStandardOracle
+      - architecture:loop-preflight/testdata/fixtures
+      - architecture:docs/generated/preflight-check-catalog.json
+      - architecture:docs/generated/preflight-corpus-coverage.json
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py

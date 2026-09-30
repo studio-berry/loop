@@ -1,0 +1,11 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: retention-source-integration
+    evidence:
+      - unit:agent-policy:quick
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:pdftool
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - Focused Qt builds and tests require a configured build directory; this worktree has none.

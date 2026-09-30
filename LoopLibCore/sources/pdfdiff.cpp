@@ -170,7 +170,15 @@ void PDFDiff::start()
                                               {
                                                   return;
                                               }
-                                              onComparationPerformed(snapshot.status == pdf::PDFJobStatus::Cancelled);
+                                              if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+                                              {
+                                                  m_result = PDFDiffResult();
+                                                  m_result.setResult(pdf::PDFOperationResult(
+                                                      snapshot.errorMessage.isEmpty()
+                                                          ? QStringLiteral("Comparison job did not complete.")
+                                                          : snapshot.errorMessage));
+                                              }
+                                              onComparationPerformed(snapshot.status != pdf::PDFJobStatus::Succeeded);
                                           });
     }
     else
@@ -192,6 +200,8 @@ void PDFDiff::stop()
     m_cancelled = true;
     pdf::PDFJobScheduler::global().cancel(jobId);
     pdf::PDFJobScheduler::global().waitForFinished(jobId);
+    m_result = PDFDiffResult();
+    m_result.setResult(pdf::PDFOperationResult(QStringLiteral("Comparison cancelled.")));
     m_activeJobId.clear();
     if (m_jobFinishedConnection)
     {

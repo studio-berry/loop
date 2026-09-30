@@ -388,6 +388,11 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
     {
         add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
     }
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("preflight-page-last"), { QStringLiteral("--preflight-page-last") }, QStringLiteral("page"), PDFToolValueType::Integer, {}, QStringLiteral("0"));
+    }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
         add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -898,6 +903,12 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     if (optionFlags.testFlag(PreflightReportFile))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("report-file"), QStringLiteral("Write the preflight report JSON this run is certified over to this file."));
+    }
+
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Run a preflight phase with this profile before rendering and record its memory high-water."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("preflight-page-last"), QStringLiteral("Limit the preflight phase to pages 1 through this page (0 covers the whole document); rendering still covers every selected page."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1481,6 +1492,17 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(PreflightReportFile))
     {
         options.preflightReportPath = parser->value("report-file");
+    }
+
+    if (optionFlags.testFlag(BenchmarkPreflightProfile))
+    {
+        options.preflightProfilePath = parser->value("profile");
+        bool preflightPageLastOk = false;
+        const int preflightPageLast = parser->value("preflight-page-last").toInt(&preflightPageLastOk);
+        if (preflightPageLastOk && preflightPageLast > 0)
+        {
+            options.preflightPageLast = preflightPageLast;
+        }
     }
 
     if (optionFlags.testFlag(VerifyPreflightCertificate))

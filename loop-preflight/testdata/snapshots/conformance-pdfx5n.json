@@ -1,0 +1,44 @@
+{
+    "checks": [
+        {
+            "id": "conformance-claims",
+            "reason": "unsupported-conformance-level:pdfx-5n",
+            "status": "unsupported"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "profile": "Loop Test - Conformance Claims",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "unsupported-conformance-level:pdfx-5n",
+        "reason_code": "unsupported-conformance-level:pdfx-5n",
+        "state": "incomplete",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "conformance-claims",
+            "evidence": {
+                "backlog_row": "pdfx5-pdfa3-output",
+                "catalog_disposition": "landed",
+                "level_id": "pdfx-5n",
+                "produced": false,
+                "report_disposition": "unsupported",
+                "validated": false
+            },
+            "message": "Declared conformance level 'pdfx-5n' is not validated.",
+            "scope": "document",
+            "severity": "warning",
+            "type": "check-unsupported"
+        }
+    ]
+}

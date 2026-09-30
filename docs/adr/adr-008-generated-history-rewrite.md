@@ -9,18 +9,18 @@
 
 ## Context
 
-[#265](https://github.com/studio-berry/loop/issues/265) asked to decide
+legacy #265 asked to decide
 whether to rewrite or retain generated dependency and build blobs already
 present in the 195 unreleased `dev` commits, and originally recommended a
 `dev`-only rewrite because `stable` had not yet received that history.
 
-That window closed when [PR #188](https://github.com/studio-berry/loop/pull/188)
+That window closed when legacy PR #188
 merged to `stable` on 2026-08-13. After the merge, both `origin/dev` and
 `origin/stable` still contained the same 982 blobs (~400.5 MiB):
 `.docker-vcpkg*`, `build-fuzz-docker/` (including a 45 MiB
 `libLoopLibCore.so`), `debug-b0e75b.log`, `scripts/debug-pr188.*`, and stray
-`loop-ocr` bytecode. Branch tips were already clean ([#249](https://github.com/studio-berry/loop/pull/249),
-[#258](https://github.com/studio-berry/loop/pull/258)); only history held the
+`loop-ocr` bytecode. Branch tips were already clean (legacy #249,
+legacy #258); only history held the
 blobs.
 
 Rewriting only `dev` would not reclaim GitHub storage. Rewriting `stable`

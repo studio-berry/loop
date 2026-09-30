@@ -242,7 +242,9 @@ int main(int argc, char* argv[])
     const bool wantsJson = commandLineRequestsJson(arguments) ||
                            ((command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
                              command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
-                             command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle")) &&
+                             command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle") ||
+                             command == QStringLiteral("worker-ping") || command == QStringLiteral("worker-open") ||
+                             command == QStringLiteral("worker-preflight")) &&
                             !commandLineSpecifiesConsoleFormat(arguments));
 
     // Extract the requested command without terminating on unknown options so
@@ -309,7 +311,9 @@ int main(int argc, char* argv[])
     if (wantsJson ||
         ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("verify-certificate") || displayCommand == QStringLiteral("ocr") ||
           displayCommand == QStringLiteral("capabilities") || displayCommand == QStringLiteral("schema") ||
-          displayCommand == QStringLiteral("export-evidence-bundle") || displayCommand == QStringLiteral("verify-evidence-bundle")) &&
+          displayCommand == QStringLiteral("export-evidence-bundle") || displayCommand == QStringLiteral("verify-evidence-bundle") ||
+          displayCommand == QStringLiteral("worker-ping") || displayCommand == QStringLiteral("worker-open") ||
+          displayCommand == QStringLiteral("worker-preflight")) &&
          !commandLineSpecifiesConsoleFormat(arguments)))
     {
         pdftool::PDFConsole::setDiagnosticSink(&context);
@@ -344,7 +348,11 @@ int main(int argc, char* argv[])
 
     pdftool::resetCancelRequested();
     std::signal(SIGINT, handleTerminationSignal);
-#ifndef Q_OS_WIN
+#ifdef Q_OS_WIN
+    // CTRL_BREAK_EVENT is the only console interrupt deliverable to a child
+    // started in its own process group; the CRT raises it as SIGBREAK.
+    std::signal(SIGBREAK, handleTerminationSignal);
+#else
     std::signal(SIGTERM, handleTerminationSignal);
 #endif
 

@@ -917,7 +917,10 @@ QJsonObject preflightCoverageScopeFor(const PreflightProfileData& profile)
         }
     }
     return QJsonObject{
-        { QStringLiteral("claim"), QStringLiteral("Loop does not claim formal GWG conformance.") },
+        { QStringLiteral("claim"), QStringLiteral("Loop does not claim formal GWG conformance. This run does not "
+                                                  "evaluate GWG 2022/2024 certificate requirements for "
+                                                  "sheetfed-offset or packaging; a clean result covers only its "
+                                                  "enabled checks.") },
         { QStringLiteral("matrix_id"), QStringLiteral("loop-gwg-pdfx-v1") },
         { QStringLiteral("enabled_checks"), checkIds }
     };
@@ -6191,7 +6194,12 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
     const PDFEvidenceDomains graphDomains = effectivePlan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(effectivePlan.checkIds);
     if (graphDomains != PDFEvidenceDomains())
     {
-        m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
+        PDFEvidenceCollectSettings evidenceSettings = evidenceSettingsForProfile(profile);
+        evidenceSettings.operationControl = m_operationControl;
+        // Records outside the profile's page scope are dropped below, so do not
+        // spend the render and content walk on those pages.
+        evidenceSettings.pageIndices = profile.restrictions.pages;
+        m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettings);
         if (profile.restrictions.pages.has_value() || (!plan.full && !plan.pages.isEmpty()))
         {
             QList<PDFEvidenceRecord> kept;
@@ -6211,7 +6219,12 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const 
         if (!m_activeGraph.isComplete())
         {
             result.inspectionComplete = false;
-            if (!m_activeGraph.budgetKind.isEmpty())
+            if (PDFOperationControl::isOperationCancelled(m_operationControl))
+            {
+                result.errorCode = QStringLiteral("cancelled");
+                result.errorMessage = PDFTranslationContext::tr("Preflight was cancelled.");
+            }
+            else if (!m_activeGraph.budgetKind.isEmpty())
             {
                 result.errorCode = QStringLiteral("budget-exceeded");
                 result.errorMessage = PDFTranslationContext::tr("Evidence collection exceeded the %1 processing budget.")

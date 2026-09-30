@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Processing Steps Required",
+  "description": "Requires cutting-die so a blank page produces processing-step-missing / dieline-missing under processing-steps.",
+  "checks": [
+    {
+      "id": "processing-steps",
+      "severity": "error",
+      "required": true,
+      "required_types": ["cutting-die"]
+    }
+  ]
+}

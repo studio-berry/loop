@@ -62,7 +62,7 @@ Every agent-authored or materially agent-modified diff, as a final pass before t
 - Remove generated boilerplate, needless wrappers and abstractions, and other local-style drift.
 
 Preserve required validation, security, cancellation, provenance, and failure handling.
-Re-run the owning issue's normal verification after the pass, and record a 1-3 sentence anti-slop summary in the handoff.
+Re-run the owning issue's normal verification after the pass, and record a 1-3 sentence quality summary in the handoff.
 The pass is review judgment on the diff; do not add brittle automated style metrics.
 Canonical policy: Berry Studio BSP-002 §4.2 and §4.3 (https://app.notion.com/p/3b39cb079ddb811d8527ed129c3ac511).
 

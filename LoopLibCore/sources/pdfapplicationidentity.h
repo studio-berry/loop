@@ -34,6 +34,7 @@ enum class PDFApplicationSurface
 {
     LoopEditor,
     PdfTool,
+    LoopPdfWorker,
     CodeGenerator,
     Jbig2Viewer,
     PdfExampleGenerator,
@@ -65,4 +66,4 @@ LOOPLIBCORESHARED_EXPORT void initializeApplicationIdentity(PDFApplicationSurfac
 
 }   // namespace pdf
 
-#endif // PDFAPPLICATIONIDENTITY_H
+#endif   // PDFAPPLICATIONIDENTITY_H

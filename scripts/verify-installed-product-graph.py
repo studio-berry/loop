@@ -74,9 +74,12 @@ def validate_sole_interactive_product(root: Path) -> None:
     keep = [row.get("artifact") for row in installed_apps if row.get("disposition") == "KEEP"]
     if keep != ["LoopEditor"]:
         raise ContractError(f"installed KEEP applications must be only LoopEditor, found {keep}")
-    cli = [row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY"]
-    if cli != ["PdfTool"]:
-        raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
+    cli = sorted(row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY")
+    if cli != ["PdfTool", "loop-pdf-worker"]:
+        raise ContractError(
+            "installed CLI-ONLY applications must be PdfTool and loop-pdf-worker, "
+            f"found {cli}"
+        )
 
     plugin_rows = {
         row["artifact"]: row
@@ -136,7 +139,7 @@ def main() -> int:
 
     print(
         "Installed product graph verified: LoopEditor=Quick-only sole interactive install; "
-        "PdfTool remains the installed CLI"
+        "PdfTool and loop-pdf-worker remain the installed CLI surfaces"
     )
     return 0
 

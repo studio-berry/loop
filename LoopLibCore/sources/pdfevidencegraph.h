@@ -26,12 +26,16 @@
 #include "pdfartifactidentity.h"
 #include "pdfdocumentcontext.h"
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 
 #include <QFlags>
 #include <QJsonObject>
 #include <QList>
 #include <QRectF>
+#include <QSet>
 #include <QString>
+
+#include <optional>
 
 namespace pdf
 {
@@ -100,6 +104,12 @@ struct LOOPLIBCORESHARED_EXPORT PDFEvidenceCollectSettings
     qreal richBlackKThreshold = 0.10;
     qreal minEffectiveStrokeWidthPt = 0.0;
     qreal zeroWidthEpsilonPt = 1.0e-6;
+    /// Polled between pages; a cancelled collection returns an incomplete graph
+    /// with incompleteReason "cancelled".
+    const PDFOperationControl* operationControl = nullptr;
+    /// Zero-based indices of the pages whose content is walked and probed; unset
+    /// covers every page. Document-level evidence is collected either way.
+    std::optional<QSet<int>> pageIndices;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFEvidenceCollector

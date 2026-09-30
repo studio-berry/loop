@@ -24,11 +24,15 @@
 #define PDFCOLORINVENTORY_H
 
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QColor>
 #include <QList>
+#include <QSet>
 #include <QString>
+
+#include <optional>
 
 namespace pdf
 {
@@ -59,18 +63,27 @@ struct LOOPLIBCORESHARED_EXPORT PDFColorInventoryResult
     QList<PDFColorInventoryInk> spotColors;
     QList<PDFRichBlackInventory> richBlackPages;
     PDFRenderDiagnostics diagnostics;
+    /// True when the inspection stopped early because the operation was cancelled;
+    /// the lists above then cover only the pages probed before the stop.
+    bool cancelled = false;
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFColorInventorySettings
 {
     int probeDpi = 150;
     qreal richBlackKThreshold = 0.10;
+    /// Largest probe raster in pixels; larger pages are probed at a proportionally lower DPI.
+    /// A letter page at the default 150 DPI is about 1.9 million pixels.
+    qint64 maxProbePixels = 2'500'000;
+    const PDFOperationControl* operationControl = nullptr;
+    /// Zero-based indices of the pages to probe; unset probes every page.
+    std::optional<QSet<int>> pageIndices;
 };
 
 /// Shared rich-black predicate used by preflight and Output Preview.
 LOOPLIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
-                                                const PDFPixelFormat& format,
-                                                PDFColorComponent kThreshold);
+                                               const PDFPixelFormat& format,
+                                               PDFColorComponent kThreshold);
 
 class LOOPLIBCORESHARED_EXPORT PDFColorInventory
 {

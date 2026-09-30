@@ -35,7 +35,8 @@ targets, or branch names. Regenerate and commit:
 |----------|----------|
 | [`generated/architecture-catalog.json`](../generated/architecture-catalog.json) | Branch policy, workflow branches, preflight check IDs, repair operations, schema versions/kinds, architecture invariants, CMake test targets |
 | [`generated/preflight-check-catalog.json`](../generated/preflight-check-catalog.json) | Per-check measures, limitations, parameters and ranges, severity model, evidence fields, applicable fixups, and GWG/PDF-X coverage overlay |
-| [`generated/preflight-coverage-backlog.json`](../generated/preflight-coverage-backlog.json) | Prioritised coverage backlog: gap, process families, state, and the verified issue or check that closes each row |
+| [`generated/preflight-coverage-backlog.json`](../generated/preflight-coverage-backlog.json) | Prioritised coverage backlog: gap, process families, state, and the verified issue or check that closes each row, or the reason it is unfiled |
+| [`generated/preflight-corpus-coverage.json`](../generated/preflight-corpus-coverage.json) | Which golden-corpus fixtures exercise each catalog row, and the rows no fixture exercises |
 | [`generated/correction-operation-catalog.json`](../generated/correction-operation-catalog.json) | Per-operation save policy, impact, surface parity, and correction limitations |
 
 ```bash
@@ -58,6 +59,7 @@ python3 scripts/generate-architecture-catalogs.py --check
 | [008 (history)](adr-008-generated-history-rewrite.md) | implemented | Generated-artifact history rewrite |
 | [009](adr-009-canvas-hosting-benchmark.md) | accepted | Canvas hosting benchmark admission |
 | [010](adr-010-quick-root-admission.md) | accepted | Quick root admission contracts |
+| [011](adr-011-architecture-contracts-d1-d5.md) | accepted | 0.3.0 architecture contracts D1–D5 |
 
 Implementation tracking for ADR-005 lives separately in
 [`ADR-005-product-surface-pruning-implementation-plan.md`](../ADR-005-product-surface-pruning-implementation-plan.md).

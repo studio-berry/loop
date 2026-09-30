@@ -70,6 +70,8 @@ SurfaceNames namesForSurface(PDFApplicationSurface surface)
             return { "LoopEditor", "Loop" };
         case PDFApplicationSurface::PdfTool:
             return { "PdfTool", "Loop PdfTool" };
+        case PDFApplicationSurface::LoopPdfWorker:
+            return { "loop-pdf-worker", "Loop PDF Worker" };
         case PDFApplicationSurface::CodeGenerator:
             return { "CodeGenerator", "Loop Code Generator" };
         case PDFApplicationSurface::Jbig2Viewer:

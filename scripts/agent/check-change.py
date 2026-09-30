@@ -488,7 +488,7 @@ def main() -> int:
         add_clang_tidy_checks(evidence, sources, build_dir, dry_run=args.dry_run)
     if tests:
         expression = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
-        add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "--output-on-failure", "-R", expression], ROOT, args.dry_run)
+        add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "-C", "Release", "--output-on-failure", "-R", expression], ROOT, args.dry_run)
 
     report = {
         "format_version": 1,

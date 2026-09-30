@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Obscured Content",
+  "description": "Isolates obscured-content for the golden corpus.",
+  "checks": [
+    {
+      "id": "obscured-content",
+      "severity": "info"
+    }
+  ]
+}

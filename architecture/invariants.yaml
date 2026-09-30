@@ -22,6 +22,26 @@ checks:
   - id: public-api-ownership
     enforcement: enforced
     summary: PageMaster, the document model, and preflight each have one listed home. Duplicate homes fail.
+  - id: d1-canonical-json-bytes
+    enforcement: declared
+    summary: Identity-bearing digests use pdf::canonicalJson with RFC 8785 key order and documented Qt Compact exceptions.
+    todo: Proven by UnitTestsGovernedExecution golden vectors and docs/CANONICAL_JSON.md. TODO add a static include/call-site checker.
+  - id: d2-preview-non-publishing
+    enforcement: declared
+    summary: Technical and visual previews never publish; only publishGovernedArtifact writes approved destination bytes.
+    todo: Proven by UnitTestsGovernedExecution preview/publish negatives. TODO add a call-graph guard.
+  - id: d3-destination-not-in-plan-digest
+    enforcement: declared
+    summary: Operation plan digests exclude destination path; destination and overwrite policy bind at execution.
+    todo: Proven by UnitTestsGovernedExecution destination binding cases. TODO assert plan envelope keys statically.
+  - id: d4-publication-vs-durable-completion
+    enforcement: declared
+    summary: Published destination bytes and durable sign-off/provenance completion are separate recoverable states.
+    todo: Proven by UnitTestsGovernedExecution publish-without-sign-off. TODO model states in a schema.
+  - id: d5-cross-surface-identity-equality
+    enforcement: declared
+    summary: Cross-surface equality is plan and governed output identity under pinned inputs, not raw PDF writer bytes.
+    todo: "Proven by check_governed_parity and ADR-011 issue 656 disposition. TODO bind named cross-surface fixtures in CI."
 reusable_for:
   - product: ivory
     maps_to: Snapshot immutability and semantic dependency rules use boundaries plus invariants, with different layer ids.

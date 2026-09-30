@@ -303,6 +303,14 @@ bool recordActionListHistory(const QString& outputPath,
             *error = QStringLiteral("Could not append Action List accepted history.");
         return false;
     }
+    const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
+    if (!retention.success)
+    {
+        if (error)
+            *error = QStringLiteral("Action List history was recorded, but retention could not be enforced: %1")
+                         .arg(retention.errorMessage);
+        return false;
+    }
     return true;
 }
 

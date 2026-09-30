@@ -49,9 +49,10 @@ private slots:
 void ApplicationIdentityTest::surfacesUseCanonicalIdentity()
 {
     using Surface = pdf::PDFApplicationSurface;
-    const std::array<std::pair<Surface, const char*>, 9> surfaces = {{
+    const std::array<std::pair<Surface, const char*>, 10> surfaces = { {
         { Surface::LoopEditor, "LoopEditor" },
         { Surface::PdfTool, "PdfTool" },
+        { Surface::LoopPdfWorker, "loop-pdf-worker" },
         { Surface::CodeGenerator, "CodeGenerator" },
         { Surface::Jbig2Viewer, "JBIG2Viewer" },
         { Surface::PdfExampleGenerator, "PdfExampleGenerator" },
@@ -59,7 +60,7 @@ void ApplicationIdentityTest::surfacesUseCanonicalIdentity()
         { Surface::QuickShellSmoke, "QuickShellSmoke" },
         { Surface::ProductQuickAccessibilitySmoke, "ProductQuickAccessibilitySmoke" },
         { Surface::CanvasBenchmark, "CanvasBenchmark" },
-    }};
+    } };
 
     std::set<QString> applicationNames;
     for (const auto& [surface, expectedApplicationName] : surfaces)

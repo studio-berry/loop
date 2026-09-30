@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Dieline Required",
+  "description": "Requires a cutting-die / dieline so a blank page produces dieline-missing.",
+  "checks": [
+    {
+      "id": "dieline",
+      "severity": "error",
+      "required": true
+    }
+  ]
+}

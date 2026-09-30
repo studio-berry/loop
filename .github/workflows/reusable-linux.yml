@@ -78,7 +78,7 @@ jobs:
       - name: Verify resource-envelope contracts
         working-directory: loop
         run: |
-          python3 -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload scripts.resource_envelope.test_run_matrix scripts.resource_envelope.test_budget_exhaustion_corpus scripts.qualification.test_validate_resource_envelope_evidence -v
+          python3 -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload scripts.resource_envelope.test_run_matrix scripts.resource_envelope.test_run_matrix_probes scripts.resource_envelope.test_synthetic_workload scripts.resource_envelope.test_budget_exhaustion_corpus scripts.qualification.test_validate_resource_envelope_evidence scripts.qualification.test_build_resource_envelope_evidence -v
           python3 scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
           python3 scripts/qualification/validate_resource_envelope_evidence.py
           python3 scripts/resource_envelope/pathological_workload.py \
@@ -284,7 +284,13 @@ jobs:
         env:
           FAST_MODE: ${{ inputs.fast }}
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_BUILD_QUICK_SHELL_SMOKE=ON -DLOOP_BUILD_CANVAS_BENCHMARK=ON -DLOOP_BUILD_QUICK_CANVAS=ON -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          # The agent-fast proof builds and lints every changed target, so it needs the
+          # Widgets developer tools configured; the full release-profile build keeps them off.
+          TOOL_TARGETS=""
+          if [ "${FAST_MODE}" = "true" ]; then
+            TOOL_TARGETS="-DLOOP_BUILD_CODE_GENERATOR=ON -DLOOP_BUILD_JBIG2_VIEWER=ON -DLOOP_BUILD_EXAMPLE_GENERATOR=ON"
+          fi
+          cmake -B build -S . ${TOOL_TARGETS} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_BUILD_QUICK_SHELL_SMOKE=ON -DLOOP_BUILD_CANVAS_BENCHMARK=ON -DLOOP_BUILD_QUICK_CANVAS=ON -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${FAST_MODE}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build

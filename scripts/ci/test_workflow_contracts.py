@@ -8,17 +8,25 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class WorkflowContractTests(unittest.TestCase):
-    def test_issue_promotion_workflow_tracks_only_protected_promotion_pushes(self):
+    def test_packaging_dispatch_permissions_have_unique_keys(self):
+        workflow = (ROOT / ".github/workflows/dispatch-packaging.yml").read_text(
+            encoding="utf-8"
+        )
+        permissions = workflow.split("permissions:\n", 1)[1].split("\njobs:", 1)[0]
+        self.assertEqual(permissions.count("actions:"), 1)
+
+    def test_issue_promotion_workflow_tracks_all_promotion_pushes(self):
         workflow = (ROOT / ".github/workflows/issue-promotion.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("branches:\n      - dev\n      - stable", workflow)
+        self.assertIn("branches:\n      - dev\n      - unstable\n      - stable", workflow)
         self.assertNotIn("pull_request:", workflow)
         self.assertIn("issues: write", workflow)
         self.assertIn("pull-requests: read", workflow)
         self.assertIn("python3 scripts/github/issue_promotion.py", workflow)
         self.assertIn("python3 -m scripts.github.test_issue_promotion", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("queue: max", workflow)
 
     def test_agent_fast_runs_its_dedicated_policy_tests(self):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
@@ -31,6 +39,11 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("scripts/ci/test_check_loop_identity.py", workflow)
         self.assertIn("scripts/ci/check_loop_identity.py", workflow)
+
+    def test_source_integrity_runs_the_preflight_corpus_coverage_guard(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        job = workflow.split("  source_integrity:")[1].split("  agent-fast:")[0]
+        self.assertIn("python3 scripts/ci/test_preflight_corpus_coverage.py", job)
 
     def test_windows_installer_verifies_from_its_checkout_root(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")

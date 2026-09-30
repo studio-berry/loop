@@ -67,6 +67,7 @@ public:
     {
         const QString jobId =
             spec.jobId.isEmpty() ? QStringLiteral("job-%1").arg(++m_sequence) : spec.jobId;
+        m_specs.insert(jobId, spec);
         m_status.insert(jobId, pdf::PDFJobStatus::Queued);
 
         if (runInline)
@@ -92,6 +93,9 @@ public:
         pdf::PDFJobSnapshot result;
         result.jobId = jobId;
         result.status = m_status.value(jobId, pdf::PDFJobStatus::Succeeded);
+        result.kind = m_specs.value(jobId).kind;
+        result.documentKey = m_specs.value(jobId).documentKey;
+        result.documentRevision = m_specs.value(jobId).documentRevision;
         return result;
     }
 
@@ -111,6 +115,7 @@ public:
 private:
     quint64 m_sequence = 0;
     QHash<QString, pdf::PDFJobStatus> m_status;
+    QHash<QString, pdf::PDFJobSpec> m_specs;
 };
 
 class FakeDocumentLoader final : public pdfinteraction::IDocumentLoader

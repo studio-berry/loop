@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Conformance Claims",
+  "description": "Isolates conformance-claims for unsupported PDF/X-5 declarations.",
+  "checks": [
+    {
+      "id": "conformance-claims",
+      "severity": "warning"
+    }
+  ]
+}

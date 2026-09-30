@@ -54,6 +54,19 @@ class PackageEvidencePairTests(unittest.TestCase):
             self.assertEqual(pair["status"], "passed")
             self.assertEqual(pair["source_sha"], source_sha)
 
+    def test_malformed_identity_is_rejected_without_coercion(self):
+        invalid_records = [[], evidence("linux", 1)]
+        numeric_digest = evidence("linux", "d" * 40)
+        numeric_digest["package"]["sha256"] = int("1" * 64)
+        invalid_records.append(numeric_digest)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "linux.json"
+            for record in invalid_records:
+                with self.subTest(record=record):
+                    path.write_text(json.dumps(record), encoding="utf-8")
+                    with self.assertRaises(PAIR.PairError):
+                        PAIR.load(path, "linux")
+
     def test_pair_rejects_mismatched_sha_and_failed_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

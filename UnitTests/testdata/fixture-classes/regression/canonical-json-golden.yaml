@@ -1,0 +1,10 @@
+id: canonical-json-golden
+class: regression
+origin: UnitTests/testdata/canonical-json/
+expected_behavior: Linux and Windows produce identical pdf::canonicalJson bytes and SHA-256 digests for the committed golden vectors. Do not retune expected digests to absorb encoder drift.
+difficulty: medium
+why_it_exists: Pins D1 canonical JSON byte format (RFC 8785 key order plus documented Qt Compact exceptions) for identity-bearing 0.3.0 digests.
+metrics:
+  - canonical-json-digest-stability
+approval_required: true
+expected_output: digest-match

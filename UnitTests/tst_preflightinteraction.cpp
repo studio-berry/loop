@@ -311,6 +311,7 @@ void PreflightInteractionTest::controllerRepresentsIncompleteRun()
 void PreflightInteractionTest::controllerMarksAnInFlightRunStaleAndCancelsIt()
 {
     pdf::PDFJobScheduler scheduler(1);
+    scheduler.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-1"));
     PreflightController controller(&scheduler);
     std::atomic_bool started = false;
 

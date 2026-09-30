@@ -40,3 +40,22 @@ postflight, Action List step results, the Editor controller, and the
 certificate gate consume this same contract. New surfaces must call the Core
 reducer or consume the normalized `verdict` object; they must not infer status
 from `errors.isEmpty()` or `findings.isEmpty()`.
+
+## Typed inspection receipt
+
+`buildPreflightInspectionReceipt()` projects a Core result, its effective
+profile, the current `PDFRevisionIdentity`, and the evidence graph into one
+`PreflightInspectionReceipt`. The receipt carries the exact input digest,
+revision, profile identity and digest, coverage scope and per-check completion,
+sorted evidence IDs, weakest recorded evidence fidelity, explicit limitations,
+and the canonical four-state verdict. It is an in-memory Core contract; the
+preflight report and evidence-bundle schemas are unchanged.
+
+The receipt identity is SHA-256 over canonical JSON containing the input digest,
+effective profile digest, and evaluated coverage scope, with a versioned kind.
+It is stable when the same bytes and policy are inspected again, even if the
+session revision counter changes. A missing, duplicate, unsupported, skipped,
+or budget-limited check status, incomplete evidence, or unsupported fidelity
+prevents a PASS receipt. A definite blocking finding remains FAIL, with any
+coverage limitation still visible. Mismatched input, profile, or revision
+provenance rejects receipt construction before publication.

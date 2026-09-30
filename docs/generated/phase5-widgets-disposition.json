@@ -105,6 +105,12 @@
         "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
       },
       {
+        "id": "loop-pdf-worker",
+        "artifact": "loop-pdf-worker",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
         "id": "loop-lib-core",
         "artifact": "LoopLibCore",
         "status": "explained-non-widgets-boundary",
