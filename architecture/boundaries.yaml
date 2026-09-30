@@ -5,10 +5,10 @@ widgets_link_tokens:
   - Qt6::Widgets
   - Qt6::QuickWidgets
 widgets_link_allow:
-  - CanvasBenchmark/CMakeLists.txt
-  - CodeGenerator/CMakeLists.txt
-  - JBIG2_Viewer/CMakeLists.txt
-  - PdfExampleGenerator/CMakeLists.txt
+  - tools/CanvasBenchmark/CMakeLists.txt
+  - tools/CodeGenerator/CMakeLists.txt
+  - tools/JBIG2_Viewer/CMakeLists.txt
+  - tools/PdfExampleGenerator/CMakeLists.txt
 layers:
   - id: core
     cmake: LoopLibCore/CMakeLists.txt

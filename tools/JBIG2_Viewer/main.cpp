@@ -20,21 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "generatormainwindow.h"
+#include "mainwindow.h"
 #include "pdfapplicationidentity.h"
 #include "pdfsettings.h"
 
-#include <QHash>
 #include <QApplication>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    QHashSeed::globalSeed().setDeterministicGlobalSeed();
-
     QApplication a(argc, argv);
-    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::CodeGenerator);
+
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::Jbig2Viewer);
     pdf::PDFSettings::migrateLegacySettings();
-    GeneratorMainWindow w;
+
+    MainWindow w;
     w.show();
     return a.exec();
 }

@@ -20,18 +20,19 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef PDFEXAMPLESGENERATOR_H
-#define PDFEXAMPLESGENERATOR_H
+#include <QApplication>
 
-class PDFExamplesGenerator
+#include "pdfapplicationidentity.h"
+#include "pdfsettings.h"
+#include "pdfexamplesgenerator.h"
+
+int main(int argc, char* argv[])
 {
-public:
-    explicit PDFExamplesGenerator() = delete;
-
-    static void generateAnnotationsExample();
-    static void generatePageBoxesExample();
-    static void generateOutlineExample();
-    static void generatePageDrawExample();
-};
-
-#endif // PDFEXAMPLESGENERATOR_H
+    QApplication a(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfExampleGenerator);
+    pdf::PDFSettings::migrateLegacySettings();
+    PDFExamplesGenerator::generateAnnotationsExample();
+    PDFExamplesGenerator::generatePageBoxesExample();
+    PDFExamplesGenerator::generateOutlineExample();
+    PDFExamplesGenerator::generatePageDrawExample();
+}

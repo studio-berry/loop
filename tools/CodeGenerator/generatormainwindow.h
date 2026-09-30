@@ -119,4 +119,4 @@ private:
     QString m_XFAsourceFileName;
 };
 
-#endif // GENERATORMAINWINDOW_H
+#endif   // GENERATORMAINWINDOW_H

@@ -17,18 +17,12 @@
   },
   "inputs": {
     "cmake_files": [
-      "CanvasBenchmark/CMakeLists.txt",
-      "CodeGenerator/CMakeLists.txt",
-      "JBIG2_Viewer/CMakeLists.txt",
       "LoopEditor/CMakeLists.txt",
       "LoopLibCore/CMakeLists.txt",
       "LoopLibInteraction/CMakeLists.txt",
       "LoopLibQuick/CMakeLists.txt",
-      "PdfExampleGenerator/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
-      "ProductQuickAccessibilitySmoke/CMakeLists.txt",
-      "QuickShellSmoke/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
@@ -98,7 +92,13 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
-      "loop-preflight/tools/CMakeLists.txt"
+      "loop-preflight/tools/CMakeLists.txt",
+      "tools/CanvasBenchmark/CMakeLists.txt",
+      "tools/CodeGenerator/CMakeLists.txt",
+      "tools/JBIG2_Viewer/CMakeLists.txt",
+      "tools/PdfExampleGenerator/CMakeLists.txt",
+      "tools/ProductQuickAccessibilitySmoke/CMakeLists.txt",
+      "tools/QuickShellSmoke/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loop-shell.json",
     "product_ledger": "docs/product-surface.json",
@@ -108,7 +108,7 @@
     {
       "id": "CanvasBenchmark",
       "kind": "executable",
-      "cmake": "CanvasBenchmark/CMakeLists.txt",
+      "cmake": "tools/CanvasBenchmark/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "qualification target excluded from the product-surface manifest",
       "install_rule": false,
@@ -136,7 +136,11 @@
       "transitive_targets": [
         "LoopLibCore"
       ],
-      "transitive_qt_modules": [],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
         "Gui",
@@ -144,7 +148,10 @@
         "Quick",
         "QuickControls2",
         "QuickWidgets",
-        "Widgets"
+        "Sql",
+        "Svg",
+        "Widgets",
+        "Xml"
       ],
       "widgets_linkage": "direct",
       "widgets_paths": [
@@ -158,7 +165,7 @@
     {
       "id": "CodeGenerator",
       "kind": "executable",
-      "cmake": "CodeGenerator/CMakeLists.txt",
+      "cmake": "tools/CodeGenerator/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "LOOP_BUILD_CODE_GENERATOR=OFF from docs/product-surface.json",
       "install_rule": false,
@@ -180,10 +187,15 @@
       "transitive_targets": [
         "LoopLibCore"
       ],
-      "transitive_qt_modules": [],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg"
+      ],
       "qt_modules": [
         "Core",
         "Gui",
+        "Sql",
+        "Svg",
         "Widgets",
         "Xml"
       ],
@@ -199,7 +211,7 @@
     {
       "id": "JBIG2_VIEWER",
       "kind": "executable",
-      "cmake": "JBIG2_Viewer/CMakeLists.txt",
+      "cmake": "tools/JBIG2_Viewer/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "LOOP_BUILD_JBIG2_VIEWER=OFF from docs/product-surface.json",
       "install_rule": false,
@@ -219,11 +231,18 @@
       "transitive_targets": [
         "LoopLibCore"
       ],
-      "transitive_qt_modules": [],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
         "Gui",
-        "Widgets"
+        "Sql",
+        "Svg",
+        "Widgets",
+        "Xml"
       ],
       "widgets_linkage": "direct",
       "widgets_paths": [
@@ -543,7 +562,7 @@
     {
       "id": "PdfExampleGenerator",
       "kind": "executable",
-      "cmake": "PdfExampleGenerator/CMakeLists.txt",
+      "cmake": "tools/PdfExampleGenerator/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "LOOP_BUILD_EXAMPLE_GENERATOR=OFF from docs/product-surface.json",
       "install_rule": false,
@@ -628,7 +647,7 @@
     {
       "id": "ProductQuickAccessibilitySmoke",
       "kind": "executable",
-      "cmake": "ProductQuickAccessibilitySmoke/CMakeLists.txt",
+      "cmake": "tools/ProductQuickAccessibilitySmoke/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "qualification target excluded from the product-surface manifest",
       "install_rule": false,
@@ -681,7 +700,7 @@
     {
       "id": "QuickShellSmoke",
       "kind": "executable",
-      "cmake": "QuickShellSmoke/CMakeLists.txt",
+      "cmake": "tools/QuickShellSmoke/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "qualification target excluded from the product-surface manifest",
       "install_rule": false,
@@ -3464,7 +3483,7 @@
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
-      "cmake": "CanvasBenchmark/CMakeLists.txt"
+      "cmake": "tools/CanvasBenchmark/CMakeLists.txt"
     },
     {
       "target": "CodeGenerator",
@@ -3472,7 +3491,7 @@
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
-      "cmake": "CodeGenerator/CMakeLists.txt"
+      "cmake": "tools/CodeGenerator/CMakeLists.txt"
     },
     {
       "target": "JBIG2_VIEWER",
@@ -3480,7 +3499,7 @@
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
-      "cmake": "JBIG2_Viewer/CMakeLists.txt"
+      "cmake": "tools/JBIG2_Viewer/CMakeLists.txt"
     },
     {
       "target": "PdfExampleGenerator",
@@ -3488,21 +3507,21 @@
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
-      "cmake": "PdfExampleGenerator/CMakeLists.txt"
+      "cmake": "tools/PdfExampleGenerator/CMakeLists.txt"
     }
   ],
   "plugin_ui": [],
   "ui_forms": [
     {
-      "id": "ui:CodeGenerator/generatormainwindow.ui",
-      "path": "CodeGenerator/generatormainwindow.ui",
+      "id": "ui:tools/CodeGenerator/generatormainwindow.ui",
+      "path": "tools/CodeGenerator/generatormainwindow.ui",
       "owner_target": "CodeGenerator",
       "plugin": null,
       "widgets_related": true
     },
     {
-      "id": "ui:JBIG2_Viewer/mainwindow.ui",
-      "path": "JBIG2_Viewer/mainwindow.ui",
+      "id": "ui:tools/JBIG2_Viewer/mainwindow.ui",
+      "path": "tools/JBIG2_Viewer/mainwindow.ui",
       "owner_target": "JBIG2_VIEWER",
       "plugin": null,
       "widgets_related": true
@@ -3513,7 +3532,7 @@
       "id": "target:CanvasBenchmark",
       "kind": "developer-tool",
       "target": "CanvasBenchmark",
-      "cmake": "CanvasBenchmark/CMakeLists.txt",
+      "cmake": "tools/CanvasBenchmark/CMakeLists.txt",
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
@@ -3523,7 +3542,7 @@
       "id": "target:CodeGenerator",
       "kind": "developer-tool",
       "target": "CodeGenerator",
-      "cmake": "CodeGenerator/CMakeLists.txt",
+      "cmake": "tools/CodeGenerator/CMakeLists.txt",
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
@@ -3533,7 +3552,7 @@
       "id": "target:JBIG2_VIEWER",
       "kind": "developer-tool",
       "target": "JBIG2_VIEWER",
-      "cmake": "JBIG2_Viewer/CMakeLists.txt",
+      "cmake": "tools/JBIG2_Viewer/CMakeLists.txt",
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
@@ -3543,16 +3562,16 @@
       "id": "target:PdfExampleGenerator",
       "kind": "developer-tool",
       "target": "PdfExampleGenerator",
-      "cmake": "PdfExampleGenerator/CMakeLists.txt",
+      "cmake": "tools/PdfExampleGenerator/CMakeLists.txt",
       "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
     },
     {
-      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "id": "ui:tools/CodeGenerator/generatormainwindow.ui",
       "kind": "ui-form",
-      "path": "CodeGenerator/generatormainwindow.ui",
+      "path": "tools/CodeGenerator/generatormainwindow.ui",
       "target": "CodeGenerator",
       "plugin": null,
       "profile_enabled": false,
@@ -3563,9 +3582,9 @@
       ]
     },
     {
-      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "id": "ui:tools/JBIG2_Viewer/mainwindow.ui",
       "kind": "ui-form",
-      "path": "JBIG2_Viewer/mainwindow.ui",
+      "path": "tools/JBIG2_Viewer/mainwindow.ui",
       "target": "JBIG2_VIEWER",
       "plugin": null,
       "profile_enabled": false,
