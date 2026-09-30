@@ -941,6 +941,7 @@ void PreflightEngineTest::run_fontIntegrity_reportsShownGlyphsMissingFromSubset(
 
 void PreflightEngineTest::classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces()
 {
+    const QPainterPath* noGlyph = nullptr;
     const QPainterPath empty;
     QPainterPath outline;
     outline.addRect(0, 0, 1, 1);
@@ -953,8 +954,8 @@ void PreflightEngineTest::classifyShownGlyph_separatesDefectsFromAdvancesAndSpac
     };
 
     QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(-120.0)) == pdf::PDFShownGlyphDefect::None);
-    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(nullptr, QChar(), 500.0, 7)) == pdf::PDFShownGlyphDefect::Unresolved);
-    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(nullptr, QChar(), 500.0, 0)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(noGlyph, QChar(), 500.0, 7)) == pdf::PDFShownGlyphDefect::Unresolved);
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(noGlyph, QChar(), 500.0, 0)) == pdf::PDFShownGlyphDefect::None);
     QVERIFY(pdf::classifyShownGlyph(glyphItem(&outline, QChar('A'), 0)) == pdf::PDFShownGlyphDefect::Notdef);
     QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar('A'), 12)) == pdf::PDFShownGlyphDefect::EmptyOutline);
     QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar(' '), 12)) == pdf::PDFShownGlyphDefect::None);
