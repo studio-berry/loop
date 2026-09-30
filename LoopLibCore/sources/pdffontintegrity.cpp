@@ -24,6 +24,7 @@
 
 #include "pdffont.h"
 
+#include <QPainterPath>
 #include <QSet>
 
 #include <algorithm>
