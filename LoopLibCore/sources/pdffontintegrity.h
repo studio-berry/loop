@@ -50,9 +50,9 @@ LOOPLIBCORESHARED_EXPORT PDFFontIntegrityResult inspectPDFFontIntegrity(const PD
 enum class PDFShownGlyphDefect
 {
     None,
-    Unresolved, ///< The shown code resolved to no glyph (TextSequence::unresolvedCodes).
-    Notdef,     ///< The shown code resolved to glyph 0 (.notdef).
-    EmptyOutline ///< The glyph exists but draws nothing for a visible character.
+    Unresolved,   ///< The shown code resolved to no glyph (TextSequence::unresolvedCodes).
+    Notdef,   ///< The shown code resolved to glyph 0 (.notdef).
+    EmptyOutline   ///< The glyph exists but draws nothing for a visible character.
 };
 
 /// Classifies one resolved glyph item of a text sequence. Advances (TJ
@@ -62,6 +62,6 @@ LOOPLIBCORESHARED_EXPORT PDFShownGlyphDefect classifyShownGlyph(const TextSequen
 
 LOOPLIBCORESHARED_EXPORT QString shownGlyphDefectName(PDFShownGlyphDefect defect);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFFONTINTEGRITY_H
+#endif   // PDFFONTINTEGRITY_H

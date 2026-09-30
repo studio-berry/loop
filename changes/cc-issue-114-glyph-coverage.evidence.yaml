@@ -1,0 +1,17 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: font-glyph-coverage-regression-fixture
+    evidence:
+      - unit:agent-policy:preflight
+      - differential:UnitTestsPreflightCorpus
+      - architecture:docs/generated/preflight-corpus-coverage.json
+  - id: shown-code-glyph-audit
+    evidence:
+      - unit:agent-policy:core
+      - unit:UnitTestsPreflightEngine
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - Only UnitTestsPreflightEngine and UnitTestsPreflightCorpus were built and run locally; the linux-build and windows-build CI lanes run the remaining mapped targets.
+  - Composite CID 0 (default whitespace) and Type 3 glyph procedures are not audited; Type 1 and CFF glyph-name coverage relies on the realized font's name lookup.
