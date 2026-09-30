@@ -9,8 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "LoopEditor" / "qml"
-MIRROR = ROOT / "ProductQuickAccessibilitySmoke" / "qml"
-SMOKE_MAIN = ROOT / "ProductQuickAccessibilitySmoke" / "main.cpp"
+MIRROR = ROOT / "tools" / "ProductQuickAccessibilitySmoke" / "qml"
+SMOKE_MAIN = ROOT / "tools" / "ProductQuickAccessibilitySmoke" / "main.cpp"
 
 
 class ProductQuickAccessibilitySmokeContractTests(unittest.TestCase):
