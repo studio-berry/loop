@@ -234,6 +234,29 @@ subsystems:
         bind: catalog
         id: docs/generated/preflight-corpus-coverage.json
         executes: binding
+  - id: core-qualification
+    summary: Internal L01 CI and package provenance checks; module admission remains reviewed.
+    paths:
+      - scripts/qualification/check_core_qualification.py
+      - scripts/qualification/test_check_core_qualification.py
+      - scripts/ci/compare_package_boundary_evidence.py
+      - scripts/ci/test_compare_package_boundary_evidence.py
+      - docs/CORE_QUALIFICATION.md
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_check_core_qualification.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_compare_package_boundary_evidence.py
+        executes: binding
+      - kind: unit
+        bind: workflow
+        id: core-qualification-ci
+        ref: .github/workflows/ci.yml
+        contains: scripts.qualification.test_check_core_qualification
+        executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
     paths:
