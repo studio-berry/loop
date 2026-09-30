@@ -26,7 +26,7 @@ only half reachable today: the approval half is pinned by
 `UnitTestsOperationHistory::noSavePathProducesAnApprovedOutputRecord` (no save
 path records an approval or an approved output, so a recovered file cannot be
 presented as approved), and the restore half is tracked by
-[#575](https://github.com/studio-berry/loop/issues/575).
+legacy #575.
 
 ## Safety contract
 

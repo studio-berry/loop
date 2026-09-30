@@ -169,4 +169,4 @@ adoption preserves feature delivery while those risks are measured.
 - [Qt Quick Controls](https://doc.qt.io/qt-6/qtquickcontrols-index.html)
 - [Qt 6.11 changes to Qt Quick](https://doc.qt.io/qt-6/quick-changes-qt6.html)
 - [QQuickWindow scene-graph backend selection](https://doc.qt.io/qt-6/qquickwindow.html)
-- [Loop issue #178](https://github.com/studio-berry/loop/issues/178)
+- legacy issue #178

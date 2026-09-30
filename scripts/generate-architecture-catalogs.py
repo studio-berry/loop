@@ -13,6 +13,7 @@ import argparse
 import difflib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -167,7 +168,12 @@ PREFLIGHT_BACKLOG_FIELDS = ("id", "priority", "gap", "families", "state", "close
 PREFLIGHT_BACKLOG_PRIORITIES = {"P1", "P2", "P3"}
 PREFLIGHT_BACKLOG_STATES = {"open", "landed", "closed"}
 PREFLIGHT_BACKLOG_UNFILED = "unfiled"
+GITHUB_ISSUE_REPOSITORY = "studio-berry/loop"
+LEGACY_ISSUE_REPOSITORY = "legacy"
 GITHUB_ISSUE_REF = re.compile(r"#[1-9][0-9]*")
+LEGACY_ISSUE_REF = re.compile(r"legacy#[1-9][0-9]*")
+ISSUE_RECORD_KEY = re.compile(r"(?:legacy)?#[1-9][0-9]*")
+ISSUE_REF_IN_TEXT = re.compile(r"(?<![\w/])(?:legacy)?#[1-9][0-9]*")
 CHECK_ID = re.compile(r"^[a-z][a-z0-9-]*$")
 
 
@@ -366,24 +372,39 @@ def build_preflight_backlog(
     """Validate the prioritised coverage backlog and emit it as its own artifact.
 
     Every gap row is cross-referenced: ``closed_by`` is the literal ``unfiled``,
-    a GitHub issue number the overlay recorded from ``gh issue view``, or a
-    registered check id. Nothing here is inferred -- an unverified issue number
-    fails the build, and a state that disagrees with the recorded issue state
-    fails the build, so the backlog cannot rot into a wish list.
+    an issue the overlay recorded, or a registered check id. Nothing here is
+    inferred -- an unverified issue number fails the build, and a state that
+    disagrees with the recorded issue state fails the build, so the backlog
+    cannot rot into a wish list.
+
+    The overlay holds two kinds of record. ``#<n>`` is an issue in
+    ``studio-berry/loop`` that ``--verify-github`` can read back. ``legacy#<n>``
+    is a frozen snapshot from the retired repository, whose numbers overlap the
+    live ones and can no longer be read back: it may document a row that was
+    closed there, but it can never be the open tracker of a gap.
     """
     issues = overlay.get("github_issues")
     if not isinstance(issues, dict) or not issues:
         raise ValueError("preflight catalog overlay is missing github_issues")
     verified: dict[str, dict[str, Any]] = {}
     for reference, entry in issues.items():
-        if not isinstance(reference, str) or not GITHUB_ISSUE_REF.fullmatch(reference):
-            raise ValueError(f"github_issues key '{reference}' is not a '#<number>' reference")
+        if not isinstance(reference, str) or not ISSUE_RECORD_KEY.fullmatch(reference):
+            raise ValueError(
+                f"github_issues key '{reference}' is not a '#<number>' or 'legacy#<number>' reference"
+            )
         if not isinstance(entry, dict):
             raise ValueError(f"github_issues entry '{reference}' must be an object")
-        absent = sorted({"number", "title", "state", "milestone"} - set(entry))
+        absent = sorted({"number", "title", "state", "milestone", "repository"} - set(entry))
         if absent:
             raise ValueError(f"github_issues entry '{reference}' missing {', '.join(absent)}")
-        if entry["number"] != int(reference[1:]):
+        expected_repository = (
+            LEGACY_ISSUE_REPOSITORY if LEGACY_ISSUE_REF.fullmatch(reference) else GITHUB_ISSUE_REPOSITORY
+        )
+        if entry["repository"] != expected_repository:
+            raise ValueError(
+                f"github_issues entry '{reference}' must record repository '{expected_repository}'"
+            )
+        if entry["number"] != int(reference.split("#")[1]):
             raise ValueError(f"github_issues entry '{reference}' records a different number")
         if entry["state"] not in {"OPEN", "CLOSED"}:
             raise ValueError(f"github_issues entry '{reference}' must record the GitHub state verbatim")
@@ -434,11 +455,16 @@ def build_preflight_backlog(
         if closed_by == PREFLIGHT_BACKLOG_UNFILED:
             if state != "open":
                 raise ValueError(f"backlog row '{identifier}' is unfiled but its state is '{state}'")
-        elif isinstance(closed_by, str) and GITHUB_ISSUE_REF.fullmatch(closed_by):
+        elif isinstance(closed_by, str) and ISSUE_RECORD_KEY.fullmatch(closed_by):
             if closed_by not in verified:
                 raise ValueError(
                     f"backlog row '{identifier}' references unverified issue {closed_by}; "
                     "confirm it with 'gh issue view' and record it in github_issues first"
+                )
+            if LEGACY_ISSUE_REF.fullmatch(closed_by) and verified[closed_by]["state"] != "CLOSED":
+                raise ValueError(
+                    f"backlog row '{identifier}' cites open legacy issue {closed_by}, which can no "
+                    "longer be read back; re-point it to a live issue or unfile it with a deferral"
                 )
             if state == "landed":
                 raise ValueError(f"backlog row '{identifier}' is landed by a check, not by {closed_by}")
@@ -487,9 +513,9 @@ def build_preflight_backlog(
 
     referenced: set[str] = set()
     for row in parsed:
-        if GITHUB_ISSUE_REF.fullmatch(row["closed_by"]):
+        if ISSUE_RECORD_KEY.fullmatch(row["closed_by"]):
             referenced.add(row["closed_by"])
-        referenced.update(re.findall(GITHUB_ISSUE_REF, row["gap"]))
+        referenced.update(ISSUE_REF_IN_TEXT.findall(row["gap"]))
     unused = sorted(reference for reference in verified if reference not in referenced)
     if unused:
         raise ValueError("github_issues entries cited by no backlog row: " + ", ".join(unused))
@@ -1170,6 +1196,57 @@ def serialized_preflight_catalog() -> str:
     return json.dumps(build_preflight_check_catalog(registry, parse_repair_operations()), indent=2, sort_keys=True) + "\n"
 
 
+def fetch_github_issue(number: int) -> dict[str, Any] | None:
+    """Read one issue back from GitHub, or None when the number does not exist."""
+    result = subprocess.run(
+        ["gh", "api", f"repos/{GITHUB_ISSUE_REPOSITORY}/issues/{number}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if result.returncode != 0:
+        if "Not Found" in result.stdout or "Not Found" in result.stderr:
+            return None
+        raise OSError(f"gh api issue {number} failed: {result.stderr.strip()}")
+    live = json.loads(result.stdout)
+    return {
+        "title": live["title"],
+        "state": live["state"].upper(),
+        "milestone": (live.get("milestone") or {}).get("title"),
+        "is_pull_request": "pull_request" in live,
+    }
+
+
+def verify_issue_records_against_github(
+    records: dict[str, dict[str, Any]], fetch: Any = fetch_github_issue
+) -> list[str]:
+    """Compare every live ``#<n>`` record with GitHub; legacy snapshots are not re-read.
+
+    Issue and pull-request numbers share one sequence, so a record that resolves
+    to a pull request, or to an issue with another title, is a collision rather
+    than a verified reference.
+    """
+    problems: list[str] = []
+    live_records = [
+        (reference, entry)
+        for reference, entry in records.items()
+        if entry["repository"] == GITHUB_ISSUE_REPOSITORY
+    ]
+    for reference, entry in sorted(live_records, key=lambda item: item[1]["number"]):
+        live = fetch(entry["number"])
+        if live is None:
+            problems.append(f"{reference}: no such issue in {GITHUB_ISSUE_REPOSITORY}")
+            continue
+        if live["is_pull_request"]:
+            problems.append(f"{reference}: resolves to a pull request, not an issue")
+            continue
+        for field in ("title", "state", "milestone"):
+            if live[field] != entry[field]:
+                problems.append(f"{reference}: {field} is {live[field]!r} on GitHub, recorded {entry[field]!r}")
+    return problems
+
+
 def serialized_preflight_backlog() -> str:
     overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
     registry = parse_preflight_checks()
@@ -1212,6 +1289,11 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="validate ADRs and the committed catalog")
     mode.add_argument("--write", action="store_true", help="validate ADRs and write the catalog")
+    parser.add_argument(
+        "--verify-github",
+        action="store_true",
+        help="read every live github_issues record back from GitHub (needs gh; not run in CI)",
+    )
     args = parser.parse_args()
 
     errors = validate_adrs()
@@ -1229,6 +1311,19 @@ def main() -> int:
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
         return 1
+
+    if args.verify_github:
+        try:
+            problems = verify_issue_records_against_github(
+                json.loads(read(PREFLIGHT_OVERLAY_PATH))["github_issues"]
+            )
+        except OSError as error:
+            print(f"error: cannot read issues back from GitHub: {error}", file=sys.stderr)
+            return 1
+        if problems:
+            for problem in problems:
+                print(f"error: github_issues {problem}", file=sys.stderr)
+            return 1
 
     if args.write:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)

@@ -27,7 +27,7 @@ The catalog has **22 registered checks**: 5 `covered`, 17 `partial`, and no `not
 | Canonical Pass/Fail/Incomplete/Error reducer and certificate gate | **Reuse; prove** all four states and no zero-finding budget PASS under [#16](https://github.com/studio-berry/loop2/issues/16). Core verdict. | [`pdfpreflightverdict.cpp`](../LoopLibCore/sources/pdfpreflightverdict.cpp), [verdict contract](PREFLIGHT_VERDICT.md); `UnitTestsPreflightVerdict`, `UnitTestsPreflightEngine`. `PreflightResult::pass` is derived compatibility data. |
 | Fixed-capacity job scheduler, cancellation, stale-result discard | **Reuse** the existing scheduler; **repair** producer/result fencing under [#17](https://github.com/studio-berry/loop2/issues/17). Core scheduling. | [`pdfjobscheduler.cpp`](../LoopLibCore/sources/pdfjobscheduler.cpp), [scheduler contract](JOB_SCHEDULER.md); `UnitTestsJobScheduler`, `UnitTestsRevisionStress`, `scripts/ci/check_unmanaged_async.py`. Caller coverage is not complete merely because the scheduler exists. |
 | Parser, reader, renderer, session, processing and resource budgets | **Reuse** Core primitives; **prove** hostile and production envelopes under [#19](https://github.com/studio-berry/loop2/issues/19). Core PDF. | [`pdfdocumentreader.cpp`](../LoopLibCore/sources/pdfdocumentreader.cpp) calls [`pdfparser.cpp`](../LoopLibCore/sources/pdfparser.cpp); [`pdfrenderer.cpp`](../LoopLibCore/sources/pdfrenderer.cpp) and [budget contract](RESOURCE_BUDGETS.md) bound work. `UnitTestsProcessingBudget`, `UnitTestsResourceBudget`, `UnitTestsBudgetExhaustion`, `UnitTestsBudgetCorpus` are mapped tests. The unbudgeted cumulative `PDFFunction::createFunction()` path remains an explicit deferred contract-level gap in that document. |
-| PdfTool open/preflight process boundary | **Reuse** the Linux-first worker proof from [legacy #618](https://github.com/studio-berry/loop/issues/618); **repair/audit** remaining privileged-host paths under [#20](https://github.com/studio-berry/loop2/issues/20). PdfTool supervisor and Core. | [`pdfworkerprotocol.h`](../PdfTool/pdfworkerprotocol.h) allowlists `ping`, `open`, `preflight`, `cancel`; [`pdfworkerclient.cpp`](../PdfTool/pdfworkerclient.cpp) maps worker failure/timeout to unavailable/incomplete; [`pdfworkersandbox.cpp`](../PdfTool/pdfworkersandbox.cpp), `UnitTestsPdfWorkerIsolation`, `scripts/ci/check_pdf_worker_isolation.py`. Windows runtime tests skip the Linux sandbox proof; [`editorhost.cpp`](../LoopEditor/editorhost.cpp) still constructs an in-process `PreflightEngine`. The open [legacy #619](https://github.com/studio-berry/loop/issues/619) does not justify a replacement worker primitive. |
+| PdfTool open/preflight process boundary | **Reuse** the Linux-first worker proof from legacy #618; **repair/audit** remaining privileged-host paths under [#20](https://github.com/studio-berry/loop2/issues/20). PdfTool supervisor and Core. | [`pdfworkerprotocol.h`](../PdfTool/pdfworkerprotocol.h) allowlists `ping`, `open`, `preflight`, `cancel`; [`pdfworkerclient.cpp`](../PdfTool/pdfworkerclient.cpp) maps worker failure/timeout to unavailable/incomplete; [`pdfworkersandbox.cpp`](../PdfTool/pdfworkersandbox.cpp), `UnitTestsPdfWorkerIsolation`, `scripts/ci/check_pdf_worker_isolation.py`. Windows runtime tests skip the Linux sandbox proof; [`editorhost.cpp`](../LoopEditor/editorhost.cpp) still constructs an in-process `PreflightEngine`. The open legacy #619 does not justify a replacement worker primitive. |
 | Independent standards/rendering validation | **Reuse** the validation harness; **prove** independent oracle outputs and fidelity claims under [#18](https://github.com/studio-berry/loop2/issues/18). Core qualification. | [`check_independent_validation_gate.py`](../scripts/ci/check_independent_validation_gate.py), [independent evidence schema](schemas/independent-validation-evidence.schema.json), [coverage matrix](PREFLIGHT_COVERAGE_MATRIX.md), `UnitTestsConversionOracle`. The source gate checks presence/guards; it is not a current installed-runtime oracle result. |
 | Cross-platform exact-SHA admission | **Defer** release admission to [#21](https://github.com/studio-berry/loop2/issues/21). Core qualification with CI owners. | [Proof lanes](../architecture/proof-lanes.yaml) bind `linux-build` and `windows-build`; [parent exit gate](https://github.com/studio-berry/loop2/issues/2) requires one exact-SHA packet. No such packet is asserted by this inventory. |
 
@@ -48,14 +48,14 @@ These are **all 18 `open` rows** in the [generated coverage backlog](generated/p
 
 | Open gap ID | Priority | Disposition; evidence/legacy owner |
 | --- | --- | --- |
-| `barcode-slug-braille` | P1 | **Defer**; backlog row, [Loop #604](https://github.com/studio-berry/loop/issues/604). |
-| `devicen-per-colorant-ink-limit` | P1 | **Defer**; backlog row, [Loop #600](https://github.com/studio-berry/loop/issues/600). |
-| `gwg-2022-2024-certificates` | P1 | **Defer**; backlog row, [Loop #664](https://github.com/studio-berry/loop/issues/664). |
-| `imposition-and-reader-spreads` | P1 | **Defer**; backlog row, [Loop #603](https://github.com/studio-berry/loop/issues/603). |
-| `pdfvt-variable-data` | P1 | **Defer**; backlog row, [Loop #605](https://github.com/studio-berry/loop/issues/605). |
-| `bleed-raster-strip-depth` | P2 | **Defer**; backlog row, [Loop #47](https://github.com/studio-berry/loop/issues/47). |
+| `barcode-slug-braille` | P1 | **Defer**; backlog row, legacy #604. |
+| `devicen-per-colorant-ink-limit` | P1 | **Defer**; backlog row, legacy #600. |
+| `gwg-2022-2024-certificates` | P1 | **Defer**; backlog row, legacy #664. |
+| `imposition-and-reader-spreads` | P1 | **Defer**; backlog row, legacy #603. |
+| `pdfvt-variable-data` | P1 | **Defer**; backlog row, legacy #605. |
+| `bleed-raster-strip-depth` | P2 | **Defer**; backlog row, legacy #47. |
 | `color-mode-icc-alternate` | P2 | **Defer**; backlog row, unfiled. |
-| `dieline-geometry` | P2 | **Defer**; backlog row, [Loop #604](https://github.com/studio-berry/loop/issues/604). |
+| `dieline-geometry` | P2 | **Defer**; backlog row, legacy #604. |
 | `font-glyph-coverage` | P2 | **Defer**; backlog row, unfiled. |
 | `hidden-layers-ocmd` | P2 | **Defer**; backlog row, unfiled. |
 | `ink-coverage-raster-tac` | P2 | **Defer**; backlog row, unfiled. |
@@ -63,7 +63,7 @@ These are **all 18 `open` rows** in the [generated coverage backlog](generated/p
 | `obscured-content-occlusion` | P2 | **Defer**; backlog row, unfiled. |
 | `off-page-content-clipping` | P2 | **Defer**; backlog row, unfiled. |
 | `transparency-rip-interaction` | P2 | **Defer**; backlog row, unfiled. |
-| `white-overprint-renderer` | P2 | **Defer**; backlog row, [Loop #49](https://github.com/studio-berry/loop/issues/49). |
+| `white-overprint-renderer` | P2 | **Defer**; backlog row, legacy #49. |
 | `color-inventory-probe-depth` | P3 | **Defer**; backlog row, unfiled. |
 | `thin-parts-raster-budget` | P3 | **Defer**; backlog row, unfiled; current failure is incomplete rather than a silent PASS. |
 

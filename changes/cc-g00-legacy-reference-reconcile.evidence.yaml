@@ -1,0 +1,11 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: overlay-records-separate-live-and-legacy-issues
+    evidence:
+      - unit:scripts/ci/test_preflight_check_catalog.py
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: backlog-rows-point-at-live-trackers
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved: []
