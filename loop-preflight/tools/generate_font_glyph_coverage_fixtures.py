@@ -2,12 +2,13 @@
 
 Standard library only. The base is font-embedded.pdf, whose embedded TrueType
 subset parses cleanly but has a (1, 0) cmap that stops at code 127. The page
-content is rewritten to also show code 0xE9 from that font, which the program
-has no glyph for. Every table still parses, so font-integrity passed it clean
-before glyph coverage was audited.
+content is rewritten to also show codes the program has no glyph for. Every
+table still parses, so font-integrity passed it clean before glyph coverage was
+audited.
 
-The fixture carries the same embedded program in three shown-text locations: page
-content, a Form XObject, and a Widget annotation appearance stream.
+Each shown-text location uses its own missing code, so the reported codes prove
+which locations were traversed: 0xE9 in page content, 0xEA in a Form XObject and
+0xEB in a Widget annotation appearance stream.
 """
 
 from __future__ import annotations
@@ -21,7 +22,10 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "testdata" / "fixtures"
 BASE = DEFAULT_OUT / "font-embedded.pdf"
 
-MISSING_CODE = b"\351"  # octal 0xE9, outside the subset's 0..127 cmap
+# Octal escapes for codes outside the subset's 0..127 cmap.
+PAGE_CODE = b"\351"  # 0xE9
+FORM_CODE = b"\352"  # 0xEA
+ANNOTATION_CODE = b"\353"  # 0xEB
 
 
 def _objects(data: bytes) -> dict[int, bytes]:
@@ -44,11 +48,11 @@ def build() -> bytes:
 
     page_content = (
         b"1 0 0 1 0 0 cm 0 g\n"
-        b"BT 1 0 0 1 40 150 Tm /F2+0 18 Tf (Frisket fixture: embedded font ) Tj (" + MISSING_CODE + b") Tj ET\n"
+        b"BT 1 0 0 1 40 150 Tm /F2+0 18 Tf (Frisket fixture: embedded font ) Tj (" + PAGE_CODE + b") Tj ET\n"
         b"/Fm0 Do\n"
     )
-    form_content = b"BT 1 0 0 1 40 120 Tm /F2+0 18 Tf (" + MISSING_CODE + b") Tj ET\n"
-    appearance = b"BT 1 0 0 1 2 2 Tm /F2+0 12 Tf (" + MISSING_CODE + b") Tj ET\n"
+    form_content = b"BT 1 0 0 1 40 120 Tm /F2+0 18 Tf (" + FORM_CODE + b") Tj ET\n"
+    appearance = b"BT 1 0 0 1 2 2 Tm /F2+0 12 Tf (" + ANNOTATION_CODE + b") Tj ET\n"
     resources = b"/Resources << /Font 6 0 R >>"
 
     page = objects[4].replace(

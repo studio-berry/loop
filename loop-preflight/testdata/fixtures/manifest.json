@@ -881,7 +881,7 @@
       "check_ids": ["font-integrity"]
     },
     "source": "hand-built",
-    "notes": "#114 regression: embedded TrueType subset parses cleanly but has no glyph for shown code 0xE9 in page content, a Form XObject and a Widget appearance stream. Passed clean before glyph coverage was audited."
+    "notes": "#114 regression: embedded TrueType subset parses cleanly but has no glyph for shown codes 0xE9 (page content), 0xEA (Form XObject) and 0xEB (Widget appearance stream). Passed clean before glyph coverage was audited."
   },
   {
     "id": "thin-parts-clear",
