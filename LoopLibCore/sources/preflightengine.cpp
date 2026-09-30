@@ -5127,8 +5127,7 @@ private:
     PDFFontPointer embeddedShownFont() const
     {
         const PDFFontPointer font = getGraphicState()->getTextFont();
-        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded()
-            || font->getFontType() == FontType::Type3)
+        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded() || font->getFontType() == FontType::Type3)
         {
             return nullptr;
         }

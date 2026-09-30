@@ -378,19 +378,21 @@
         "evidence.font_subtype",
         "evidence.embedded",
         "evidence.inspection_complete",
-        "evidence.defects"
+        "evidence.defects",
+        "evidence.code_kind",
+        "evidence.missing_codes"
       ],
       "families": [
         "sheetfed-offset",
         "digital"
       ],
       "fixups": [],
-      "limitations": "Not a full glyph-coverage audit.",
-      "measures": "Embedded font bytes that fail to parse or cmap.",
+      "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. Composite CID 0 (default whitespace) and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
+      "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
       "parameters": [],
       "severity": [
         {
-          "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error",
+          "condition": "an embedded font program fails to parse or its cmap cannot be read, or a shown code resolves to no usable glyph; a complete inspection keeps the check severity, an incomplete one is forced to error",
           "finding_type": "font-integrity",
           "severity": "error"
         }
