@@ -93,6 +93,8 @@ struct TextSequenceItem
     QChar character;
     PDFReal advance = 0;
     CID cid = 0;
+    /// Glyph index in the font program; 0 is .notdef. Zero also for advances and Type 3 glyphs.
+    GID glyphIndex = 0;
 };
 
 struct TextSequence

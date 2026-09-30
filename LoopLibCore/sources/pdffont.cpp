@@ -1217,6 +1217,7 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
                 {
                     const Glyph& glyph = getGlyph(glyphIndex);
                     textSequence.items.emplace_back(&glyph.glyph, font->getUnicode(cid), glyph.advance, cid);
+                    textSequence.items.back().glyphIndex = glyphIndex;
                 }
                 else
                 {
@@ -1275,6 +1276,7 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
                 {
                     const Glyph& glyph = getGlyph(*glyphIndex);
                     textSequence.items.emplace_back(&glyph.glyph, character, glyph.advance, cid);
+                    textSequence.items.back().glyphIndex = *glyphIndex;
                 }
                 else
                 {

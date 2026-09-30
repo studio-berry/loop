@@ -517,8 +517,8 @@
    "fixups": []
   },
   "font-integrity": {
-   "measures": "Embedded font bytes that fail to parse or cmap.",
-   "limitations": "Not a full glyph-coverage audit.",
+   "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
+   "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. A missing glyph with zero advance, simple-font code 0, and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -529,7 +529,7 @@
     {
      "finding_type": "font-integrity",
      "severity": "error",
-     "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error"
+     "condition": "an embedded font program fails to parse or its cmap cannot be read, or a shown code resolves to no usable glyph; a complete inspection keeps the check severity, an incomplete one is forced to error"
     }
    ],
    "evidence": [
@@ -544,7 +544,9 @@
     "evidence.font_subtype",
     "evidence.embedded",
     "evidence.inspection_complete",
-    "evidence.defects"
+    "evidence.defects",
+    "evidence.code_kind",
+    "evidence.missing_codes"
    ],
    "fixups": []
   },
@@ -1482,13 +1484,13 @@
   {
    "id": "font-glyph-coverage",
    "priority": "P2",
-   "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+   "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
    "families": [
     "sheetfed-offset",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#114",
+   "state": "landed",
+   "closed_by": "font-integrity",
    "deferral": null
   },
   {

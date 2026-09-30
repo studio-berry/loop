@@ -151,4 +151,51 @@ PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font)
     return result;
 }
 
+PDFShownGlyphDefect classifyShownGlyph(const TextSequenceItem& item)
+{
+    if (item.isContentStream())
+    {
+        return PDFShownGlyphDefect::None;
+    }
+
+    if (!item.glyph)
+    {
+        // The realized font emits a glyphless item with the code's width when the
+        // code resolves to nothing. TJ adjustments carry cid 0.
+        return (item.cid != 0 && item.advance != 0.0) ? PDFShownGlyphDefect::Unresolved
+                                                        : PDFShownGlyphDefect::None;
+    }
+
+    if (item.glyphIndex == 0)
+    {
+        return PDFShownGlyphDefect::Notdef;
+    }
+
+    const bool visibleCharacter = !item.character.isNull() && !item.character.isSpace()
+        && item.character.category() != QChar::Other_Format
+        && item.character.category() != QChar::Other_Control;
+    if (visibleCharacter && item.glyph->isEmpty())
+    {
+        return PDFShownGlyphDefect::EmptyOutline;
+    }
+
+    return PDFShownGlyphDefect::None;
+}
+
+QString shownGlyphDefectName(PDFShownGlyphDefect defect)
+{
+    switch (defect)
+    {
+        case PDFShownGlyphDefect::Unresolved:
+            return QStringLiteral("MissingGlyph");
+        case PDFShownGlyphDefect::Notdef:
+            return QStringLiteral("NotdefGlyph");
+        case PDFShownGlyphDefect::EmptyOutline:
+            return QStringLiteral("EmptyGlyph");
+        case PDFShownGlyphDefect::None:
+            break;
+    }
+    return QString();
+}
+
 } // namespace pdf

@@ -32,6 +32,8 @@
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
 #include "pdffixupregistry.h"
+#include "pdffont.h"
+#include "pdffontintegrity.h"
 #include "pdfrepairoperation.h"
 #include "pdfobject.h"
 #include "pdfthinpartprobe.h"
@@ -82,6 +84,8 @@ private slots:
     void thinPartProbe_reportsBoundedWidthAndPrecision();
     void fontIntegrity_checkIsRegistered();
     void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
+    void run_fontIntegrity_reportsShownGlyphsMissingFromSubset();
+    void classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces();
     void hiddenContent_checksAreRegistered();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
     void run_includesProfileFixups();
@@ -899,6 +903,63 @@ void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
     QVERIFY(result.pass);
     QVERIFY(result.errors.isEmpty());
     QVERIFY(result.warnings.isEmpty());
+}
+
+void PreflightEngineTest::run_fontIntegrity_reportsShownGlyphsMissingFromSubset()
+{
+    // The subset parses cleanly but has no glyph for codes 0xE9 (page content),
+    // 0xEA (Form XObject) and 0xEB (annotation appearance stream).
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-glyph-missing.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Font integrity") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+
+    const pdf::PreflightFinding& finding = result.errors.first();
+    QCOMPARE(finding.checkId, QStringLiteral("font-integrity"));
+    QCOMPARE(finding.page, 1);
+    QCOMPARE(finding.evidence.value(QStringLiteral("font_resource")).toString(), QStringLiteral("F2+0"));
+    QCOMPARE(finding.evidence.value(QStringLiteral("inspection_complete")).toBool(), true);
+    QCOMPARE(finding.evidence.value(QStringLiteral("code_kind")).toString(), QStringLiteral("character-code"));
+    QCOMPARE(finding.evidence.value(QStringLiteral("missing_codes")).toArray(), (QJsonArray{ 0xE9, 0xEA, 0xEB }));
+    QVERIFY(finding.evidence.value(QStringLiteral("defects")).toArray().contains(QStringLiteral("MissingGlyph")));
+}
+
+void PreflightEngineTest::classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces()
+{
+    const QPainterPath empty;
+    QPainterPath outline;
+    outline.addRect(0, 0, 1, 1);
+
+    const auto glyphItem = [](const QPainterPath* path, QChar character, pdf::GID gid)
+    {
+        pdf::TextSequenceItem item(path, character, 500.0, 7);
+        item.glyphIndex = gid;
+        return item;
+    };
+
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(-120.0)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(nullptr, QChar(), 500.0, 7)) == pdf::PDFShownGlyphDefect::Unresolved);
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(nullptr, QChar(), 500.0, 0)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&outline, QChar('A'), 0)) == pdf::PDFShownGlyphDefect::Notdef);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar('A'), 12)) == pdf::PDFShownGlyphDefect::EmptyOutline);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar(' '), 12)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar(), 12)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&outline, QChar('A'), 12)) == pdf::PDFShownGlyphDefect::None);
 }
 
 void PreflightEngineTest::hiddenContent_checksAreRegistered()

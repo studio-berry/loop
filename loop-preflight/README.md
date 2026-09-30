@@ -83,6 +83,14 @@ defects with the font resource and object reference, and marks unsupported
 formats as incomplete rather than clean. Existing `embedded-fonts` ids and
 severity behavior are unchanged.
 
+It also audits glyph coverage: every character code or CID shown in page
+content, Form XObjects and annotation appearance streams is resolved through
+the font's encoding and cmap, and a code that resolves to no glyph, to
+`.notdef`, or to an empty outline for a visible character is reported per page
+and font with `evidence.missing_codes`. A zero-advance missing glyph, simple-font
+code 0 and Type 3 glyph procedures are not reported; a page whose content cannot
+be processed is reported with `inspection_complete: false`.
+
 ## Hidden and non-printing content
 
 The detection-only checks `invisible-content`, `hidden-layers`,
@@ -581,6 +589,7 @@ Corpus-gap fixtures added for #668 (each isolates one previously unexercised che
 | `obscured-content.pdf` | test-obscured-content | info | `obscured-content` |
 | `hidden-layers.pdf` | test-hidden-layers | warning | `hidden-layers` |
 | `font-integrity-corrupt.pdf` | test-font-integrity | fail | `font-integrity` |
+| `font-glyph-missing.pdf` | test-font-integrity | fail | `font-integrity` (shown codes absent from the subset) |
 | `thin-parts-clear.pdf` | test-thin-parts-clear | fail | `thin-parts` (not near-threshold) |
 | `blank-page.pdf` | test-dieline-required | fail | `dieline` |
 | `blank-page.pdf` | test-processing-steps-required | fail | `processing-steps` |

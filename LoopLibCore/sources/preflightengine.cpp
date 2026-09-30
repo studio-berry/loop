@@ -74,6 +74,7 @@
 #include <exception>
 #include <functional>
 #include <limits>
+#include <map>
 #include <set>
 
 namespace pdf
@@ -5052,6 +5053,70 @@ void runEmbeddedFontsCheck(PDFDocumentSession* session,
     }
 }
 
+struct ShownGlyphDefects
+{
+    QString subtype;
+    bool composite = false;
+    std::map<QString, std::set<unsigned int>> codesByDefect;
+};
+
+/// Records, per embedded font, the codes a page actually shows that do not
+/// resolve to a usable glyph. Page content, Form XObjects and annotation
+/// appearance streams all flow through the same text-sequence hook.
+class ShownGlyphCoverageProcessor final : public PDFPageContentProcessor
+{
+public:
+    using PDFPageContentProcessor::PDFPageContentProcessor;
+
+    void processFormStream(const PDFStream* stream)
+    {
+        if (stream && !isContentSuppressed())
+        {
+            processForm(stream);
+        }
+    }
+
+    const std::map<QString, ShownGlyphDefects>& defects() const { return m_defects; }
+
+protected:
+    bool isContentKindSuppressed(ContentKind kind) const override
+    {
+        return kind != ContentKind::Text && kind != ContentKind::Forms;
+    }
+
+    void performProcessTextSequence(const TextSequence& textSequence, ProcessOrder order) override
+    {
+        if (order != ProcessOrder::BeforeOperation)
+        {
+            return;
+        }
+
+        const PDFFontPointer font = getGraphicState()->getTextFont();
+        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded()
+            || font->getFontType() == FontType::Type3)
+        {
+            return;
+        }
+
+        for (const TextSequenceItem& item : textSequence.items)
+        {
+            const PDFShownGlyphDefect defect = classifyShownGlyph(item);
+            if (defect == PDFShownGlyphDefect::None)
+            {
+                continue;
+            }
+
+            ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font->getFontId())];
+            entry.subtype = QString::number(static_cast<int>(font->getFontType()));
+            entry.composite = font->getFontType() == FontType::Type0;
+            entry.codesByDefect[shownGlyphDefectName(defect)].insert(item.cid);
+        }
+    }
+
+private:
+    std::map<QString, ShownGlyphDefects> m_defects;
+};
+
 // LOW CONFIDENCE NOTE: DPI calculation uses getCurrentTransformationMatrix()
 // from the PDFPageContentProcessor state, which is in PDF user space.
 // This matches the existing PDFImageCollectorProcessor pattern in
@@ -5186,6 +5251,101 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
         if (page)
         {
             scanResources(page->getResources(), int(pageIndex + 1));
+        }
+    }
+
+    // Shown-glyph coverage: every code the pages, forms and annotation appearances
+    // actually show must resolve to a real glyph in the embedded program.
+    PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
+    PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    PDFModifiedDocument modifiedDocument(document, &ocActivity);
+    fontCache.setDocument(modifiedDocument);
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+    PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(document);
+    PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    PDFMeshQualitySettings meshQuality;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = document->getCatalog()->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        const int pageNumber = int(pageIndex + 1);
+        std::map<QString, ShownGlyphDefects> pageDefects;
+        bool incomplete = false;
+        QString incompleteReason;
+        try
+        {
+            ShownGlyphCoverageProcessor processor(page, document, &fontCache, cms.get(), &ocActivity,
+                                                  QTransform(), meshQuality, session->getProcessingBudget());
+            processor.processContents();
+            processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage*, const PDFStream* formStream)
+                                               { processor.processFormStream(formStream); });
+            pageDefects = processor.defects();
+        }
+        catch (const PDFException& exception)
+        {
+            incomplete = true;
+            incompleteReason = QString::fromUtf8(exception.what());
+        }
+
+        for (const auto& [fontName, shown] : pageDefects)
+        {
+            QStringList defectNames;
+            QStringList codeText;
+            QJsonArray missingCodes;
+            std::set<unsigned int> allCodes;
+            for (const auto& [defectName, codes] : shown.codesByDefect)
+            {
+                defectNames.append(defectName);
+                allCodes.insert(codes.begin(), codes.end());
+            }
+            for (unsigned int code : allCodes)
+            {
+                missingCodes.append(int(code));
+                codeText.append(QString::number(code));
+            }
+
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = pageNumber;
+            finding.type = QStringLiteral("font-integrity");
+            finding.checkId = check.id;
+            finding.severity = check.severity;
+            finding.message = PDFTranslationContext::tr("Font '%1' on page %2 has no usable glyph for shown %3: %4")
+                                  .arg(fontName)
+                                  .arg(pageNumber)
+                                  .arg(shown.composite ? QStringLiteral("CIDs") : QStringLiteral("character codes"),
+                                       codeText.join(QStringLiteral(", ")));
+            finding.evidence.insert(QStringLiteral("font_resource"), fontName);
+            finding.evidence.insert(QStringLiteral("font_subtype"), shown.subtype);
+            finding.evidence.insert(QStringLiteral("embedded"), true);
+            finding.evidence.insert(QStringLiteral("inspection_complete"), true);
+            finding.evidence.insert(QStringLiteral("code_kind"),
+                                    shown.composite ? QStringLiteral("cid") : QStringLiteral("character-code"));
+            finding.evidence.insert(QStringLiteral("missing_codes"), missingCodes);
+            finding.evidence.insert(QStringLiteral("defects"), QJsonArray::fromStringList(defectNames));
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
+        }
+
+        if (incomplete)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = pageNumber;
+            finding.type = QStringLiteral("font-integrity");
+            finding.checkId = check.id;
+            finding.severity = QStringLiteral("error");
+            finding.message = PDFTranslationContext::tr("Shown-glyph coverage could not be audited on page %1: %2")
+                                  .arg(pageNumber)
+                                  .arg(incompleteReason);
+            finding.evidence.insert(QStringLiteral("inspection_complete"), false);
+            finding.evidence.insert(QStringLiteral("defects"), QJsonArray{ QStringLiteral("GlyphCoverageIncomplete") });
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
         }
     }
 }
