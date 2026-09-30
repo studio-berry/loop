@@ -129,7 +129,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "hidden-layers"
+        "hidden-layers",
+        "ocmd-print-divergence"
       ],
       "uninspected_fixtures": []
     },
@@ -272,6 +273,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 76,
+  "source_fixtures": 77,
   "unattributed_findings": 1
 }

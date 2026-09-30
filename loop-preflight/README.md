@@ -94,6 +94,15 @@ is observed; it does not claim full compositing equivalence. Off-page content
 is tolerated inside the page BleedBox, or inside the configured allowance when
 no BleedBox exists. These checks do not register corrective fixups.
 
+`hidden-layers` evaluates every optional-content governor it meets under both
+the View and the Print usage, with the default configuration's `/AS` events
+applied: groups and membership dictionaries (`/P` AnyOn, AllOn, AnyOff, AllOff
+and `/VE` expressions) on marked content, on Form XObject `/OC` entries and on
+annotation `/OC` entries. It reports membership hidden in print and content
+that differs between screen and print, in either direction, with
+`evidence.view_state`, `evidence.print_state` and `evidence.policy`. A governor
+that cannot be evaluated is reported with `inspection_complete: false`.
+
 The `transparency-risk` check has no additional parameters; it observes
 transparency groups, blend modes, and blend-space crossings.
 

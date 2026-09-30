@@ -1,0 +1,133 @@
+{
+    "checks": [
+        {
+            "id": "hidden-layers",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - Hidden Layers",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "divergence": true,
+                "governor": "ocmd",
+                "governor_source": "xobject",
+                "inspection_complete": true,
+                "ocg_names": [
+                    "ScreenOnly"
+                ],
+                "policy": "AllOn",
+                "print_state": "off",
+                "view_state": "on"
+            },
+            "message": "Optional-content membership dictionary on page 1 is visible on screen but hidden in print.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "hidden-layers"
+        },
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "divergence": true,
+                "governor": "ocmd",
+                "governor_source": "xobject",
+                "inspection_complete": true,
+                "ocg_names": [
+                    "ScreenOnly"
+                ],
+                "policy": "AllOff",
+                "print_state": "on",
+                "view_state": "off"
+            },
+            "message": "Optional-content membership dictionary on page 1 is hidden on screen but printed.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "hidden-layers"
+        },
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "divergence": true,
+                "governor": "ocmd",
+                "governor_source": "marked-content",
+                "inspection_complete": true,
+                "ocg_names": [
+                    "PrintOnly"
+                ],
+                "policy": "AnyOn",
+                "print_state": "on",
+                "view_state": "off"
+            },
+            "message": "Optional-content membership dictionary on page 1 is hidden on screen but printed.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "hidden-layers"
+        },
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "divergence": true,
+                "governor": "ocmd",
+                "governor_source": "marked-content",
+                "inspection_complete": true,
+                "ocg_names": [
+                    "ScreenOnly"
+                ],
+                "policy": "VE",
+                "print_state": "on",
+                "view_state": "off"
+            },
+            "message": "Optional-content membership dictionary on page 1 is hidden on screen but printed.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "hidden-layers"
+        },
+        {
+            "check_id": "hidden-layers",
+            "evidence": {
+                "confidence": "exact",
+                "divergence": true,
+                "governor": "ocmd",
+                "governor_source": "marked-content",
+                "inspection_complete": true,
+                "ocg_names": [
+                    "ScreenOnly"
+                ],
+                "policy": "AnyOff",
+                "print_state": "on",
+                "view_state": "off"
+            },
+            "message": "Optional-content membership dictionary on page 1 is hidden on screen but printed.",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "hidden-layers"
+        }
+    ]
+}

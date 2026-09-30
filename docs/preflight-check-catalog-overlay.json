@@ -549,8 +549,8 @@
    "fixups": []
   },
   "hidden-layers": {
-   "measures": "Optional content groups that hide print content.",
-   "limitations": "Does not enumerate every OCMD combination.",
+   "measures": "Optional content groups and membership dictionaries (/P AnyOn, AllOn, AnyOff, AllOff and /VE) that hide print content, and content whose visibility differs between screen and print.",
+   "limitations": "Evaluates the default configuration under the View and Print usages with its /AS events; alternate configurations and content an /OC entry governs on Form XObjects or annotations that are never painted are not evaluated. A governor that cannot be evaluated is reported incomplete.",
    "coverage": "partial",
    "families": [
     "packaging"
@@ -568,7 +568,7 @@
     {
      "finding_type": "hidden-layers",
      "severity": "error",
-     "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "an optional-content group referenced by print content is not printable by default, or a membership dictionary governing marked content, a Form XObject or an annotation is hidden in print or differs between screen and print; an optional-content governor that cannot be evaluated is forced to error with inspection_complete false. The profile's check severity (error|warning|info, default error) replaces the others and warning/info route the finding to warnings."
     }
    ],
    "evidence": [
@@ -578,7 +578,15 @@
     "message",
     "check_id",
     "evidence.confidence",
-    "evidence.ocg_name"
+    "evidence.ocg_name",
+    "evidence.governor",
+    "evidence.governor_source",
+    "evidence.policy",
+    "evidence.ocg_names",
+    "evidence.view_state",
+    "evidence.print_state",
+    "evidence.divergence",
+    "evidence.inspection_complete"
    ],
    "fixups": []
   },
@@ -1494,12 +1502,12 @@
   {
    "id": "hidden-layers-ocmd",
    "priority": "P2",
-   "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+   "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
    "families": [
     "packaging"
    ],
-   "state": "open",
-   "closed_by": "#115",
+   "state": "landed",
+   "closed_by": "hidden-layers",
    "deferral": null
   },
   {
