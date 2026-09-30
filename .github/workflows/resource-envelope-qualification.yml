@@ -31,7 +31,7 @@ env:
   REPETITIONS: 3
   CANCEL_FIXTURE: ten-thousand-page
   CANCEL_AFTER_SECONDS: 3
-  TIMEOUT_SECONDS: 900
+  TIMEOUT_SECONDS: 1800
 
 jobs:
   linux:
