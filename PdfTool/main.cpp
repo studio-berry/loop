@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <memory>
+
 #include "pdftoolabstractapplication.h"
 #include "pdftoolcancel.h"
 #include "pdftoolresult.h"
@@ -234,11 +236,29 @@ int main(int argc, char* argv[])
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
     pdf::PDFSettings::migrateLegacySettings();
 
-    const pdf::PDFLogSession logSession(QStringLiteral("pdftool"));
-    const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
-
     const QStringList arguments = QCoreApplication::arguments();
     const QString command = requestedCommand(arguments);
+    const bool isolatedOperation = command == QStringLiteral("worker-ping") ||
+                                   command == QStringLiteral("worker-open") ||
+                                   command == QStringLiteral("worker-preflight");
+#if defined(Q_OS_WIN)
+    if (isolatedOperation)
+    {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    }
+#endif
+    if (isolatedOperation)
+    {
+        qInstallMessageHandler([](QtMsgType, const QMessageLogContext&, const QString&) {});
+    }
+    std::unique_ptr<pdf::PDFLogSession> logSession;
+    std::unique_ptr<pdf::PDFSentrySession> sentrySession;
+    if (!isolatedOperation)
+    {
+        logSession = std::make_unique<pdf::PDFLogSession>(QStringLiteral("pdftool"));
+        sentrySession = std::make_unique<pdf::PDFSentrySession>(QStringLiteral("pdftool"));
+    }
+
     const bool wantsJson = commandLineRequestsJson(arguments) ||
                            ((command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
                              command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||

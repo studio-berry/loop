@@ -20,35 +20,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef PDFWORKERRUNTIME_H
-#define PDFWORKERRUNTIME_H
+#ifndef PDFWORKERPROCESS_H
+#define PDFWORKERPROCESS_H
 
-#include "pdfworkersandbox.h"
+#include <QByteArray>
+#include <QElapsedTimer>
+#include <QStringList>
+#include <atomic>
+#include <memory>
 
-#include <QJsonObject>
-
-namespace pdftool::worker
+namespace pdftool
 {
-
-class WorkerRuntime
+class WorkerProcess
 {
 public:
-    explicit WorkerRuntime(WorkerSandboxPaths sandboxPaths, QJsonObject sandboxStatus);
-
-    QJsonObject handleRequest(const QJsonObject& request);
+    WorkerProcess();
+    ~WorkerProcess();
+    bool start(const QString& executable, const QStringList& arguments, const QString& inputDir,
+               const QString& tempDir, const QString& outputDir, QString& error);
+    void stop();
+    bool running() const;
+    qint64 pid() const;
+    qint64 exitCode() const;
+    bool write(const QByteArray& bytes, QElapsedTimer& timer, int timeoutMs, const std::atomic_bool& cancelled);
+    QByteArray read(qint64 maximum);
 
 private:
-    QJsonObject handlePing(const QString& id);
-    QJsonObject handleOpen(const QString& id, const QJsonObject& request);
-    QJsonObject handlePreflight(const QString& id, const QJsonObject& request);
-    QJsonObject handleCancel(const QString& id);
-
-    bool pathIsInsideSandbox(const QString& candidate, const QString& root) const;
-
-    WorkerSandboxPaths m_sandboxPaths;
-    QJsonObject m_sandboxStatus;
+    struct State;
+    std::unique_ptr<State> m_state;
 };
-
-}   // namespace pdftool::worker
-
-#endif   // PDFWORKERRUNTIME_H
+}
+#endif
