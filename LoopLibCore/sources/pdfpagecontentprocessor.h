@@ -753,6 +753,10 @@ protected:
     /// Implement to respond to text sequence processing
     virtual void performProcessTextSequence(const TextSequence& textSequence, ProcessOrder order);
 
+    /// Called once per shown string for which at least one code resolved to no
+    /// glyph, including strings that produce no drawable items at all.
+    virtual void performTextGlyphsUnresolved(const TextSequence& textSequence);
+
     enum class ContentKind
     {
         Shapes,   ///< General shapes (they can be also shaded / tiled)

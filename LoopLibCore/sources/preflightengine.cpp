@@ -5084,6 +5084,20 @@ protected:
         return kind != ContentKind::Text && kind != ContentKind::Forms;
     }
 
+    void performTextGlyphsUnresolved(const TextSequence& textSequence) override
+    {
+        const PDFFontPointer font = embeddedShownFont();
+        if (!font)
+        {
+            return;
+        }
+
+        for (const CID code : textSequence.unresolvedCodes)
+        {
+            record(*font, PDFShownGlyphDefect::Unresolved, code);
+        }
+    }
+
     void performProcessTextSequence(const TextSequence& textSequence, ProcessOrder order) override
     {
         if (order != ProcessOrder::BeforeOperation)
@@ -5091,19 +5105,10 @@ protected:
             return;
         }
 
-        const PDFFontPointer font = getGraphicState()->getTextFont();
-        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded()
-            || font->getFontType() == FontType::Type3)
+        const PDFFontPointer font = embeddedShownFont();
+        if (!font)
         {
             return;
-        }
-
-        for (const CID code : textSequence.unresolvedCodes)
-        {
-            ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font->getFontId())];
-            entry.subtype = QString::number(static_cast<int>(font->getFontType()));
-            entry.composite = font->getFontType() == FontType::Type0;
-            entry.codesByDefect[shownGlyphDefectName(PDFShownGlyphDefect::Unresolved)].insert(code);
         }
 
         for (const TextSequenceItem& item : textSequence.items)
@@ -5114,14 +5119,30 @@ protected:
                 continue;
             }
 
-            ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font->getFontId())];
-            entry.subtype = QString::number(static_cast<int>(font->getFontType()));
-            entry.composite = font->getFontType() == FontType::Type0;
-            entry.codesByDefect[shownGlyphDefectName(defect)].insert(item.cid);
+            record(*font, defect, item.cid);
         }
     }
 
 private:
+    PDFFontPointer embeddedShownFont() const
+    {
+        const PDFFontPointer font = getGraphicState()->getTextFont();
+        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded()
+            || font->getFontType() == FontType::Type3)
+        {
+            return nullptr;
+        }
+        return font;
+    }
+
+    void record(const PDFFont& font, PDFShownGlyphDefect defect, CID code)
+    {
+        ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font.getFontId())];
+        entry.subtype = QString::number(static_cast<int>(font.getFontType()));
+        entry.composite = font.getFontType() == FontType::Type0;
+        entry.codesByDefect[shownGlyphDefectName(defect)].insert(code);
+    }
+
     std::map<QString, ShownGlyphDefects> m_defects;
 };
 
