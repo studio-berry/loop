@@ -1222,6 +1222,7 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
                 else
                 {
                     reporter->reportRenderError(RenderErrorType::Warning, PDFTranslationContext::tr("Glyph for simple font character code '%1' not found.").arg(cid));
+                    textSequence.unresolvedCodes.push_back(cid);
                     if (glyphWidth > 0)
                     {
                         const QPainterPath* nullpath = nullptr;
@@ -1284,6 +1285,7 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
                     {
                         // Character with CID == 0 is treated as default whitespace, it hasn't glyph
                         reporter->reportRenderError(RenderErrorType::Warning, PDFTranslationContext::tr("Glyph for composite font character with cid '%1' not found.").arg(cid));
+                        textSequence.unresolvedCodes.push_back(cid);
                     }
 
                     if (glyphWidth > 0)

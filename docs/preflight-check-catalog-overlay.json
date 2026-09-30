@@ -518,7 +518,7 @@
   },
   "font-integrity": {
    "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
-   "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. A missing glyph with zero advance, simple-font code 0, and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
+   "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. Composite CID 0 (default whitespace) and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",

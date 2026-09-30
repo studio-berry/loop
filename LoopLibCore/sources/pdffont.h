@@ -100,6 +100,11 @@ struct TextSequenceItem
 struct TextSequence
 {
     std::vector<TextSequenceItem> items;
+
+    /// Shown codes (character codes of simple fonts, CIDs of composite fonts) that
+    /// resolved to no glyph, whatever their advance. Composite CID 0 is the default
+    /// whitespace and is never listed.
+    std::vector<CID> unresolvedCodes;
 };
 
 constexpr bool isTextRenderingModeFilled(TextRenderingMode mode)

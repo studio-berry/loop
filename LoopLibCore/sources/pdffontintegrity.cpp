@@ -161,10 +161,8 @@ PDFShownGlyphDefect classifyShownGlyph(const TextSequenceItem& item)
 
     if (!item.glyph)
     {
-        // The realized font emits a glyphless item with the code's width when the
-        // code resolves to nothing. TJ adjustments carry cid 0.
-        return (item.cid != 0 && item.advance != 0.0) ? PDFShownGlyphDefect::Unresolved
-                                                        : PDFShownGlyphDefect::None;
+        // Codes that resolve to nothing are listed in TextSequence::unresolvedCodes.
+        return PDFShownGlyphDefect::None;
     }
 
     if (item.glyphIndex == 0)

@@ -5098,6 +5098,14 @@ protected:
             return;
         }
 
+        for (const CID code : textSequence.unresolvedCodes)
+        {
+            ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font->getFontId())];
+            entry.subtype = QString::number(static_cast<int>(font->getFontType()));
+            entry.composite = font->getFontType() == FontType::Type0;
+            entry.codesByDefect[shownGlyphDefectName(PDFShownGlyphDefect::Unresolved)].insert(code);
+        }
+
         for (const TextSequenceItem& item : textSequence.items)
         {
             const PDFShownGlyphDefect defect = classifyShownGlyph(item);
