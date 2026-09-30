@@ -26,6 +26,8 @@
 #include "pdfglobal.h"
 #include "pdfdocumentreader.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
+#include <optional>
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -41,6 +43,8 @@ struct PreflightResolvedProfile;
 struct LOOPLIBCORESHARED_EXPORT PreflightFileInspectionRequest
 {
     QString documentPath;
+    QString receiptDocumentId;
+    bool createReceipt = false;
     QString password;
     bool permissiveReading = false;
     QJsonObject profile;
@@ -62,6 +66,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightFileInspectionOutcome
     QString readErrorMessage;
     QStringList readWarnings;
     bool inspectionRan = false;
+    std::optional<PreflightInspectionReceipt> receipt;
+    QString receiptError;
 };
 
 /// Runs a file-backed preflight inspection entirely inside LoopLibCore so host

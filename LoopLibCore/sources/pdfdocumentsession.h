@@ -88,7 +88,7 @@ public:
     static PDFDocumentSession* create(PDFDocument* document,
                                       PDFDocumentContext* context = nullptr,
                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
-    static PDFDocumentSession* createForInspection(PDFDocument* document);
+    static PDFDocumentSession* createForInspection(PDFDocument* document, const QString& documentId = QString());
     static void destroy(PDFDocumentSession* session) noexcept;
 
     /// Estimates the resident model owned by a parsed document, including raw

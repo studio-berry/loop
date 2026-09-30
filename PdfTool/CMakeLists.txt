@@ -98,6 +98,9 @@ set(_loop_pdftool_sources
     pdftoolworker.h
     pdfworkerclient.cpp
     pdfworkerclient.h
+    pdfworkerprocess.cpp
+    pdfworkerprocess_win.cpp
+    pdfworkerprocess.h
     pdfworkerprotocol.h
 )
 
@@ -171,8 +174,9 @@ set(_loop_pdf_worker_sources
 )
 add_executable(loop-pdf-worker ${_loop_pdf_worker_sources})
 target_link_libraries(loop-pdf-worker PRIVATE LoopLibCore Qt6::Core Qt6::Gui)
-if(UNIX AND NOT APPLE)
-    target_compile_definitions(loop-pdf-worker PRIVATE LOOP_PDF_WORKER_REQUIRE_SANDBOX=1)
+if(WIN32)
+    target_compile_definitions(PdfTool PRIVATE _WIN32_WINNT=0x0A00)
+    target_link_libraries(PdfTool PRIVATE userenv advapi32 ole32)
 endif()
 set_target_properties(loop-pdf-worker PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -182,3 +186,10 @@ set_target_properties(loop-pdf-worker PROPERTIES
 )
 install(TARGETS loop-pdf-worker RUNTIME DESTINATION ${LOOP_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOOP_INSTALL_LIB_DIR})
 add_dependencies(PdfTool loop-pdf-worker)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/worker-runtime.cmake)
+loop_stage_worker_runtime(loop-pdf-worker)
+if(WIN32)
+    install(FILES "$<TARGET_FILE:loop-pdf-worker>.runtime" DESTINATION ${LOOP_INSTALL_BIN_DIR})
+    install(DIRECTORY "$<TARGET_FILE_DIR:loop-pdf-worker>/worker-runtime/" DESTINATION ${LOOP_INSTALL_BIN_DIR}/worker-runtime)
+endif()

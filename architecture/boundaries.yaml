@@ -90,6 +90,8 @@ layers:
       - Qt6::Xml
       - ole32
       - sapi
+      - userenv
+      - advapi32
     forbidden_includes:
       - "^QtWidgets(/|$)"
       - "^QWidget$"
@@ -151,6 +153,9 @@ separations:
       - PdfTool/pdfworkersandbox.cpp
       - PdfTool/pdfworkersandbox.h
       - PdfTool/pdfworkerprotocol.h
+      - PdfTool/pdfworkerprocess.cpp
+      - PdfTool/pdfworkerprocess_win.cpp
+      - PdfTool/pdfworkerprocess.h
     forbidden_includes:
       - "^pdfsentry\\.h$"
       - "^sentry\\.h$"

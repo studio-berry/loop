@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static isolation checks for loop-pdf-worker (#618).
+"""Static isolation checks for loop-pdf-worker (#20).
 
 Fails if the worker target sources initialize Sentry/crashpad, or if the IPC
 allowlist drifts away from open/preflight/cancel/ping.
@@ -20,6 +20,9 @@ WORKER_SOURCES = [
     ROOT / "PdfTool/pdfworkersandbox.cpp",
     ROOT / "PdfTool/pdfworkersandbox.h",
     ROOT / "PdfTool/pdfworkerprotocol.h",
+    ROOT / "PdfTool/pdfworkerprocess.cpp",
+    ROOT / "PdfTool/pdfworkerprocess_win.cpp",
+    ROOT / "PdfTool/pdfworkerprocess.h",
 ]
 
 FORBIDDEN = (
