@@ -25,19 +25,39 @@
 #include "pdfdocumentsession.h"
 #include "pdffont.h"
 #include "pdfconstants.h"
+#include "pdfoperationcontrol.h"
 #include "pdfsafefilewriter.h"
 #include "pdfworkloadenvelope.h"
+#include "preflightclirun.h"
+#include "preflightengine.h"
+#include "preflightprofileresolver.h"
 
 #include <QColorSpace>
 #include <QElapsedTimer>
 #include <QImageWriter>
 #include <QJsonObject>
 
+#include <algorithm>
+
 namespace pdftool
 {
 
 static PDFToolRender s_toolRenderApplication;
 static PDFToolBenchmark s_toolBenchmarkApplication;
+
+namespace
+{
+
+class CliCancellationControl final : public pdf::PDFOperationControl
+{
+public:
+    bool isOperationCancelled() const override
+    {
+        return isCancelRequested();
+    }
+};
+
+}   // namespace
 
 QString PDFToolRender::getStandardString(PDFToolAbstractApplication::StandardString standardString) const
 {
@@ -160,7 +180,54 @@ QString PDFToolBenchmark::getStandardString(PDFToolAbstractApplication::Standard
 
 PDFToolAbstractApplication::Options PDFToolBenchmark::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ImageExportSettingsResolution | ColorManagementSystem | RenderFlags;
+    return ConsoleFormat | OpenDocument | PageSelector | ImageExportSettingsResolution | ColorManagementSystem | RenderFlags | BenchmarkPreflightProfile;
+}
+
+PDFToolExitCode PDFToolBenchmark::execute(const PDFToolOptions& options)
+{
+    m_preflightPhase = PreflightPhase();
+    if (options.preflightProfilePath.isEmpty())
+    {
+        return PDFToolRenderBase::execute(options);
+    }
+
+    QJsonObject profileJson;
+    QString profileError;
+    if (!pdf::PreflightEngine::loadProfile(options.preflightProfilePath, profileJson, profileError))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), profileError);
+        return PDFToolExitCode::InvalidInvocation;
+    }
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(profileJson, options.preflightProfilePath);
+    if (!imported.ok)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, imported.errorCode, imported.errorMessage);
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
+    CliCancellationControl cancellationControl;
+    pdf::PreflightFileInspectionRequest request;
+    request.documentPath = options.document;
+    request.password = options.password;
+    request.permissiveReading = options.permissiveReading;
+    request.profile = imported.profile;
+    request.plan.full = true;
+    request.plan.reason = QStringLiteral("benchmark-preflight-phase");
+    request.firstPage = options.pageSelectorFirstPage;
+    request.lastPage = options.preflightPageLast > 0 ? QString::number(options.preflightPageLast) : options.pageSelectorLastPage;
+    request.selectedPages = options.pageSelectorSelection;
+    request.cancellation = &cancellationControl;
+
+    // The outcome owns the full source bytes; it is released here, before the
+    // render phase opens the document again.
+    {
+        const pdf::PreflightFileInspectionOutcome outcome = pdf::inspectPreflightFile(request);
+        m_preflightPhase.requested = true;
+        m_preflightPhase.inspected = outcome.documentReadOk && outcome.inspectionRan && !isCancelRequested();
+        m_preflightPhase.highWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+    }
+
+    return PDFToolRenderBase::execute(options);
 }
 
 void PDFToolBenchmark::finish(const PDFToolOptions& options)
@@ -207,26 +274,52 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
             pdf::PDFWorkloadEnvelope envelope;
             envelope.identity = identity;
             envelope.family = QStringLiteral("benchmark-render");
-            const bool cancelled = isCancelRequested();
-            envelope.status = cancelled
-                                  ? QStringLiteral("cancelled")
-                              : m_resourceBudgetExhausted ? QStringLiteral("budget-exceeded")
-                                                          : QStringLiteral("incomplete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
-            envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
-            envelope.processCommitHighWaterBytes = pdf::PDFWorkloadEnvelope::currentProcessCommitHighWaterBytes();
-            envelope.elapsedMs = m_wallTime;
-            envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
-            envelope.incompleteReason = cancelled
-                                            ? QStringLiteral("operation-cancelled")
-                                        : m_resourceBudgetExhausted ? QStringLiteral("resource-budget-exceeded")
-                                                                    : QStringLiteral("preflight-measurement-unavailable");
             qint64 pagesMaterialized = 0;
             for (const PageInfo& page : m_pageInfo)
             {
                 pagesMaterialized += page.isRendered ? 1 : 0;
             }
             envelope.pagesMaterialized = pagesMaterialized;
+
+            // A record is complete only when every phase it claims was measured:
+            // an unmeasured preflight or an unrendered page keeps it incomplete.
+            const bool cancelled = isCancelRequested();
+            if (cancelled)
+            {
+                envelope.status = QStringLiteral("cancelled");
+                envelope.incompleteReason = QStringLiteral("operation-cancelled");
+            }
+            else if (m_resourceBudgetExhausted)
+            {
+                envelope.status = QStringLiteral("budget-exceeded");
+                envelope.incompleteReason = QStringLiteral("resource-budget-exceeded");
+            }
+            else if (!m_preflightPhase.requested)
+            {
+                envelope.status = QStringLiteral("incomplete");
+                envelope.incompleteReason = QStringLiteral("preflight-measurement-unavailable");
+            }
+            else if (!m_preflightPhase.inspected)
+            {
+                envelope.status = QStringLiteral("incomplete");
+                envelope.incompleteReason = QStringLiteral("preflight-phase-failed");
+            }
+            else if (pagesMaterialized != envelope.pageCount)
+            {
+                envelope.status = QStringLiteral("incomplete");
+                envelope.incompleteReason = QStringLiteral("pages-not-materialized");
+            }
+            else
+            {
+                envelope.status = QStringLiteral("complete");
+            }
+
+            envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+            envelope.processCommitHighWaterBytes = pdf::PDFWorkloadEnvelope::currentProcessCommitHighWaterBytes();
+            envelope.preflightHighWaterBytes = m_preflightPhase.highWaterBytes;
+            envelope.elapsedMs = m_wallTime;
+            envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
             envelope.recordResources(*m_resourceBudget);
             data.insert(QStringLiteral("workload_envelope"), envelope.toJson());
             options.executionContext->setData(data);
@@ -373,10 +466,22 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
     QElapsedTimer timer;
     timer.start();
 
-    rasterizerPool.render(pageIndices, imageSizeGetter, std::bind(&PDFToolRenderBase::onPageRendered, this, options, std::placeholders::_1), nullptr);
+    // Render in slices and check for cancellation between them, so an interrupt
+    // stops the run within one slice instead of after the whole page range.
+    const auto processImage = std::bind(&PDFToolRenderBase::onPageRendered, this, options, std::placeholders::_1);
+    const std::size_t sliceSize = std::size_t(pdf::PDFRasterizerPool::getCorrectedRasterizerCount(options.renderRasterizerCount)) * 4;
+    bool resourceBudgetExhausted = false;
+    for (std::size_t first = 0; first < pageIndices.size() && !isCancelRequested(); first += sliceSize)
+    {
+        const std::size_t last = std::min(pageIndices.size(), first + sliceSize);
+        const std::vector<pdf::PDFInteger> slice(pageIndices.cbegin() + first, pageIndices.cbegin() + last);
+        rasterizerPool.render(slice, imageSizeGetter, processImage, nullptr);
+        // render() resets the pool's flag per call, so exhaustion is accumulated here.
+        resourceBudgetExhausted = resourceBudgetExhausted || rasterizerPool.resourceBudgetExhausted();
+    }
 
     m_wallTime = timer.elapsed();
-    m_resourceBudgetExhausted = rasterizerPool.resourceBudgetExhausted();
+    m_resourceBudgetExhausted = resourceBudgetExhausted;
 
     fontCache.setCacheShrinkEnabled(nullptr, true);
 

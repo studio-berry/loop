@@ -125,6 +125,17 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
+        if (PDFOperationControl::isOperationCancelled(settings.operationControl))
+        {
+            result.cancelled = true;
+            break;
+        }
+
+        if (settings.pageIndices && !settings.pageIndices->contains(int(pageIndex)))
+        {
+            continue;
+        }
+
         const PDFPage* page = catalog->getPage(pageIndex);
         if (!page)
         {
@@ -139,7 +150,12 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
             continue;
         }
 
-        const QSize imageSize(qMax(1, int(widthPxReal)), qMax(1, int(heightPxReal)));
+        // The probe holds several float bitmaps per pixel, so an oversized page is probed
+        // at a coarser resolution instead of allocating memory proportional to its size.
+        const double probeScale = settings.maxProbePixels > 0 && widthPxReal * heightPxReal > double(settings.maxProbePixels)
+                                      ? std::sqrt(double(settings.maxProbePixels) / (widthPxReal * heightPxReal))
+                                      : 1.0;
+        const QSize imageSize(qMax(1, int(widthPxReal * probeScale)), qMax(1, int(heightPxReal * probeScale)));
         const QTransform pagePointToDevice = PDFRenderer::createPagePointToDevicePointMatrix(
             page, QRect(QPoint(0, 0), imageSize));
         PDFTransparencyRenderer renderer(page,

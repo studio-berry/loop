@@ -348,7 +348,11 @@ int main(int argc, char* argv[])
 
     pdftool::resetCancelRequested();
     std::signal(SIGINT, handleTerminationSignal);
-#ifndef Q_OS_WIN
+#ifdef Q_OS_WIN
+    // CTRL_BREAK_EVENT is the only console interrupt deliverable to a child
+    // started in its own process group; the CRT raises it as SIGBREAK.
+    std::signal(SIGBREAK, handleTerminationSignal);
+#else
     std::signal(SIGTERM, handleTerminationSignal);
 #endif
 

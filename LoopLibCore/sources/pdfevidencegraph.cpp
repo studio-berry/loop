@@ -159,6 +159,7 @@ namespace
 {
 
 constexpr int EVIDENCE_MAX_FORM_DEPTH = 32;
+constexpr const char* EVIDENCE_CANCELLED_REASON = "cancelled";
 
 PDFArtifactIdentity artifactIdentityFromDocument(const PDFDocument* document)
 {
@@ -1288,8 +1289,16 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
     PDFColorInventorySettings inventorySettings;
     inventorySettings.probeDpi = settings.colorProbeDpi;
     inventorySettings.richBlackKThreshold = settings.richBlackKThreshold;
+    inventorySettings.operationControl = settings.operationControl;
+    inventorySettings.pageIndices = settings.pageIndices;
     PDFColorInventory inventory(session);
     const PDFColorInventoryResult result = inventory.inspect(inventorySettings);
+    if (result.cancelled)
+    {
+        graph->complete = false;
+        graph->incompleteReason = QString::fromLatin1(EVIDENCE_CANCELLED_REASON);
+        return;
+    }
     if (!result.diagnostics.isExact())
     {
         const QString diagnostic = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
@@ -1398,6 +1407,17 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
             const PDFCatalog* catalog = document->getCatalog();
             for (PDFInteger pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
             {
+                if (PDFOperationControl::isOperationCancelled(settings.operationControl))
+                {
+                    graph.complete = false;
+                    graph.incompleteReason = QString::fromLatin1(EVIDENCE_CANCELLED_REASON);
+                    return graph;
+                }
+                if (settings.pageIndices && !settings.pageIndices->contains(int(pageIndex)))
+                {
+                    continue;
+                }
+
                 const PDFPage* page = catalog->getPage(pageIndex);
                 if (!page)
                 {

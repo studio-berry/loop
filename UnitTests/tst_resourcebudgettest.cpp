@@ -25,7 +25,7 @@ void ResourceBudgetTest::conservativeDefaultsExposeAllPools()
 {
     const pdf::PDFResourceBudgetConfig config = pdf::PDFResourceBudgetConfig::conservativeDefaults();
     QCOMPARE(config.residentLimitBytes, 768 * pdf::PDFResourceBudgetConfig::MiB);
-    QCOMPARE(config.limit(pdf::PDFResourcePool::ActiveDocumentModel), 256 * pdf::PDFResourceBudgetConfig::MiB);
+    QCOMPARE(config.limit(pdf::PDFResourcePool::ActiveDocumentModel), 640 * pdf::PDFResourceBudgetConfig::MiB);
     QCOMPARE(config.limit(pdf::PDFResourcePool::CompiledEvidenceCache), 128 * pdf::PDFResourceBudgetConfig::MiB);
     QCOMPARE(config.limit(pdf::PDFResourcePool::RasterTileCache), 128 * pdf::PDFResourceBudgetConfig::MiB);
     QCOMPARE(config.limit(pdf::PDFResourcePool::GpuTextureCache), 128 * pdf::PDFResourceBudgetConfig::MiB);
