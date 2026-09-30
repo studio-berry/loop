@@ -595,9 +595,7 @@ add_dependencies(UnitTestsOcrCli PdfTool)
 target_compile_definitions(UnitTestsOcrCli PRIVATE
     LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
     LOOP_OCR_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-ocr"
-    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
-    PDFWORKER_EXECUTABLE_PATH="$<TARGET_FILE:loop-pdf-worker>"
-    PDFWORKER_PROBE_PATH="$<TARGET_FILE:LoopPdfWorkerProbe>")
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>")
 
 set_target_properties(UnitTestsOcrCli PROPERTIES
     WIN32_EXECUTABLE OFF
