@@ -23,6 +23,8 @@ def load(path: Path, expected_platform: str) -> dict[str, Any]:
         evidence = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise PairError(f"unable to read evidence {path}: {exc}") from exc
+    if not isinstance(evidence, dict):
+        raise PairError(f"package evidence must be a JSON object: {path}")
     if evidence.get("schema_version") != 1 or evidence.get("kind") != "loop-package-boundary-evidence":
         raise PairError(f"unsupported evidence schema: {path}")
     if evidence.get("platform") != expected_platform:
@@ -42,14 +44,16 @@ def load(path: Path, expected_platform: str) -> dict[str, Any]:
     )
     if not isinstance(checks, dict) or any(checks.get(name) is not True for name in required_checks):
         raise PairError(f"package evidence checks are incomplete: {path}")
-    if not FULL_SHA.fullmatch(str(evidence.get("source_sha", ""))):
+    source_sha = evidence.get("source_sha")
+    if not isinstance(source_sha, str) or not FULL_SHA.fullmatch(source_sha):
         raise PairError(f"package evidence source SHA is not full length: {path}")
     package = evidence.get("package")
     expected_format = "AppImage" if expected_platform == "linux" else "MSI"
     if (
         not isinstance(package, dict)
         or package.get("format") != expected_format
-        or not re.fullmatch(r"[0-9a-fA-F]{64}", str(package.get("sha256", "")))
+        or not isinstance(package.get("sha256"), str)
+        or not re.fullmatch(r"[0-9a-fA-F]{64}", package["sha256"])
     ):
         raise PairError(f"package identity is incomplete: {path}")
     return evidence
