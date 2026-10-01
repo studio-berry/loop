@@ -38,4 +38,4 @@ unresolved:
   - core:scripts/ci/check_independent_validation_gate.py
   - Local configured Windows check-change gate passed again after real-oracle parser and writer fixes, including installed LLVM 19.1.5 x64 analysis and 68 mapped native targets; this does not establish hosted or external oracle qualification.
   - Real oracle triad and Ghostscript measurements remain unqualified until both source-bound platform packets pass.
-  - Portable Windows oracle distribution was provisioned with approval and passed integrity/smoke checks; Linux distribution, external publication and hosted dispatch remain outstanding.
+  - Both pinned oracle distributions and local source-bound packets were published with approval. Hosted run 36796901700 retained matching Windows/Linux packets on source 78638b18408cbc52074e55321973e56513e6433e and failed solely for rendering qualification; run 36807466098 verifies the later PageMaster resume correction.
