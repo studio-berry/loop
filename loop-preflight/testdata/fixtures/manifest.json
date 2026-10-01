@@ -376,6 +376,28 @@
     "notes": "White overprint using an ICCBased color space."
   },
   {
+    "id": "white-overprint-image",
+    "pdf": "white-overprint-image.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["white-overprint"]
+    },
+    "source": "generated",
+    "notes": "#119 regression: a pure-white DeviceCMYK image painted with overprint on and OPM 1 over cyan. The page-view scan only inspects path paints, so it passed clean; under OPM 1 the compositor makes the white vanish."
+  },
+  {
+    "id": "transparency-overprint-knockout",
+    "pdf": "transparency-overprint-knockout.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["transparency-risk"]
+    },
+    "source": "generated",
+    "notes": "#119 regression: black painted with overprint, OPM 1 and alpha 0.5 inside a knockout CMYK transparency group over cyan. Only the Normal blend mode is used, so the blend scan passed it clean; how overprint, alpha and knockout combine is decided by the compositor."
+  },
+  {
     "id": "ink-coverage-over",
     "pdf": "ink-coverage-over.pdf",
     "profile": "testdata/profiles/test-ink-coverage.json",
