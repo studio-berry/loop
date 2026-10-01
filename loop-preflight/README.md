@@ -251,6 +251,24 @@ PdfTool capabilities --console-format json | jq '.data.fixups'
 The command reports build capability; the preflight report still applies the
 profile and finding/document gates before placing an item in `fixups_available`.
 
+## Compositor-judged overprint
+
+`white-overprint` and `transparency-risk` also consult the overprint-accurate
+compositor that Output Preview uses (`PDFTransparencyRenderer` with the
+preflight-analysis policy), not only page-view overprint state. A page that
+declares overprint (`/OP` or `/op` in an ExtGState, including inside Form
+XObjects) is rasterized at `probe_dpi` once per run and the compositor reports
+the overprint it applied. `white-overprint` then adds a finding for paper-white
+pixels overprinted through paint the page-view scan does not inspect (images,
+shadings, results of transparency); `transparency-risk` adds a
+`transparency-overprint-interaction` finding where overprint is composited under
+a non-Normal blend mode, constant alpha below one or a knockout group. A page
+that cannot be rasterized, exceeds `max_raster_pixels`, or uses an overprint
+combination the compositor only approximates reports an informational
+`check-incomplete` finding instead of passing clean. Pages that do not declare
+overprint are not rasterized. White paint smaller than a probe pixel and
+annotation appearances are not seen by the compositor probe.
+
 ## Transparency risk checking
 
 The `transparency-risk` check observes actual page-content processing and emits

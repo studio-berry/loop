@@ -84,6 +84,9 @@ private slots:
     void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
     void hiddenContent_checksAreRegistered();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
+    void run_whiteOverprint_reportsWhiteImageOverprintFromCompositor();
+    void run_transparencyRisk_reportsOverprintInteractionFromCompositor();
+    void run_overprintCompositorProbe_skipsPagesWithoutOverprintAndReportsBudgetAsIncomplete();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
@@ -941,6 +944,79 @@ void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
     QCOMPARE(result.warnings.first().type, QStringLiteral("off-page-content"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("off-page-content"));
     QVERIFY(result.warnings.first().bbox.isValid());
+}
+
+namespace
+{
+pdf::PreflightResult runCompositorFixture(const QString& fixtureName, const QString& checkId, const QJsonObject& extra = QJsonObject())
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fixtureName;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        return pdf::PreflightResult();
+    }
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    QJsonObject check{ { QStringLiteral("id"), checkId }, { QStringLiteral("severity"), QStringLiteral("warning") } };
+    for (auto it = extra.begin(); it != extra.end(); ++it)
+    {
+        check.insert(it.key(), it.value());
+    }
+    return engine.run(QJsonObject{ { QStringLiteral("name"), QStringLiteral("Compositor overprint") },
+                                   { QStringLiteral("checks"), QJsonArray{ check } } });
+}
+}   // namespace
+
+void PreflightEngineTest::run_whiteOverprint_reportsWhiteImageOverprintFromCompositor()
+{
+    const pdf::PreflightResult result = runCompositorFixture(QStringLiteral("white-overprint-image.pdf"), QStringLiteral("white-overprint"));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("source")).toString(), QStringLiteral("compositor"));
+    // A 40 pt image at 150 dpi covers about 7000 pixels.
+    const double whitePixels = result.warnings.first().evidence.value(QStringLiteral("white_overprint_pixels")).toDouble();
+    QVERIFY2(whitePixels > 5000.0 && whitePixels < 9000.0, qPrintable(QString::number(whitePixels)));
+}
+
+void PreflightEngineTest::run_transparencyRisk_reportsOverprintInteractionFromCompositor()
+{
+    const pdf::PreflightResult result = runCompositorFixture(QStringLiteral("transparency-overprint-knockout.pdf"), QStringLiteral("transparency-risk"));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("transparency-overprint-interaction"));
+    QVERIFY(result.warnings.first().evidence.value(QStringLiteral("transparent_overprint_pixels")).toDouble() > 0.0);
+
+    // A plain overprint page with no transparency stays clean for transparency-risk.
+    const pdf::PreflightResult plain = runCompositorFixture(QStringLiteral("overprint-cmyk-mode1-on.pdf"), QStringLiteral("transparency-risk"));
+    QCOMPARE(plain.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_overprintCompositorProbe_skipsPagesWithoutOverprintAndReportsBudgetAsIncomplete()
+{
+    // No overprint declared: the compositor is not consulted and the page stays clean.
+    const pdf::PreflightResult none = runCompositorFixture(QStringLiteral("white-overprint-ok.pdf"), QStringLiteral("white-overprint"));
+    QCOMPARE(none.warnings.size(), 0);
+    QVERIFY(none.pass);
+
+    // A budget too small for the raster is reported by the probe as unrendered, never as clean.
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-image.pdf");
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFOverprintProbe probe(&session);
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    const pdf::PDFOverprintProbeResult limited = probe.probe(page, 150, 100);
+    QVERIFY(!limited.rendered);
+    QVERIFY(limited.budgetExceeded);
+    const pdf::PDFOverprintProbeResult full = probe.probe(page, 150, 250LL * 1000 * 1000);
+    QVERIFY(full.rendered);
+    QVERIFY(full.observation.whiteOverprintPixels > 0);
 }
 
 void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()
