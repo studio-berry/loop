@@ -4864,7 +4864,12 @@ protected:
                 reference = property.getReference();
             }
         }
-        if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        if (reference.isValid() && !getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        {
+            // A membership dictionary is reported with its evaluation by the governor report.
+            return;
+        }
+        if (reference.isValid())
         {
             name = getDocument()->getCatalog()->getOptionalContentProperties()->getOptionalContentGroup(reference).getName();
             if (name.isEmpty())
@@ -5028,7 +5033,8 @@ void runHiddenContentCheck(PDFDocumentSession* session,
                 const bool divergent = !governor.incomplete && governor.viewState != governor.printState;
                 const bool hiddenInPrint = !governor.incomplete && governor.printState == OCState::OFF;
                 // A plain group hidden in print from marked content is already reported by name.
-                if (!governor.incomplete && !divergent && !(hiddenInPrint && (governor.kind == QStringLiteral("ocmd") || governor.source != QStringLiteral("marked-content"))))
+                const bool reportedByName = hiddenInPrint && governor.kind == QStringLiteral("ocg") && governor.source == QStringLiteral("marked-content");
+                if (!governor.incomplete && (reportedByName || (!divergent && !hiddenInPrint)))
                 {
                     continue;
                 }
