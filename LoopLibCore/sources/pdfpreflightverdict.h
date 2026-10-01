@@ -77,6 +77,54 @@ LOOPLIBCORESHARED_EXPORT QString preflightGateFailureMessage(const QString& file
 LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
                                                                  const PreflightProfileData* effectiveProfile = nullptr);
 
+struct LOOPLIBCORESHARED_EXPORT PreflightReceiptCheck
+{
+    QString id;
+    bool required = false;
+    bool complete = false;
+    QString status;
+    QString reason;
+};
+
+struct LOOPLIBCORESHARED_EXPORT PreflightInspectionReceipt
+{
+    QString identity;
+    QString inputDigest;
+    PDFRevisionIdentity revision;
+    QString effectiveProfileDigest;
+    QJsonObject profileIdentity;
+    QJsonObject coverageScope;
+    QList<PreflightReceiptCheck> checks;
+    QStringList evidenceRefs;
+    QString fidelity;
+    QStringList limitations;
+    PreflightVerdict verdict;
+
+    QJsonObject toJson() const;
+};
+
+LOOPLIBCORESHARED_EXPORT bool preflightInspectionReceiptFromJson(
+    const QJsonObject& object, PreflightInspectionReceipt& receipt, QString& errorMessage);
+
+LOOPLIBCORESHARED_EXPORT bool validatePreflightInspectionReceipt(
+    const PreflightInspectionReceipt& receipt, const QString& inputDigest,
+    const PDFRevisionIdentity& revision, const PreflightProfileData& profile, QString& errorMessage);
+
+LOOPLIBCORESHARED_EXPORT PreflightInspectionReceipt buildTerminalPreflightReceipt(
+    const QString& inputDigest, const PDFRevisionIdentity& revision,
+    const QString& profileDigest, const QString& reasonCode);
+
+
+/// Binds one Core result to its input revision and evidence. The identity is
+/// stable for the same input, effective profile and coverage policy; a missing
+/// required check or unsupported evidence cannot produce PASS.
+LOOPLIBCORESHARED_EXPORT bool buildPreflightInspectionReceipt(const PreflightResult& result,
+                                                              const PreflightProfileData& profile,
+                                                              const PDFRevisionIdentity& revision,
+                                                              const PDFEvidenceGraph& evidence,
+                                                              PreflightInspectionReceipt& receipt,
+                                                              QString& errorMessage);
+
 /// The single Core planner used by step postflight, check selection and impact
 /// qualification. An operation-wide/uncertain declaration cannot be narrowed
 /// by page-local repair targets.

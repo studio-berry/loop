@@ -15,17 +15,18 @@ class WorkflowContractTests(unittest.TestCase):
         permissions = workflow.split("permissions:\n", 1)[1].split("\njobs:", 1)[0]
         self.assertEqual(permissions.count("actions:"), 1)
 
-    def test_issue_promotion_workflow_tracks_only_protected_promotion_pushes(self):
+    def test_issue_promotion_workflow_tracks_all_promotion_pushes(self):
         workflow = (ROOT / ".github/workflows/issue-promotion.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("branches:\n      - dev\n      - stable", workflow)
+        self.assertIn("branches:\n      - dev\n      - unstable\n      - stable", workflow)
         self.assertNotIn("pull_request:", workflow)
         self.assertIn("issues: write", workflow)
         self.assertIn("pull-requests: read", workflow)
         self.assertIn("python3 scripts/github/issue_promotion.py", workflow)
         self.assertIn("python3 -m scripts.github.test_issue_promotion", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("queue: max", workflow)
 
     def test_agent_fast_runs_its_dedicated_policy_tests(self):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")

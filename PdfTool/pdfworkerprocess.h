@@ -20,20 +20,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "mainwindow.h"
-#include "pdfapplicationidentity.h"
-#include "pdfsettings.h"
+#ifndef PDFWORKERPROCESS_H
+#define PDFWORKERPROCESS_H
 
-#include <QApplication>
+#include <QByteArray>
+#include <QElapsedTimer>
+#include <QStringList>
+#include <atomic>
+#include <memory>
 
-int main(int argc, char *argv[])
+namespace pdftool
 {
-    QApplication a(argc, argv);
+class WorkerProcess
+{
+public:
+    WorkerProcess();
+    ~WorkerProcess();
+    bool start(const QString& executable, const QStringList& arguments, const QString& inputDir,
+               const QString& tempDir, const QString& outputDir, QString& error);
+    void stop();
+    bool running() const;
+    qint64 pid() const;
+    qint64 exitCode() const;
+    bool write(const QByteArray& bytes, QElapsedTimer& timer, int timeoutMs, const std::atomic_bool& cancelled);
+    QByteArray read(qint64 maximum);
 
-    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::Jbig2Viewer);
-    pdf::PDFSettings::migrateLegacySettings();
-
-    MainWindow w;
-    w.show();
-    return a.exec();
+private:
+    struct State;
+    std::unique_ptr<State> m_state;
+};
 }
+#endif

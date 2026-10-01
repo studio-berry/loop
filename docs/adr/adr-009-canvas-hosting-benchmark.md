@@ -147,4 +147,4 @@ Those remain explicit later gates in ADR-007 and ADR-010.
 - [Quick-root admission](adr-010-quick-root-admission.md)
 - [Qt Quick Controls shell](adr-007-qt-quick-controls-shell.md)
 - [Quick composition contract](../QUICK_COMPOSITION.md)
-- [Issue #247](https://github.com/studio-berry/loop/issues/247)
+- legacy issue #247

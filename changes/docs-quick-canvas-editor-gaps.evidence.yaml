@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: quick-canvas-editor-gap-record
+    evidence:
+      - architecture:agent-policy:documentation
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - mapped quick and interaction test lanes were not run; build-local does not exist and .local-vcpkg was removed, so configure and dependency restore are both approval-required under agent-policy.json
+  - ProductQuickAccessibilitySmoke was not run for the same reason

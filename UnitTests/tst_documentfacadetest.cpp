@@ -74,6 +74,7 @@ public:
             spec.jobId.isEmpty() ? QStringLiteral("job-%1").arg(++m_sequence) : spec.jobId;
 
         submittedSpecs.append(spec);
+        m_specs.insert(jobId, spec);
         m_status.insert(jobId, pdf::PDFJobStatus::Queued);
 
         if (runInline)
@@ -116,6 +117,9 @@ public:
         pdf::PDFJobSnapshot result;
         result.jobId = jobId;
         result.status = m_status.value(jobId, pdf::PDFJobStatus::Succeeded);
+        result.kind = m_specs.value(jobId).kind;
+        result.documentKey = m_specs.value(jobId).documentKey;
+        result.documentRevision = m_specs.value(jobId).documentRevision;
         return result;
     }
 
@@ -150,6 +154,7 @@ public:
 
     bool runInline = true;
     bool cancelStopsQueuedWork = true;
+    pdf::PDFJobStatus terminalStatus = pdf::PDFJobStatus::Succeeded;
     QList<pdf::PDFJobSpec> submittedSpecs;
     QStringList cancelledJobs;
     QStringList clearedKeys;
@@ -170,11 +175,12 @@ private:
                                    pdf::PDFProcessingLimits::conservativeDefaults(),
                                    [](int) {});
         work(context);
-        m_status.insert(jobId, pdf::PDFJobStatus::Succeeded);
+        m_status.insert(jobId, terminalStatus);
     }
 
     quint64 m_sequence = 0;
     QHash<QString, pdf::PDFJobStatus> m_status;
+    QHash<QString, pdf::PDFJobSpec> m_specs;
     QHash<QString, pdf::PDFJobWork> m_deferred;
 };
 
@@ -274,6 +280,7 @@ private slots:
     void disabledCommandIsUnavailable();
 
     void openAdmitsDocumentAndPublishesRevision();
+    void workerLoadCannotPublishAfterSchedulerFailure();
     void openFailureReportsTypedErrorAndBindsNoDocument();
     void openCancellationIsTerminalAndNotSuccess();
     void cancellingAQueuedOpenIsTerminal();
@@ -522,6 +529,17 @@ void DocumentFacadeTest::openAdmitsDocumentAndPublishesRevision()
 
     QVERIFY(harness.catalog.isEnabled(pdfinteraction::DocumentFacade::CloseCommandId));
     QVERIFY(harness.catalog.isEnabled(pdfinteraction::DocumentFacade::SaveCommandId));
+}
+
+void DocumentFacadeTest::workerLoadCannotPublishAfterSchedulerFailure()
+{
+    Harness harness;
+    harness.submitter.terminalStatus = pdf::PDFJobStatus::Failed;
+    harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Error);
+    QCOMPARE(harness.context.getDocument(), nullptr);
+    QCOMPARE(harness.facade->typedError(), QStringLiteral("document/job-not-admitted"));
 }
 
 void DocumentFacadeTest::openFailureReportsTypedErrorAndBindsNoDocument()

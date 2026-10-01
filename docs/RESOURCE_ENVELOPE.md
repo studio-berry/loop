@@ -60,9 +60,14 @@ $env:QT_QPA_PLATFORM = "offscreen"
 $env:QT_PLUGIN_PATH = "C:\path\to\qt\plugins"
 PdfTool.exe benchmark C:\temp\loop-div2k-10000-pages.pdf `
   --render-hw-accel 0 `
-  --render-rasterizers 8 `
+  --render-rasterizers 3 `
   --console-format json
 ```
+
+Rasterizers are pinned to 3 because the benchmark renders at the default 300 DPI: a Letter page
+image is 33.7 MB, each rasterizer holds one at a time, and the 128 MiB `raster-tile-cache` pool
+admits three. A fourth concurrent page is rejected as budget-exceeded and the run exits with
+`PartialOutput`.
 
 The JSON result includes the `workload_envelope` object. A successful
 Windows software-renderer run on the local 0.2.0 candidate rendered all
@@ -84,9 +89,15 @@ unsupported, budget-exceeded, or incomplete.
 The envelope is schema version 2. `resources` is produced by the shared
 `PDFResourceBudget` authority and contains the resident ceiling plus all seven
 named pool records. `pages_materialized` reports pages actually processed by a
-runner; it is not the catalog page count. `preflight_high_water_bytes` remains
-`-1` until a run includes the preflight phase, and such a record is explicitly
-`incomplete` rather than being promoted to a passing result. The deterministic
+runner; it is not the catalog page count. `preflight_high_water_bytes` is the process high-water when the
+`benchmark --profile <profile.json>` preflight phase ends; without `--profile`
+it stays `-1` and the record is explicitly `incomplete` rather than being
+promoted to a passing result. `--preflight-page-last <n>` limits that phase to
+pages 1 through `n` while rendering still covers every selected page; the
+runner passes it (256) for fixtures above 1,000 pages, because preflight costs
+roughly 0.5-0.7 s per page on a hosted runner, and records it as
+`profile.preflight_page_last`. A sampled record's `preflight_high_water_bytes`
+covers the sampled pages, not the whole document. The deterministic
 pathological and transparency/spot fixtures can be generated without the
 external DIV2K corpus:
 
@@ -154,7 +165,7 @@ recommended cold-process timing/RSS sample:
 python scripts/resource_envelope/run_matrix.py `
   --pdf-tool C:\path\to\PdfTool.exe `
   --manifest C:\temp\resource-envelope-fixtures.json `
-  --repetitions 3 --rasterizers 8 --strict `
+  --repetitions 3 --rasterizers 3 --strict `
   --output C:\temp\resource-envelope-matrix.json
 ```
 
@@ -166,6 +177,12 @@ reported as a passing complete run. Add
 `--baseline C:\previous\resource-envelope-matrix.json` to compare matching
 fixture digests and platform/toolchain identities. The default regression
 margin is `2.0`; use a narrower margin only after collecting stable platform
-baselines. Add `--cancel-fixture pathological-vector
---cancel-after-seconds 1` to send an interrupt to one controlled probe and
-record the application's cancellation latency.
+baselines. The runner passes `--profile` (default
+`loop-preflight/profiles/loop-default.json`) so every run measures the
+preflight phase. Add `--cancel-fixture ten-thousand-page
+--cancel-after-seconds 3` for the separate cancellation probe, which interrupts
+one extra run and then times a fresh process reopening the fixture and
+rendering its first page (`recovery_ms`). `--strict` requires that probe and
+also runs the hostile lane over `UnitTests/testdata/budget_exhaustion/`. For
+the hosted, synthetic-fixture version of this run, see
+`docs/RESOURCE_ENVELOPE_QUALIFICATION.md`.

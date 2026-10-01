@@ -145,7 +145,7 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
     outcome.sourceData = reader.getSource();
 
     std::unique_ptr<PDFDocumentSession, void (*)(PDFDocumentSession*)> session(
-        PDFDocumentSession::createForInspection(document.get()),
+        PDFDocumentSession::createForInspection(document.get(), request.receiptDocumentId),
         &PDFDocumentSession::destroy);
 
     PreflightEngine engine(session.get());
@@ -166,7 +166,19 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
         }
         else
         {
-            outcome.report = engine.run(request.profile, request.jobSpec, request.cliBindings, request.plan, selectedPages);
+            PreflightProfileData effectiveProfile;
+            outcome.report = engine.run(request.profile, request.jobSpec, request.cliBindings, request.plan,
+                                        selectedPages, request.createReceipt ? &effectiveProfile : nullptr);
+            if (request.createReceipt)
+            {
+                outcome.report.documentRevisionDigest = QString::fromLatin1(session->getRevision().document.sourceDataHash.toHex());
+                PreflightInspectionReceipt receipt;
+                if (buildPreflightInspectionReceipt(outcome.report, effectiveProfile, session->getRevision(),
+                                                    engine.lastEvidenceGraph(), receipt, outcome.receiptError))
+                {
+                    outcome.receipt = std::move(receipt);
+                }
+            }
         }
         outcome.inspectionRan = true;
     }

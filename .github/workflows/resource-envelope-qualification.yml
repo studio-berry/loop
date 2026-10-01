@@ -1,0 +1,302 @@
+name: Resource envelope qualification
+
+# Hosted qualification for issue #19: builds PdfTool from the candidate SHA,
+# generates the deterministic synthetic fixture bundle, and runs the strict
+# resource-envelope matrix (measured fixtures, cancellation/recovery probe,
+# hostile corpus) on Linux and Windows. The evidence job turns both matrices
+# into one record carrying this run's id.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/resource_envelope/**'
+      - 'scripts/qualification/*resource_envelope*'
+      - 'PdfTool/main.cpp'
+      - 'PdfTool/pdftoolrender.*'
+      - 'LoopLibCore/sources/pdfworkloadenvelope.*'
+      - 'LoopLibCore/sources/pdfresourcebudget.*'
+      - 'LoopLibCore/sources/pdfrenderer.*'
+      - 'docs/RESOURCE_ENVELOPE_BUDGETS.json'
+      - '.github/workflows/resource-envelope-qualification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resource-envelope-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REPETITIONS: 3
+  CANCEL_FIXTURE: ten-thousand-page
+  CANCEL_AFTER_SECONDS: 3
+  TIMEOUT_SECONDS: 1800
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+      QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          path: loop
+          fetch-depth: 0
+
+      - name: Install Dependencies
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          sudo apt update
+          sudo apt install -y autoconf autoconf-archive automake libtool libcups2 libcups2-dev libfontconfig1-dev
+
+      - name: 'VCPKG: Set up VCPKG'
+        run: |
+          VCPKG_COMMIT="$(python3 -c 'import json; print(json.load(open("loop/vcpkg-configuration.json"))["default-registry"]["baseline"])')"
+          if ! [[ "$VCPKG_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Invalid vcpkg baseline: $VCPKG_COMMIT"
+              exit 1
+          fi
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout --detach "$VCPKG_COMMIT"
+          test "$(git -C vcpkg rev-parse HEAD)" = "$VCPKG_COMMIT"
+          ./vcpkg/bootstrap-vcpkg.sh
+          ./vcpkg/vcpkg integrate install
+
+      - name: 'VCPKG: Cache vcpkg dependencies'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: |
+            ./vcpkg/downloads
+            ./vcpkg/packages
+            ./vcpkg_installed
+          key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-v2-
+
+      - name: 'VCPKG: Install project dependencies'
+        working-directory: vcpkg
+        run: |
+          ./vcpkg install --x-manifest-root=$GITHUB_WORKSPACE/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+        with:
+          version: '6.11.1'
+          host: 'linux'
+          target: 'desktop'
+          dir: '${{ github.workspace }}/qt/'
+          install-deps: 'true'
+          modules: 'qtspeech qtmultimedia'
+          cache: 'true'
+          cache-key-prefix: ${{ runner.os }}-qt-6111
+
+      - name: Build PdfTool
+        working-directory: loop
+        run: |
+          cmake -B build -S . -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake --build build --target PdfTool --config Release -j6
+          PDF_TOOL="$(find "$PWD/build" -type f -name PdfTool -perm -u+x | head -n 1)"
+          test -n "$PDF_TOOL"
+          echo "PDF_TOOL=$PDF_TOOL" >> "$GITHUB_ENV"
+          "$PDF_TOOL" help --console-format json > /dev/null
+
+      - name: Generate synthetic fixture bundle
+        working-directory: loop
+        run: python3 scripts/resource_envelope/synthetic_workload.py --output-dir "$RUNNER_TEMP/fixtures" --manifest "$RUNNER_TEMP/fixtures/fixtures.json"
+
+      - name: Run strict resource-envelope matrix
+        working-directory: loop
+        run: |
+          mkdir -p "$RUNNER_TEMP/qualification"
+          cp "$RUNNER_TEMP/fixtures/fixtures.json" "$RUNNER_TEMP/qualification/fixtures.json"
+          python3 -m scripts.resource_envelope.run_matrix \
+            --pdf-tool "$PDF_TOOL" \
+            --manifest "$RUNNER_TEMP/fixtures/fixtures.json" \
+            --repetitions "$REPETITIONS" --timeout-seconds "$TIMEOUT_SECONDS" \
+            --cancel-fixture "$CANCEL_FIXTURE" --cancel-after-seconds "$CANCEL_AFTER_SECONDS" \
+            --strict \
+            --output "$RUNNER_TEMP/qualification/matrix-linux.json"
+
+      - name: Upload Linux matrix
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: resource-envelope-matrix-linux
+          path: ${{ runner.temp }}/qualification/
+          if-no-files-found: warn
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    env:
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\loop\vcpkg\overlays\general
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+      QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          path: loop
+          fetch-depth: 0
+
+      - name: Exclude workspace from Windows Defender real-time scanning
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${env:GITHUB_WORKSPACE}" -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: 'VCPKG: Set up VCPKG'
+        shell: pwsh
+        run: |
+          $config = Get-Content (Join-Path $env:GITHUB_WORKSPACE "loop\vcpkg-configuration.json") -Raw | ConvertFrom-Json
+          $vcpkgCommit = $config.'default-registry'.baseline
+          if ($vcpkgCommit -notmatch '^[0-9a-f]{40}$') { throw "Invalid vcpkg baseline: $vcpkgCommit" }
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout --detach $vcpkgCommit
+          if ((git -C vcpkg rev-parse HEAD).Trim() -ne $vcpkgCommit) { throw "vcpkg checkout does not match manifest baseline" }
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          .\vcpkg\vcpkg.exe integrate install
+
+      - name: 'VCPKG: Cache vcpkg dependencies'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: |
+            ./vcpkg/downloads
+            ./vcpkg/packages
+            ./vcpkg/installed
+            ./vcpkg/archives
+          key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-v2-
+
+      - name: 'VCPKG: Install project dependencies'
+        working-directory: vcpkg
+        shell: pwsh
+        run: |
+          $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loop'
+          .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed with exit code $LASTEXITCODE." }
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+        with:
+          version: '6.11.1'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          dir: '${{ github.workspace }}/qt/'
+          install-deps: 'true'
+          modules: 'qtspeech qtmultimedia'
+          cache: 'true'
+          cache-key-prefix: ${{ runner.os }}-qt-6111
+          # Same aqtinstall pin as reusable-windows.yml (miurahr/aqtinstall#1007).
+          aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
+
+      - name: Build PdfTool
+        working-directory: loop
+        shell: pwsh
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_LOOP_DISTRIBUTION=OFF -DLOOP_INSTALL_QT_DEPENDENCIES=OFF -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}"
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
+          cmake --build build --target PdfTool --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build PdfTool failed with exit code $LASTEXITCODE." }
+          $pdfTool = Get-ChildItem build -Recurse -Filter PdfTool.exe | Select-Object -First 1
+          if (-not $pdfTool) { throw "PdfTool.exe was not produced." }
+          "PDF_TOOL=$($pdfTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "QT_PLUGIN_PATH=$(Join-Path $env:QT_ROOT_DIR 'plugins')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$(Join-Path $env:QT_ROOT_DIR 'bin')" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          "$(Join-Path $env:VCPKG_INSTALLED_DIR 'x64-windows\bin')" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Smoke PdfTool runtime
+        working-directory: loop
+        shell: pwsh
+        run: |
+          & $env:PDF_TOOL help --console-format json | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "PdfTool help failed with exit code $LASTEXITCODE." }
+
+      - name: Generate synthetic fixture bundle
+        working-directory: loop
+        shell: pwsh
+        run: |
+          python scripts/resource_envelope/synthetic_workload.py --output-dir "$env:RUNNER_TEMP\fixtures" --manifest "$env:RUNNER_TEMP\fixtures\fixtures.json"
+          if ($LASTEXITCODE -ne 0) { throw "fixture generation failed with exit code $LASTEXITCODE." }
+
+      - name: Run strict resource-envelope matrix
+        working-directory: loop
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\qualification" | Out-Null
+          python -m scripts.resource_envelope.run_matrix `
+            --pdf-tool "$env:PDF_TOOL" `
+            --manifest "$env:RUNNER_TEMP\fixtures\fixtures.json" `
+            --repetitions $env:REPETITIONS --timeout-seconds $env:TIMEOUT_SECONDS `
+            --cancel-fixture $env:CANCEL_FIXTURE --cancel-after-seconds $env:CANCEL_AFTER_SECONDS `
+            --strict `
+            --output "$env:RUNNER_TEMP\qualification\matrix-windows.json"
+          if ($LASTEXITCODE -ne 0) { throw "strict resource-envelope matrix failed with exit code $LASTEXITCODE." }
+
+      - name: Upload Windows matrix
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: resource-envelope-matrix-windows
+          path: ${{ runner.temp }}\qualification\
+          if-no-files-found: warn
+
+  evidence:
+    needs: [linux, windows]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          path: loop
+
+      - name: Download matrices
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          pattern: resource-envelope-matrix-*
+          path: ${{ runner.temp }}/matrices
+
+      - name: Build and validate qualification evidence
+        working-directory: loop
+        run: |
+          set -euo pipefail
+          MATRICES=()
+          for platform in linux windows; do
+            matrix="$RUNNER_TEMP/matrices/resource-envelope-matrix-$platform/matrix-$platform.json"
+            if [ -f "$matrix" ]; then MATRICES+=(--matrix "$platform=$matrix"); fi
+          done
+          manifest="$(find "$RUNNER_TEMP/matrices" -name fixtures.json | head -n 1)"
+          test -n "$manifest" || { echo "::error::no fixture manifest was uploaded"; exit 1; }
+          python3 scripts/qualification/build_resource_envelope_evidence.py \
+            "${MATRICES[@]}" \
+            --fixture-manifest "$manifest" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/evidence/evidence.json"
+          python3 scripts/qualification/validate_resource_envelope_evidence.py --evidence "$RUNNER_TEMP/evidence/evidence.json" --skip-manifest
+          cp "$manifest" "$RUNNER_TEMP/evidence/fixture-manifest.json"
+          python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); print("disposition:", e["disposition"]); [print("  -", r) for r in e["disposition_reasons"]]; sys.exit(0 if e["disposition"] == "passed" else 1)' "$RUNNER_TEMP/evidence/evidence.json"
+
+      - name: Upload qualification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: resource-envelope-evidence
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn

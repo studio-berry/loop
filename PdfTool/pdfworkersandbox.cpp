@@ -24,6 +24,7 @@
 
 #include "pdfworkerprotocol.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 
@@ -41,6 +42,13 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <vector>
+#endif
+#if defined(Q_OS_WIN)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include <vector>
 #endif
 
@@ -83,6 +91,17 @@ bool setResourceLimits(const WorkerSandboxLimits& limits, QString* errorMessage)
     const qint64 rss = limits.rssBytes > 0 ? limits.rssBytes : DEFAULT_RSS_LIMIT_BYTES;
     const qint64 cpu = limits.cpuSeconds > 0 ? limits.cpuSeconds : DEFAULT_CPU_SECONDS;
 
+    const struct rlimit coreLimit
+    {
+        0, 0
+    };
+    if (::setrlimit(RLIMIT_CORE, &coreLimit) != 0 || ::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Failed to disable worker dumps.");
+        return false;
+    }
+
     struct rlimit asLimit;
     asLimit.rlim_cur = static_cast<rlim_t>(rss);
     asLimit.rlim_max = static_cast<rlim_t>(rss);
@@ -111,9 +130,20 @@ bool setResourceLimits(const WorkerSandboxLimits& limits, QString* errorMessage)
 
 bool denyNetworkWithSeccomp(QString* errorMessage)
 {
-    // Deny networking syscalls; everything else is allowed. Hand-rolled BPF so
-    // we do not introduce a libseccomp link dependency.
     const std::vector<__u32> denied = {
+        static_cast<__u32>(__NR_execve),
+#ifdef __NR_execveat
+        static_cast<__u32>(__NR_execveat),
+#endif
+#ifdef __NR_fork
+        static_cast<__u32>(__NR_fork),
+#endif
+#ifdef __NR_vfork
+        static_cast<__u32>(__NR_vfork),
+#endif
+#ifdef __NR_io_uring_setup
+        static_cast<__u32>(__NR_io_uring_setup),
+#endif
         static_cast<__u32>(__NR_socket),
         static_cast<__u32>(__NR_connect),
         static_cast<__u32>(__NR_accept),
@@ -132,10 +162,34 @@ bool denyNetworkWithSeccomp(QString* errorMessage)
 
     std::vector<sock_filter> filter;
     filter.push_back(BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, arch)));
-    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 1, 0));
+    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,
+#if defined(__x86_64__)
+                              AUDIT_ARCH_X86_64,
+#elif defined(__aarch64__)
+                              AUDIT_ARCH_AARCH64,
+#else
+#error Unsupported worker seccomp architecture
+#endif
+                              1, 0));
     filter.push_back(BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS));
     filter.push_back(BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)));
 
+#if defined(__x86_64__)
+    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, 0x40000000, 0, 1));
+    filter.push_back(BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS));
+#endif
+#ifdef __NR_clone3
+    // libc falls back to clone, whose flags can be checked for thread creation.
+    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_clone3, 0, 1));
+    filter.push_back(BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | ENOSYS));
+#endif
+#ifdef __NR_clone
+    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_clone, 0, 4));
+    filter.push_back(BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[0])));
+    filter.push_back(BPF_JUMP(BPF_JMP | BPF_JSET | BPF_K, 0x00010000 /* CLONE_THREAD */, 1, 0));
+    filter.push_back(BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EACCES));
+    filter.push_back(BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW));
+#endif
     for (const __u32 nr : denied)
     {
         filter.push_back(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, nr, 0, 1));
@@ -156,7 +210,7 @@ bool denyNetworkWithSeccomp(QString* errorMessage)
     program.len = static_cast<unsigned short>(filter.size());
     program.filter = filter.data();
 
-    if (::prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program) != 0)
+    if (::syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, SECCOMP_FILTER_FLAG_TSYNC, &program) != 0)
     {
         if (errorMessage)
         {
@@ -172,7 +226,6 @@ bool pathAllowed(const QString& absolutePath, QString* errorMessage)
     const QFileInfo info(absolutePath);
     if (!info.exists())
     {
-        // Create parent directory for temp/output if missing.
         if (errorMessage)
         {
             *errorMessage = QStringLiteral("Sandbox path does not exist: %1").arg(absolutePath);
@@ -201,6 +254,9 @@ bool addLandlockPath(int rulesetFd, const QString& absolutePath, __u64 access, Q
     __u64 effectiveAccess = access;
     if (info.isFile())
     {
+#ifdef LANDLOCK_ACCESS_FS_REFER
+        effectiveAccess &= ~LANDLOCK_ACCESS_FS_REFER;
+#endif
         effectiveAccess &= ~(LANDLOCK_ACCESS_FS_READ_DIR |
                              LANDLOCK_ACCESS_FS_REMOVE_DIR |
                              LANDLOCK_ACCESS_FS_MAKE_CHAR |
@@ -233,7 +289,12 @@ bool addLandlockPath(int rulesetFd, const QString& absolutePath, __u64 access, Q
 bool applyLandlock(const WorkerSandboxPaths& paths, QString* errorMessage)
 {
     const int abi = landlock_create_ruleset(nullptr, 0, LANDLOCK_CREATE_RULESET_VERSION);
-    if (abi < 1)
+#if !defined(LANDLOCK_ACCESS_FS_TRUNCATE) || !defined(LANDLOCK_ACCESS_FS_REFER)
+    if (errorMessage)
+        *errorMessage = QStringLiteral("Landlock headers do not support required filesystem rights.");
+    return false;
+#else
+    if (abi < 3)
     {
         if (errorMessage)
         {
@@ -259,6 +320,7 @@ bool applyLandlock(const WorkerSandboxPaths& paths, QString* errorMessage)
         LANDLOCK_ACCESS_FS_MAKE_BLOCK |
         LANDLOCK_ACCESS_FS_MAKE_SYM;
 
+    attr.handled_access_fs |= LANDLOCK_ACCESS_FS_REFER | LANDLOCK_ACCESS_FS_TRUNCATE;
     const int rulesetFd = landlock_create_ruleset(&attr, sizeof(attr), 0);
     if (rulesetFd < 0)
     {
@@ -291,7 +353,11 @@ bool applyLandlock(const WorkerSandboxPaths& paths, QString* errorMessage)
         LANDLOCK_ACCESS_FS_REMOVE_FILE |
         LANDLOCK_ACCESS_FS_MAKE_REG |
         LANDLOCK_ACCESS_FS_MAKE_DIR |
-        LANDLOCK_ACCESS_FS_REMOVE_DIR;
+        LANDLOCK_ACCESS_FS_REMOVE_DIR
+#ifdef LANDLOCK_ACCESS_FS_TRUNCATE
+        | LANDLOCK_ACCESS_FS_TRUNCATE
+#endif
+        ;
 
     // When input is a file, Landlock path_beneath on the file itself grants
     // access to that file; when it is a directory, the whole tree is readable.
@@ -303,44 +369,20 @@ bool applyLandlock(const WorkerSandboxPaths& paths, QString* errorMessage)
         return false;
     }
 
-    // Allow reading the worker binary and shared libraries under /usr and /lib
-    // so Qt/LoopLibCore can continue to resolve after restriction. Without this
-    // the process dies on the next dlopen. Also allow common read-only system
-    // roots Qt and libc touch during startup (/etc, /dev, /proc).
-    for (const char* root : { "/usr", "/lib", "/lib64", "/opt", "/etc", "/dev", "/proc", "/sys" })
+    // Already mapped libraries remain available. These roots cover deferred
+    // font/locale/ICC data and runtime library loads; never grant /proc or /dev.
+    const QStringList runtimeRoots{
+        QStringLiteral("/usr/lib"), QStringLiteral("/usr/lib64"), QStringLiteral("/lib"), QStringLiteral("/lib64"),
+        QStringLiteral("/usr/share/fonts"), QStringLiteral("/usr/share/fontconfig"), QStringLiteral("/etc/fonts"),
+        QStringLiteral("/usr/share/color"), QStringLiteral("/usr/share/locale"), QStringLiteral("/etc/ld.so.cache"),
+        QCoreApplication::applicationDirPath(), QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(QStringLiteral("../lib"))
+    };
+    for (const QString& path : runtimeRoots)
     {
-        if (::access(root, F_OK) != 0)
+        if (QFileInfo::exists(path) && !addLandlockPath(rulesetFd, path, readOnly, errorMessage))
         {
-            continue;
-        }
-        QString ignored;
-        if (!addLandlockPath(rulesetFd, QString::fromLatin1(root),
-                             LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR,
-                             &ignored))
-        {
-            // Optional roots may be absent or unopenable; continue.
-        }
-    }
-
-    // Allow the directory that contains the worker executable (build/install tree).
-    {
-        char selfPath[4096] = {};
-        const ssize_t length = ::readlink("/proc/self/exe", selfPath, sizeof(selfPath) - 1);
-        if (length > 0)
-        {
-            selfPath[length] = '\0';
-            const QString exeDir = QFileInfo(QString::fromLocal8Bit(selfPath, int(length))).absolutePath();
-            QString ignored;
-            addLandlockPath(rulesetFd, exeDir,
-                            LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR,
-                            &ignored);
-            const QString libDir = QFileInfo(exeDir + QStringLiteral("/../lib")).absoluteFilePath();
-            if (QFileInfo::exists(libDir))
-            {
-                addLandlockPath(rulesetFd, libDir,
-                                LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR,
-                                &ignored);
-            }
+            ::close(rulesetFd);
+            return false;
         }
     }
 
@@ -370,6 +412,7 @@ bool applyLandlock(const WorkerSandboxPaths& paths, QString* errorMessage)
 
     ::close(rulesetFd);
     return true;
+#endif
 }
 
 #endif   // Q_OS_LINUX
@@ -412,6 +455,59 @@ bool applyWorkerSandbox(const WorkerSandboxPaths& paths,
         return false;
     }
     return true;
+#elif defined(Q_OS_WIN)
+    Q_UNUSED(paths);
+    Q_UNUSED(limits);
+    HANDLE token = nullptr;
+    BOOL appContainer = FALSE;
+    DWORD size = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token))
+        return false;
+    const BOOL isolated = GetTokenInformation(token, TokenIsAppContainer, &appContainer, sizeof(appContainer), &size);
+    GetTokenInformation(token, TokenCapabilities, nullptr, 0, &size);
+    std::vector<unsigned char> capabilities(size);
+    const BOOL queried = size > 0 && GetTokenInformation(token, TokenCapabilities, capabilities.data(), size, &size);
+    const bool noCapabilities = queried && reinterpret_cast<TOKEN_GROUPS*>(capabilities.data())->GroupCount == 0;
+    CloseHandle(token);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION job{};
+    PROCESS_MITIGATION_CHILD_PROCESS_POLICY children{};
+    const DWORD required = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_ACTIVE_PROCESS |
+                           JOB_OBJECT_LIMIT_PROCESS_MEMORY | JOB_OBJECT_LIMIT_PROCESS_TIME;
+    if (!isolated || !appContainer)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("worker.sandbox.token");
+        return false;
+    }
+    if (!noCapabilities)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("worker.sandbox.capabilities");
+        return false;
+    }
+    if (!QueryInformationJobObject(nullptr, JobObjectExtendedLimitInformation, &job, sizeof(job), nullptr))
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("worker.sandbox.job-query");
+        return false;
+    }
+    if ((job.BasicLimitInformation.LimitFlags & required) != required ||
+        job.BasicLimitInformation.ActiveProcessLimit != 1 ||
+        job.ProcessMemoryLimit != static_cast<SIZE_T>(limits.rssBytes > 0 ? limits.rssBytes : DEFAULT_RSS_LIMIT_BYTES) ||
+        job.BasicLimitInformation.PerProcessUserTimeLimit.QuadPart != (limits.cpuSeconds > 0 ? limits.cpuSeconds : DEFAULT_CPU_SECONDS) * 10000000)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("worker.sandbox.job-limits");
+        return false;
+    }
+    if (!GetProcessMitigationPolicy(GetCurrentProcess(), ProcessChildProcessPolicy, &children, sizeof(children)) ||
+        !children.NoChildProcessCreation)
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("worker.sandbox.children");
+        return false;
+    }
+    return true;
 #else
     Q_UNUSED(paths);
     Q_UNUSED(limits);
@@ -423,7 +519,7 @@ bool applyWorkerSandbox(const WorkerSandboxPaths& paths,
 #endif
 }
 
-QJsonObject sandboxStatusJson(bool applied, const QString& detail)
+QJsonObject sandboxStatusJson(bool applied, const QString& detail, WorkerSandboxLimits limits)
 {
     return QJsonObject{
         { QStringLiteral("applied"), applied },
@@ -437,8 +533,8 @@ QJsonObject sandboxStatusJson(bool applied, const QString& detail)
 #endif
         },
         { QStringLiteral("detail"), detail },
-        { QStringLiteral("rss_limit_bytes"), DEFAULT_RSS_LIMIT_BYTES },
-        { QStringLiteral("cpu_limit_seconds"), DEFAULT_CPU_SECONDS },
+        { QStringLiteral("rss_limit_bytes"), (limits.rssBytes > 0 ? limits.rssBytes : DEFAULT_RSS_LIMIT_BYTES) },
+        { QStringLiteral("cpu_limit_seconds"), (limits.cpuSeconds > 0 ? limits.cpuSeconds : DEFAULT_CPU_SECONDS) },
     };
 }
 

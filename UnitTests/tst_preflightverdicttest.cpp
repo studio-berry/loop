@@ -44,6 +44,7 @@
 #include <QTemporaryDir>
 #include <QTranslator>
 #include <QtTest>
+#include <limits>
 
 class PreflightVerdictTest : public QObject
 {
@@ -63,6 +64,13 @@ private slots:
     void incompleteInspectionWithoutFindings_isNotPass();
     void cancellationMarkedIncomplete_isNotPass();
     void requiredCheckMissingStatus_isIncomplete();
+    void receiptIdentity_matchesGoldenVector();
+    void receiptWireRoundTrip();
+    void receiptWireRejectsTampering();
+    void terminalReceiptPreservesUnknownIdentity();
+    void receiptTerminalStates_data();
+    void receiptTerminalStates();
+    void receiptRejectsMismatchedProvenance();
     void processExitCodes_matchPdfToolContract();
     void budgetExceeded_neverAllowsCertificate();
     void operatorSummary_distinguishesIncompleteFromPass();
@@ -135,6 +143,33 @@ pdf::PreflightResult budgetExceededResult()
                                                            QStringLiteral("page 1") });
     return result;
 }
+
+struct ReceiptFixture
+{
+    pdf::PreflightResult result;
+    pdf::PreflightProfileData profile;
+    pdf::PDFRevisionIdentity revision;
+    pdf::PDFEvidenceGraph evidence;
+
+    ReceiptFixture()
+    {
+        result.documentRevisionDigest = QString(64, QLatin1Char('a'));
+        result.effectiveProfileDigest = QString(64, QLatin1Char('b'));
+        result.coverageScope = QJsonObject{
+            { QStringLiteral("claim"), QStringLiteral("Limited to enabled checks.") },
+            { QStringLiteral("enabled_checks"), QJsonArray{ QStringLiteral("bleed") } }
+        };
+        result.checkStatuses.append(makeCheckStatus(QStringLiteral("bleed"), QStringLiteral("ok")));
+        profile.effectiveDigest = result.effectiveProfileDigest;
+        pdf::PreflightCheckConfig check;
+        check.id = QStringLiteral("bleed");
+        check.enabled = true;
+        check.required = true;
+        profile.checks.append(check);
+        revision.document.documentId = QStringLiteral("receipt-fixture");
+        revision.documentRevision = 1;
+    }
+};
 
 /// A translator with no .qm file behind it: it answers one message in the
 /// Core verdict context, which is exactly what a shipped catalogue would do.
@@ -964,6 +999,232 @@ void PreflightVerdictTest::requiredCheckMissingStatus_isIncomplete()
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
     QCOMPARE(verdict.reasonCode, QStringLiteral("required-check-not-run"));
     QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::receiptIdentity_matchesGoldenVector()
+{
+    ReceiptFixture fixture;
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("evidence-2");
+    record.fidelity = QStringLiteral("sampled");
+    fixture.evidence.records.append(record);
+    pdf::PreflightFinding warning;
+    warning.evidenceIds.append(QStringLiteral("evidence-1"));
+    fixture.result.warnings.append(warning);
+
+    pdf::PreflightInspectionReceipt receipt;
+    QString error;
+    QVERIFY2(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, receipt, error),
+             qPrintable(error));
+    QCOMPARE(receipt.identity, QStringLiteral("8e94a7fefac162eafa4a20516692fb281c28978788b9d91d4df3397061933a8b"));
+    QCOMPARE(receipt.verdict.state, pdf::PreflightVerdictState::Pass);
+    QCOMPARE(receipt.checks.size(), 1);
+    QVERIFY(receipt.checks.first().complete);
+    QCOMPARE(receipt.evidenceRefs, (QStringList{ QStringLiteral("evidence-1"), QStringLiteral("evidence-2") }));
+    QCOMPARE(receipt.fidelity, QStringLiteral("sampled"));
+    QCOMPARE(receipt.limitations, QStringList{ QStringLiteral("Limited to enabled checks.") });
+
+    fixture.revision.documentRevision = 2;
+    pdf::PreflightInspectionReceipt later;
+    QVERIFY2(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, later, error),
+             qPrintable(error));
+    QCOMPARE(later.identity, receipt.identity);
+    QCOMPARE(later.revision.documentRevision, pdf::DocumentRevision(2));
+
+    fixture.profile.effectiveDigest = QString(64, QLatin1Char('c'));
+    fixture.result.effectiveProfileDigest = fixture.profile.effectiveDigest;
+    pdf::PreflightInspectionReceipt changedPolicy;
+    QVERIFY2(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, changedPolicy, error),
+             qPrintable(error));
+    QCOMPARE(changedPolicy.identity, QStringLiteral("931952b4c72f56e67fa371c94eb01bec4383cab251286a3c675c7d8dcada11f8"));
+}
+
+void PreflightVerdictTest::receiptWireRoundTrip()
+{
+    ReceiptFixture fixture;
+    fixture.revision.document.sourceDataHash = QByteArray::fromHex(fixture.result.documentRevisionDigest.toLatin1());
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("wire-evidence");
+    record.fidelity = QStringLiteral("exact");
+    fixture.evidence.records.append(record);
+    fixture.revision.documentRevision = std::numeric_limits<quint64>::max();
+    fixture.revision.cacheGeneration = (quint64(1) << 54) + 3;
+    fixture.revision.effectiveProfileIdentity = QStringLiteral("effective-policy");
+    pdf::PreflightInspectionReceipt receipt, decoded;
+    QString error;
+    QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                 fixture.evidence, receipt, error));
+    QVERIFY2(pdf::preflightInspectionReceiptFromJson(receipt.toJson(), decoded, error), qPrintable(error));
+    QCOMPARE(decoded.toJson(), receipt.toJson());
+    QCOMPARE(decoded.revision, fixture.revision);
+    fixture.profile.profileIdentity = receipt.profileIdentity;
+    fixture.profile.coverageScope = receipt.coverageScope;
+    QVERIFY2(pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, fixture.revision, fixture.profile, error), qPrintable(error));
+    auto changed = fixture.revision;
+    ++changed.cacheGeneration;
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, changed, fixture.profile, error));
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, QString(64, QLatin1Char('e')), fixture.revision, fixture.profile, error));
+    fixture.profile.effectiveDigest = QString(64, QLatin1Char('f'));
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, fixture.revision, fixture.profile, error));
+}
+
+void PreflightVerdictTest::terminalReceiptPreservesUnknownIdentity()
+{
+    pdf::PDFRevisionIdentity revision;
+    revision.document.documentId = QStringLiteral("request-before-staging");
+    const auto terminal = pdf::buildTerminalPreflightReceipt({}, revision, {}, QStringLiteral("worker.snapshot-failed"));
+    pdf::PreflightInspectionReceipt parsed;
+    QString error;
+    QVERIFY2(pdf::preflightInspectionReceiptFromJson(terminal.toJson(), parsed, error), qPrintable(error));
+    QVERIFY(parsed.inputDigest.isEmpty());
+    QVERIFY(parsed.effectiveProfileDigest.isEmpty());
+    QVERIFY(!parsed.verdict.isPass());
+    auto forged = terminal.toJson();
+    auto verdict = forged.value(QStringLiteral("verdict")).toObject();
+    verdict.insert(QStringLiteral("state"), QStringLiteral("pass"));
+    forged.insert(QStringLiteral("verdict"), verdict);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(forged, parsed, error));
+}
+
+void PreflightVerdictTest::receiptWireRejectsTampering()
+{
+    ReceiptFixture fixture;
+    fixture.revision.document.sourceDataHash = QByteArray::fromHex(fixture.result.documentRevisionDigest.toLatin1());
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("wire-evidence");
+    record.fidelity = QStringLiteral("exact");
+    fixture.evidence.records.append(record);
+    pdf::PreflightInspectionReceipt receipt, decoded;
+    QString error;
+    QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                 fixture.evidence, receipt, error));
+    auto json = receipt.toJson();
+    json.insert(QStringLiteral("schema"), QStringLiteral("loop.inspection-receipt.v99"));
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    json.insert(QStringLiteral("checks"), QJsonArray{});
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    auto checks = json.value(QStringLiteral("checks")).toArray();
+    auto check = checks.first().toObject();
+    check.insert(QStringLiteral("status"), QStringLiteral("unsupported"));
+    checks.replace(0, check);
+    json.insert(QStringLiteral("checks"), checks);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    json.insert(QStringLiteral("evidence_refs"), QJsonArray{});
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    checks = json.value(QStringLiteral("checks")).toArray();
+    check = checks.first().toObject();
+    check.insert(QStringLiteral("status"), QStringLiteral("invented-status"));
+    check.insert(QStringLiteral("complete"), false);
+    checks.replace(0, check);
+    json.insert(QStringLiteral("checks"), checks);
+    auto incompleteVerdict = json.value(QStringLiteral("verdict")).toObject();
+    incompleteVerdict.insert(QStringLiteral("state"), QStringLiteral("incomplete"));
+    json.insert(QStringLiteral("verdict"), incompleteVerdict);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    auto revision = json.value(QStringLiteral("revision")).toObject();
+    revision.insert(QStringLiteral("cache_generation"), 0);
+    json.insert(QStringLiteral("revision"), revision);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    const auto failure = pdf::buildTerminalPreflightReceipt(receipt.inputDigest, fixture.revision,
+                                                            receipt.effectiveProfileDigest, QStringLiteral("worker.crashed"));
+    QVERIFY(pdf::preflightInspectionReceiptFromJson(failure.toJson(), decoded, error));
+    QVERIFY(!decoded.verdict.isPass());
+}
+
+void PreflightVerdictTest::receiptTerminalStates_data()
+{
+    QTest::addColumn<QString>("caseName");
+    QTest::addColumn<pdf::PreflightVerdictState>("expected");
+    QTest::newRow("pass") << QStringLiteral("pass") << pdf::PreflightVerdictState::Pass;
+    QTest::newRow("no-evidence") << QStringLiteral("no-evidence") << pdf::PreflightVerdictState::Incomplete;
+    QTest::newRow("fail") << QStringLiteral("fail") << pdf::PreflightVerdictState::Fail;
+    QTest::newRow("missing-required") << QStringLiteral("missing-required") << pdf::PreflightVerdictState::Incomplete;
+    QTest::newRow("unsupported") << QStringLiteral("unsupported") << pdf::PreflightVerdictState::Incomplete;
+    QTest::newRow("budget-limited") << QStringLiteral("budget-limited") << pdf::PreflightVerdictState::Incomplete;
+    QTest::newRow("cancelled") << QStringLiteral("cancelled") << pdf::PreflightVerdictState::Incomplete;
+    QTest::newRow("parser-error") << QStringLiteral("parser-error") << pdf::PreflightVerdictState::Error;
+}
+
+void PreflightVerdictTest::receiptTerminalStates()
+{
+    QFETCH(QString, caseName);
+    QFETCH(pdf::PreflightVerdictState, expected);
+    ReceiptFixture fixture;
+    if (caseName != QLatin1String("no-evidence"))
+    {
+        pdf::PDFEvidenceRecord record;
+        record.id = QStringLiteral("evidence-1");
+        record.fidelity = QStringLiteral("exact");
+        fixture.evidence.records.append(record);
+    }
+    if (caseName == QLatin1String("fail"))
+    {
+        fixture.result.errors.append(blockingFinding());
+    }
+    else if (caseName == QLatin1String("missing-required"))
+    {
+        fixture.result.checkStatuses.clear();
+    }
+    else if (caseName == QLatin1String("unsupported"))
+    {
+        fixture.result.checkStatuses.first().status = QStringLiteral("unsupported");
+    }
+    else if (caseName == QLatin1String("budget-limited"))
+    {
+        fixture.result.checkStatuses.first().budgetKind = QStringLiteral("raster-pixels");
+    }
+    else if (caseName == QLatin1String("cancelled"))
+    {
+        fixture.result.errorCode = QStringLiteral("cancelled");
+    }
+    else if (caseName == QLatin1String("parser-error"))
+    {
+        fixture.result.errorCode = QStringLiteral("parser-error");
+    }
+
+    pdf::PreflightInspectionReceipt receipt;
+    QString error;
+    QVERIFY2(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, receipt, error),
+             qPrintable(error));
+    QCOMPARE(receipt.verdict.state, expected);
+    QCOMPARE(receipt.verdict.isPass(), expected == pdf::PreflightVerdictState::Pass);
+    if (caseName == QLatin1String("no-evidence"))
+    {
+        pdf::PreflightInspectionReceipt parsed;
+        QVERIFY2(pdf::preflightInspectionReceiptFromJson(receipt.toJson(), parsed, error), qPrintable(error));
+    }
+    if (expected == pdf::PreflightVerdictState::Incomplete)
+    {
+        QVERIFY(!receipt.verdict.allowsCertificateIssuance());
+    }
+}
+
+void PreflightVerdictTest::receiptRejectsMismatchedProvenance()
+{
+    ReceiptFixture fixture;
+    fixture.evidence.artifact.sha256 = QString(64, QLatin1Char('c'));
+    pdf::PreflightInspectionReceipt receipt;
+    QString error;
+    QVERIFY(!pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, receipt, error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(receipt.identity.isEmpty());
+
+    fixture.evidence.artifact.sha256.clear();
+    fixture.evidence.revision = fixture.revision;
+    fixture.evidence.revision.documentRevision = 2;
+    QVERIFY(!pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                  fixture.evidence, receipt, error));
+    QVERIFY(receipt.identity.isEmpty());
 }
 
 void PreflightVerdictTest::processExitCodes_matchPdfToolContract()

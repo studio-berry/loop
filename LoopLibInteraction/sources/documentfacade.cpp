@@ -24,6 +24,7 @@
 
 #include "pdfresourcebudget.h"
 
+#include <QTimer>
 #include <QVariant>
 
 #include <utility>
@@ -434,6 +435,24 @@ void DocumentFacade::admitLoadResult(CommandInvocationId invocation,
         return;
     }
 
+    const pdf::PDFJobSnapshot job = m_submitter->snapshot(m_pendingJobId);
+    if (job.jobId == m_pendingJobId &&
+        (job.status == pdf::PDFJobStatus::Queued || job.status == pdf::PDFJobStatus::Running))
+    {
+        QTimer::singleShot(1, this, [this, invocation, generation, result = std::move(result)]() mutable
+                           { admitLoadResult(invocation, generation, std::move(result)); });
+        return;
+    }
+    if (job.jobId != m_pendingJobId || job.status != pdf::PDFJobStatus::Succeeded ||
+        job.kind != pdf::PDFJobKind::Other)
+    {
+        result = {};
+        result.outcome = job.status == pdf::PDFJobStatus::Cancelled
+                             ? DocumentLoadOutcome::Cancelled
+                             : DocumentLoadOutcome::Failed;
+        result.typedError = QStringLiteral("document/job-not-admitted");
+    }
+
     m_pendingJobId.clear();
 
     pdf::PDFDocumentContext* documentContext = context();
@@ -548,6 +567,24 @@ void DocumentFacade::admitWriteResult(CommandInvocationId invocation,
         return;
     }
 
+    const pdf::PDFJobSnapshot job = m_submitter->snapshot(m_pendingJobId);
+    if (job.jobId == m_pendingJobId &&
+        (job.status == pdf::PDFJobStatus::Queued || job.status == pdf::PDFJobStatus::Running))
+    {
+        QTimer::singleShot(1, this, [this, invocation, generation, target = std::move(target), result = std::move(result)]() mutable
+                           { admitWriteResult(invocation, generation, std::move(target), std::move(result)); });
+        return;
+    }
+    if (job.jobId != m_pendingJobId || job.status != pdf::PDFJobStatus::Succeeded ||
+        job.kind != pdf::PDFJobKind::Export || m_publishedKey.isEmpty() || job.documentKey != m_publishedKey ||
+        job.documentRevision != m_revisionSource.currentRevision().toString())
+    {
+        result.outcome = job.status == pdf::PDFJobStatus::Cancelled
+                             ? DocumentWriteOutcome::Cancelled
+                             : DocumentWriteOutcome::Failed;
+        result.typedError = QStringLiteral("document/job-not-admitted");
+    }
+
     m_pendingJobId.clear();
 
     switch (result.outcome)
@@ -583,8 +620,7 @@ void DocumentFacade::detachDocument()
 {
     if (!m_publishedKey.isEmpty())
     {
-        // A key with no entry is never stale, so this belongs at close and at
-        // replacement, not between submissions.
+        // Closing the fence also rejects any completion from this session.
         m_submitter->clearCurrentRevision(m_publishedKey);
         m_publishedKey.clear();
     }

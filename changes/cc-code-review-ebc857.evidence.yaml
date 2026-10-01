@@ -1,0 +1,17 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: retention-failure-keeps-published-output
+    evidence:
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:quick
+  - id: core-coverage-claim
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - Focused Qt builds and tests (UnitTestsEditorHost, UnitTestsRepairOperatorAcceptance, UnitTestsPreflightEngine) require a configured build directory; this worktree has none.

@@ -24,6 +24,7 @@
 
 #include "pdfpagecachebudget.h"
 
+#include <QTimer>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -93,7 +94,18 @@ PageSurfaceCoordinator::~PageSurfaceCoordinator()
 
 void PageSurfaceCoordinator::setDocumentKey(QString documentKey)
 {
+    if (m_documentKey == documentKey)
+    {
+        return;
+    }
+    const bool hadDocumentKey = !m_documentKey.isEmpty();
+    cancelInFlight();
+    clearCache();
     m_documentKey = std::move(documentKey);
+    if (hadDocumentKey || m_initialSnapshotPrimed)
+    {
+        rebuildSnapshot();
+    }
 }
 
 void PageSurfaceCoordinator::setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget)
@@ -627,6 +639,33 @@ void PageSurfaceCoordinator::admit(quint64 requestId,
                                    std::shared_ptr<pdf::PDFResourceReservation> resourceReservation)
 {
     const auto inFlight = m_inFlight.find(requestId);
+    if (inFlight != m_inFlight.end())
+    {
+        const pdf::PDFJobSnapshot job = m_submitter->snapshot(inFlight->jobId);
+        if (job.jobId == inFlight->jobId &&
+            (job.status == pdf::PDFJobStatus::Queued || job.status == pdf::PDFJobStatus::Running))
+        {
+            QTimer::singleShot(1, this, [this, requestId, result = std::move(result), resourceReservation = std::move(resourceReservation)]() mutable
+                               { admit(requestId, std::move(result), std::move(resourceReservation)); });
+            return;
+        }
+        if (job.jobId != inFlight->jobId || job.status != pdf::PDFJobStatus::Succeeded)
+        {
+            const SurfaceTerminalState terminal = job.status == pdf::PDFJobStatus::Cancelled
+                                                      ? SurfaceTerminalState::Cancelled
+                                                  : job.status == pdf::PDFJobStatus::Stale
+                                                      ? SurfaceTerminalState::Stale
+                                                      : SurfaceTerminalState::Failed;
+            finishInFlight(requestId, terminal);
+            return;
+        }
+        if (!(result.key == inFlight->key) || !(result.token == inFlight->token))
+        {
+            ++m_counters.rejectedSuperseded;
+            finishInFlight(requestId, SurfaceTerminalState::Stale);
+            return;
+        }
+    }
     if (!resourceReservation && inFlight != m_inFlight.end())
     {
         resourceReservation = inFlight->resourceReservation;

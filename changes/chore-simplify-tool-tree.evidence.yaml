@@ -1,0 +1,22 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: tool-tree-path-contracts
+    evidence:
+      - unit:agent-policy:developer_widgets
+      - unit:agent-policy:quick
+      - unit:agent-policy:build_policy
+      - unit:agent-policy:plugins
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:docs/generated/architecture-catalog.json
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: migrated-source-contracts
+    evidence:
+      - unit:scripts/ci/test_check_preflight_truth_source.py
+      - unit:scripts/ci/test_check_qml_mirror_parity.py
+      - packaging:linux-build
+      - packaging:windows-build
+unresolved:
+  - CMake configure and native build were not run.
+  - Focused Python contract tests were not run.

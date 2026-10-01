@@ -806,15 +806,6 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
 
-    const pdf::PDFHistoryRetentionResult retention = operationHistory.enforceRetention({}, historyArtifacts);
-    if (!retention.success)
-    {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.retention-failed"),
-                         QStringLiteral("The repair history was recorded, but retention could not be enforced: %1")
-                             .arg(retention.errorMessage));
-        return PDFToolExitCode::ProcessingFailure;
-    }
-
     if (!options.repairReportFile.isEmpty())
     {
         QString reportError;
@@ -840,6 +831,17 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (options.outputStyle != PDFOutputFormatter::Style::Json)
     {
         PDFConsole::writeText(QString::fromUtf8(QJsonDocument(reportJson).toJson(QJsonDocument::Indented)), options.outputCodec);
+    }
+
+    // Retention runs after the accepted output is fully reported so a retention failure
+    // cannot suppress the repair report or output registration.
+    const pdf::PDFHistoryRetentionResult retention = operationHistory.enforceRetention({}, historyArtifacts);
+    if (!retention.success)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.retention-failed"),
+                         QStringLiteral("The repair history was recorded, but retention could not be enforced: %1")
+                             .arg(retention.errorMessage));
+        return PDFToolExitCode::ProcessingFailure;
     }
     return PDFToolExitCode::Success;
 }

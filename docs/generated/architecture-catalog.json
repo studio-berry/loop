@@ -509,7 +509,8 @@
     ],
     ".github/workflows/issue-promotion.yml": [
       "dev",
-      "stable"
+      "stable",
+      "unstable"
     ],
     ".github/workflows/release-gate.yml": [
       "stable"

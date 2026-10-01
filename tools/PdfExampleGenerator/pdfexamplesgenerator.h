@@ -34,4 +34,4 @@ public:
     static void generatePageDrawExample();
 };
 
-#endif // PDFEXAMPLESGENERATOR_H
+#endif   // PDFEXAMPLESGENERATOR_H

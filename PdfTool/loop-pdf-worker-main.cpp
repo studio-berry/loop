@@ -33,13 +33,25 @@
 #include <QTextStream>
 
 #include <cstdio>
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#endif
 
 namespace
 {
 
 int writeLine(const QJsonObject& object)
 {
-    const QByteArray line = QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n';
+    QByteArray line = QJsonDocument(object).toJson(QJsonDocument::Compact) + '\n';
+    if (line.size() > pdftool::worker::MAX_RESPONSE_BYTES)
+    {
+        line = QJsonDocument(pdftool::worker::makeErrorResponse(
+                                 object.value(QStringLiteral("id")).toString(), object.value(QStringLiteral("op")).toString(),
+                                 QStringLiteral("incomplete"), QStringLiteral("worker.response-limit"),
+                                 QStringLiteral("Inspection response exceeded its limit.")))
+                   .toJson(QJsonDocument::Compact) +
+               '\n';
+    }
     if (fwrite(line.constData(), 1, static_cast<size_t>(line.size()), stdout) != static_cast<size_t>(line.size()))
     {
         return 1;
@@ -52,9 +64,9 @@ int writeLine(const QJsonObject& object)
 
 int main(int argc, char* argv[])
 {
-    // loop-pdf-worker never initializes Sentry or an out-of-process crash
-    // reporter. A hostile PDF that crashes this process must not produce a
-    // customer-content minidump (R-008).
+#if defined(Q_OS_WIN)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#endif
     QCoreApplication application(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopPdfWorker);
 
@@ -96,29 +108,35 @@ int main(int argc, char* argv[])
     pdftool::worker::WorkerSandboxLimits limits;
     if (parser.isSet(rssOption))
     {
-        limits.rssBytes = parser.value(rssOption).toLongLong();
+        bool valid = false;
+        limits.rssBytes = parser.value(rssOption).toLongLong(&valid);
+        if (!valid || limits.rssBytes <= 0 || limits.rssBytes > pdftool::worker::DEFAULT_RSS_LIMIT_BYTES)
+            return 2;
     }
     if (parser.isSet(cpuOption))
     {
-        limits.cpuSeconds = parser.value(cpuOption).toLongLong();
+        bool valid = false;
+        limits.cpuSeconds = parser.value(cpuOption).toLongLong(&valid);
+        if (!valid || limits.cpuSeconds <= 0 || limits.cpuSeconds > pdftool::worker::DEFAULT_CPU_SECONDS)
+            return 2;
     }
 
     QString sandboxError;
     const bool sandboxApplied = pdftool::worker::applyWorkerSandbox(paths, limits, &sandboxError);
-#if defined(LOOP_PDF_WORKER_REQUIRE_SANDBOX) && LOOP_PDF_WORKER_REQUIRE_SANDBOX
     if (!sandboxApplied)
     {
-        QTextStream(stderr) << "loop-pdf-worker: sandbox required but failed: " << sandboxError << '\n';
-        return 3;
+        const QStringList codes{ QStringLiteral("worker.sandbox.token"), QStringLiteral("worker.sandbox.capabilities"),
+                                 QStringLiteral("worker.sandbox.job-query"), QStringLiteral("worker.sandbox.job-limits"),
+                                 QStringLiteral("worker.sandbox.children") };
+        const int index = codes.indexOf(sandboxError);
+        return index >= 0 ? 10 + index : 3;
     }
+#if defined(Q_OS_WIN)
+    const QString sandboxDetail = QStringLiteral("windows-appcontainer-job");
 #else
-    if (!sandboxApplied)
-    {
-        QTextStream(stderr) << "loop-pdf-worker: sandbox unavailable: " << sandboxError << '\n';
-    }
+    const QString sandboxDetail = QStringLiteral("linux-landlock-seccomp-rlimit");
 #endif
-
-    pdftool::worker::WorkerRuntime runtime(paths);
+    pdftool::worker::WorkerRuntime runtime(paths, pdftool::worker::sandboxStatusJson(sandboxApplied, sandboxDetail, limits));
     QFile input;
     if (!input.open(stdin, QIODevice::ReadOnly))
     {
@@ -128,10 +146,14 @@ int main(int argc, char* argv[])
 
     while (true)
     {
-        const QByteArray line = input.readLine();
+        const QByteArray line = input.readLine(pdftool::worker::MAX_REQUEST_BYTES + 1);
         if (line.isNull())
         {
             break;
+        }
+        if (line.size() > pdftool::worker::MAX_REQUEST_BYTES || !line.endsWith('\n'))
+        {
+            return 6;
         }
         const QByteArray trimmed = line.trimmed();
         if (trimmed.isEmpty())
@@ -146,7 +168,7 @@ int main(int argc, char* argv[])
             writeLine(pdftool::worker::makeErrorResponse(QString(), QStringLiteral("unknown"),
                                                          QStringLiteral("invalid-invocation"),
                                                          QStringLiteral("worker.bad-json"),
-                                                         parseError.errorString()));
+                                                         QStringLiteral("Invalid JSON request.")));
             continue;
         }
 

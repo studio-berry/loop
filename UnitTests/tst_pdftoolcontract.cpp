@@ -134,7 +134,48 @@ private slots:
     void rgbToCmykRefusesToWriteOverItsOwnInput();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
+    void benchmarkWithoutPreflightProfileIsIncomplete();
+    void benchmarkWithPreflightProfileIsComplete();
 };
+
+namespace
+{
+
+QJsonObject runBenchmarkEnvelope(const QStringList& extraArguments)
+{
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    QStringList arguments{ QStringLiteral("benchmark"), fixture,
+                           QStringLiteral("--render-hw-accel"), QStringLiteral("0"),
+                           QStringLiteral("--console-format"), QStringLiteral("json") };
+    arguments << extraArguments;
+    const ToolRun run = runPdfTool(arguments);
+    verifyEnvelope(run, 0, QStringLiteral("benchmark"));
+    return run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("workload_envelope")).toObject();
+}
+
+}   // namespace
+
+void PdfToolContractTest::benchmarkWithoutPreflightProfileIsIncomplete()
+{
+    const QJsonObject envelope = runBenchmarkEnvelope({});
+    QVERIFY(!envelope.isEmpty());
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("incomplete"));
+    QCOMPARE(envelope.value(QStringLiteral("incomplete_reason")).toString(), QStringLiteral("preflight-measurement-unavailable"));
+    QCOMPARE(envelope.value(QStringLiteral("preflight_high_water_bytes")).toInteger(), -1);
+}
+
+void PdfToolContractTest::benchmarkWithPreflightProfileIsComplete()
+{
+    const QString profile = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
+    const QJsonObject envelope = runBenchmarkEnvelope({ QStringLiteral("--profile"), profile });
+    QVERIFY(!envelope.isEmpty());
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("complete"));
+    QVERIFY(envelope.value(QStringLiteral("incomplete_reason")).toString().isEmpty());
+    const qint64 preflightHighWater = envelope.value(QStringLiteral("preflight_high_water_bytes")).toInteger();
+    QVERIFY2(preflightHighWater > 0, qPrintable(QString::number(preflightHighWater)));
+    QVERIFY(envelope.value(QStringLiteral("rss_high_water_bytes")).toInteger() >= preflightHighWater);
+    QCOMPARE(envelope.value(QStringLiteral("pages_materialized")).toInteger(), envelope.value(QStringLiteral("page_count")).toInteger());
+}
 
 void PdfToolContractTest::helpIsWrapped()
 {

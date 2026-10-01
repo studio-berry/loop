@@ -64,8 +64,8 @@ public:
     virtual void publishCurrentRevision(const QString& documentKey,
                                         const pdf::PDFRevisionIdentity& revision) = 0;
 
-    /// Drops the fence entry for a document key. A key with no entry is never
-    /// stale, so this belongs at document close, not between submissions.
+    /// Drops the fence entry for a document key. Bound jobs then become stale,
+    /// including if the same revision is published after a reopen.
     virtual void clearCurrentRevision(const QString& documentKey) = 0;
 };
 

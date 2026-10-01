@@ -22,7 +22,7 @@
 - [ ] Invalid state stops before partial mutation or publication and returns a descriptive error or result
 - [ ] Names carry the domain intent, and comments explain rationale rather than restating the code
 
-## Anti-slop pass
+## Quality pass
 
 - [ ] Redundant or explanatory comments that do not match the file's style removed
 - [ ] Abnormal defensive checks and broad try/catch blocks removed where a trusted upstream boundary already guarantees the invariant, with real boundary and safety checks kept
@@ -31,7 +31,7 @@
 - [ ] Generated boilerplate, needless wrappers, and local-style drift removed
 - [ ] Validation, security, cancellation, provenance, and failure handling preserved
 
-Anti-slop summary (1-3 sentences):
+Quality summary (1-3 sentences):
 
 <!-- What was removed, and what was kept on purpose. -->
 

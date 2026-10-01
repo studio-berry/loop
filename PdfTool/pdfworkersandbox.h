@@ -42,15 +42,12 @@ struct WorkerSandboxLimits
     qint64 cpuSeconds = 0;
 };
 
-/// Applies the Linux release-worker sandbox: no network (seccomp), Landlock FS
-/// restriction to input/temp/output, and RLIMIT CPU/RSS. On non-Linux hosts this
-/// returns false (Windows job-object hardening is a follow-on).
-/// A missing sandbox for LOOP_PDF_WORKER_REQUIRE_SANDBOX builds is fatal.
+/// Establishes or verifies containment before any document parsing.
 bool applyWorkerSandbox(const WorkerSandboxPaths& paths,
                         const WorkerSandboxLimits& limits,
                         QString* errorMessage);
 
-QJsonObject sandboxStatusJson(bool applied, const QString& detail);
+QJsonObject sandboxStatusJson(bool applied, const QString& detail, WorkerSandboxLimits limits = {});
 
 }   // namespace pdftool::worker
 

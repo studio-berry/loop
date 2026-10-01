@@ -20,8 +20,8 @@
       "name": "QuickShellSmoke",
       "cmake_option": "LOOP_BUILD_QUICK_SHELL_SMOKE",
       "qml_uri": "Loop.QuickShellSmoke",
-      "qml_file": "QuickShellSmoke/QuickShellSmoke.qml",
-      "cmake_file": "QuickShellSmoke/CMakeLists.txt",
+      "qml_file": "tools/QuickShellSmoke/QuickShellSmoke.qml",
+      "cmake_file": "tools/QuickShellSmoke/CMakeLists.txt",
       "install": false,
       "qt_modules": [
         "Qt6::Qml",
@@ -33,8 +33,8 @@
       "name": "CanvasBenchmark",
       "cmake_option": "LOOP_BUILD_CANVAS_BENCHMARK",
       "qml_uri": "Loop.CanvasBenchmark",
-      "qml_file": "CanvasBenchmark/CanvasBenchmark.qml",
-      "cmake_file": "CanvasBenchmark/CMakeLists.txt",
+      "qml_file": "tools/CanvasBenchmark/CanvasBenchmark.qml",
+      "cmake_file": "tools/CanvasBenchmark/CMakeLists.txt",
       "install": false,
       "qt_modules": [
         "Qt6::Qml",

@@ -52,7 +52,7 @@ public:
     static void store(QObject* object, QDomElement& element);
     static QObject* clone(QObject* object, QObject* parent);
 
-    template<typename T>
+    template <typename T>
     static inline QString convertEnumToString(T enumValue)
     {
         QMetaEnum metaEnum = QMetaEnum::fromType<T>();
@@ -60,7 +60,7 @@ public:
         return metaEnum.valueToKey(enumValue);
     }
 
-    template<typename T>
+    template <typename T>
     static inline void convertStringToEnum(const QString enumString, T& value)
     {
         QMetaEnum metaEnum = QMetaEnum::fromType<T>();
@@ -74,7 +74,7 @@ public:
         }
     }
 
-    template<typename T>
+    template <typename T>
     static inline void fillComboBox(QComboBox* comboBox, T value)
     {
         QMetaEnum metaEnum = QMetaEnum::fromType<T>();
@@ -266,7 +266,6 @@ private:
     using BaseClass = GeneratedBase;
 
 public:
-
     enum ObjectType
     {
         Object,
@@ -317,7 +316,6 @@ private:
     using BaseClass = GeneratedBase;
 
 public:
-
     enum ActionType
     {
         Parameters,
@@ -370,7 +368,6 @@ private:
     using BaseClass = GeneratedBase;
 
 public:
-
     enum FunctionType
     {
         Structure,
@@ -461,7 +458,6 @@ public:
     void generateCode(const QDomDocument& document, QString headerName, QString sourceName);
 
 private:
-
     struct Type
     {
         QString id;
@@ -508,4 +504,4 @@ private:
 Q_DECLARE_METATYPE(codegen::GeneratedCodeStorage*)
 Q_DECLARE_METATYPE(codegen::GeneratedFunction*)
 
-#endif // CODEGENERATOR_H
+#endif   // CODEGENERATOR_H

@@ -37,14 +37,14 @@ void PDFExamplesGenerator::generateAnnotationsExample()
     builder.setLanguage(QLocale::system());
 
     pdf::PDFObjectReference page1 = builder.appendPage(QRectF(0, 0, 400, 400));
-    builder.createAnnotationText(page1, QRectF(50,  50, 24, 24), pdf::TextAnnotationIcon::Comment, "Title1", "Subject1", "Comment", false);
+    builder.createAnnotationText(page1, QRectF(50, 50, 24, 24), pdf::TextAnnotationIcon::Comment, "Title1", "Subject1", "Comment", false);
     builder.createAnnotationText(page1, QRectF(50, 100, 24, 24), pdf::TextAnnotationIcon::Help, "Title1", "Subject1", "Help", false);
     builder.createAnnotationText(page1, QRectF(50, 150, 24, 24), pdf::TextAnnotationIcon::Insert, "Title1", "Subject1", "Insert", false);
     builder.createAnnotationText(page1, QRectF(50, 200, 24, 24), pdf::TextAnnotationIcon::Key, "Title1", "Subject1", "Key", false);
     builder.createAnnotationText(page1, QRectF(50, 250, 24, 24), pdf::TextAnnotationIcon::NewParagraph, "Title1", "Subject1", "NewParagraph", false);
     builder.createAnnotationText(page1, QRectF(50, 300, 24, 24), pdf::TextAnnotationIcon::Note, "Title1", "Subject1", "Note", false);
     builder.createAnnotationText(page1, QRectF(50, 350, 24, 24), pdf::TextAnnotationIcon::Paragraph, "Title1", "Subject1", "Paragraph", false);
-    builder.createAnnotationText(page1, QRectF(250,  50, 24, 24), pdf::TextAnnotationIcon::Comment, "Title1", "Subject1", "Comment", true);
+    builder.createAnnotationText(page1, QRectF(250, 50, 24, 24), pdf::TextAnnotationIcon::Comment, "Title1", "Subject1", "Comment", true);
     builder.createAnnotationText(page1, QRectF(250, 100, 24, 24), pdf::TextAnnotationIcon::Help, "Title1", "Subject1", "Help", true);
     builder.createAnnotationText(page1, QRectF(250, 150, 24, 24), pdf::TextAnnotationIcon::Insert, "Title1", "Subject1", "Insert", true);
     builder.createAnnotationText(page1, QRectF(250, 200, 24, 24), pdf::TextAnnotationIcon::Key, "Title1", "Subject1", "Key", true);
@@ -53,18 +53,18 @@ void PDFExamplesGenerator::generateAnnotationsExample()
     builder.createAnnotationText(page1, QRectF(250, 350, 24, 24), pdf::TextAnnotationIcon::Paragraph, "Title1", "Subject1", "Paragraph", true);
 
     pdf::PDFObjectReference page2 = builder.appendPage(QRectF(0, 0, 400, 400));
-    builder.createAnnotationLink(page2, QRectF(50,  50, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Invert);
-    builder.createAnnotationLink(page2, QRectF(50,  150, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::None);
-    builder.createAnnotationLink(page2, QRectF(50,  250, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Outline);
-    builder.createAnnotationLink(page2, QRectF(50,  350, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Push);
+    builder.createAnnotationLink(page2, QRectF(50, 50, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Invert);
+    builder.createAnnotationLink(page2, QRectF(50, 150, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::None);
+    builder.createAnnotationLink(page2, QRectF(50, 250, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Outline);
+    builder.createAnnotationLink(page2, QRectF(50, 350, 200, 50), "www.seznam.cz", pdf::LinkHighlightMode::Push);
 
     pdf::PDFObjectReference page3 = builder.appendPage(QRectF(0, 0, 400, 400));
-    builder.createAnnotationFreeText(page3, QRectF(50,  50, 100, 50), "Title", "Subject", "Toto je dolni text, желтая лошадь", Qt::AlignLeft);
-    builder.createAnnotationFreeText(page3, QRectF(50,  150, 100, 50), "Title", "Subject", "Toto je stredni text, желтая лошадь", Qt::AlignCenter);
-    builder.createAnnotationFreeText(page3, QRectF(50,  250, 100, 50), "Title", "Subject", "Toto je horni text, желтая лошадь", Qt::AlignRight);
-    builder.createAnnotationFreeText(page3, QRectF(250,  50, 100, 50), QRectF(300, 50, 50, 50), "Title", "Subject", "Toto je dolni text, желтая лошадь", Qt::AlignLeft, QPointF(250, 50), QPointF(300, 100), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
-    builder.createAnnotationFreeText(page3, QRectF(250,  150, 100, 50), QRectF(300, 150, 50, 50), "Title", "Subject", "Toto je stredni text, желтая лошадь", Qt::AlignCenter, QPointF(250, 150), QPointF(300, 200), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
-    pdf::PDFObjectReference ref = builder.createAnnotationFreeText(page3, QRectF(250,  250, 100, 50), QRectF(300, 250, 50, 50), "Title", "Subject", "Toto je horni text, желтая лошадь", Qt::AlignRight, QPointF(260, 250), QPointF(260, 290), QPointF(300, 290), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
+    builder.createAnnotationFreeText(page3, QRectF(50, 50, 100, 50), "Title", "Subject", "Toto je dolni text, желтая лошадь", Qt::AlignLeft);
+    builder.createAnnotationFreeText(page3, QRectF(50, 150, 100, 50), "Title", "Subject", "Toto je stredni text, желтая лошадь", Qt::AlignCenter);
+    builder.createAnnotationFreeText(page3, QRectF(50, 250, 100, 50), "Title", "Subject", "Toto je horni text, желтая лошадь", Qt::AlignRight);
+    builder.createAnnotationFreeText(page3, QRectF(250, 50, 100, 50), QRectF(300, 50, 50, 50), "Title", "Subject", "Toto je dolni text, желтая лошадь", Qt::AlignLeft, QPointF(250, 50), QPointF(300, 100), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
+    builder.createAnnotationFreeText(page3, QRectF(250, 150, 100, 50), QRectF(300, 150, 50, 50), "Title", "Subject", "Toto je stredni text, желтая лошадь", Qt::AlignCenter, QPointF(250, 150), QPointF(300, 200), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
+    pdf::PDFObjectReference ref = builder.createAnnotationFreeText(page3, QRectF(250, 250, 100, 50), QRectF(300, 250, 50, 50), "Title", "Subject", "Toto je horni text, желтая лошадь", Qt::AlignRight, QPointF(260, 250), QPointF(260, 290), QPointF(300, 290), pdf::AnnotationLineEnding::OpenArrow, pdf::AnnotationLineEnding::ClosedArrow);
     builder.setAnnotationContents(ref, "UPDATED: Horni text");
     builder.setAnnotationTitle(ref, "Updated title");
     builder.setAnnotationSubject(ref, "Updated subject");
@@ -77,8 +77,7 @@ void PDFExamplesGenerator::generateAnnotationsExample()
         int lineRows = 400 / (baseRect.height() * spaceCoef);
         int lineCols = 400 / (baseRect.width() * spaceCoef);
         int lineNumber = 0;
-        constexpr pdf::AnnotationLineEnding lineEndings[] =
-        {
+        constexpr pdf::AnnotationLineEnding lineEndings[] = {
             pdf::AnnotationLineEnding::None,
             pdf::AnnotationLineEnding::Square,
             pdf::AnnotationLineEnding::Circle,
@@ -123,8 +122,7 @@ void PDFExamplesGenerator::generateAnnotationsExample()
         int lineRows = 400 / (baseRect.height() * spaceCoef);
         int lineCols = 400 / (baseRect.width() * spaceCoef);
         int lineNumber = 0;
-        constexpr pdf::AnnotationLineEnding lineEndings[] =
-        {
+        constexpr pdf::AnnotationLineEnding lineEndings[] = {
             pdf::AnnotationLineEnding::None,
             pdf::AnnotationLineEnding::Square,
             pdf::AnnotationLineEnding::Circle,
