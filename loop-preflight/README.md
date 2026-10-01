@@ -188,8 +188,10 @@ connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
 is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
 The finding is emitted only when the measured value is strictly greater than the
 threshold; an exact boundary is clean. Optional parameters are `probe_dpi`
-(default 150), `min_region_area_pct` (default 0.05% of the analyzed box),
-`max_regions_per_page` (default 20; `0` deliberately suppresses region
+(default 150), `min_region_area_mm2` (default 0.25 mm^2, a physical floor of about a
+0.5 mm square that a press reproduces as a distinct solid; the deprecated
+`min_region_area_pct` is accepted but ignored, because a page-relative floor let
+an isolated over-limit element pass clean on a large page), `max_regions_per_page` (default 20; `0` deliberately suppresses region
 findings), and `max_raster_pixels` (default 250,000,000). The analysis is
 skipped and marked incomplete when that raster budget is exceeded.
 `analysis_box` defaults to `bleed` and falls
