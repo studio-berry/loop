@@ -2328,7 +2328,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                          QList<PreflightFinding>& warnings)
 {
     const QString analysisBox = check.restrictions.pageBox.value_or(check.inkCoverageAnalysisBox);
-    auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false)
+    auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false, const QJsonObject& extraEvidence = QJsonObject())
     {
         PreflightFinding finding;
         finding.scope = pageNumber > 0
@@ -2344,6 +2344,10 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             { QStringLiteral("analysis_box"), analysisBox },
             { QStringLiteral("max_raster_pixels"), check.maxRasterPixels }
         };
+        for (auto it = extraEvidence.begin(); it != extraEvidence.end(); ++it)
+        {
+            finding.evidence.insert(it.key(), it.value());
+        }
         finding.message = pageNumber > 0
                               ? PDFTranslationContext::tr("Page %1 skipped: %2").arg(pageNumber).arg(reason)
                               : PDFTranslationContext::tr("Ink coverage skipped: %1").arg(reason);
@@ -2366,7 +2370,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     PDFInkCoverageProbeSettings probeSettings;
     probeSettings.maxInkCoverage = check.maxInkPct / 100.0;
     probeSettings.dpi = check.probeDpi;
-    probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
+    probeSettings.minRegionAreaMM2 = check.minRegionAreaMm2;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
     probeSettings.maxRasterPixels = check.maxRasterPixels;
     if (analysisBox == QStringLiteral("trim"))
@@ -2422,6 +2426,21 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                                        : result.diagnostics.reasons.join(QStringLiteral("; "));
             emitIncomplete(int(pageIndex + 1), reason);
             continue;
+        }
+
+        if (result.overLimitAreaMM2 > 0.0 && check.minRegionAreaMm2 < result.minResolvableAreaMM2)
+        {
+            emitIncomplete(int(pageIndex + 1),
+                           PDFTranslationContext::tr("probe_dpi %1 cannot resolve min_region_area_mm2 %2 (the raster resolves %3 mm^2); raise probe_dpi")
+                               .arg(check.probeDpi)
+                               .arg(check.minRegionAreaMm2)
+                               .arg(result.minResolvableAreaMM2),
+                           false,
+                           QJsonObject{
+                               { QStringLiteral("min_region_area_mm2"), check.minRegionAreaMm2 },
+                               { QStringLiteral("min_resolvable_area_mm2"), result.minResolvableAreaMM2 },
+                               { QStringLiteral("pixel_area_mm2"), result.pixelAreaMM2 },
+                               { QStringLiteral("probe_dpi"), check.probeDpi } });
         }
 
         int regionRank = 0;
@@ -7606,6 +7625,8 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         const QJsonValue maxRasterPixelsValue = checkObject.value(QStringLiteral("max_raster_pixels"));
         check.maxInkPct = maxInkValue.toDouble(0.0);
         check.minRegionAreaPct = minRegionAreaValue.toDouble(0.05);
+        const QJsonValue minRegionAreaMm2Value = checkObject.value(QStringLiteral("min_region_area_mm2"));
+        check.minRegionAreaMm2 = minRegionAreaMm2Value.toDouble(0.25);
         check.maxRegionsPerPage = maxRegionsValue.toInt(20);
         check.maxRasterPixels = 250LL * 1000 * 1000;
         if (check.id == QStringLiteral("ink-coverage") && (!maxInkValue.isDouble() || !std::isfinite(check.maxInkPct) || check.maxInkPct <= 0.0))
@@ -7624,6 +7645,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             if (checkObject.contains(QStringLiteral("min_region_area_pct")) && (!minRegionAreaValue.isDouble() || !std::isfinite(check.minRegionAreaPct) || check.minRegionAreaPct < 0.0 || check.minRegionAreaPct > 100.0))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires min_region_area_pct between 0 and 100.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("min_region_area_mm2")) && (!minRegionAreaMm2Value.isDouble() || !std::isfinite(check.minRegionAreaMm2) || check.minRegionAreaMm2 < 0.0))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative min_region_area_mm2.").arg(check.id);
                 return false;
             }
             if (checkObject.contains(QStringLiteral("max_regions_per_page")) && (!maxRegionsValue.isDouble() || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble() || check.maxRegionsPerPage < 0))

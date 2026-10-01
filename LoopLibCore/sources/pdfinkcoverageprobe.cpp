@@ -193,6 +193,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     const QSizeF pageSizeMM = page->getRectMM(analysisBox).size();
     const qreal pixelAreaMM2 = (pageSizeMM.width() * pageSizeMM.height()) / static_cast<qreal>(totalPixels);
     result.overLimitAreaMM2 = static_cast<qreal>(overLimitPixels) * pixelAreaMM2;
+    result.pixelAreaMM2 = pixelAreaMM2;
+    result.minResolvableAreaMM2 = pixelAreaMM2 * static_cast<qreal>(PDFInkCoverageProbeSettings::MinResolvablePixels);
 
     struct DeviceRegion
     {
@@ -256,8 +258,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
                 }
             }
 
-            const qreal areaRatio = static_cast<qreal>(region.pixelCount) / static_cast<qreal>(totalPixels);
-            if (areaRatio < settings.minRegionAreaRatio)
+            const qreal regionAreaMM2 = static_cast<qreal>(region.pixelCount) * pixelAreaMM2;
+            if (regionAreaMM2 < settings.minRegionAreaMM2 || region.pixelCount < PDFInkCoverageProbeSettings::MinResolvablePixels)
             {
                 continue;
             }

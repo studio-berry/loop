@@ -112,6 +112,8 @@ private slots:
     void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
     void run_inkCoverage_passesBelowLimitFixture();
     void run_inkCoverage_budgetAbortIsIncomplete();
+    void run_inkCoverage_reportsIsolatedOverLimitRegionOnLargePage();
+    void run_inkCoverage_reportsFloorFinerThanProbeResolutionAsIncomplete();
     void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
     void run_downsampleFixupAdvertisedForHighDpiImage();
     void run_imageResolutionBBoxMatchesCtmPlacement();
@@ -502,6 +504,8 @@ void PreflightEngineTest::parseProfile_rejectsInvalidInkCoverageParameters()
         { QStringLiteral("min_region_area_pct"), QJsonValue(-1) },
         { QStringLiteral("min_region_area_pct"), QJsonValue(101) },
         { QStringLiteral("min_region_area_pct"), QJsonValue(QStringLiteral("0.05")) },
+        { QStringLiteral("min_region_area_mm2"), QJsonValue(-1) },
+        { QStringLiteral("min_region_area_mm2"), QJsonValue(QStringLiteral("0.25")) },
         { QStringLiteral("max_regions_per_page"), QJsonValue(1.5) },
         { QStringLiteral("max_regions_per_page"), QJsonValue(QStringLiteral("20")) },
         { QStringLiteral("max_raster_pixels"), QJsonValue(0) },
@@ -1871,6 +1875,83 @@ void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("skipped"));
     QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("ink coverage raster exceeds the pixel budget"));
     QVERIFY(!pdf::preflightAllowsCertification(result));
+}
+
+void PreflightEngineTest::run_inkCoverage_reportsIsolatedOverLimitRegionOnLargePage()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-isolated-region.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage isolated region") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("probe_dpi"), 150 },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("ink-coverage"));
+    const double areaMm2 = result.warnings.first().evidence.value(QStringLiteral("area_mm2")).toDouble();
+    QVERIFY2(areaMm2 > 25.0 && areaMm2 < 50.0, qPrintable(QString::number(areaMm2)));
+    QVERIFY(result.warnings.first().evidence.value(QStringLiteral("peak_ink_pct")).toDouble() > 390.0);
+
+    // The deprecated page-percentage floor no longer suppresses the region.
+    QJsonObject legacyCheck = profile.value(QStringLiteral("checks")).toArray().first().toObject();
+    legacyCheck.insert(QStringLiteral("min_region_area_pct"), 5.0);
+    const QJsonObject legacyProfile{ { QStringLiteral("name"), QStringLiteral("Ink coverage legacy floor") },
+                                     { QStringLiteral("checks"), QJsonArray{ legacyCheck } } };
+    QCOMPARE(engine.run(legacyProfile).warnings.size(), 1);
+}
+
+void PreflightEngineTest::run_inkCoverage_reportsFloorFinerThanProbeResolutionAsIncomplete()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-isolated-region.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // At 20 dpi one pixel is about 1.6 mm^2, so a 0.25 mm^2 floor cannot be honored.
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage coarse probe") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("probe_dpi"), 20 },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    bool foundIncomplete = false;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        if (finding.type == QStringLiteral("check-incomplete"))
+        {
+            foundIncomplete = true;
+            QVERIFY(finding.evidence.value(QStringLiteral("min_resolvable_area_mm2")).toDouble() > 0.25);
+        }
+    }
+    QVERIFY(foundIncomplete);
 }
 
 void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()

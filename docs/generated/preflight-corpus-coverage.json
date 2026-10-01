@@ -151,6 +151,7 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
+        "ink-coverage-isolated-region",
         "ink-coverage-over"
       ],
       "uninspected_fixtures": []

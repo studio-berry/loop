@@ -1,0 +1,30 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: ink-isolated-region-regression-fixture
+    evidence:
+      - integration:UnitTestsPreflightCorpus
+      - architecture:loop-preflight/testdata/fixtures
+      - architecture:docs/generated/preflight-check-catalog.json
+      - architecture:docs/generated/architecture-catalog.json
+      - architecture:docs/generated/preflight-corpus-coverage.json
+  - id: ink-coverage-physical-area-floor
+    evidence:
+      - unit:agent-policy:core
+      - unit:agent-policy:preflight
+      - unit:agent-policy:schemas_contracts
+      - unit:UnitTestsPreflightChecks
+      - unit:UnitTestsPreflightEngine
+      - unit:UnitTestsPreflightInteraction
+      - unit:UnitTestsPreflightVerdict
+      - unit:UnitTestsPreflightProfileResolver
+      - unit:UnitTestsProfileIdentity
+      - unit:UnitTestsOperatorAcceptance
+      - integration:UnitTestsPreflightWorkflowAcceptance
+      - differential:UnitTestsStandardOracle
+      - differential:UnitTestsConversionOracle
+      - security:scripts/ci/check_source_integrity.py
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - Only UnitTestsPreflightEngine and UnitTestsPreflightCorpus were built and run locally; the other listed unit, integration and differential lanes are proven by the linux-build and windows-build CI lanes, not by this worktree.
+  - Residual limits - a floor finer than four raster pixels at probe_dpi reports incomplete; regions below the floor stay suppressed by design, and the probe is not a plate-ready separation TAC.
