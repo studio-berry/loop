@@ -169,7 +169,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "obscured-content"
+        "obscured-content",
+        "obscured-content-clipped"
       ],
       "uninspected_fixtures": []
     },
@@ -178,7 +179,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "off-page-content"
+        "off-page-content",
+        "off-page-content-clipped"
       ],
       "uninspected_fixtures": []
     },
@@ -241,6 +243,7 @@
         "transparency-cmyk-group-rgb",
         "transparency-cmyk-group-spot",
         "transparency-hue",
+        "transparency-overprint-knockout",
         "transparency-rgb-group-cmyk"
       ],
       "uninspected_fixtures": [
@@ -266,6 +269,7 @@
         "white-overprint-devicen",
         "white-overprint-form",
         "white-overprint-iccbased",
+        "white-overprint-image",
         "white-overprint-separation"
       ],
       "uninspected_fixtures": [
@@ -274,6 +278,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 78,
+  "source_fixtures": 82,
   "unattributed_findings": 1
 }

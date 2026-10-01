@@ -30,6 +30,7 @@
 #include "pdfutils.h"
 #include "pdfprogress.h"
 
+#include <functional>
 #include <QImage>
 #include <QStringList>
 
@@ -87,6 +88,20 @@ enum class PDFRenderFidelity
     ExactSupported,
     SupportedWithFallback,
     Unsupported
+};
+
+/// Overprint that the compositor actually applied while painting, counted in raster
+/// pixels. It is what the overprint-accurate renderer did, not page-view state.
+struct PDFOverprintObservation
+{
+    /// Pixels painted with an overprint mode in effect.
+    quint64 overprintPixels = 0;
+    /// Overprinted pixels whose painted colorants are all paper white (no ink).
+    quint64 whiteOverprintPixels = 0;
+    /// Overprinted pixels composited under a non-Normal blend mode, constant alpha below one
+    /// or a knockout group, where overprint and transparency interact. Antialiased edge
+    /// coverage is not counted.
+    quint64 transparentOverprintPixels = 0;
 };
 
 struct PDFRenderDiagnostics
@@ -785,6 +800,9 @@ public:
 
     const PDFRenderDiagnostics& getRenderDiagnostics() const { return m_renderDiagnostics; }
 
+    /// Overprint the compositor applied while painting; see PDFOverprintObservation.
+    const PDFOverprintObservation& getOverprintObservation() const { return m_overprintObservation; }
+
     static PDFRenderFidelity classifyOverprintFidelity(const PDFOverprintMode& overprintMode,
                                                        BlendMode blendMode,
                                                        bool hasSpotColors);
@@ -953,6 +971,22 @@ private:
 
     void recordOverprintDiagnostics(bool containsFilling, bool containsStroking);
 
+    /// Counts the overprinted pixels of a source about to be blended.
+    /// \param source Source bitmap
+    /// \param rect Painted rectangle
+    /// \param contentMask Returns the per-pixel content mask (fill 0x01, stroke 0x02)
+    /// \param enabledContentMask Content kinds for which overprint is enabled
+    /// \param blendMode Blend mode of the source
+    /// \param alpha Constant fill alpha of the source
+    /// \param knockout True, if the source is composited into a knockout group
+    void observeOverprint(const PDFFloatBitmap& source,
+                          const QRect& rect,
+                          const std::function<uint8_t(size_t, size_t)>& contentMask,
+                          uint8_t enabledContentMask,
+                          BlendMode blendMode,
+                          PDFReal alpha,
+                          bool knockout);
+
     /// Returns true, if multithreaded painter path sampling should be used
     /// for a given fill rectangle.
     /// \param fillRect Fill rectangle
@@ -1050,6 +1084,7 @@ private:
     PDFDrawBuffer m_drawBuffer;
     PDFFloatBitmapWithColorSpace m_originalProcessBitmap;
     PDFRenderDiagnostics m_renderDiagnostics;
+    PDFOverprintObservation m_overprintObservation;
 };
 
 /// Ink coverage calculator. Calculates ink coverage for a given
