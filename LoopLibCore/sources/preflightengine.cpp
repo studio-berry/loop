@@ -2201,6 +2201,22 @@ void runProcessingStepsCheck(PDFDocumentSession* session,
     }
 }
 
+bool edgeIsConfirmed(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
+{
+    switch (side)
+    {
+        case PDFBleedFixupSide::Left:
+            return result.left.confirmed;
+        case PDFBleedFixupSide::Right:
+            return result.right.confirmed;
+        case PDFBleedFixupSide::Top:
+            return result.top.confirmed;
+        case PDFBleedFixupSide::Bottom:
+            return result.bottom.confirmed;
+    }
+    return true;
+}
+
 void runContentBleedCheck(PDFDocumentSession* session,
                           const PreflightCheckConfig& check,
                           QList<PreflightFinding>& errors,
@@ -2240,15 +2256,49 @@ void runContentBleedCheck(PDFDocumentSession* session,
 
         const PDFBleedMarginProbeResult result = probe.probe(page, static_cast<size_t>(pageIndex), probeSettings);
 
-        if (result.allEdgesCovered())
-        {
-            continue;
-        }
-
         const PDFBleedFixupSide sides[4] = {
             PDFBleedFixupSide::Left, PDFBleedFixupSide::Right,
             PDFBleedFixupSide::Top, PDFBleedFixupSide::Bottom
         };
+
+        // An edge that artwork bounds call populated but that is not provably solid, and that no
+        // raster measurement confirmed, must not pass as clean bleed.
+        if (!result.allEdgesConfirmed())
+        {
+            QStringList unconfirmedSides;
+            for (PDFBleedFixupSide side : sides)
+            {
+                if (edgeHasContent(result, side) && !edgeIsConfirmed(result, side))
+                {
+                    unconfirmedSides.append(sideNameForFinding(side));
+                }
+            }
+
+            const QString reason = check.rasterConfirm
+                ? PDFTranslationContext::tr("the strip raster could not be measured within the pixel budget")
+                : PDFTranslationContext::tr("raster confirmation is off, so artwork bounds alone cannot show the strip is inked");
+            PreflightFinding incomplete;
+            incomplete.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            incomplete.page = int(pageIndex + 1);
+            incomplete.type = QStringLiteral("check-incomplete");
+            incomplete.severity = QStringLiteral("info");
+            incomplete.checkId = check.id;
+            incomplete.message = PDFTranslationContext::tr("Bleed margin on %1 was not confirmed on page %2: %3.")
+                                     .arg(unconfirmedSides.join(QStringLiteral(", ")))
+                                     .arg(pageIndex + 1)
+                                     .arg(reason);
+            incomplete.evidence.insert(QStringLiteral("reason"), reason);
+            incomplete.evidence.insert(QStringLiteral("sides"), unconfirmedSides.join(QStringLiteral(", ")));
+            incomplete.evidence.insert(QStringLiteral("raster_confirm"), check.rasterConfirm);
+            incomplete.evidence.insert(QStringLiteral("min_edge_coverage"), probeSettings.minEdgeCoverage);
+            incomplete.evidence.insert(QStringLiteral("inspection_complete"), false);
+            pushPreflightFinding(incomplete, incomplete.severity, errors, warnings);
+        }
+
+        if (result.allEdgesCovered())
+        {
+            continue;
+        }
 
         bool pageHasBleedGap = false;
 

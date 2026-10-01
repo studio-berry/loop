@@ -35,8 +35,11 @@
 #include <QPainter>
 #include <QtMath>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
+#include <vector>
 
 namespace pdf
 {
@@ -109,6 +112,143 @@ PDFReal sideBleedPt(const QMarginsF& bleedMM, PDFBleedFixupSide side)
     return 0.0;
 }
 
+bool isAxisAlignedRectangle(const QPainterPath& path, const QRectF& bounds)
+{
+    constexpr qreal Tolerance = 0.01;
+    const QList<QPolygonF> subpaths = path.toSubpathPolygons();
+    if (subpaths.size() != 1)
+    {
+        return false;
+    }
+
+    const QPolygonF& polygon = subpaths.front();
+    if (polygon.size() < 4 || polygon.size() > 5)
+    {
+        return false;
+    }
+
+    for (const QPointF& point : polygon)
+    {
+        const bool onVerticalEdge = std::abs(point.x() - bounds.left()) <= Tolerance || std::abs(point.x() - bounds.right()) <= Tolerance;
+        const bool onHorizontalEdge = std::abs(point.y() - bounds.top()) <= Tolerance || std::abs(point.y() - bounds.bottom()) <= Tolerance;
+        if (!onVerticalEdge || !onHorizontalEdge)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// True when the piece's bounding rect is fully painted: an image, a shading or a filled rectangle.
+/// A stroked outline shares a rectangle's geometry, so a stroked rectangle is not told apart here.
+bool pieceFillsItsBounds(const PDFPrecompiledPage::GraphicPieceInfo& info)
+{
+    if (info.isImage() || info.isShading())
+    {
+        return true;
+    }
+    return info.isVectorGraphics() && isAxisAlignedRectangle(info.pagePath, info.boundingRect);
+}
+
+struct StripCoverage
+{
+    qreal upper = 0.0;   ///< Share of the strip touched by any piece's bounds.
+    qreal solid = 0.0;   ///< Share of the strip covered by pieces that fill their bounds.
+};
+
+qreal mergedLength(std::vector<std::pair<qreal, qreal>>& intervals)
+{
+    constexpr qreal Gap = 0.01;
+    std::sort(intervals.begin(), intervals.end());
+
+    qreal total = 0.0;
+    qreal currentLo = 0.0;
+    qreal currentHi = 0.0;
+    bool open = false;
+    for (const std::pair<qreal, qreal>& interval : intervals)
+    {
+        if (open && interval.first <= currentHi + Gap)
+        {
+            currentHi = qMax(currentHi, interval.second);
+            continue;
+        }
+        if (open)
+        {
+            total += currentHi - currentLo;
+        }
+        currentLo = interval.first;
+        currentHi = interval.second;
+        open = true;
+    }
+    if (open)
+    {
+        total += currentHi - currentLo;
+    }
+    return total;
+}
+
+/// Splits the strip into bands across its depth and measures, per band, the length along the strip
+/// that is touched by piece bounds (upper) and fully crossed by a solid piece (solid).
+StripCoverage measureStripCoverage(const PDFPrecompiledPage::GraphicPieceInfos& pieces,
+                                   const QRectF& strip,
+                                   PDFBleedFixupSide side)
+{
+    constexpr int Bands = 8;
+    constexpr qreal Tolerance = 0.01;
+
+    const bool vertical = side == PDFBleedFixupSide::Left || side == PDFBleedFixupSide::Right;
+    const qreal length = vertical ? strip.height() : strip.width();
+    const qreal depth = vertical ? strip.width() : strip.height();
+    if (!(length > 0.0) || !(depth > 0.0))
+    {
+        return StripCoverage();
+    }
+
+    const qreal alongLo = vertical ? strip.top() : strip.left();
+    const qreal alongHi = alongLo + length;
+    const qreal acrossLo = vertical ? strip.left() : strip.top();
+
+    StripCoverage coverage;
+    for (int band = 0; band < Bands; ++band)
+    {
+        const qreal bandLo = acrossLo + depth * band / Bands;
+        const qreal bandHi = acrossLo + depth * (band + 1) / Bands;
+
+        std::vector<std::pair<qreal, qreal>> touching;
+        std::vector<std::pair<qreal, qreal>> solid;
+        for (const PDFPrecompiledPage::GraphicPieceInfo& piece : pieces)
+        {
+            const QRectF& rect = piece.boundingRect;
+            if (!rect.isValid())
+            {
+                continue;
+            }
+
+            const qreal rectAcrossLo = vertical ? rect.left() : rect.top();
+            const qreal rectAcrossHi = vertical ? rect.right() : rect.bottom();
+            const qreal rectAlongLo = qMax(alongLo, vertical ? rect.top() : rect.left());
+            const qreal rectAlongHi = qMin(alongHi, vertical ? rect.bottom() : rect.right());
+            if (!(rectAlongHi > rectAlongLo) || !(rectAcrossHi > bandLo) || !(rectAcrossLo < bandHi))
+            {
+                continue;
+            }
+
+            touching.emplace_back(rectAlongLo, rectAlongHi);
+            if (rectAcrossLo <= bandLo + Tolerance && rectAcrossHi >= bandHi - Tolerance && pieceFillsItsBounds(piece))
+            {
+                solid.emplace_back(rectAlongLo, rectAlongHi);
+            }
+        }
+
+        coverage.upper += mergedLength(touching) / length;
+        coverage.solid += mergedLength(solid) / length;
+    }
+
+    coverage.upper /= Bands;
+    coverage.solid /= Bands;
+    return coverage;
+}
+
 } // namespace
 
 PDFBleedMarginProbe::PDFBleedMarginProbe(PDFDocumentSession* session) :
@@ -122,7 +262,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
 {
     PDFBleedMarginProbeResult result = probeFast(page, pageIndex, settings);
 
-    if (settings.fastOnly || result.allEdgesCovered() || !m_session)
+    if (settings.fastOnly || (result.allEdgesCovered() && result.allEdgesConfirmed()) || !m_session)
     {
         return result;
     }
@@ -141,51 +281,47 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
 
     PDFBleedMarginProbeResult rasterResult = probeRaster(page, pageIndex, settings, reference, target);
 
-    auto rasterUpgradesEmptyEdge = [](const PDFBleedMarginProbeEdgeResult& rasterEdge) -> bool
+    // Raster confirmation decides every edge the bounds pass could not prove solid:
+    //  - an empty edge is upgraded when the raster sees substantial margin ink (trim-edge
+    //    antialiasing on an otherwise empty strip stays below the floor);
+    //  - an edge that bounds called populated is demoted when the raster finds it too sparse.
+    // An edge the raster could not measure (strip over budget) keeps its bounds verdict and
+    // stays unconfirmed, so the caller can report the gap instead of passing it.
+    auto applyRaster = [&settings](PDFBleedMarginProbeEdgeResult& target, const PDFBleedMarginProbeEdgeResult& rasterEdge)
     {
         if (rasterEdge.totalPixels <= 0)
         {
-            return false;
-        }
-
-        const qreal inkCoverage = static_cast<qreal>(rasterEdge.inkPixels)
-            / static_cast<qreal>(rasterEdge.totalPixels);
-        // Tier-2 only downgrades Tier-1 false positives when raster sees substantial
-        // margin ink. Trim-edge antialiasing on otherwise empty strips stays below this.
-        constexpr qreal kMinInkCoverageToUpgrade = 0.10;
-        return inkCoverage >= kMinInkCoverageToUpgrade;
-    };
-
-    const bool upgradeLeft = !result.left.hasContent && rasterUpgradesEmptyEdge(rasterResult.left);
-    const bool upgradeRight = !result.right.hasContent && rasterUpgradesEmptyEdge(rasterResult.right);
-    const bool upgradeTop = !result.top.hasContent && rasterUpgradesEmptyEdge(rasterResult.top);
-    const bool upgradeBottom = !result.bottom.hasContent && rasterUpgradesEmptyEdge(rasterResult.bottom);
-
-    // Raster confirmation may upgrade fast-path empty edges when strips have real content.
-    // Even when an edge isn't upgraded (fast path already found content there), keep its
-    // raster calibration numbers (totalPixels/inkPixels/stripRect) so callers can inspect
-    // what the raster pass measured instead of the fast path's unset defaults.
-    auto mergeCalibration = [](PDFBleedMarginProbeEdgeResult& target,
-                               const PDFBleedMarginProbeEdgeResult& rasterEdge,
-                               bool upgrade)
-    {
-        if (upgrade)
-        {
-            target = rasterEdge;
             return;
         }
-        if (rasterEdge.totalPixels > 0)
+
+        const qreal inkCoverage = static_cast<qreal>(rasterEdge.inkPixels) / static_cast<qreal>(rasterEdge.totalPixels);
+        const bool populated = inkCoverage >= settings.minEdgeCoverage;
+        const qreal boundsCoverage = target.boundsCoverage;
+        if (target.confirmed)
         {
+            // Solid by bounds, or no applicable bleed: keep the verdict, record the calibration.
             target.inkPixels = rasterEdge.inkPixels;
             target.totalPixels = rasterEdge.totalPixels;
             target.stripRect = rasterEdge.stripRect;
+            if (!target.hasContent && populated)
+            {
+                target = rasterEdge;
+                target.hasContent = true;
+                target.boundsCoverage = boundsCoverage;
+            }
+            return;
         }
+
+        target = rasterEdge;
+        target.hasContent = populated;
+        target.boundsCoverage = boundsCoverage;
+        target.confirmed = true;
     };
 
-    mergeCalibration(result.left, rasterResult.left, upgradeLeft);
-    mergeCalibration(result.right, rasterResult.right, upgradeRight);
-    mergeCalibration(result.top, rasterResult.top, upgradeTop);
-    mergeCalibration(result.bottom, rasterResult.bottom, upgradeBottom);
+    applyRaster(result.left, rasterResult.left);
+    applyRaster(result.right, rasterResult.right);
+    applyRaster(result.top, rasterResult.top);
+    applyRaster(result.bottom, rasterResult.bottom);
 
     return result;
 }
@@ -257,8 +393,12 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
         PDFBleedMarginProbeEdgeResult edgeResult;
         edgeResult.stripRect = strip;
 
-        // Check if content bounds overlap the strip rect.
-        edgeResult.hasContent = contentBounds.intersects(strip);
+        // A strip is populated only when the artwork bounds cover enough of it; a few stray
+        // marks that merely touch it are not bleed.
+        const StripCoverage coverage = measureStripCoverage(infos, strip, side);
+        edgeResult.boundsCoverage = coverage.upper;
+        edgeResult.hasContent = contentBounds.intersects(strip) && coverage.upper >= settings.minEdgeCoverage;
+        edgeResult.confirmed = !edgeResult.hasContent || coverage.solid >= 1.0 - 1e-3;
 
         switch (side)
         {
