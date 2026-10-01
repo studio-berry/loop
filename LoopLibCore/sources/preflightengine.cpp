@@ -2067,36 +2067,20 @@ void evaluateThinStrokesFromGraph(const PreflightCheckConfig& check,
     }
 }
 
-bool edgeHasContent(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
+const PDFBleedMarginProbeEdgeResult& edgeResult(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
 {
     switch (side)
     {
         case PDFBleedFixupSide::Left:
-            return result.left.hasContent;
+            return result.left;
         case PDFBleedFixupSide::Right:
-            return result.right.hasContent;
+            return result.right;
         case PDFBleedFixupSide::Top:
-            return result.top.hasContent;
+            return result.top;
         case PDFBleedFixupSide::Bottom:
-            return result.bottom.hasContent;
+            break;
     }
-    return false;
-}
-
-QRectF edgeStripRect(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
-{
-    switch (side)
-    {
-        case PDFBleedFixupSide::Left:
-            return result.left.stripRect;
-        case PDFBleedFixupSide::Right:
-            return result.right.stripRect;
-        case PDFBleedFixupSide::Top:
-            return result.top.stripRect;
-        case PDFBleedFixupSide::Bottom:
-            return result.bottom.stripRect;
-    }
-    return QRectF();
+    return result.bottom;
 }
 
 void emitNeedsAutoBleedFinding(int pageNumber,
@@ -2201,22 +2185,6 @@ void runProcessingStepsCheck(PDFDocumentSession* session,
     }
 }
 
-bool edgeIsConfirmed(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
-{
-    switch (side)
-    {
-        case PDFBleedFixupSide::Left:
-            return result.left.confirmed;
-        case PDFBleedFixupSide::Right:
-            return result.right.confirmed;
-        case PDFBleedFixupSide::Top:
-            return result.top.confirmed;
-        case PDFBleedFixupSide::Bottom:
-            return result.bottom.confirmed;
-    }
-    return true;
-}
-
 void runContentBleedCheck(PDFDocumentSession* session,
                           const PreflightCheckConfig& check,
                           QList<PreflightFinding>& errors,
@@ -2268,14 +2236,14 @@ void runContentBleedCheck(PDFDocumentSession* session,
             QStringList unconfirmedSides;
             for (PDFBleedFixupSide side : sides)
             {
-                if (edgeHasContent(result, side) && !edgeIsConfirmed(result, side))
+                if (edgeResult(result, side).hasContent && !edgeResult(result, side).confirmed)
                 {
                     unconfirmedSides.append(sideNameForFinding(side));
                 }
             }
 
             const QString reason = check.rasterConfirm
-                                       ? PDFTranslationContext::tr("the strip raster could not be measured within the pixel budget")
+                                       ? PDFTranslationContext::tr("the strip raster could not be measured (strip over the pixel budget, or unusable page boxes)")
                                        : PDFTranslationContext::tr("raster confirmation is off, so artwork bounds alone cannot show the strip is inked");
             PreflightFinding incomplete;
             incomplete.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
@@ -2306,12 +2274,12 @@ void runContentBleedCheck(PDFDocumentSession* session,
         {
             for (PDFBleedFixupSide side : sides)
             {
-                if (edgeHasContent(result, side))
+                if (edgeResult(result, side).hasContent)
                 {
                     continue;
                 }
 
-                const QRectF stripRect = edgeStripRect(result, side);
+                const QRectF stripRect = edgeResult(result, side).stripRect;
                 PreflightFinding finding;
                 finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
                 finding.page = int(pageIndex + 1);
@@ -2331,13 +2299,13 @@ void runContentBleedCheck(PDFDocumentSession* session,
             QRectF unionMissingBbox;
             for (PDFBleedFixupSide side : sides)
             {
-                if (edgeHasContent(result, side))
+                if (edgeResult(result, side).hasContent)
                 {
                     continue;
                 }
 
                 missingSides.append(sideNameForFinding(side));
-                const QRectF stripRect = edgeStripRect(result, side);
+                const QRectF stripRect = edgeResult(result, side).stripRect;
                 if (stripRect.isValid())
                 {
                     unionMissingBbox = unionMissingBbox.united(stripRect);

@@ -132,27 +132,40 @@ bool isAxisAlignedRectangle(const QPainterPath& path, const QRectF& bounds)
         return false;
     }
 
-    for (const QPointF& point : polygon)
+    // Every vertex is a bounds corner, consecutive vertices share an axis (no diagonal, so no
+    // bowtie) and the four corners are distinct (no doubled-back triangle).
+    int corners = 0;
+    for (int index = 0; index < polygon.size(); ++index)
     {
-        const bool onVerticalEdge = std::abs(point.x() - bounds.left()) <= Tolerance || std::abs(point.x() - bounds.right()) <= Tolerance;
-        const bool onHorizontalEdge = std::abs(point.y() - bounds.top()) <= Tolerance || std::abs(point.y() - bounds.bottom()) <= Tolerance;
-        if (!onVerticalEdge || !onHorizontalEdge)
+        const QPointF& point = polygon[index];
+        const bool onLeft = std::abs(point.x() - bounds.left()) <= Tolerance;
+        const bool onRight = std::abs(point.x() - bounds.right()) <= Tolerance;
+        const bool onTop = std::abs(point.y() - bounds.top()) <= Tolerance;
+        const bool onBottom = std::abs(point.y() - bounds.bottom()) <= Tolerance;
+        if (!(onLeft || onRight) || !(onTop || onBottom))
+        {
+            return false;
+        }
+        corners |= (onLeft ? 1 : 2) << (onTop ? 0 : 2);
+
+        const QPointF& next = polygon[(index + 1) % polygon.size()];
+        if (std::abs(next.x() - point.x()) > Tolerance && std::abs(next.y() - point.y()) > Tolerance)
         {
             return false;
         }
     }
-    return true;
+    return corners == 0xF;
 }
 
 /// True when the piece's bounding rect is fully painted: an image, a shading or a filled rectangle.
-/// A stroked outline shares a rectangle's geometry, so a stroked rectangle is not told apart here.
+/// A stroke-only rectangle (a keyline) inks only its outline, so it does not count.
 bool pieceFillsItsBounds(const PDFPrecompiledPage::GraphicPieceInfo& info)
 {
     if (info.isImage() || info.isShading())
     {
         return true;
     }
-    return info.isVectorGraphics() && isAxisAlignedRectangle(info.pagePath, info.boundingRect);
+    return info.isVectorGraphics() && info.isFilled && isAxisAlignedRectangle(info.pagePath, info.boundingRect);
 }
 
 struct StripCoverage
@@ -194,7 +207,9 @@ qreal mergedLength(std::vector<std::pair<qreal, qreal>>& intervals)
 
 /// Splits the strip into bands across its depth and measures, per band, the length along the strip
 /// that is touched by piece bounds (upper) and fully crossed by a solid piece (solid).
+/// \param fillsBounds pieceFillsItsBounds() of each piece, computed once per page
 StripCoverage measureStripCoverage(const PDFPrecompiledPage::GraphicPieceInfos& pieces,
+                                   const std::vector<bool>& fillsBounds,
                                    const QRectF& strip,
                                    PDFBleedFixupSide side)
 {
@@ -221,9 +236,9 @@ StripCoverage measureStripCoverage(const PDFPrecompiledPage::GraphicPieceInfos& 
 
         std::vector<std::pair<qreal, qreal>> touching;
         std::vector<std::pair<qreal, qreal>> solid;
-        for (const PDFPrecompiledPage::GraphicPieceInfo& piece : pieces)
+        for (size_t pieceIndex = 0; pieceIndex < pieces.size(); ++pieceIndex)
         {
-            const QRectF& rect = piece.boundingRect;
+            const QRectF& rect = pieces[pieceIndex].boundingRect;
             if (!rect.isValid())
             {
                 continue;
@@ -239,7 +254,7 @@ StripCoverage measureStripCoverage(const PDFPrecompiledPage::GraphicPieceInfos& 
             }
 
             touching.emplace_back(rectAlongLo, rectAlongHi);
-            if (rectAcrossLo <= bandLo + Tolerance && rectAcrossHi >= bandHi - Tolerance && pieceFillsItsBounds(piece))
+            if (rectAcrossLo <= bandLo + Tolerance && rectAcrossHi >= bandHi - Tolerance && fillsBounds[pieceIndex])
             {
                 solid.emplace_back(rectAlongLo, rectAlongHi);
             }
@@ -372,6 +387,13 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
         return result;
     }
 
+    std::vector<bool> fillsBounds;
+    fillsBounds.reserve(infos.size());
+    for (const PDFPrecompiledPage::GraphicPieceInfo& info : infos)
+    {
+        fillsBounds.push_back(pieceFillsItsBounds(info));
+    }
+
     const PDFBleedFixupSide sides[4] = {
         PDFBleedFixupSide::Left, PDFBleedFixupSide::Right,
         PDFBleedFixupSide::Top, PDFBleedFixupSide::Bottom
@@ -408,7 +430,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
 
         // A strip is populated only when the artwork bounds cover enough of it; a few stray
         // marks that merely touch it are not bleed.
-        const StripCoverage coverage = measureStripCoverage(infos, strip, side);
+        const StripCoverage coverage = measureStripCoverage(infos, fillsBounds, strip, side);
         edgeResult.boundsCoverage = coverage.upper;
         edgeResult.hasContent = contentBounds.intersects(strip) && coverage.upper >= settings.minEdgeCoverage;
         edgeResult.confirmed = !edgeResult.hasContent || coverage.solid >= settings.minEdgeCoverage;

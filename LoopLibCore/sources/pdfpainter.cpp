@@ -926,6 +926,7 @@ PDFPrecompiledPage::GraphicPieceInfos PDFPrecompiledPage::calculateGraphicPieceI
                     info.type = data.isText ? GraphicPieceInfo::Type::Text : GraphicPieceInfo::Type::VectorGraphics;
                     info.boundingRect = pagePath.controlPointRect();
                     info.pagePath = pagePath;
+                    info.isFilled = data.brush.style() != Qt::NoBrush;
 
                     const int elementCount = pagePath.elementCount();
                     for (int i = 0; i < elementCount; ++i)
