@@ -2427,7 +2427,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             continue;
         }
 
-        if (check.minRegionAreaMm2 < result.minResolvableAreaMM2)
+        if (result.overLimitAreaMM2 > 0.0 && check.minRegionAreaMm2 < result.minResolvableAreaMM2)
         {
             emitIncomplete(int(pageIndex + 1),
                            PDFTranslationContext::tr("probe_dpi %1 cannot resolve min_region_area_mm2 %2 (the raster resolves %3 mm^2); raise probe_dpi")
