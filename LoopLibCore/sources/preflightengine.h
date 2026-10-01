@@ -45,6 +45,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <tuple>
 
 namespace pdf
 {
@@ -456,9 +457,9 @@ private:
     const PDFOperationControl* m_operationControl = nullptr;
     std::map<QString, CheckRunner> m_checks;
     PDFEvidenceGraph m_activeGraph;
-    /// Compositor overprint probes of the current run, keyed by zero-based page index, so
-    /// white-overprint and transparency-risk render each page once between them.
-    std::map<int, PDFOverprintProbeResult> m_overprintProbes;
+    /// Compositor overprint probes of the current run, keyed by zero-based page index, probe
+    /// dpi and pixel budget, so checks sharing a raster setup render each page once between them.
+    std::map<std::tuple<int, int, qint64>, PDFOverprintProbeResult> m_overprintProbes;
 };
 
 }   // namespace pdf

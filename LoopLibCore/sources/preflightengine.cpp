@@ -1947,18 +1947,40 @@ void evaluateEmbeddedFontsFromGraph(const PreflightCheckConfig& check,
     }
 }
 
-/// True when the page, or a Form XObject it paints, declares overprint (/OP or /op true) in an
-/// ExtGState. Only such pages are rasterized on the compositor, which keeps the cost off
-/// the common case.
+/// True when the page, or a Form XObject, pattern, soft-mask group or Type 3 glyph it paints,
+/// declares overprint (/OP or /op true) in an ExtGState. Only such pages are rasterized on the
+/// compositor, which keeps the cost off the common case. Resources nested too deep to scan
+/// count as declaring overprint, so such a page is judged rather than passed unseen.
 bool pageDeclaresOverprint(const PDFDocument* document, const PDFPage* page)
 {
     std::set<PDFObjectReference> visited;
     std::function<bool(const PDFObject&, int)> scan;
+    const auto setsOverprint = [document](const PDFDictionary* state)
+    {
+        for (const char* key : { "OP", "op" })
+        {
+            const PDFObject value = state ? document->getObject(state->get(key)) : PDFObject();
+            if (value.isBool() && value.getBool())
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    const auto scanStreamResources = [&](const PDFObject& entry, int depth) -> bool
+    {
+        if (entry.isReference() && !visited.insert(entry.getReference()).second)
+        {
+            return false;
+        }
+        const PDFDictionary* dictionary = document->getDictionaryFromObject(entry);
+        return dictionary && scan(dictionary->get("Resources"), depth + 1);
+    };
     scan = [&](const PDFObject& resourcesObject, int depth) -> bool
     {
         if (depth > 8)
         {
-            return false;
+            return true;
         }
         const PDFObject resources = document->getObject(resourcesObject);
         if (!resources.isDictionary())
@@ -1980,13 +2002,39 @@ bool pageDeclaresOverprint(const PDFDocument* document, const PDFPage* page)
                 {
                     continue;
                 }
-                for (const char* key : { "OP", "op" })
+                if (setsOverprint(state))
                 {
-                    const PDFObject value = document->getObject(state->get(key));
-                    if (value.isBool() && value.getBool())
-                    {
-                        return true;
-                    }
+                    return true;
+                }
+                const PDFDictionary* softMask = document->getDictionaryFromObject(state->get("SMask"));
+                if (softMask && scanStreamResources(softMask->get("G"), depth))
+                {
+                    return true;
+                }
+            }
+        }
+
+        const PDFDictionary* patterns = document->getDictionaryFromObject(resources.getDictionary()->get("Pattern"));
+        if (patterns)
+        {
+            for (size_t i = 0; i < patterns->getCount(); ++i)
+            {
+                const PDFDictionary* pattern = document->getDictionaryFromObject(patterns->getValue(i));
+                if ((pattern && setsOverprint(document->getDictionaryFromObject(pattern->get("ExtGState")))) || scanStreamResources(patterns->getValue(i), depth))
+                {
+                    return true;
+                }
+            }
+        }
+
+        const PDFDictionary* fonts = document->getDictionaryFromObject(resources.getDictionary()->get("Font"));
+        if (fonts)
+        {
+            for (size_t i = 0; i < fonts->getCount(); ++i)
+            {
+                if (scanStreamResources(fonts->getValue(i), depth))
+                {
+                    return true;
                 }
             }
         }
@@ -1996,13 +2044,7 @@ bool pageDeclaresOverprint(const PDFDocument* document, const PDFPage* page)
         {
             for (size_t i = 0; i < xobjects->getCount(); ++i)
             {
-                const PDFObject entry = xobjects->getValue(i);
-                if (entry.isReference() && !visited.insert(entry.getReference()).second)
-                {
-                    continue;
-                }
-                const PDFObject xobject = document->getObject(entry);
-                if (xobject.isStream() && scan(xobject.getStream()->getDictionary()->get("Resources"), depth + 1))
+                if (scanStreamResources(xobjects->getValue(i), depth))
                 {
                     return true;
                 }
@@ -2016,11 +2058,12 @@ bool pageDeclaresOverprint(const PDFDocument* document, const PDFPage* page)
 /// Rasterizes every page that declares overprint on the compositor, once per run, and
 /// returns the probe for a page index. Returns nullptr for pages that do not declare overprint.
 const PDFOverprintProbeResult* compositorOverprintProbe(PDFDocumentSession* session,
-                                                        std::map<int, PDFOverprintProbeResult>& cache,
+                                                        std::map<std::tuple<int, int, qint64>, PDFOverprintProbeResult>& cache,
                                                         PDFInteger pageIndex,
                                                         const PreflightCheckConfig& check)
 {
-    const auto cached = cache.find(int(pageIndex));
+    const std::tuple<int, int, qint64> key(int(pageIndex), check.probeDpi, check.maxRasterPixels);
+    const auto cached = cache.find(key);
     if (cached != cache.end())
     {
         return &cached->second;
@@ -2034,7 +2077,7 @@ const PDFOverprintProbeResult* compositorOverprintProbe(PDFDocumentSession* sess
     }
 
     PDFOverprintProbe probe(session);
-    return &(cache[int(pageIndex)] = probe.probe(page, check.probeDpi, check.maxRasterPixels));
+    return &(cache[key] = probe.probe(page, check.probeDpi, check.maxRasterPixels));
 }
 
 PreflightFinding compositorIncompleteFinding(const PreflightCheckConfig& check,
@@ -2074,7 +2117,7 @@ PreflightFinding compositorIncompleteFinding(const PreflightCheckConfig& check,
 /// Adds findings for white overprint that only the overprint-accurate compositor sees (images,
 /// shadings, patterns and results of transparency), for pages the page-view scan did not flag.
 void evaluateWhiteOverprintOnCompositor(PDFDocumentSession* session,
-                                        std::map<int, PDFOverprintProbeResult>& cache,
+                                        std::map<std::tuple<int, int, qint64>, PDFOverprintProbeResult>& cache,
                                         const PreflightCheckConfig& check,
                                         const std::set<int>& flaggedPages,
                                         QList<PreflightFinding>& errors,
@@ -2127,7 +2170,7 @@ void evaluateWhiteOverprintOnCompositor(PDFDocumentSession* session,
 /// Adds findings where the compositor composites overprint under a non-Normal blend mode, partial
 /// opacity or a knockout group, the combinations a RIP resolves differently from page view.
 void evaluateTransparencyOverprintOnCompositor(PDFDocumentSession* session,
-                                               std::map<int, PDFOverprintProbeResult>& cache,
+                                               std::map<std::tuple<int, int, qint64>, PDFOverprintProbeResult>& cache,
                                                const PreflightCheckConfig& check,
                                                QList<PreflightFinding>& errors,
                                                QList<PreflightFinding>& warnings)
