@@ -2340,36 +2340,20 @@ void evaluateThinStrokesFromGraph(const PreflightCheckConfig& check,
     }
 }
 
-bool edgeHasContent(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
+const PDFBleedMarginProbeEdgeResult& edgeResult(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
 {
     switch (side)
     {
         case PDFBleedFixupSide::Left:
-            return result.left.hasContent;
+            return result.left;
         case PDFBleedFixupSide::Right:
-            return result.right.hasContent;
+            return result.right;
         case PDFBleedFixupSide::Top:
-            return result.top.hasContent;
+            return result.top;
         case PDFBleedFixupSide::Bottom:
-            return result.bottom.hasContent;
+            break;
     }
-    return false;
-}
-
-QRectF edgeStripRect(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
-{
-    switch (side)
-    {
-        case PDFBleedFixupSide::Left:
-            return result.left.stripRect;
-        case PDFBleedFixupSide::Right:
-            return result.right.stripRect;
-        case PDFBleedFixupSide::Top:
-            return result.top.stripRect;
-        case PDFBleedFixupSide::Bottom:
-            return result.bottom.stripRect;
-    }
-    return QRectF();
+    return result.bottom;
 }
 
 void emitNeedsAutoBleedFinding(int pageNumber,
@@ -2513,15 +2497,49 @@ void runContentBleedCheck(PDFDocumentSession* session,
 
         const PDFBleedMarginProbeResult result = probe.probe(page, static_cast<size_t>(pageIndex), probeSettings);
 
-        if (result.allEdgesCovered())
-        {
-            continue;
-        }
-
         const PDFBleedFixupSide sides[4] = {
             PDFBleedFixupSide::Left, PDFBleedFixupSide::Right,
             PDFBleedFixupSide::Top, PDFBleedFixupSide::Bottom
         };
+
+        // An edge that artwork bounds call populated but that is not provably solid, and that no
+        // raster measurement confirmed, must not pass as clean bleed.
+        if (!result.allEdgesConfirmed())
+        {
+            QStringList unconfirmedSides;
+            for (PDFBleedFixupSide side : sides)
+            {
+                if (edgeResult(result, side).hasContent && !edgeResult(result, side).confirmed)
+                {
+                    unconfirmedSides.append(sideNameForFinding(side));
+                }
+            }
+
+            const QString reason = check.rasterConfirm
+                                       ? PDFTranslationContext::tr("the strip raster could not be measured (strip over the pixel budget, or unusable page boxes)")
+                                       : PDFTranslationContext::tr("raster confirmation is off, so artwork bounds alone cannot show the strip is inked");
+            PreflightFinding incomplete;
+            incomplete.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            incomplete.page = int(pageIndex + 1);
+            incomplete.type = QStringLiteral("check-incomplete");
+            incomplete.severity = QStringLiteral("info");
+            incomplete.checkId = check.id;
+            incomplete.message = PDFTranslationContext::tr("Bleed margin on %1 was not confirmed on page %2: %3.")
+                                     .arg(unconfirmedSides.join(QStringLiteral(", ")))
+                                     .arg(pageIndex + 1)
+                                     .arg(reason);
+            incomplete.evidence.insert(QStringLiteral("reason"), reason);
+            incomplete.evidence.insert(QStringLiteral("sides"), unconfirmedSides.join(QStringLiteral(", ")));
+            incomplete.evidence.insert(QStringLiteral("raster_confirm"), check.rasterConfirm);
+            incomplete.evidence.insert(QStringLiteral("min_edge_coverage"), probeSettings.minEdgeCoverage);
+            incomplete.evidence.insert(QStringLiteral("inspection_complete"), false);
+            pushPreflightFinding(incomplete, incomplete.severity, errors, warnings);
+        }
+
+        if (result.allEdgesCovered())
+        {
+            continue;
+        }
 
         bool pageHasBleedGap = false;
 
@@ -2529,12 +2547,12 @@ void runContentBleedCheck(PDFDocumentSession* session,
         {
             for (PDFBleedFixupSide side : sides)
             {
-                if (edgeHasContent(result, side))
+                if (edgeResult(result, side).hasContent)
                 {
                     continue;
                 }
 
-                const QRectF stripRect = edgeStripRect(result, side);
+                const QRectF stripRect = edgeResult(result, side).stripRect;
                 PreflightFinding finding;
                 finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
                 finding.page = int(pageIndex + 1);
@@ -2554,13 +2572,13 @@ void runContentBleedCheck(PDFDocumentSession* session,
             QRectF unionMissingBbox;
             for (PDFBleedFixupSide side : sides)
             {
-                if (edgeHasContent(result, side))
+                if (edgeResult(result, side).hasContent)
                 {
                     continue;
                 }
 
                 missingSides.append(sideNameForFinding(side));
-                const QRectF stripRect = edgeStripRect(result, side);
+                const QRectF stripRect = edgeResult(result, side).stripRect;
                 if (stripRect.isValid())
                 {
                     unionMissingBbox = unionMissingBbox.united(stripRect);

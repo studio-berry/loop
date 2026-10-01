@@ -8,7 +8,7 @@
   "matrix_id": "loop-gwg-pdfx-v1",
   "rows": {
     "bleed": {
-      "clean_fixture_count": 24,
+      "clean_fixture_count": 26,
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
@@ -89,8 +89,10 @@
         "ai-art-missing-bleed",
         "ai-art-partial-bleed",
         "ai-art-raster-trim-edge",
+        "content-bleed-hairline-margin",
         "content-bleed-missing",
         "content-bleed-raster-confirm",
+        "content-bleed-sparse-marks",
         "content-bleed-three-of-four"
       ],
       "uninspected_fixtures": []
@@ -279,6 +281,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 83,
+  "source_fixtures": 85,
   "unattributed_findings": 1
 }

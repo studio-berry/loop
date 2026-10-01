@@ -28,6 +28,7 @@
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
+#include "pdfbleedmarginprobe.h"
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
@@ -112,6 +113,10 @@ private slots:
     void legacyDecisionsWithoutSchemaKindStillLoad();
     void run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed();
     void run_contentBleedRasterConfirm_emitsBleedMarginEmptyAndNeedsAutoBleed();
+    void run_contentBleedSparseMarks_reportsEmptyMarginInsteadOfPassing();
+    void run_contentBleedHairlineWithoutRaster_reportsIncompleteNotClean();
+    void run_contentBleedHairlineWithRaster_reportsEveryEdgeEmpty();
+    void probe_sparseMarginCalibration_pinsTheCoverageFloor();
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
     void run_whiteOverprint_passesWhenOverprintOff();
     void run_whiteOverprint_emitsWarningInsideFormXObject();
@@ -1887,6 +1892,132 @@ void PreflightEngineTest::run_contentBleedRasterConfirm_emitsBleedMarginEmptyAnd
     QVERIFY(hasNeedsAutoBleed);
     QCOMPARE(result.fixupsAvailable.size(), 1);
     QCOMPARE(result.fixupsAvailable.first().id, QStringLiteral("add-bleed"));
+}
+
+namespace
+{
+pdf::PDFDocument readBleedFixture(const QString& name)
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + name;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        return pdf::PDFDocument();
+    }
+    return document;
+}
+}   // namespace
+
+void PreflightEngineTest::run_contentBleedSparseMarks_reportsEmptyMarginInsteadOfPassing()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-sparse-marks.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // A 1 pt dot per edge touches every strip but covers far less than the coverage floor.
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(false));
+    QVERIFY(result.pass);
+    QCOMPARE(result.warnings.size(), 2);
+    QCOMPARE(result.warnings.at(0).type, QStringLiteral("content-bleed"));
+    QVERIFY(result.warnings.at(0).message.contains(QStringLiteral("left, right, top, bottom")));
+    QCOMPARE(result.warnings.at(1).type, QStringLiteral("needs-auto-bleed"));
+}
+
+void PreflightEngineTest::run_contentBleedHairlineWithoutRaster_reportsIncompleteNotClean()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-hairline-margin.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // The hairline's bounds fill each strip, but bounds cannot show a stroke inks it: without
+    // raster confirmation the check must say so instead of passing.
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(false));
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.at(0).type, QStringLiteral("check-incomplete"));
+    QCOMPARE(result.warnings.at(0).checkId, QStringLiteral("content-bleed"));
+    QCOMPARE(result.warnings.at(0).evidence.value(QStringLiteral("raster_confirm")).toBool(), false);
+    QCOMPARE(result.warnings.at(0).evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
+    QVERIFY(!result.pass);
+}
+
+void PreflightEngineTest::run_contentBleedHairlineWithRaster_reportsEveryEdgeEmpty()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-hairline-margin.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(true));
+    QVERIFY(result.pass);
+    int emptyEdges = 0;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QVERIFY(finding.type != QStringLiteral("check-incomplete"));
+        if (finding.type == QStringLiteral("bleed-margin-empty"))
+        {
+            ++emptyEdges;
+        }
+    }
+    QCOMPARE(emptyEdges, 4);
+}
+
+void PreflightEngineTest::probe_sparseMarginCalibration_pinsTheCoverageFloor()
+{
+    pdf::PDFBleedMarginProbeSettings settings;
+    const pdf::PDFReal bleedMm = pdf::convertPDFPointToMM(9.0);
+    settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+    settings.dpi = 150;
+    QCOMPARE(settings.minEdgeCoverage, 0.10);
+
+    auto probeFixture = [&settings](const QString& name, bool fastOnly)
+    {
+        pdf::PDFDocument document = readBleedFixture(name);
+        pdf::PDFDocumentSession session(&document);
+        pdf::PDFBleedMarginProbe probe(&session);
+        pdf::PDFBleedMarginProbeSettings local = settings;
+        local.fastOnly = fastOnly;
+        return probe.probe(document.getCatalog()->getPage(0), 0, local);
+    };
+
+    // Solid artwork across every strip: populated and proven by bounds alone.
+    const pdf::PDFBleedMarginProbeResult adequate = probeFixture(QStringLiteral("content-bleed-adequate.pdf"), true);
+    QVERIFY(adequate.allEdgesCovered());
+    QVERIFY(adequate.allEdgesConfirmed());
+    QVERIFY(adequate.left.boundsCoverage > 0.99);
+
+    // Stray dots: bounds coverage is a fraction of a percent, far under the floor.
+    const pdf::PDFBleedMarginProbeResult sparse = probeFixture(QStringLiteral("content-bleed-sparse-marks.pdf"), true);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { sparse.left, sparse.right, sparse.top, sparse.bottom })
+    {
+        QVERIFY(!edge.hasContent);
+        QVERIFY(edge.boundsCoverage > 0.0 && edge.boundsCoverage < 0.02);
+    }
+
+    // Diagonal hairline: bounds see a full strip but cannot prove it inked.
+    const pdf::PDFBleedMarginProbeResult hairlineBounds = probeFixture(QStringLiteral("content-bleed-hairline-margin.pdf"), true);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { hairlineBounds.left, hairlineBounds.right, hairlineBounds.top, hairlineBounds.bottom })
+    {
+        QVERIFY(edge.hasContent);
+        QVERIFY(!edge.confirmed);
+        QVERIFY(edge.boundsCoverage > 0.9);
+    }
+
+    // The raster measures the same hairline (marks at or below the probe threshold) well under the
+    // floor and demotes every edge.
+    const pdf::PDFBleedMarginProbeResult hairlineRaster = probeFixture(QStringLiteral("content-bleed-hairline-margin.pdf"), false);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { hairlineRaster.left, hairlineRaster.right, hairlineRaster.top, hairlineRaster.bottom })
+    {
+        QVERIFY(!edge.hasContent);
+        QVERIFY(edge.confirmed);
+        QVERIFY(edge.totalPixels > 0);
+        const qreal ink = static_cast<qreal>(edge.inkPixels) / static_cast<qreal>(edge.totalPixels);
+        QVERIFY2(ink < settings.minEdgeCoverage, qPrintable(QString::number(ink)));
+    }
 }
 
 void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverprint()

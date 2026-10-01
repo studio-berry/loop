@@ -248,6 +248,28 @@
     "notes": "Artwork into left/right/top bleed strips only; Tier-1 emits exactly one content-bleed on the bottom edge."
   },
   {
+    "id": "content-bleed-sparse-marks",
+    "pdf": "content-bleed-sparse-marks.pdf",
+    "profile": "examples/profile-tiered-bleed.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["content-bleed"]
+    },
+    "source": "generated",
+    "notes": "#120 regression: the bleed margin holds only a 1 pt dot per edge. The artwork bounds touch every strip, so the bounds-only probe passed it clean. The strips now need 10% coverage, so each edge reports empty."
+  },
+  {
+    "id": "content-bleed-hairline-margin",
+    "pdf": "content-bleed-hairline-margin.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["content-bleed"]
+    },
+    "source": "generated",
+    "notes": "#120 regression: the bleed margin holds only a 0.1 pt diagonal hairline across each edge. Raster confirmation never re-checked an edge the bounds pass had already accepted, so it passed clean. Raster now demotes each edge to bleed-margin-empty because the hairline inks under 10% of the strip."
+  },
+  {
     "id": "ai-art-missing-bleed",
     "pdf": "ai-art-missing-bleed.pdf",
     "profile": "examples/profile-tiered-bleed-raster.json",
