@@ -4662,6 +4662,7 @@ struct HiddenContentFinding
     QRectF bbox;
     QString detail;
     bool heuristic = false;
+    bool incomplete = false;
 };
 
 /// What a single optional-content governor (an OCG or a membership dictionary)
@@ -4805,7 +4806,8 @@ public:
                            const PDFOptionalContentActivity* viewActivity,
                            const PDFMeshQualitySettings& meshQualitySettings,
                            PDFProcessingBudget* budget,
-                           qreal offPageAllowance) :
+                           qreal offPageAllowance,
+                           bool trackOcclusion) :
         PDFPageContentProcessor(page,
                                 document,
                                 fontCache,
@@ -4814,6 +4816,7 @@ public:
                                 QTransform(),
                                 meshQualitySettings,
                                 budget),
+        m_trackOcclusion(trackOcclusion),
         m_printActivity(optionalContentActivity),
         m_viewActivity(viewActivity)
     {
@@ -4932,51 +4935,194 @@ protected:
         }
     }
 
+    void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override
+    {
+        QPainterPath world = getCurrentWorldMatrix().map(path);
+        world.setFillRule(fillRule);
+        if (m_clip.active)
+        {
+            m_clip.path = m_clip.path.intersected(world);
+        }
+        else
+        {
+            m_clip.active = true;
+            m_clip.path = world;
+        }
+    }
+
+    void performSaveGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::BeforeOperation)
+        {
+            m_clipStack.append(m_clip);
+        }
+    }
+
+    void performRestoreGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::BeforeOperation && !m_clipStack.isEmpty())
+        {
+            m_clip = m_clipStack.takeLast();
+        }
+    }
+
     void performBeforePathPainting(const QPainterPath& path,
                                    bool stroke,
                                    bool fill,
                                    bool text,
                                    Qt::FillRule fillRule) override
     {
-        Q_UNUSED(fillRule);
         if (path.isEmpty() || (!stroke && !fill && !text))
         {
             return;
         }
 
-        const QRectF bounds = getCurrentWorldMatrix().map(path).boundingRect().normalized();
+        QPainterPath world = getCurrentWorldMatrix().map(path);
+        world.setFillRule(fillRule);
         const PDFPageContentProcessorState* state = getGraphicState();
+        const QRectF rawBounds = world.boundingRect().normalized();
         if (state->getAlphaFilling() <= 0.0 || state->getAlphaStroking() <= 0.0)
         {
-            m_findings.append({ QStringLiteral("invisible-content"), bounds,
+            m_findings.append({ QStringLiteral("invisible-content"), rawBounds,
                                 QStringLiteral("graphics-state alpha is zero"), false });
         }
 
-        if (!m_toleratedBounds.isEmpty() && !m_toleratedBounds.intersects(bounds))
+        // Everything below judges the geometry that is actually painted: the path
+        // intersected with the effective clip, not its raw bounding box.
+        const PaintedGeometry painted = clipPainted(world, fill);
+        if (painted.clippedAway)
         {
-            m_findings.append({ QStringLiteral("off-page-content"), bounds,
+            return;
+        }
+
+        if (!m_toleratedBounds.isEmpty() && !m_toleratedBounds.intersects(painted.bounds))
+        {
+            m_findings.append({ QStringLiteral("off-page-content"), painted.bounds,
                                 QStringLiteral("mark lies outside the effective page/bleed box"), false });
         }
 
-        if (fill && state->getAlphaFilling() >= 1.0 && !m_paintedBounds.isEmpty())
+        // Occlusion subtracts paths pairwise, so it only runs for the check that reports it.
+        if (!m_trackOcclusion)
         {
-            for (const QRectF& previous : m_paintedBounds)
+            return;
+        }
+
+        if (fill)
+        {
+            const bool opaque = state->getAlphaFilling() >= 1.0;
+            const bool plainBlend = state->getBlendMode() == BlendMode::Normal && !state->getSoftMask();
+            if (opaque)
             {
-                if (bounds.contains(previous))
+                for (PaintedItem& item : m_items)
                 {
-                    m_findings.append({ QStringLiteral("obscured-content"), previous,
-                                        QStringLiteral("fully covered by later opaque paint"), true });
-                    break;
+                    if (item.reported || !painted.bounds.intersects(item.bounds))
+                    {
+                        continue;
+                    }
+                    if (!plainBlend)
+                    {
+                        // A blend mode or soft mask decides whether this paint hides the
+                        // earlier mark, and that is not decidable without a RIP model.
+                        if (painted.bounds.contains(item.bounds) && !m_undecided)
+                        {
+                            m_undecided = true;
+                            m_findings.append({ QStringLiteral("obscured-content"), item.bounds,
+                                                QStringLiteral("a blend mode or soft mask over earlier paint prevents deciding whether it is hidden"),
+                                                true, true });
+                        }
+                        continue;
+                    }
+                    item.remaining = item.remaining.subtracted(painted.region);
+                    const QRectF left = item.remaining.boundingRect();
+                    if (item.remaining.isEmpty() || left.width() < NegligibleExtentPt || left.height() < NegligibleExtentPt)
+                    {
+                        item.reported = true;
+                        m_findings.append({ QStringLiteral("obscured-content"), item.bounds,
+                                            QStringLiteral("fully covered by later opaque paint"), true });
+                    }
                 }
             }
         }
+
         if (fill || stroke || text)
         {
-            m_paintedBounds.append(bounds);
+            if (m_items.size() < MaxTrackedItems)
+            {
+                m_items.append({ painted.region, painted.bounds, false });
+            }
+            else if (!m_truncated)
+            {
+                m_truncated = true;
+                m_findings.append({ QStringLiteral("obscured-content"), QRectF(),
+                                    QStringLiteral("the page paints more objects than occlusion tracking covers"), true, true });
+            }
         }
     }
 
 private:
+    static constexpr qreal NegligibleExtentPt = 0.01;
+    static constexpr int MaxTrackedItems = 1000;
+
+    struct ClipState
+    {
+        bool active = false;
+        QPainterPath path;
+    };
+
+    struct PaintedGeometry
+    {
+        QPainterPath region;
+        QRectF bounds;
+        bool clippedAway = false;
+    };
+
+    struct PaintedItem
+    {
+        QPainterPath remaining;
+        QRectF bounds;
+        bool reported = false;
+    };
+
+    /// Intersects painted geometry with the effective clip. Area paints use the exact
+    /// path intersection; strokes and degenerate paths fall back to rectangle bounds,
+    /// because a zero-area path has an empty exact intersection.
+    PaintedGeometry clipPainted(const QPainterPath& world, bool areaPaint) const
+    {
+        PaintedGeometry result;
+        result.region = world;
+        result.bounds = world.boundingRect().normalized();
+        if (!m_clip.active)
+        {
+            return result;
+        }
+
+        const QRectF clipBounds = m_clip.path.boundingRect().normalized();
+        if (!clipBounds.intersects(result.bounds))
+        {
+            result.clippedAway = true;
+            return result;
+        }
+
+        if (areaPaint && result.bounds.width() > 0.0 && result.bounds.height() > 0.0)
+        {
+            const QPainterPath inside = m_clip.path.intersected(world);
+            if (inside.isEmpty())
+            {
+                result.clippedAway = true;
+                return result;
+            }
+            result.region = inside;
+            result.bounds = inside.boundingRect().normalized();
+            return result;
+        }
+
+        result.bounds = result.bounds.intersected(clipBounds);
+        QPainterPath boundsPath;
+        boundsPath.addRect(result.bounds);
+        result.region = boundsPath;
+        return result;
+    }
+
     void recordGovernor(const PDFObject& governor, const QString& source, const QString& key)
     {
         if (!m_viewActivity || !m_printActivity || !m_recordedGovernors.insert(source + QLatin1Char('|') + key).second)
@@ -4990,7 +5136,12 @@ private:
     }
 
     QRectF m_toleratedBounds;
-    QList<QRectF> m_paintedBounds;
+    bool m_trackOcclusion = false;
+    ClipState m_clip;
+    QList<ClipState> m_clipStack;
+    QList<PaintedItem> m_items;
+    bool m_undecided = false;
+    bool m_truncated = false;
     QStringList m_hiddenLayers;
     QList<HiddenContentFinding> m_findings;
     QList<OptionalContentGovernorReport> m_governors;
@@ -5033,7 +5184,8 @@ void runHiddenContentCheck(PDFDocumentSession* session,
                                          &viewActivity,
                                          meshQualitySettings,
                                          session->getProcessingBudget(),
-                                         check.amountPt);
+                                         check.amountPt,
+                                         check.id == QStringLiteral("obscured-content"));
         processor.processContents();
 
         if (check.id == QStringLiteral("hidden-layers"))
@@ -5109,6 +5261,21 @@ void runHiddenContentCheck(PDFDocumentSession* session,
         {
             if (source.type != check.id)
             {
+                continue;
+            }
+
+            if (source.incomplete)
+            {
+                PreflightFinding incomplete;
+                incomplete.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+                incomplete.page = int(pageIndex + 1);
+                incomplete.type = QStringLiteral("check-incomplete");
+                incomplete.checkId = check.id;
+                incomplete.severity = QStringLiteral("info");
+                incomplete.message = PDFTranslationContext::tr("Page %1 occlusion could not be decided: %2.").arg(pageIndex + 1).arg(source.detail);
+                incomplete.evidence.insert(QStringLiteral("reason"), source.detail);
+                incomplete.evidence.insert(QStringLiteral("inspection_complete"), false);
+                pushPreflightFinding(incomplete, incomplete.severity, errors, warnings);
                 continue;
             }
 

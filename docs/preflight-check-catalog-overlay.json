@@ -778,7 +778,7 @@
   },
   "obscured-content": {
    "measures": "Content covered by later painting.",
-   "limitations": "Heuristic; not a RIP occlusion model.",
+   "limitations": "Painted vector geometry is intersected with the effective clip and covered in paint order; images, shadings and transparency are not modelled, a blend mode or soft mask over earlier paint reports the page incomplete, and findings stay heuristic, not a RIP occlusion model.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset"
@@ -813,7 +813,7 @@
   },
   "off-page-content": {
    "measures": "Content whose bounds fall outside the page.",
-   "limitations": "Clipping can hide false positives and false negatives.",
+   "limitations": "Painted bounds are intersected with the effective clip before the page test; stroke and degenerate geometry use rectangle bounds, and images and shadings are not inspected.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1547,24 +1547,24 @@
   {
    "id": "obscured-content-occlusion",
    "priority": "P2",
-   "gap": "obscured-content is a bounding-box heuristic rather than a RIP occlusion model, so covered content can pass clean",
+   "gap": "obscured-content compared raw bounding boxes, so content covered by clipped or combined opaque paint passed clean; it now covers painted, clipped vector geometry in paint order and reports a blend mode or soft mask over earlier paint as incomplete (filed as #118)",
    "families": [
     "sheetfed-offset"
    ],
-   "state": "open",
-   "closed_by": "#118",
+   "state": "landed",
+   "closed_by": "obscured-content",
    "deferral": null
   },
   {
    "id": "off-page-content-clipping",
    "priority": "P2",
-   "gap": "off-page-content compares painted bounds before clipping, so a clipped mark can be a false negative or a false positive",
+   "gap": "off-page-content compared painted bounds before clipping, so a clipped mark could be a false negative or a false positive; painted bounds are now intersected with the effective clip first (filed as #118)",
    "families": [
     "sheetfed-offset",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#118",
+   "state": "landed",
+   "closed_by": "off-page-content",
    "deferral": null
   },
   {
