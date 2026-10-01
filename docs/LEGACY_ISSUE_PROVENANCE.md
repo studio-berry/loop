@@ -48,12 +48,12 @@ tests, and exact-SHA evidence, and write a new issue for a demonstrated remainin
 Rules:
 
 1. **Never link a legacy number.** No `github.com/studio-berry/loop/issues/<n>` URL may
-   point at a legacy issue. Existing ones were rewritten to `legacy #<n>` text, except
-   the links to legacy #656 and #675 in `docs/GOVERNED_EXECUTION.md` and
-   `docs/adr/adr-011-architecture-contracts-d1-d5.md`: both belong to the
-   governed-execution subsystem, whose binding proof lanes (build, packaging, unit)
-   cannot be produced by a documentation change, so they are rewritten with the next
-   change that carries them.
+   point at a legacy issue. All 28 legacy issue and pull-request URLs that were under
+   `docs/` are rewritten to `legacy #<n>` text. The last three, the links to legacy #656
+   and #675 in `docs/GOVERNED_EXECUTION.md` and
+   `docs/adr/adr-011-architecture-contracts-d1-d5.md`, waited for a change that carries
+   the governed-execution subsystem's binding proof lanes (build, packaging, unit);
+   this change carries them, so the rewrite is complete and no exception remains.
 2. **Machine-read records name their repository.** `github_issues` entries in
    `docs/preflight-check-catalog-overlay.json` carry `repository`. Live records are
    `#<n>` with `studio-berry/loop`; frozen snapshots are `legacy#<n>` with `legacy`.
@@ -92,3 +92,8 @@ Rows that landed (`corrupt-embedded-fonts`, `nested-font-resources`,
 as does the `invisible-content-breadth` gap text for its earlier detector.
 `color-inventory-probe-depth` and `thin-parts-raster-budget` stay register-only with a
 reviewed deferral.
+
+The legacy URL rewrite is complete: `docs/GOVERNED_EXECUTION.md` and
+`docs/adr/adr-011-architecture-contracts-d1-d5.md` were the last files holding a legacy
+link, and no `docs/` file links a legacy number now. The reset-issue links in
+`docs/CORE_QUALIFICATION.md` are live and stay as they are.

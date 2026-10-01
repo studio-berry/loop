@@ -12,7 +12,7 @@
 0.3.0 already ships governed planning, preview, approval, publication, revalidation,
 and sign-off. Qualification still needs those behaviors pinned as **contracts** with
 executable proof, not inferred from implementation shape. This ADR closes the five
-decisions named in [#675](https://github.com/studio-berry/loop/issues/675).
+decisions named in legacy #675.
 
 ## Decisions
 
@@ -69,7 +69,7 @@ canonical **plan identity** and governed **output identity** fields under pinned
 writer inputs (`plan_digest`, source/candidate/published digests, revalidation and
 profile digests). Exact PDF writer byte identity is **not** part of the equality
 contract when the writer emits clock- or random-derived fields; that weaker
-contract is explicit and covers the disposition of [#656](https://github.com/studio-berry/loop/issues/656)
+contract is explicit and covers the disposition of legacy #656
 (fail-closed proofs must use structural/in-memory comparison or governed digests,
 not independent re-serialization).
 
