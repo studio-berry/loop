@@ -1007,9 +1007,9 @@ void PreflightEngineTest::run_offPageContent_judgesClippedGeometry()
 {
     const QString offPage = QStringLiteral("off-page-content");
 
-    // A page-sized mark under a clip wholly off the page paints nothing on the page.
+    // A mark spanning the page, under a clip wholly off the page, paints only off the page.
     const pdf::PreflightResult clippedOff = runClipTestCheck(
-        makeClipTestPdf("q 300 300 100 100 re W n 0 g 0 0 200 200 re f Q\n"), offPage);
+        makeClipTestPdf("q 300 300 100 100 re W n 0 g 0 0 400 400 re f Q\n"), offPage);
     QCOMPARE(clippedOff.warnings.size(), 1);
     QCOMPARE(clippedOff.warnings.first().type, offPage);
 
