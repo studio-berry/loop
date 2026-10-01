@@ -3,7 +3,7 @@
 
 This is intentionally a small contract check rather than a C++ parser. It
 guards the names and seams that make the release gates reviewable: the
-canonical preflight reducer, the single operation-history chain, and the
+canonical preflight reducer, final-artifact validation, the single operation-history chain, and the
 absence of a second JSONL/audit-event ledger. The unmanaged async launch
 inventory is checked separately by check_unmanaged_async.py.
 """
@@ -37,7 +37,11 @@ REQUIRED_MARKERS = {
     "PdfTool/pdftoolactionlist.cpp": ("makeActionListExecutionOptions",),
     "LoopLibCore/sources/pdfpreflightverdict.h": ("reducePreflightVerdict",),
     "LoopLibCore/sources/pdfactionlist.cpp": ("reducePreflightVerdict", "applyCanonicalPreflightVerdict"),
-    "LoopLibCore/sources/pdfstandardconversion.cpp": ("reducePreflightVerdict",),
+    "LoopLibCore/sources/pdfstandardconversion.cpp": (
+        "PDFStandardConversion::validateArtifacts",
+        "PDFArtifactValidationStatus::Passed",
+        "PDFSafeFileWriter::writeData",
+    ),
     "LoopLibInteraction/sources/preflightcontroller.cpp": ("reducePreflightVerdict",),
     "LoopLibCore/sources/pdfoperationhistory.h": (
         "enum class PDFOperationHistoryEventKind",
