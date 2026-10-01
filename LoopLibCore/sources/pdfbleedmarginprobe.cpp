@@ -366,7 +366,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
     {
         if (info.boundingRect.isValid())
         {
-            contentBounds = contentBounds.united(info.boundingRect);
+            contentBounds = contentBounds.united(paintableBounds(info));
         }
     }
 
