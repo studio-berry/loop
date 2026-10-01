@@ -2439,8 +2439,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                                { QStringLiteral("min_region_area_mm2"), check.minRegionAreaMm2 },
                                { QStringLiteral("min_resolvable_area_mm2"), result.minResolvableAreaMM2 },
                                { QStringLiteral("pixel_area_mm2"), result.pixelAreaMM2 },
-                               { QStringLiteral("probe_dpi"), check.probeDpi }
-                           });
+                               { QStringLiteral("probe_dpi"), check.probeDpi } });
         }
 
         int regionRank = 0;
