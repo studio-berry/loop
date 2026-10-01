@@ -1113,7 +1113,7 @@
         "digital"
       ],
       "fixups": [],
-      "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+      "limitations": "Does not flatten. Overprint composited with a non-Normal blend mode, constant alpha below one or a knockout group is reported from the compositor; the RIP result itself is not simulated.",
       "measures": "Live transparency blend modes and blend-space mismatches.",
       "parameters": [
         {
@@ -1134,6 +1134,16 @@
           "condition": "a page records one or more transparency blend-space mismatches. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "transparency-blend-space",
           "severity": "error"
+        },
+        {
+          "condition": "the compositor composites overprint under a non-Normal blend mode, constant alpha below one or a knockout group. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "finding_type": "transparency-overprint-interaction",
+          "severity": "error"
+        },
+        {
+          "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
+          "severity": "info"
         }
       ]
     },
@@ -1206,7 +1216,7 @@
         "packaging"
       ],
       "fixups": [],
-      "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+      "limitations": "Pages that declare overprint (/OP or /op in an ExtGState, including Form XObjects) are also rasterized on the overprint-accurate compositor at probe_dpi; sub-pixel white paint and annotation appearances are not seen there.",
       "measures": "White/knockout overprint flags on fills and strokes.",
       "parameters": [
         {
@@ -1219,9 +1229,14 @@
       ],
       "severity": [
         {
-          "condition": "a page paints white or near-white content with overprint set. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "a page paints white or near-white content with overprint set, or the compositor applies overprint to paper-white pixels (images, shadings, results of transparency) the page-view scan does not inspect. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "white-overprint",
           "severity": "error"
+        },
+        {
+          "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
+          "severity": "info"
         }
       ]
     }

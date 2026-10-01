@@ -244,6 +244,7 @@
         "transparency-cmyk-group-rgb",
         "transparency-cmyk-group-spot",
         "transparency-hue",
+        "transparency-overprint-knockout",
         "transparency-rgb-group-cmyk"
       ],
       "uninspected_fixtures": [
@@ -269,6 +270,7 @@
         "white-overprint-devicen",
         "white-overprint-form",
         "white-overprint-iccbased",
+        "white-overprint-image",
         "white-overprint-separation"
       ],
       "uninspected_fixtures": [
@@ -277,6 +279,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 81,
+  "source_fixtures": 83,
   "unattributed_findings": 1
 }

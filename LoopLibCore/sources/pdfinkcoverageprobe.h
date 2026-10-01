@@ -109,6 +109,27 @@ private:
     PDFDocumentSession* m_session;
 };
 
+struct LOOPLIBCORESHARED_EXPORT PDFOverprintProbeResult
+{
+    bool rendered = false;   // false when rasterization was unavailable or over budget
+    bool budgetExceeded = false;
+    PDFRenderDiagnostics diagnostics;
+    PDFOverprintObservation observation;
+};
+
+/// Renders a page on the overprint-accurate compositor (the Output Preview path) and
+/// reports the overprint that compositor applied, instead of reading page-view state.
+class LOOPLIBCORESHARED_EXPORT PDFOverprintProbe
+{
+public:
+    explicit PDFOverprintProbe(PDFDocumentSession* session);
+
+    PDFOverprintProbeResult probe(const PDFPage* page, int dpi, qint64 maxRasterPixels);
+
+private:
+    PDFDocumentSession* m_session;
+};
+
 }   // namespace pdf
 
 #endif   // PDFINKCOVERAGEPROBE_H

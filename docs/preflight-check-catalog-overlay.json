@@ -1250,7 +1250,7 @@
   },
   "transparency-risk": {
    "measures": "Live transparency blend modes and blend-space mismatches.",
-   "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+   "limitations": "Does not flatten. Overprint composited with a non-Normal blend mode, constant alpha below one or a knockout group is reported from the compositor; the RIP result itself is not simulated.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1276,6 +1276,16 @@
      "finding_type": "transparency-blend-space",
      "severity": "error",
      "condition": "a page records one or more transparency blend-space mismatches. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "transparency-overprint-interaction",
+     "severity": "error",
+     "condition": "the compositor composites overprint under a non-Normal blend mode, constant alpha below one or a knockout group. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1344,7 +1354,7 @@
   },
   "white-overprint": {
    "measures": "White/knockout overprint flags on fills and strokes.",
-   "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+   "limitations": "Pages that declare overprint (/OP or /op in an ExtGState, including Form XObjects) are also rasterized on the overprint-accurate compositor at probe_dpi; sub-pixel white paint and annotation appearances are not seen there.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1363,7 +1373,12 @@
     {
      "finding_type": "white-overprint",
      "severity": "error",
-     "condition": "a page paints white or near-white content with overprint set. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "a page paints white or near-white content with overprint set, or the compositor applies overprint to paper-white pixels (images, shadings, results of transparency) the page-view scan does not inspect. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1570,26 +1585,26 @@
   {
    "id": "transparency-rip-interaction",
    "priority": "P2",
-   "gap": "transparency-risk does not flatten and does not simulate overprint-plus-transparency interaction as a RIP does, so a press-only interaction passes clean",
+   "gap": "transparency-risk did not look at overprint-plus-transparency interaction, so a press-only interaction passed clean; it now reports overprint composited with a non-Normal blend mode, constant alpha or a knockout group from the compositor (filed as #119)",
    "families": [
     "sheetfed-offset",
     "packaging",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#119",
+   "state": "landed",
+   "closed_by": "transparency-risk",
    "deferral": null
   },
   {
    "id": "white-overprint-renderer",
    "priority": "P2",
-   "gap": "white-overprint reads page-view overprint state rather than the Output Preview or transparency renderer, so a renderer-dependent white overprint passes clean",
+   "gap": "white-overprint read page-view overprint state only, so white overprint that appears through the compositor (images, shadings, transparency) passed clean; pages that declare overprint are now also judged on the overprint-accurate compositor (filed as #119)",
    "families": [
     "sheetfed-offset",
     "packaging"
    ],
-   "state": "open",
-   "closed_by": "#119",
+   "state": "landed",
+   "closed_by": "white-overprint",
    "deferral": null
   },
   {
