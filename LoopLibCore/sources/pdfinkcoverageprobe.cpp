@@ -338,8 +338,7 @@ PDFOverprintProbeResult PDFOverprintProbe::probe(const PDFPage* page, int dpi, q
     const qreal pointToPixel = static_cast<qreal>(dpi) / 72.0;
     const double widthReal = std::ceil(rotatedAnalysisBox.width() * pointToPixel);
     const double heightReal = std::ceil(rotatedAnalysisBox.height() * pointToPixel);
-    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0
-        || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0 || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
