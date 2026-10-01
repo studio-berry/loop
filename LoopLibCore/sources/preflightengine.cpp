@@ -5055,6 +5055,8 @@ void runEmbeddedFontsCheck(PDFDocumentSession* session,
 
 struct ShownGlyphDefects
 {
+    PDFFontPointer font;
+    QString fontName;
     QString subtype;
     bool composite = false;
     std::map<QString, std::set<unsigned int>> codesByDefect;
@@ -5076,7 +5078,7 @@ public:
         }
     }
 
-    const std::map<QString, ShownGlyphDefects>& defects() const { return m_defects; }
+    const std::vector<ShownGlyphDefects>& defects() const { return m_defects; }
 
 protected:
     bool isContentKindSuppressed(ContentKind kind) const override
@@ -5094,7 +5096,7 @@ protected:
 
         for (const CID code : textSequence.unresolvedCodes)
         {
-            record(*font, PDFShownGlyphDefect::Unresolved, code);
+            record(font, PDFShownGlyphDefect::Unresolved, code);
         }
     }
 
@@ -5119,13 +5121,21 @@ protected:
                 continue;
             }
 
-            record(*font, defect, item.cid);
+            record(font, defect, item.cid);
         }
     }
 
 private:
+    /// Invisible (Tr 3) and clip-only (Tr 7) text shows nothing, so OCR text layers
+    /// drawn with glyphless fonts are not audited.
     PDFFontPointer embeddedShownFont() const
     {
+        const TextRenderingMode mode = getGraphicState()->getTextRenderingMode();
+        if (!isTextRenderingModeFilled(mode) && !isTextRenderingModeStroked(mode))
+        {
+            return nullptr;
+        }
+
         const PDFFontPointer font = getGraphicState()->getTextFont();
         if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded() || font->getFontType() == FontType::Type3)
         {
@@ -5134,15 +5144,25 @@ private:
         return font;
     }
 
-    void record(const PDFFont& font, PDFShownGlyphDefect defect, CID code)
+    /// Entries are per font object, not per resource name: page and form resources
+    /// may bind the same name to different fonts.
+    void record(const PDFFontPointer& font, PDFShownGlyphDefect defect, CID code)
     {
-        ShownGlyphDefects& entry = m_defects[QString::fromLatin1(font.getFontId())];
-        entry.subtype = QString::number(static_cast<int>(font.getFontType()));
-        entry.composite = font.getFontType() == FontType::Type0;
-        entry.codesByDefect[shownGlyphDefectName(defect)].insert(code);
+        auto entry = std::find_if(m_defects.begin(), m_defects.end(), [&font](const ShownGlyphDefects& defects)
+                                  { return defects.font == font; });
+        if (entry == m_defects.end())
+        {
+            ShownGlyphDefects defects;
+            defects.font = font;
+            defects.fontName = QString::fromLatin1(font->getFontId());
+            defects.subtype = QString::number(static_cast<int>(font->getFontType()));
+            defects.composite = font->getFontType() == FontType::Type0;
+            entry = m_defects.insert(m_defects.end(), std::move(defects));
+        }
+        entry->codesByDefect[shownGlyphDefectName(defect)].insert(code);
     }
 
-    std::map<QString, ShownGlyphDefects> m_defects;
+    std::vector<ShownGlyphDefects> m_defects;
 };
 
 // LOW CONFIDENCE NOTE: DPI calculation uses getCurrentTransformationMatrix()
@@ -5303,7 +5323,7 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
         }
 
         const int pageNumber = int(pageIndex + 1);
-        std::map<QString, ShownGlyphDefects> pageDefects;
+        std::vector<ShownGlyphDefects> pageDefects;
         bool incomplete = false;
         QString incompleteReason;
         try
@@ -5314,6 +5334,12 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
             processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage*, const PDFStream* formStream)
                                                { processor.processFormStream(formStream); });
             pageDefects = processor.defects();
+            std::stable_sort(pageDefects.begin(), pageDefects.end(), [](const ShownGlyphDefects& left, const ShownGlyphDefects& right)
+                             { return left.fontName < right.fontName; });
+        }
+        catch (const PDFBudgetExceededException&)
+        {
+            throw;
         }
         catch (const PDFException& exception)
         {
@@ -5321,8 +5347,9 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
             incompleteReason = QString::fromUtf8(exception.what());
         }
 
-        for (const auto& [fontName, shown] : pageDefects)
+        for (const ShownGlyphDefects& shown : pageDefects)
         {
+            const QString& fontName = shown.fontName;
             QStringList defectNames;
             QStringList codeText;
             QJsonArray missingCodes;
