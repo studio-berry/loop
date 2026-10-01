@@ -308,4 +308,81 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     return result;
 }
 
+PDFOverprintProbe::PDFOverprintProbe(PDFDocumentSession* session) :
+    m_session(session)
+{
+}
+
+PDFOverprintProbeResult PDFOverprintProbe::probe(const PDFPage* page, int dpi, qint64 maxRasterPixels)
+{
+    PDFOverprintProbeResult result;
+    if (!page || !m_session || dpi <= 0)
+    {
+        return result;
+    }
+
+    PDFDocument* document = m_session->getDocument();
+    if (!document)
+    {
+        return result;
+    }
+
+    const QRectF analysisBox = resolveAnalysisBox(page, PDFInkCoverageAnalysisBox::Bleed);
+    if (!isUsableBox(analysisBox))
+    {
+        return result;
+    }
+
+    const PageRotation pageRotation = page->getPageRotation();
+    const QRectF rotatedAnalysisBox = PDFPage::getRotatedBox(analysisBox, pageRotation).normalized();
+    const qreal pointToPixel = static_cast<qreal>(dpi) / 72.0;
+    const double widthReal = std::ceil(rotatedAnalysisBox.width() * pointToPixel);
+    const double heightReal = std::ceil(rotatedAnalysisBox.height() * pointToPixel);
+    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0
+        || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    {
+        return result;
+    }
+
+    const int width = qMax(1, static_cast<int>(widthReal));
+    const int height = qMax(1, static_cast<int>(heightReal));
+    if (maxRasterPixels > 0 && static_cast<qint64>(width) * static_cast<qint64>(height) > maxRasterPixels)
+    {
+        result.budgetExceeded = true;
+        return result;
+    }
+
+    PDFTransparencyRendererSettings rendererSettings;
+    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SaveOriginalProcessImage, true);
+    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::ActiveColorMask, false);
+    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SeparationSimulation, true);
+    rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
+    rendererSettings.renderPolicy = PDFRenderPolicy::forPreflightAnalysis();
+
+    const QSize imageSize(width, height);
+    const QTransform pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(
+        rotatedAnalysisBox,
+        QRect(QPoint(0, 0), imageSize),
+        pageRotation);
+    PDFInkMapper inkMapper(nullptr, document);
+    inkMapper.createSpotColors(true);
+
+    PDFTransparencyRenderer renderer(page,
+                                     document,
+                                     m_session->getFontCache(),
+                                     m_session->getCMS(),
+                                     m_session->getOptionalContentActivity(),
+                                     &inkMapper,
+                                     rendererSettings,
+                                     pagePointToDevice);
+    renderer.beginPaint(imageSize);
+    renderer.processContents();
+    renderer.endPaint();
+
+    result.rendered = true;
+    result.diagnostics = renderer.getRenderDiagnostics();
+    result.observation = renderer.getOverprintObservation();
+    return result;
+}
+
 }   // namespace pdf

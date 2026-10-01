@@ -37,6 +37,7 @@
 #include <QMap>
 #include <QRectF>
 #include <QSet>
+#include "pdfinkcoverageprobe.h"
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -455,6 +456,9 @@ private:
     const PDFOperationControl* m_operationControl = nullptr;
     std::map<QString, CheckRunner> m_checks;
     PDFEvidenceGraph m_activeGraph;
+    /// Compositor overprint probes of the current run, keyed by zero-based page index, so
+    /// white-overprint and transparency-risk render each page once between them.
+    std::map<int, PDFOverprintProbeResult> m_overprintProbes;
 };
 
 }   // namespace pdf

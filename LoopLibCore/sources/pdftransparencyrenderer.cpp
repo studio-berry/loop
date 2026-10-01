@@ -2689,6 +2689,15 @@ void PDFTransparencyRenderer::performEndTransparencyGroup(ProcessOrder order, co
         const PDFFloatBitmap::OverprintMode selectedOverprintMode = containsOverprintContent
             ? selectBlendOverprintMode(overprintMode, sourceData.containsFilling, sourceData.containsStroking)
             : PDFFloatBitmap::OverprintMode::NoOveprint;
+        if (selectedOverprintMode != PDFFloatBitmap::OverprintMode::NoOveprint)
+        {
+            const std::vector<uint8_t>& groupContentMask = sourceData.contentMask;
+            const size_t groupWidth = sourceData.immediateBackdrop.getWidth();
+            observeOverprint(sourceData.immediateBackdrop, getPaintRect(),
+                             [&groupContentMask, groupWidth](size_t x, size_t y)
+                             { return y * groupWidth + x < groupContentMask.size() ? groupContentMask[y * groupWidth + x] : uint8_t(0); },
+                             enabledContentMask, sourceData.blendMode, static_cast<PDFReal>(sourceData.alphaFill), sourceData.group.knockout);
+        }
 
         PDFFloatBitmap::blend(sourceData.immediateBackdrop, targetData.immediateBackdrop, *getBackdrop(), *getInitialBackdrop(), *sourceData.softMask.getSoftMask(),
                               sourceData.alphaIsShape, sourceData.alphaFill, sourceData.blendMode, sourceData.group.knockout, selectedOverprintMode, getPaintRect(),
@@ -3189,6 +3198,14 @@ void PDFTransparencyRenderer::flushDrawBuffer()
         const PDFFloatBitmap::OverprintMode selectedOverprintMode = selectBlendOverprintMode(overprintMode,
                                                                                              containsFilling,
                                                                                              containsStroking);
+        if (selectedOverprintMode != PDFFloatBitmap::OverprintMode::NoOveprint)
+        {
+            const uint8_t enabledMask = (overprintMode.overprintFilling ? 0x01 : 0x00) | (overprintMode.overprintStroking ? 0x02 : 0x00);
+            observeOverprint(m_drawBuffer, m_drawBuffer.getModifiedRect(),
+                             [this](size_t x, size_t y)
+                             { return m_drawBuffer.getPixelContentMask(x, y); },
+                             enabledMask, getGraphicState()->getBlendMode(), 1.0, isTransparencyGroupKnockout());
+        }
 
         PDFFloatBitmap::blend(m_drawBuffer, *getImmediateBackdrop(), *getBackdrop(), *getInitialBackdrop(), *getPainterState()->softMask.getSoftMask(),
                               getGraphicState()->getAlphaIsShape(), 1.0f, getGraphicState()->getBlendMode(), isTransparencyGroupKnockout(),
@@ -3210,6 +3227,70 @@ void PDFTransparencyRenderer::flushDrawBuffer()
         }
 
         m_drawBuffer.clear();
+    }
+}
+
+void PDFTransparencyRenderer::observeOverprint(const PDFFloatBitmap& source,
+                                               const QRect& rect,
+                                               const std::function<uint8_t(size_t, size_t)>& contentMask,
+                                               uint8_t enabledContentMask,
+                                               BlendMode blendMode,
+                                               PDFReal alpha,
+                                               bool knockout)
+{
+    const PDFPixelFormat format = source.getPixelFormat();
+    const QRect bounded = rect.intersected(QRect(0, 0, int(source.getWidth()), int(source.getHeight())));
+    if (bounded.isEmpty() || !format.hasProcessColors())
+    {
+        return;
+    }
+
+    constexpr PDFColorComponent Tolerance = 0.005f;
+    const bool subtractive = format.hasProcessColorsSubtractive();
+    const bool plainBlend = blendMode == BlendMode::Normal || blendMode == BlendMode::Compatible;
+    const uint8_t shapeChannel = format.getShapeChannelIndex();
+    const uint8_t opacityChannel = format.getOpacityChannelIndex();
+
+    for (int y = bounded.top(); y <= bounded.bottom(); ++y)
+    {
+        for (int x = bounded.left(); x <= bounded.right(); ++x)
+        {
+            if ((contentMask(size_t(x), size_t(y)) & enabledContentMask) == 0)
+            {
+                continue;
+            }
+
+            PDFConstColorBuffer pixel = source.getPixel(size_t(x), size_t(y));
+            if (shapeChannel != PDFPixelFormat::INVALID_CHANNEL_INDEX && pixel[shapeChannel] <= 0.0f)
+            {
+                continue;
+            }
+
+            ++m_overprintObservation.overprintPixels;
+
+            bool white = true;
+            for (uint8_t channel = format.getProcessColorChannelIndexStart(); channel < format.getProcessColorChannelIndexEnd() && white; ++channel)
+            {
+                white = subtractive ? pixel[channel] <= Tolerance : pixel[channel] >= 1.0f - Tolerance;
+            }
+            if (format.hasSpotColors())
+            {
+                for (uint8_t channel = format.getSpotColorChannelIndexStart(); channel < format.getSpotColorChannelIndexEnd() && white; ++channel)
+                {
+                    white = pixel[channel] <= Tolerance;
+                }
+            }
+            if (white)
+            {
+                ++m_overprintObservation.whiteOverprintPixels;
+            }
+
+            const bool partialOpacity = opacityChannel != PDFPixelFormat::INVALID_CHANNEL_INDEX && pixel[opacityChannel] < 1.0f - Tolerance;
+            if (!plainBlend || alpha < 1.0 - Tolerance || partialOpacity || knockout)
+            {
+                ++m_overprintObservation.transparentOverprintPixels;
+            }
+        }
     }
 }
 
