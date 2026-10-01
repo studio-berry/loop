@@ -4655,7 +4655,8 @@ public:
                            const PDFOptionalContentActivity* optionalContentActivity,
                            const PDFMeshQualitySettings& meshQualitySettings,
                            PDFProcessingBudget* budget,
-                           qreal offPageAllowance) :
+                           qreal offPageAllowance,
+                           bool trackOcclusion) :
         PDFPageContentProcessor(page,
                                 document,
                                 fontCache,
@@ -4663,7 +4664,8 @@ public:
                                 optionalContentActivity,
                                 QTransform(),
                                 meshQualitySettings,
-                                budget)
+                                budget),
+        m_trackOcclusion(trackOcclusion)
     {
         if (page)
         {
@@ -4800,6 +4802,12 @@ protected:
                                 QStringLiteral("mark lies outside the effective page/bleed box"), false });
         }
 
+        // Occlusion subtracts paths pairwise, so it only runs for the check that reports it.
+        if (!m_trackOcclusion)
+        {
+            return;
+        }
+
         if (fill)
         {
             const bool opaque = state->getAlphaFilling() >= 1.0;
@@ -4917,6 +4925,7 @@ private:
     }
 
     QRectF m_toleratedBounds;
+    bool m_trackOcclusion = false;
     ClipState m_clip;
     QList<ClipState> m_clipStack;
     QList<PaintedItem> m_items;
@@ -4957,7 +4966,8 @@ void runHiddenContentCheck(PDFDocumentSession* session,
                                          &printActivity,
                                          meshQualitySettings,
                                          session->getProcessingBudget(),
-                                         check.amountPt);
+                                         check.amountPt,
+                                         check.id == QStringLiteral("obscured-content"));
         processor.processContents();
 
         for (const HiddenContentFinding& source : processor.findings())
