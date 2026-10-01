@@ -1175,9 +1175,24 @@ int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
     return -1;
 }
 
+bool hasStandardsConversion(const PDFPageMasterExportJob& job)
+{
+    if (job.hasStandardConversionSettings)
+        return true;
+    if (!job.hasActionList)
+        return false;
+    for (const auto& step : job.actionList.steps)
+    {
+        const auto* operation = PDFRepairRegistry::instance().find(step.operationId);
+        if (operation && operation->id() == QLatin1String("standards-convert"))
+            return true;
+    }
+    return false;
+}
+
 bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObject& manifest, const QString& fileName)
 {
-    if (!job.resume)
+    if (!job.resume || hasStandardsConversion(job))
     {
         return false;
     }
@@ -1409,6 +1424,17 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 stepProgress->step();
             }
             continue;
+        }
+
+        if (job.resume && hasStandardsConversion(job))
+        {
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.remove(QStringLiteral("independent_validation"));
+            output.remove(QStringLiteral("governed"));
+            output.remove(QStringLiteral("action_list_result"));
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
         }
 
         PDFOperationResult currentResult = manipulator.assemble(job.assembledDocuments[index]);
