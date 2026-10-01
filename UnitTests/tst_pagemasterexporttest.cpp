@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfpagemasterexport.h"
+#include "independentvalidatorfixture.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfglobal.h"
@@ -65,6 +66,7 @@ class PageMasterExportTest : public QObject
 
 private slots:
     void pipelineOrder_geometryThenBleedThenWrite();
+    void standardValidationFailurePreservesExistingOutput();
     void pipelineOrder_skipsDisabledStages();
     void multiOutput_writesAll();
     void failure_assembleError_writesNothing();
@@ -417,6 +419,32 @@ qint64 readVmHWMKilobytes()
 }
 
 }   // namespace
+
+void PageMasterExportTest::standardValidationFailurePreservesExistingOutput()
+{
+    QTemporaryDir directory;
+    const auto settings = independent_test::settings(independent_test::writeVeraPdfScript(directory, QStringLiteral("false"), QStringLiteral("PDF/A-2B validation profile"), false));
+    QVERIFY(!settings.outputIntentIccData.isEmpty());
+    const auto source = buildFilledPage();
+    const QString path = directory.filePath(QStringLiteral("output.pdf"));
+    QFile existing(path);
+    QVERIFY(existing.open(QIODevice::WriteOnly));
+    existing.write("existing destination");
+    existing.close();
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, source);
+    job.outputFileNames.push_back(path);
+    job.overwriteFiles = true;
+    job.standardConversionSettings = settings;
+    job.hasStandardConversionSettings = true;
+    const auto result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(existing.open(QIODevice::ReadOnly));
+    QCOMPARE(existing.readAll(), QByteArrayLiteral("existing destination"));
+    const auto output = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+    QCOMPARE(output.value(QStringLiteral("independent_validation")).toArray().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("rejected"));
+}
 
 void PageMasterExportTest::pipelineOrder_geometryThenBleedThenWrite()
 {

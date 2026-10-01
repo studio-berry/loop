@@ -16,6 +16,15 @@ on:
         type: string
         default: ''
 
+      independent_oracle_url:
+        required: false
+        type: string
+        default: ''
+      independent_oracle_sha256:
+        required: false
+        type: string
+        default: ''
+
 permissions:
   contents: read
 
@@ -407,6 +416,51 @@ jobs:
         working-directory: loop/build
         run: |
           ctest --output-on-failure
+
+      - name: Pin qualification measurement interpreter
+        if: ${{ inputs.independent_oracle_url != '' }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned independent oracle distribution
+        if: ${{ inputs.independent_oracle_url != '' }}
+        working-directory: loop
+        shell: pwsh
+        env:
+          ORACLE_URL: ${{ inputs.independent_oracle_url }}
+          ORACLE_SHA256: ${{ inputs.independent_oracle_sha256 }}
+        run: |
+          python -m scripts.qualification.install_oracle_bundle --url "$env:ORACLE_URL" --sha256 "$env:ORACLE_SHA256" --destination "$env:RUNNER_TEMP/independent-oracles"
+          if ($LASTEXITCODE -ne 0) { throw "Pinned oracle provisioning failed" }
+
+      - name: Install pinned rendering measurement wheel
+        if: ${{ inputs.independent_oracle_url != '' }}
+        shell: pwsh
+        run: |
+          python -m pip install --no-index --no-deps --target "$env:RUNNER_TEMP/independent-python" "$env:LOOP_PILLOW_WHEEL"
+          if ($LASTEXITCODE -ne 0) { throw "Pinned measurement dependency provisioning failed" }
+
+      - name: Qualify independent standards and rendering
+        if: ${{ inputs.independent_oracle_url != '' }}
+        working-directory: loop
+        shell: pwsh
+        env:
+          ORACLE_SHA256: ${{ inputs.independent_oracle_sha256 }}
+          QUALIFICATION_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PYTHONPATH: ${{ runner.temp }}/independent-python
+        run: |
+          python -m scripts.qualification.run_independent_packet --source-sha "${{ github.sha }}" --build build --output "$env:RUNNER_TEMP/independent-packet" --distribution "$env:RUNNER_TEMP/independent-oracles" --distribution-sha256 "$env:ORACLE_SHA256" --run-url "$env:QUALIFICATION_RUN_URL"
+          if ($LASTEXITCODE -ne 0) { throw "Independent qualification failed or is incomplete" }
+
+      - name: Retain independent reproduction packet
+        if: ${{ always() && inputs.independent_oracle_url != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: independent-packet-${{ runner.os }}
+          path: ${{ runner.temp }}/independent-packet
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Install independent validators
         if: ${{ !inputs.fast }}

@@ -25,6 +25,7 @@
 #include "pdfpreflightverdict.h"
 #include "pdfrepairoperation.h"
 #include "pdfstandardconversion.h"
+#include "independentvalidatorfixture.h"
 
 #include <QPainter>
 
@@ -99,6 +100,8 @@ class RepairOperationTest : public QObject
 
 private slots:
     void builtInOperations_areRegistered();
+    void standardsConversionRejectsLegacyContract();
+    void standardsTransactionRejectsFinalArtifact();
     void builtInOperations_declareSavePolicies();
     void everyRegisteredOperationDeclaresItsSavePolicy();
     void noNonIncrementalOperationCanBeAppendedToASignedSource();
@@ -122,6 +125,45 @@ private slots:
     void declaredValidators_rejectMalformedProfileBeforePublish();
     void declaredValidators_failClosedOnIncompleteInspection();
 };
+
+void RepairOperationTest::standardsConversionRejectsLegacyContract()
+{
+    const auto* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("standards-convert"));
+    QVERIFY(operation);
+    QCOMPARE(operation->version(), 2);
+    pdf::PDFRepairPlan plan;
+    const auto result = operation->analyze(buildPreflightCleanDocument(), QJsonObject{ { QStringLiteral("target"), QStringLiteral("pdfa-2b") } }, &plan);
+    QVERIFY(!result);
+    QVERIFY(result.getErrorMessage().contains(QLatin1String("migrate")));
+}
+
+void RepairOperationTest::standardsTransactionRejectsFinalArtifact()
+{
+    QTemporaryDir directory;
+    const auto settings = independent_test::settings(independent_test::writeVeraPdfScript(directory, QStringLiteral("false"), QStringLiteral("PDF/A-2B validation profile"), false));
+    QVERIFY(!settings.outputIntentIccData.isEmpty());
+    const auto source = buildPreflightCleanDocument();
+    const QByteArray sourceBytes = writeSerializedBytes(source);
+    pdf::PDFRepairTransactionOptions options;
+    options.requirePreview = false;
+    options.requirePostflight = false;
+    pdf::PDFRepairTransaction transaction(source, options);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("standards-convert")), independent_test::parameters(settings)));
+    const auto applied = transaction.apply();
+    QVERIFY2(applied, qPrintable(applied.getErrorMessage()));
+    const QString path = directory.filePath(QStringLiteral("candidate.pdf"));
+    QFile existing(path);
+    QVERIFY(existing.open(QIODevice::WriteOnly));
+    existing.write("existing destination");
+    existing.close();
+    pdf::PDFDocument reopened;
+    QVERIFY(!transaction.serializeCandidate(path, &reopened));
+    QCOMPARE(transaction.artifactValidation().size(), 1);
+    QCOMPARE(transaction.artifactValidation().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("rejected"));
+    QVERIFY(existing.open(QIODevice::ReadOnly));
+    QCOMPARE(existing.readAll(), QByteArrayLiteral("existing destination"));
+    QCOMPARE(writeSerializedBytes(source), sourceBytes);
+}
 
 void RepairOperationTest::builtInOperations_areRegistered()
 {

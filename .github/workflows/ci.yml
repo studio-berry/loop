@@ -11,6 +11,23 @@ on:
       - dev
       - unstable
   workflow_dispatch:
+    inputs:
+      linux_oracle_url:
+        description: Reviewed immutable Linux oracle ZIP URL
+        required: false
+        type: string
+      linux_oracle_sha256:
+        description: Linux oracle distribution SHA-256
+        required: false
+        type: string
+      windows_oracle_url:
+        description: Reviewed immutable Windows oracle ZIP URL
+        required: false
+        type: string
+      windows_oracle_sha256:
+        description: Windows oracle distribution SHA-256
+        required: false
+        type: string
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -115,10 +132,29 @@ jobs:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
+    with:
+      independent_oracle_url: ${{ inputs.linux_oracle_url || '' }}
+      independent_oracle_sha256: ${{ inputs.linux_oracle_sha256 || '' }}
 
   windows:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
+    with:
+      independent_oracle_url: ${{ inputs.windows_oracle_url || '' }}
+      independent_oracle_sha256: ${{ inputs.windows_oracle_sha256 || '' }}
     secrets:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+  independent-integrity:
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && (inputs.linux_oracle_url != '' || inputs.windows_oracle_url != '') }}
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: independent-packet-*
+          path: packets
+      - name: Verify both source-bound qualification lanes
+        run: python3 -m scripts.qualification.verify_independent_packets --source-sha "${{ github.sha }}" packets/independent-packet-Linux packets/independent-packet-Windows

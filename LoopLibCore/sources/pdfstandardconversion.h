@@ -26,9 +26,11 @@
 #include "pdfdocument.h"
 #include "pdfglobal.h"
 #include "pdftransparencyflattener.h"
-#include "pdfutils.h"   // PDFOperationResult, returned by preview()/apply() below
+#include "pdfoperationcontrol.h"
+#include "pdfutils.h"   // PDFOperationResult, returned by preview()/prepare() below
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QStringList>
 #include <QVector>
@@ -79,7 +81,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionSettings
 /// True when \p settings ask for live transparency to be flattened, following
 /// the target default only when the policy is Automatic. Preview, the
 /// preflight-blocker classification, the operation plan's expected changes, and
-/// the apply path must all use this one answer.
+/// preparation path must all use this one answer.
 LOOPLIBCORESHARED_EXPORT bool flattensTransparency(const PDFStandardConversionSettings& settings);
 
 struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionChange
@@ -108,6 +110,30 @@ struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionReport
     QJsonObject toJson() const;
 };
 
+enum class PDFArtifactValidationStatus
+{
+    Passed,
+    Rejected,
+    Incomplete
+};
+
+struct LOOPLIBCORESHARED_EXPORT PDFArtifactValidationResult
+{
+    PDFArtifactValidationStatus status = PDFArtifactValidationStatus::Incomplete;
+    QString target;
+    QString artifactSha256;
+    qint64 artifactBytes = 0;
+    QString validatorProgram;
+    QString validatorVersion;
+    QString reportSha256;
+    QString reason;
+    QJsonObject evidence;
+
+    QJsonObject toJson() const;
+};
+
+LOOPLIBCORESHARED_EXPORT PDFStandardConversionSettings standardConversionSettings(const QJsonObject& parameters);
+
 class LOOPLIBCORESHARED_EXPORT PDFStandardConversion
 {
 public:
@@ -115,9 +141,24 @@ public:
                                       const PDFStandardConversionSettings& settings,
                                       PDFStandardConversionReport* report);
 
-    static PDFOperationResult apply(PDFDocument* document,
-                                    const PDFStandardConversionSettings& settings,
-                                    PDFStandardConversionReport* report = nullptr);
+    static PDFOperationResult prepare(PDFDocument* document,
+                                      const PDFStandardConversionSettings& settings,
+                                      PDFStandardConversionReport* report = nullptr);
+
+    static PDFArtifactValidationResult validateArtifact(const QByteArray& bytes,
+                                                        const PDFStandardConversionSettings& settings,
+                                                        const PDFOperationControl* control = nullptr);
+    static PDFOperationResult validateArtifacts(const QByteArray& bytes,
+                                                const QList<PDFStandardConversionSettings>& requirements,
+                                                QJsonArray* evidence,
+                                                const PDFOperationControl* control = nullptr);
+    static PDFOperationResult writeCandidate(const PDFDocument& document,
+                                             const QString& path,
+                                             const QList<PDFStandardConversionSettings>& requirements,
+                                             PDFDocument* reopened,
+                                             QByteArray* bytes,
+                                             QJsonArray* evidence,
+                                             const PDFOperationControl* control = nullptr);
 };
 
 }   // namespace pdf

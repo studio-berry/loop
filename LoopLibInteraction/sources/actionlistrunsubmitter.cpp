@@ -157,8 +157,9 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
             {
                 QTemporaryDir publicationDirectory;
                 const QString publicationPath = publicationDirectory.filePath(QStringLiteral("editor-candidate.pdf"));
-                pdf::PDFDocumentWriter writer(nullptr, context.operationControl());
-                if (!publicationDirectory.isValid() || !writer.write(publicationPath, &candidate, true))
+                if (!publicationDirectory.isValid() || !pdf::PDFStandardConversion::writeCandidate(
+                                                           candidate, publicationPath, outcome->executionResult.standardValidationRequirements,
+                                                           &candidate, nullptr, &outcome->executionResult.independentValidation, context.operationControl()))
                 {
                     outcome->ok = false;
                     outcome->executionResult.status = QStringLiteral("failed");
