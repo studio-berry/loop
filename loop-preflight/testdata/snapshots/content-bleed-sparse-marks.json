@@ -6,12 +6,21 @@
         },
         {
             "id": "content-bleed",
-            "status": "ok"
+            "status": "warning"
         }
     ],
     "errors": [
     ],
     "fixups_available": [
+        {
+            "description": "Extend page boxes / artwork to provide bleed",
+            "id": "add-bleed",
+            "params": {
+                "amount_pt": 9,
+                "mode": "mirror"
+            },
+            "safe": false
+        }
     ],
     "inspection_complete": true,
     "pass": true,
@@ -28,5 +37,33 @@
         ]
     },
     "warnings": [
+        {
+            "bbox": [
+                9,
+                9,
+                207,
+                207
+            ],
+            "check_id": "content-bleed",
+            "message": "Artwork does not extend into bleed margin on left, right, top, bottom",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "content-bleed"
+        },
+        {
+            "bbox": [
+                18,
+                18,
+                198,
+                198
+            ],
+            "check_id": "content-bleed",
+            "message": "Page is a candidate for the add-bleed fixup",
+            "page": 1,
+            "scope": "page",
+            "severity": "info",
+            "type": "needs-auto-bleed"
+        }
     ]
 }
