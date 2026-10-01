@@ -18,7 +18,7 @@ Approved isolated provisioning supplied qpdf 12.4.2, veraPDF 1.28.2, MSYS2 Poppl
 
 ## Final review
 
-The review removed unused includes and stale report state, retained existing publication gates, and checked that later serialization and mutations cannot reuse earlier artifact evidence. Native execution exposed and corrected a Windows color-space link boundary, missing bitmap capture flag, and noncanonical target name in the new test helper. Separation export now composites ink opacity onto white paper, and failed publication retries clear earlier artifact evidence. It also closed a reproduction-packet gap by retaining measured rendering PDFs and checking their identities. 
+The review removed unused includes and stale report state, retained existing publication gates, and checked that later serialization and mutations cannot reuse earlier artifact evidence. Native execution exposed and corrected a Windows color-space link boundary, missing bitmap capture flag, and noncanonical target name in the new test helper. Separation export now composites ink opacity onto white paper, and failed publication retries clear earlier artifact evidence. It also closed a reproduction-packet gap by retaining measured rendering PDFs and checking their identities.
 
 The final style pass removed unused includes and reviewed comments and helpers for redundant explanation, needless wrappers and local style drift. Required cancellation, failure, provenance and validation checks were preserved.
 
