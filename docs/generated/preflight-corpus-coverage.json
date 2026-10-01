@@ -120,6 +120,7 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
+        "font-glyph-missing",
         "font-integrity-corrupt"
       ],
       "uninspected_fixtures": []
@@ -129,7 +130,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "hidden-layers"
+        "hidden-layers",
+        "ocmd-print-divergence"
       ],
       "uninspected_fixtures": []
     },
@@ -149,6 +151,7 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
+        "ink-coverage-isolated-region",
         "ink-coverage-over"
       ],
       "uninspected_fixtures": []
@@ -274,6 +277,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 78,
+  "source_fixtures": 81,
   "unattributed_findings": 1
 }

@@ -83,6 +83,14 @@ defects with the font resource and object reference, and marks unsupported
 formats as incomplete rather than clean. Existing `embedded-fonts` ids and
 severity behavior are unchanged.
 
+It also audits glyph coverage: every character code or CID shown in page
+content, Form XObjects and annotation appearance streams is resolved through
+the font's encoding and cmap, and a code that resolves to no glyph, to
+`.notdef`, or to an empty outline for a visible character is reported per page
+and font with `evidence.missing_codes`. Composite CID 0 (default whitespace) and
+Type 3 glyph procedures are not reported; a page whose content cannot
+be processed is reported with `inspection_complete: false`.
+
 ## Hidden and non-printing content
 
 The detection-only checks `invisible-content`, `hidden-layers`,
@@ -93,6 +101,15 @@ findings. `obscured-content` is deliberately reported at `info` severity with
 is observed; it does not claim full compositing equivalence. Off-page content
 is tolerated inside the page BleedBox, or inside the configured allowance when
 no BleedBox exists. These checks do not register corrective fixups.
+
+`hidden-layers` evaluates every optional-content governor it meets under both
+the View and the Print usage, with the default configuration's `/AS` events
+applied: groups and membership dictionaries (`/P` AnyOn, AllOn, AnyOff, AllOff
+and `/VE` expressions) on marked content, on Form XObject `/OC` entries and on
+annotation `/OC` entries. It reports membership hidden in print and content
+that differs between screen and print, in either direction, with
+`evidence.view_state`, `evidence.print_state` and `evidence.policy`. A governor
+that cannot be evaluated is reported with `inspection_complete: false`.
 
 The `transparency-risk` check has no additional parameters; it observes
 transparency groups, blend modes, and blend-space crossings.
@@ -188,8 +205,10 @@ connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
 is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
 The finding is emitted only when the measured value is strictly greater than the
 threshold; an exact boundary is clean. Optional parameters are `probe_dpi`
-(default 150), `min_region_area_pct` (default 0.05% of the analyzed box),
-`max_regions_per_page` (default 20; `0` deliberately suppresses region
+(default 150), `min_region_area_mm2` (default 0.25 mm^2, a physical floor of about a
+0.5 mm square that a press reproduces as a distinct solid; the deprecated
+`min_region_area_pct` is accepted but ignored, because a page-relative floor let
+an isolated over-limit element pass clean on a large page), `max_regions_per_page` (default 20; `0` deliberately suppresses region
 findings), and `max_raster_pixels` (default 250,000,000). The analysis is
 skipped and marked incomplete when that raster budget is exceeded.
 `analysis_box` defaults to `bleed` and falls
@@ -204,7 +223,12 @@ This check is deliberately not enabled by `loop-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.
 Pages exceeding the raster pixel budget emit an informational page-scope finding,
 set the check status to `skipped`, and set `inspection_complete` to `false`;
-budget exhaustion never silently passes as a clean inspection.
+budget exhaustion never silently passes as a clean inspection. The
+`min_region_area_mm2` floor is physical, so a small rich-black element is
+reported on an A3 page exactly as on an A6 card. A region needs four raster pixels
+to be told apart from antialiasing; when `probe_dpi` is too coarse for that
+(the pixel area times four exceeds `min_region_area_mm2`) each page reports an
+informational `check-incomplete` finding instead of passing clean.
 
 ## Image downsampling fixup
 
@@ -581,6 +605,7 @@ Corpus-gap fixtures added for #668 (each isolates one previously unexercised che
 | `obscured-content.pdf` | test-obscured-content | info | `obscured-content` |
 | `hidden-layers.pdf` | test-hidden-layers | warning | `hidden-layers` |
 | `font-integrity-corrupt.pdf` | test-font-integrity | fail | `font-integrity` |
+| `font-glyph-missing.pdf` | test-font-integrity | fail | `font-integrity` (shown codes absent from the subset) |
 | `thin-parts-clear.pdf` | test-thin-parts-clear | fail | `thin-parts` (not near-threshold) |
 | `blank-page.pdf` | test-dieline-required | fail | `dieline` |
 | `blank-page.pdf` | test-processing-steps-required | fail | `processing-steps` |

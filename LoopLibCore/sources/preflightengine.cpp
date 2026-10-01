@@ -74,6 +74,7 @@
 #include <exception>
 #include <functional>
 #include <limits>
+#include <map>
 #include <set>
 
 namespace pdf
@@ -2327,7 +2328,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                          QList<PreflightFinding>& warnings)
 {
     const QString analysisBox = check.restrictions.pageBox.value_or(check.inkCoverageAnalysisBox);
-    auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false)
+    auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false, const QJsonObject& extraEvidence = QJsonObject())
     {
         PreflightFinding finding;
         finding.scope = pageNumber > 0
@@ -2343,6 +2344,10 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             { QStringLiteral("analysis_box"), analysisBox },
             { QStringLiteral("max_raster_pixels"), check.maxRasterPixels }
         };
+        for (auto it = extraEvidence.begin(); it != extraEvidence.end(); ++it)
+        {
+            finding.evidence.insert(it.key(), it.value());
+        }
         finding.message = pageNumber > 0
                               ? PDFTranslationContext::tr("Page %1 skipped: %2").arg(pageNumber).arg(reason)
                               : PDFTranslationContext::tr("Ink coverage skipped: %1").arg(reason);
@@ -2365,7 +2370,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     PDFInkCoverageProbeSettings probeSettings;
     probeSettings.maxInkCoverage = check.maxInkPct / 100.0;
     probeSettings.dpi = check.probeDpi;
-    probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
+    probeSettings.minRegionAreaMM2 = check.minRegionAreaMm2;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
     probeSettings.maxRasterPixels = check.maxRasterPixels;
     if (analysisBox == QStringLiteral("trim"))
@@ -2421,6 +2426,21 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                                        : result.diagnostics.reasons.join(QStringLiteral("; "));
             emitIncomplete(int(pageIndex + 1), reason);
             continue;
+        }
+
+        if (result.overLimitAreaMM2 > 0.0 && check.minRegionAreaMm2 < result.minResolvableAreaMM2)
+        {
+            emitIncomplete(int(pageIndex + 1),
+                           PDFTranslationContext::tr("probe_dpi %1 cannot resolve min_region_area_mm2 %2 (the raster resolves %3 mm^2); raise probe_dpi")
+                               .arg(check.probeDpi)
+                               .arg(check.minRegionAreaMm2)
+                               .arg(result.minResolvableAreaMM2),
+                           false,
+                           QJsonObject{
+                               { QStringLiteral("min_region_area_mm2"), check.minRegionAreaMm2 },
+                               { QStringLiteral("min_resolvable_area_mm2"), result.minResolvableAreaMM2 },
+                               { QStringLiteral("pixel_area_mm2"), result.pixelAreaMM2 },
+                               { QStringLiteral("probe_dpi"), check.probeDpi } });
         }
 
         int regionRank = 0;
@@ -4645,6 +4665,136 @@ struct HiddenContentFinding
     bool incomplete = false;
 };
 
+/// What a single optional-content governor (an OCG or a membership dictionary)
+/// resolves to under the view and print usages, with the default configuration's
+/// /AS events applied for each.
+struct OptionalContentGovernorReport
+{
+    QString source;   // xobject, marked-content or annotation
+    QString kind;   // ocg or ocmd
+    QString policy;   // AnyOn, AllOn, AnyOff, AllOff or VE; empty for a group
+    QStringList groups;
+    OCState viewState = OCState::Unknown;
+    OCState printState = OCState::Unknown;
+    bool incomplete = false;
+    QString reason;
+};
+
+QString optionalContentGroupLabel(const PDFOptionalContentProperties* properties, const PDFObjectReference& reference)
+{
+    if (properties && properties->hasOptionalContentGroup(reference))
+    {
+        const QString name = properties->getOptionalContentGroup(reference).getName();
+        if (!name.isEmpty())
+        {
+            return name;
+        }
+    }
+    return QStringLiteral("object %1 %2").arg(reference.objectNumber).arg(reference.generation);
+}
+
+OptionalContentGovernorReport evaluateOptionalContentGovernor(const PDFDocument* document,
+                                                              const PDFObject& governor,
+                                                              const PDFOptionalContentActivity& viewActivity,
+                                                              const PDFOptionalContentActivity& printActivity)
+{
+    OptionalContentGovernorReport report;
+    const PDFOptionalContentProperties* properties = printActivity.getProperties();
+
+    if (governor.isReference() && properties && properties->hasOptionalContentGroup(governor.getReference()))
+    {
+        const PDFObjectReference reference = governor.getReference();
+        report.kind = QStringLiteral("ocg");
+        report.groups = QStringList{ optionalContentGroupLabel(properties, reference) };
+        report.viewState = viewActivity.getState(reference);
+        report.printState = printActivity.getState(reference);
+        report.incomplete = report.viewState == OCState::Unknown || report.printState == OCState::Unknown;
+        if (report.incomplete)
+        {
+            report.reason = QStringLiteral("group state is unknown");
+        }
+        return report;
+    }
+
+    report.kind = QStringLiteral("ocmd");
+    const PDFObject resolved = document->getObject(governor);
+    if (!resolved.isDictionary())
+    {
+        report.incomplete = true;
+        report.reason = QStringLiteral("optional-content governor is not a group or membership dictionary");
+        return report;
+    }
+
+    const PDFDictionary* dictionary = resolved.getDictionary();
+    const bool hasExpression = dictionary->hasKey("VE");
+    const PDFObject policyObject = document->getObject(dictionary->get("P"));
+    report.policy = hasExpression ? QStringLiteral("VE")
+                                  : (policyObject.isName() ? QString::fromLatin1(policyObject.getString())
+                                                           : QStringLiteral("AnyOn"));
+
+    // Collect the groups the membership names, through /OCGs or the expression tree.
+    std::function<void(const PDFObject&, int)> collect = [&](const PDFObject& node, int depth)
+    {
+        if (depth > 32)
+        {
+            return;
+        }
+        if (node.isReference() && properties && properties->hasOptionalContentGroup(node.getReference()))
+        {
+            const QString label = optionalContentGroupLabel(properties, node.getReference());
+            if (!report.groups.contains(label))
+            {
+                report.groups.append(label);
+            }
+            return;
+        }
+        const PDFObject value = document->getObject(node);
+        if (value.isArray())
+        {
+            for (size_t index = 0; index < value.getArray()->getCount(); ++index)
+            {
+                collect(value.getArray()->getItem(index), depth + 1);
+            }
+        }
+    };
+    collect(dictionary->get(hasExpression ? "VE" : "OCGs"), 0);
+
+    PDFOptionalContentMembershipObject membership;
+    try
+    {
+        membership = PDFOptionalContentMembershipObject::create(document, governor);
+    }
+    catch (const PDFException& exception)
+    {
+        report.incomplete = true;
+        report.reason = QString::fromUtf8(exception.what());
+        return report;
+    }
+
+    if (!membership.isValid())
+    {
+        // A membership dictionary naming no groups and no expression shows its content.
+        if (!hasExpression && report.groups.isEmpty() && !dictionary->hasKey("OCGs"))
+        {
+            report.viewState = OCState::ON;
+            report.printState = OCState::ON;
+            return report;
+        }
+        report.incomplete = true;
+        report.reason = QStringLiteral("membership dictionary could not be parsed");
+        return report;
+    }
+
+    report.viewState = membership.evaluate(&viewActivity);
+    report.printState = membership.evaluate(&printActivity);
+    report.incomplete = report.viewState == OCState::Unknown || report.printState == OCState::Unknown;
+    if (report.incomplete)
+    {
+        report.reason = QStringLiteral("membership references a group with no known state");
+    }
+    return report;
+}
+
 class HiddenContentProcessor final : public PDFPageContentProcessor
 {
 public:
@@ -4653,6 +4803,7 @@ public:
                            const PDFFontCache* fontCache,
                            const PDFCMS* cms,
                            const PDFOptionalContentActivity* optionalContentActivity,
+                           const PDFOptionalContentActivity* viewActivity,
                            const PDFMeshQualitySettings& meshQualitySettings,
                            PDFProcessingBudget* budget,
                            qreal offPageAllowance,
@@ -4665,7 +4816,9 @@ public:
                                 QTransform(),
                                 meshQualitySettings,
                                 budget),
-        m_trackOcclusion(trackOcclusion)
+        m_trackOcclusion(trackOcclusion),
+        m_printActivity(optionalContentActivity),
+        m_viewActivity(viewActivity)
     {
         if (page)
         {
@@ -4679,10 +4832,46 @@ public:
     }
 
     const QList<HiddenContentFinding>& findings() const { return m_findings; }
+    const QList<OptionalContentGovernorReport>& governors() const { return m_governors; }
+
+    /// Records an annotation's /OC entry, which the content stream never reaches.
+    void inspectAnnotationGovernor(const PDFObject& governor, const QString& key)
+    {
+        recordGovernor(governor, QStringLiteral("annotation"), key);
+    }
 
 protected:
+    bool isContentSuppressedByOC(PDFObjectReference ocgOrOcmd) override
+    {
+        if (ocgOrOcmd.isValid())
+        {
+            recordGovernor(PDFObject::createReference(ocgOrOcmd),
+                           m_currentOperator == Operator::PaintXObject ? QStringLiteral("xobject")
+                                                                       : QStringLiteral("marked-content"),
+                           QStringLiteral("%1 %2").arg(ocgOrOcmd.objectNumber).arg(ocgOrOcmd.generation));
+        }
+        return PDFPageContentProcessor::isContentSuppressedByOC(ocgOrOcmd);
+    }
+
     void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
     {
+        if (tag == "OC")
+        {
+            // A direct membership dictionary is never a reference, so the content
+            // processor cannot evaluate it; do it here instead of treating it as visible.
+            PDFObject governor = properties;
+            QString key = QStringLiteral("inline");
+            if (properties.isName() && getPropertiesDictionary())
+            {
+                governor = getPropertiesDictionary()->get(properties.getString());
+                key = QStringLiteral("inline:%1").arg(QString::fromLatin1(properties.getString()));
+            }
+            if (governor.isDictionary())
+            {
+                recordGovernor(governor, QStringLiteral("marked-content"), key);
+            }
+        }
+
         if (tag != "OC" || !isContentSuppressed())
         {
             return;
@@ -4698,7 +4887,12 @@ protected:
                 reference = property.getReference();
             }
         }
-        if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        if (reference.isValid() && !getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        {
+            // A membership dictionary is reported with its evaluation by the governor report.
+            return;
+        }
+        if (reference.isValid())
         {
             name = getDocument()->getCatalog()->getOptionalContentProperties()->getOptionalContentGroup(reference).getName();
             if (name.isEmpty())
@@ -4717,6 +4911,11 @@ protected:
                                      ProcessOrder processOrder,
                                      const QByteArray& operatorAsText) override
     {
+        if (processOrder == ProcessOrder::BeforeOperation)
+        {
+            m_currentOperator = currentOperator;
+        }
+
         if (processOrder != ProcessOrder::BeforeOperation || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
         {
             return;
@@ -4924,6 +5123,18 @@ private:
         return result;
     }
 
+    void recordGovernor(const PDFObject& governor, const QString& source, const QString& key)
+    {
+        if (!m_viewActivity || !m_printActivity || !m_recordedGovernors.insert(source + QLatin1Char('|') + key).second)
+        {
+            return;
+        }
+
+        OptionalContentGovernorReport report = evaluateOptionalContentGovernor(getDocument(), governor, *m_viewActivity, *m_printActivity);
+        report.source = source;
+        m_governors.append(report);
+    }
+
     QRectF m_toleratedBounds;
     bool m_trackOcclusion = false;
     ClipState m_clip;
@@ -4933,6 +5144,11 @@ private:
     bool m_truncated = false;
     QStringList m_hiddenLayers;
     QList<HiddenContentFinding> m_findings;
+    QList<OptionalContentGovernorReport> m_governors;
+    std::set<QString> m_recordedGovernors;
+    const PDFOptionalContentActivity* m_printActivity = nullptr;
+    const PDFOptionalContentActivity* m_viewActivity = nullptr;
+    Operator m_currentOperator = Operator::Invalid;
 };
 
 void runHiddenContentCheck(PDFDocumentSession* session,
@@ -4947,6 +5163,7 @@ void runHiddenContentCheck(PDFDocumentSession* session,
 
     PDFDocument* document = session->getDocument();
     PDFOptionalContentActivity printActivity(document, OCUsage::Print, nullptr);
+    PDFOptionalContentActivity viewActivity(document, OCUsage::View, nullptr);
     const PDFCatalog* catalog = document->getCatalog();
     const PDFInteger pageCount = catalog->getPageCount();
     PDFMeshQualitySettings meshQualitySettings;
@@ -4964,11 +5181,81 @@ void runHiddenContentCheck(PDFDocumentSession* session,
                                          session->getFontCache(),
                                          session->getCMS(),
                                          &printActivity,
+                                         &viewActivity,
                                          meshQualitySettings,
                                          session->getProcessingBudget(),
                                          check.amountPt,
                                          check.id == QStringLiteral("obscured-content"));
         processor.processContents();
+
+        if (check.id == QStringLiteral("hidden-layers"))
+        {
+            for (const PDFObjectReference& annotationReference : page->getAnnotations())
+            {
+                const PDFObject annotation = document->getObjectByReference(annotationReference);
+                if (annotation.isDictionary() && annotation.getDictionary()->hasKey("OC"))
+                {
+                    processor.inspectAnnotationGovernor(annotation.getDictionary()->get("OC"),
+                                                        QStringLiteral("%1 %2").arg(annotationReference.objectNumber).arg(annotationReference.generation));
+                }
+            }
+
+            for (const OptionalContentGovernorReport& governor : processor.governors())
+            {
+                const bool divergent = !governor.incomplete && governor.viewState != governor.printState;
+                const bool hiddenInPrint = !governor.incomplete && governor.printState == OCState::OFF;
+                // A plain group hidden in print from marked content is already reported by name.
+                const bool reportedByName = hiddenInPrint && governor.kind == QStringLiteral("ocg") && governor.source == QStringLiteral("marked-content");
+                if (!governor.incomplete && (reportedByName || (!divergent && !hiddenInPrint)))
+                {
+                    continue;
+                }
+
+                const auto stateName = [](OCState state)
+                {
+                    return state == OCState::ON ? QStringLiteral("on")
+                                                : (state == OCState::OFF ? QStringLiteral("off") : QStringLiteral("unknown"));
+                };
+                const QString subject = governor.kind == QStringLiteral("ocg") ? QStringLiteral("group") : QStringLiteral("membership dictionary");
+
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+                finding.page = int(pageIndex + 1);
+                finding.type = QStringLiteral("hidden-layers");
+                finding.checkId = check.id;
+                finding.severity = governor.incomplete ? QStringLiteral("error") : check.severity;
+                if (governor.incomplete)
+                {
+                    finding.message = PDFTranslationContext::tr("Optional-content %1 on page %2 could not be evaluated for print: %3.")
+                                          .arg(subject)
+                                          .arg(pageIndex + 1)
+                                          .arg(governor.reason);
+                }
+                else if (divergent)
+                {
+                    finding.message = governor.printState == OCState::OFF
+                                          ? PDFTranslationContext::tr("Optional-content %1 on page %2 is visible on screen but hidden in print.").arg(subject).arg(pageIndex + 1)
+                                          : PDFTranslationContext::tr("Optional-content %1 on page %2 is hidden on screen but printed.").arg(subject).arg(pageIndex + 1);
+                }
+                else
+                {
+                    finding.message = PDFTranslationContext::tr("Optional-content %1 on page %2 is hidden in print.").arg(subject).arg(pageIndex + 1);
+                }
+                finding.evidence.insert(QStringLiteral("confidence"), QStringLiteral("exact"));
+                finding.evidence.insert(QStringLiteral("governor"), governor.kind);
+                finding.evidence.insert(QStringLiteral("governor_source"), governor.source);
+                if (!governor.policy.isEmpty())
+                {
+                    finding.evidence.insert(QStringLiteral("policy"), governor.policy);
+                }
+                finding.evidence.insert(QStringLiteral("ocg_names"), QJsonArray::fromStringList(governor.groups));
+                finding.evidence.insert(QStringLiteral("view_state"), stateName(governor.viewState));
+                finding.evidence.insert(QStringLiteral("print_state"), stateName(governor.printState));
+                finding.evidence.insert(QStringLiteral("divergence"), divergent);
+                finding.evidence.insert(QStringLiteral("inspection_complete"), !governor.incomplete);
+                pushPreflightFinding(finding, finding.severity, errors, warnings);
+            }
+        }
 
         for (const HiddenContentFinding& source : processor.findings())
         {
@@ -5219,6 +5506,118 @@ void runEmbeddedFontsCheck(PDFDocumentSession* session,
     }
 }
 
+struct ShownGlyphDefects
+{
+    PDFFontPointer font;
+    QString fontName;
+    QString subtype;
+    bool composite = false;
+    std::map<QString, std::set<unsigned int>> codesByDefect;
+};
+
+/// Records, per embedded font, the codes a page actually shows that do not
+/// resolve to a usable glyph. Page content, Form XObjects and annotation
+/// appearance streams all flow through the same text-sequence hook.
+class ShownGlyphCoverageProcessor final : public PDFPageContentProcessor
+{
+public:
+    using PDFPageContentProcessor::PDFPageContentProcessor;
+
+    void processFormStream(const PDFStream* stream)
+    {
+        if (stream && !isContentSuppressed())
+        {
+            processForm(stream);
+        }
+    }
+
+    const std::vector<ShownGlyphDefects>& defects() const { return m_defects; }
+
+protected:
+    bool isContentKindSuppressed(ContentKind kind) const override
+    {
+        return kind != ContentKind::Text && kind != ContentKind::Forms;
+    }
+
+    void performTextGlyphsUnresolved(const TextSequence& textSequence) override
+    {
+        const PDFFontPointer font = embeddedShownFont();
+        if (!font)
+        {
+            return;
+        }
+
+        for (const CID code : textSequence.unresolvedCodes)
+        {
+            record(font, PDFShownGlyphDefect::Unresolved, code);
+        }
+    }
+
+    void performProcessTextSequence(const TextSequence& textSequence, ProcessOrder order) override
+    {
+        if (order != ProcessOrder::BeforeOperation)
+        {
+            return;
+        }
+
+        const PDFFontPointer font = embeddedShownFont();
+        if (!font)
+        {
+            return;
+        }
+
+        for (const TextSequenceItem& item : textSequence.items)
+        {
+            const PDFShownGlyphDefect defect = classifyShownGlyph(item);
+            if (defect == PDFShownGlyphDefect::None)
+            {
+                continue;
+            }
+
+            record(font, defect, item.cid);
+        }
+    }
+
+private:
+    /// Invisible (Tr 3) and clip-only (Tr 7) text shows nothing, so OCR text layers
+    /// drawn with glyphless fonts are not audited.
+    PDFFontPointer embeddedShownFont() const
+    {
+        const TextRenderingMode mode = getGraphicState()->getTextRenderingMode();
+        if (!isTextRenderingModeFilled(mode) && !isTextRenderingModeStroked(mode))
+        {
+            return nullptr;
+        }
+
+        const PDFFontPointer font = getGraphicState()->getTextFont();
+        if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded() || font->getFontType() == FontType::Type3)
+        {
+            return nullptr;
+        }
+        return font;
+    }
+
+    /// Entries are per font object, not per resource name: page and form resources
+    /// may bind the same name to different fonts.
+    void record(const PDFFontPointer& font, PDFShownGlyphDefect defect, CID code)
+    {
+        auto entry = std::find_if(m_defects.begin(), m_defects.end(), [&font](const ShownGlyphDefects& defects)
+                                  { return defects.font == font; });
+        if (entry == m_defects.end())
+        {
+            ShownGlyphDefects defects;
+            defects.font = font;
+            defects.fontName = QString::fromLatin1(font->getFontId());
+            defects.subtype = QString::number(static_cast<int>(font->getFontType()));
+            defects.composite = font->getFontType() == FontType::Type0;
+            entry = m_defects.insert(m_defects.end(), std::move(defects));
+        }
+        entry->codesByDefect[shownGlyphDefectName(defect)].insert(code);
+    }
+
+    std::vector<ShownGlyphDefects> m_defects;
+};
+
 // LOW CONFIDENCE NOTE: DPI calculation uses getCurrentTransformationMatrix()
 // from the PDFPageContentProcessor state, which is in PDF user space.
 // This matches the existing PDFImageCollectorProcessor pattern in
@@ -5353,6 +5752,108 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
         if (page)
         {
             scanResources(page->getResources(), int(pageIndex + 1));
+        }
+    }
+
+    // Shown-glyph coverage: every code the pages, forms and annotation appearances
+    // actually show must resolve to a real glyph in the embedded program.
+    PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
+    PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    PDFModifiedDocument modifiedDocument(document, &ocActivity);
+    fontCache.setDocument(modifiedDocument);
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+    PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(document);
+    PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    PDFMeshQualitySettings meshQuality;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = document->getCatalog()->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        const int pageNumber = int(pageIndex + 1);
+        std::vector<ShownGlyphDefects> pageDefects;
+        bool incomplete = false;
+        QString incompleteReason;
+        try
+        {
+            ShownGlyphCoverageProcessor processor(page, document, &fontCache, cms.get(), &ocActivity,
+                                                  QTransform(), meshQuality, session->getProcessingBudget());
+            processor.processContents();
+            processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage*, const PDFStream* formStream)
+                                               { processor.processFormStream(formStream); });
+            pageDefects = processor.defects();
+            std::stable_sort(pageDefects.begin(), pageDefects.end(), [](const ShownGlyphDefects& left, const ShownGlyphDefects& right)
+                             { return left.fontName < right.fontName; });
+        }
+        catch (const PDFBudgetExceededException&)
+        {
+            throw;
+        }
+        catch (const PDFException& exception)
+        {
+            incomplete = true;
+            incompleteReason = QString::fromUtf8(exception.what());
+        }
+
+        for (const ShownGlyphDefects& shown : pageDefects)
+        {
+            const QString& fontName = shown.fontName;
+            QStringList defectNames;
+            QStringList codeText;
+            QJsonArray missingCodes;
+            std::set<unsigned int> allCodes;
+            for (const auto& [defectName, codes] : shown.codesByDefect)
+            {
+                defectNames.append(defectName);
+                allCodes.insert(codes.begin(), codes.end());
+            }
+            for (unsigned int code : allCodes)
+            {
+                missingCodes.append(int(code));
+                codeText.append(QString::number(code));
+            }
+
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = pageNumber;
+            finding.type = QStringLiteral("font-integrity");
+            finding.checkId = check.id;
+            finding.severity = check.severity;
+            finding.message = PDFTranslationContext::tr("Font '%1' on page %2 has no usable glyph for shown %3: %4")
+                                  .arg(fontName)
+                                  .arg(pageNumber)
+                                  .arg(shown.composite ? QStringLiteral("CIDs") : QStringLiteral("character codes"),
+                                       codeText.join(QStringLiteral(", ")));
+            finding.evidence.insert(QStringLiteral("font_resource"), fontName);
+            finding.evidence.insert(QStringLiteral("font_subtype"), shown.subtype);
+            finding.evidence.insert(QStringLiteral("embedded"), true);
+            finding.evidence.insert(QStringLiteral("inspection_complete"), true);
+            finding.evidence.insert(QStringLiteral("code_kind"),
+                                    shown.composite ? QStringLiteral("cid") : QStringLiteral("character-code"));
+            finding.evidence.insert(QStringLiteral("missing_codes"), missingCodes);
+            finding.evidence.insert(QStringLiteral("defects"), QJsonArray::fromStringList(defectNames));
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
+        }
+
+        if (incomplete)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = pageNumber;
+            finding.type = QStringLiteral("font-integrity");
+            finding.checkId = check.id;
+            finding.severity = QStringLiteral("error");
+            finding.message = PDFTranslationContext::tr("Shown-glyph coverage could not be audited on page %1: %2")
+                                  .arg(pageNumber)
+                                  .arg(incompleteReason);
+            finding.evidence.insert(QStringLiteral("inspection_complete"), false);
+            finding.evidence.insert(QStringLiteral("defects"), QJsonArray{ QStringLiteral("GlyphCoverageIncomplete") });
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
         }
     }
 }
@@ -7291,6 +7792,8 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         const QJsonValue maxRasterPixelsValue = checkObject.value(QStringLiteral("max_raster_pixels"));
         check.maxInkPct = maxInkValue.toDouble(0.0);
         check.minRegionAreaPct = minRegionAreaValue.toDouble(0.05);
+        const QJsonValue minRegionAreaMm2Value = checkObject.value(QStringLiteral("min_region_area_mm2"));
+        check.minRegionAreaMm2 = minRegionAreaMm2Value.toDouble(0.25);
         check.maxRegionsPerPage = maxRegionsValue.toInt(20);
         check.maxRasterPixels = 250LL * 1000 * 1000;
         if (check.id == QStringLiteral("ink-coverage") && (!maxInkValue.isDouble() || !std::isfinite(check.maxInkPct) || check.maxInkPct <= 0.0))
@@ -7309,6 +7812,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             if (checkObject.contains(QStringLiteral("min_region_area_pct")) && (!minRegionAreaValue.isDouble() || !std::isfinite(check.minRegionAreaPct) || check.minRegionAreaPct < 0.0 || check.minRegionAreaPct > 100.0))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires min_region_area_pct between 0 and 100.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("min_region_area_mm2")) && (!minRegionAreaMm2Value.isDouble() || !std::isfinite(check.minRegionAreaMm2) || check.minRegionAreaMm2 < 0.0))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative min_region_area_mm2.").arg(check.id);
                 return false;
             }
             if (checkObject.contains(QStringLiteral("max_regions_per_page")) && (!maxRegionsValue.isDouble() || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble() || check.maxRegionsPerPage < 0))

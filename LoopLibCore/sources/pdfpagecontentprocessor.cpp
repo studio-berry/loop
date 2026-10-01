@@ -540,6 +540,11 @@ void PDFPageContentProcessor::performProcessTextSequence(const TextSequence& tex
     Q_UNUSED(order);
 }
 
+void PDFPageContentProcessor::performTextGlyphsUnresolved(const TextSequence& textSequence)
+{
+    Q_UNUSED(textSequence);
+}
+
 bool PDFPageContentProcessor::isContentKindSuppressed(ContentKind kind) const
 {
     Q_UNUSED(kind);
@@ -3406,6 +3411,11 @@ void PDFPageContentProcessor::operatorCompatibilityEnd()
 
 void PDFPageContentProcessor::drawText(const TextSequence& textSequence)
 {
+    if (!textSequence.unresolvedCodes.empty())
+    {
+        performTextGlyphsUnresolved(textSequence);
+    }
+
     if (textSequence.items.empty())
     {
         // Do not display empty text
