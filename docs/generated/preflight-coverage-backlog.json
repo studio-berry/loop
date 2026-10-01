@@ -287,16 +287,16 @@
       "state": "open"
     },
     {
-      "closed_by": "#114",
+      "closed_by": "font-integrity",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
       ],
-      "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+      "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
       "id": "font-glyph-coverage",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "thin-strokes",
@@ -311,28 +311,28 @@
       "state": "landed"
     },
     {
-      "closed_by": "#115",
+      "closed_by": "hidden-layers",
       "deferral": null,
       "families": [
         "packaging"
       ],
-      "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+      "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
       "id": "hidden-layers-ocmd",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
-      "closed_by": "#116",
+      "closed_by": "ink-coverage",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
         "newspaper"
       ],
-      "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+      "gap": "ink-coverage suppressed regions below min_region_area_pct, a fraction of the page, so an isolated over-limit element passed clean on a large page; the floor is now physical (min_region_area_mm2) and a probe_dpi too coarse to resolve it reports the page incomplete (filed as #116)",
       "id": "ink-coverage-raster-tac",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "#117",
