@@ -50,8 +50,15 @@ struct LOOPLIBCORESHARED_EXPORT PDFInkCoverageProbeSettings
     qreal maxInkCoverage = 3.0;
     /// Rasterization resolution for the coverage probe.
     int dpi = 150;
-    /// Regions smaller than this fraction of the page are ignored (antialiasing noise).
-    qreal minRegionAreaRatio = 0.0005;
+    /// Smallest over-limit region, in mm^2, that is reported. The floor is physical rather
+    /// than a fraction of the page: a 0.5 mm x 0.5 mm solid is about the smallest element a
+    /// press reproduces as a distinct area rather than as dot gain, so it is the same on an
+    /// A6 card and on an A0 poster.
+    qreal minRegionAreaMM2 = 0.25;
+    /// An over-limit region needs at least this many raster pixels to be told apart from
+    /// antialiasing, so the raster can only vouch for regions of MinResolvablePixels pixels
+    /// or more. When the floor is smaller than that, the probe result reports it.
+    static constexpr size_t MinResolvablePixels = 4;
     /// Maximum number of regions reported per page; the largest are kept.
     int maxRegionsPerPage = 20;
     /// Maximum raster pixel count before the probe returns budgetExceeded.
@@ -81,6 +88,11 @@ struct LOOPLIBCORESHARED_EXPORT PDFInkCoverageProbeResult
     PDFRenderDiagnostics diagnostics;
     qreal peakInkCoverage = 0.0;   // page-wide max TAC
     qreal overLimitAreaMM2 = 0.0;
+    /// Area of one raster pixel in mm^2 at the probe resolution.
+    qreal pixelAreaMM2 = 0.0;
+    /// Smallest region area the raster can resolve (MinResolvablePixels pixels). A configured
+    /// floor below this cannot be honored, so a floor-sized element may go unseen.
+    qreal minResolvableAreaMM2 = 0.0;
     std::vector<PDFInkCoverageRegion> regions;   // sorted by areaMM2, descending
 };
 

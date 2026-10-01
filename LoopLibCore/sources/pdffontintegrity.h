@@ -31,6 +31,7 @@ namespace pdf
 {
 
 class PDFFont;
+struct TextSequenceItem;
 
 struct LOOPLIBCORESHARED_EXPORT PDFFontIntegrityResult
 {
@@ -46,6 +47,21 @@ struct LOOPLIBCORESHARED_EXPORT PDFFontIntegrityResult
 /// does not alter the existing embedded-fonts check contract.
 LOOPLIBCORESHARED_EXPORT PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font);
 
-} // namespace pdf
+enum class PDFShownGlyphDefect
+{
+    None,
+    Unresolved,   ///< The shown code resolved to no glyph (TextSequence::unresolvedCodes).
+    Notdef,   ///< The shown code resolved to glyph 0 (.notdef).
+    EmptyOutline   ///< The glyph exists but draws nothing for a visible character.
+};
 
-#endif // PDFFONTINTEGRITY_H
+/// Classifies one resolved glyph item of a text sequence. Advances (TJ
+/// adjustments), glyphless items and Type 3 glyph procedures are never defects
+/// here; codes that resolved to nothing are reported by the text sequence.
+LOOPLIBCORESHARED_EXPORT PDFShownGlyphDefect classifyShownGlyph(const TextSequenceItem& item);
+
+LOOPLIBCORESHARED_EXPORT QString shownGlyphDefectName(PDFShownGlyphDefect defect);
+
+}   // namespace pdf
+
+#endif   // PDFFONTINTEGRITY_H

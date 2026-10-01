@@ -411,6 +411,19 @@
     "notes": "CMYK patch at approximately 370% TAC on an otherwise light page; the test profile isolates the ink-coverage warning."
   },
   {
+    "id": "ink-coverage-isolated-region",
+    "pdf": "ink-coverage-isolated-region.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": {
+      "pass": true,
+      "check_ids": [
+        "ink-coverage"
+      ]
+    },
+    "source": "generated",
+    "notes": "#116 regression: one 6 mm square of 400% rich black on an otherwise blank A3 page. It covers about 0.03% of the page, under the old page-percentage floor, so the check passed it clean."
+  },
+  {
     "id": "ink-coverage-ok",
     "pdf": "ink-coverage-ok.pdf",
     "profile": "testdata/profiles/test-ink-coverage.json",
@@ -906,6 +919,17 @@
     "notes": "#668 corpus gap: optional-content group OFF by default with OC-marked content."
   },
   {
+    "id": "ocmd-print-divergence",
+    "pdf": "ocmd-print-divergence.pdf",
+    "profile": "testdata/profiles/test-hidden-layers.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["hidden-layers"]
+    },
+    "source": "hand-built",
+    "notes": "#115 regression: five OCMDs (AllOn, AnyOn, AllOff, AnyOff, VE) over groups with opposite View and Print usage, on Form XObjects and marked content. Screen and print show different content; the scan passed it clean before membership dictionaries were evaluated for both usages."
+  },
+  {
     "id": "font-integrity-corrupt",
     "pdf": "font-integrity-corrupt.pdf",
     "profile": "testdata/profiles/test-font-integrity.json",
@@ -915,6 +939,17 @@
     },
     "source": "hand-built",
     "notes": "#668 corpus gap: embedded FontFile2 truncated so inspectPDFFontIntegrity reports TruncatedProgram."
+  },
+  {
+    "id": "font-glyph-missing",
+    "pdf": "font-glyph-missing.pdf",
+    "profile": "testdata/profiles/test-font-integrity.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["font-integrity"]
+    },
+    "source": "hand-built",
+    "notes": "#114 regression: embedded TrueType subset parses cleanly but has no glyph for shown codes 0xE9 (page content), 0xEA (Form XObject) and 0xEB (Widget appearance stream). Passed clean before glyph coverage was audited."
   },
   {
     "id": "thin-parts-clear",

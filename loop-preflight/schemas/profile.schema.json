@@ -283,7 +283,14 @@
           "type": "number",
           "minimum": 0,
           "default": 0.05,
-          "description": "Minimum over-limit connected-region area as a percentage of the page (ink-coverage)."
+          "deprecated": true,
+          "description": "Deprecated and ignored (ink-coverage). A page-relative floor let an isolated over-limit element pass clean; use min_region_area_mm2."
+        },
+        "min_region_area_mm2": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.25,
+          "description": "Smallest over-limit connected region, in mm^2, that ink-coverage reports. Over-limit regions at or above it that the raster cannot resolve make the check incomplete."
         },
         "max_regions_per_page": {
           "type": "integer",

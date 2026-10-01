@@ -517,8 +517,8 @@
    "fixups": []
   },
   "font-integrity": {
-   "measures": "Embedded font bytes that fail to parse or cmap.",
-   "limitations": "Not a full glyph-coverage audit.",
+   "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
+   "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. Composite CID 0 (default whitespace) and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -529,7 +529,7 @@
     {
      "finding_type": "font-integrity",
      "severity": "error",
-     "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error"
+     "condition": "an embedded font program fails to parse or its cmap cannot be read, or a shown code resolves to no usable glyph; a complete inspection keeps the check severity, an incomplete one is forced to error"
     }
    ],
    "evidence": [
@@ -544,13 +544,15 @@
     "evidence.font_subtype",
     "evidence.embedded",
     "evidence.inspection_complete",
-    "evidence.defects"
+    "evidence.defects",
+    "evidence.code_kind",
+    "evidence.missing_codes"
    ],
    "fixups": []
   },
   "hidden-layers": {
-   "measures": "Optional content groups that hide print content.",
-   "limitations": "Does not enumerate every OCMD combination.",
+   "measures": "Optional content groups and membership dictionaries (/P AnyOn, AllOn, AnyOff, AllOff and /VE) that hide print content, and content whose visibility differs between screen and print.",
+   "limitations": "Evaluates the default configuration under the View and Print usages with its /AS events; alternate configurations and content an /OC entry governs on Form XObjects or annotations that are never painted are not evaluated. A governor that cannot be evaluated is reported incomplete.",
    "coverage": "partial",
    "families": [
     "packaging"
@@ -568,7 +570,7 @@
     {
      "finding_type": "hidden-layers",
      "severity": "error",
-     "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "an optional-content group referenced by print content is not printable by default, or a membership dictionary governing marked content, a Form XObject or an annotation is hidden in print or differs between screen and print; an optional-content governor that cannot be evaluated is forced to error with inspection_complete false. The profile's check severity (error|warning|info, default error) replaces the others and warning/info route the finding to warnings."
     }
    ],
    "evidence": [
@@ -578,7 +580,15 @@
     "message",
     "check_id",
     "evidence.confidence",
-    "evidence.ocg_name"
+    "evidence.ocg_name",
+    "evidence.governor",
+    "evidence.governor_source",
+    "evidence.policy",
+    "evidence.ocg_names",
+    "evidence.view_state",
+    "evidence.print_state",
+    "evidence.divergence",
+    "evidence.inspection_complete"
    ],
    "fixups": []
   },
@@ -656,11 +666,18 @@
      "meaning": "Resolution of the area-coverage raster."
     },
     {
+     "id": "min_region_area_mm2",
+     "type": "number",
+     "default": 0.25,
+     "range": ">= 0",
+     "meaning": "Smallest over-limit connected region, in mm^2 of physical area, that is reported. The default is about a 0.5 mm square, the smallest solid a press reproduces as a distinct area. A floor finer than four raster pixels at probe_dpi cannot be honored and reports the page incomplete."
+    },
+    {
      "id": "min_region_area_pct",
      "type": "number",
      "default": 0.05,
      "range": "0..100",
-     "meaning": "Smallest over-limit connected region, as a percentage of the page, that is reported."
+     "meaning": "Deprecated and ignored; a page-relative floor let an isolated over-limit element pass clean on a large page. Use min_region_area_mm2."
     },
     {
      "id": "max_regions_per_page",
@@ -695,12 +712,12 @@
     {
      "finding_type": "ink-coverage",
      "severity": "error",
-     "condition": "a connected region exceeds max_ink_pct over more than min_region_area_pct of the page. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "a connected region of at least min_region_area_mm2 exceeds max_ink_pct. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
     },
     {
      "finding_type": "check-incomplete",
      "severity": "info",
-     "condition": "the page raster exceeded max_raster_pixels, was unavailable, or reported non-exact fidelity, so the page is reported incomplete rather than clean."
+     "condition": "the page raster exceeded max_raster_pixels, was unavailable, reported non-exact fidelity, or probe_dpi is too coarse to resolve min_region_area_mm2, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1497,37 +1514,37 @@
   {
    "id": "font-glyph-coverage",
    "priority": "P2",
-   "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+   "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
    "families": [
     "sheetfed-offset",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#114",
+   "state": "landed",
+   "closed_by": "font-integrity",
    "deferral": null
   },
   {
    "id": "hidden-layers-ocmd",
    "priority": "P2",
-   "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+   "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
    "families": [
     "packaging"
    ],
-   "state": "open",
-   "closed_by": "#115",
+   "state": "landed",
+   "closed_by": "hidden-layers",
    "deferral": null
   },
   {
    "id": "ink-coverage-raster-tac",
    "priority": "P2",
-   "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+   "gap": "ink-coverage suppressed regions below min_region_area_pct, a fraction of the page, so an isolated over-limit element passed clean on a large page; the floor is now physical (min_region_area_mm2) and a probe_dpi too coarse to resolve it reports the page incomplete (filed as #116)",
    "families": [
     "sheetfed-offset",
     "web-offset",
     "newspaper"
    ],
-   "state": "open",
-   "closed_by": "#116",
+   "state": "landed",
+   "closed_by": "ink-coverage",
    "deferral": null
   },
   {
