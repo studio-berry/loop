@@ -398,7 +398,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
         const StripCoverage coverage = measureStripCoverage(infos, strip, side);
         edgeResult.boundsCoverage = coverage.upper;
         edgeResult.hasContent = contentBounds.intersects(strip) && coverage.upper >= settings.minEdgeCoverage;
-        edgeResult.confirmed = !edgeResult.hasContent || coverage.solid >= 1.0 - 1e-3;
+        edgeResult.confirmed = !edgeResult.hasContent || coverage.solid >= settings.minEdgeCoverage;
 
         switch (side)
         {
