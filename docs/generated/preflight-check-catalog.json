@@ -407,14 +407,22 @@
         "message",
         "check_id",
         "evidence.confidence",
-        "evidence.ocg_name"
+        "evidence.ocg_name",
+        "evidence.governor",
+        "evidence.governor_source",
+        "evidence.policy",
+        "evidence.ocg_names",
+        "evidence.view_state",
+        "evidence.print_state",
+        "evidence.divergence",
+        "evidence.inspection_complete"
       ],
       "families": [
         "packaging"
       ],
       "fixups": [],
-      "limitations": "Does not enumerate every OCMD combination.",
-      "measures": "Optional content groups that hide print content.",
+      "limitations": "Evaluates the default configuration under the View and Print usages with its /AS events; alternate configurations and content an /OC entry governs on Form XObjects or annotations that are never painted are not evaluated. A governor that cannot be evaluated is reported incomplete.",
+      "measures": "Optional content groups and membership dictionaries (/P AnyOn, AllOn, AnyOff, AllOff and /VE) that hide print content, and content whose visibility differs between screen and print.",
       "parameters": [
         {
           "default": 9.0,
@@ -426,7 +434,7 @@
       ],
       "severity": [
         {
-          "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "an optional-content group referenced by print content is not printable by default, or a membership dictionary governing marked content, a Form XObject or an annotation is hidden in print or differs between screen and print; an optional-content governor that cannot be evaluated is forced to error with inspection_complete false. The profile's check severity (error|warning|info, default error) replaces the others and warning/info route the finding to warnings.",
           "finding_type": "hidden-layers",
           "severity": "error"
         }

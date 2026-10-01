@@ -4645,6 +4645,136 @@ struct HiddenContentFinding
     bool heuristic = false;
 };
 
+/// What a single optional-content governor (an OCG or a membership dictionary)
+/// resolves to under the view and print usages, with the default configuration's
+/// /AS events applied for each.
+struct OptionalContentGovernorReport
+{
+    QString source;   // xobject, marked-content or annotation
+    QString kind;   // ocg or ocmd
+    QString policy;   // AnyOn, AllOn, AnyOff, AllOff or VE; empty for a group
+    QStringList groups;
+    OCState viewState = OCState::Unknown;
+    OCState printState = OCState::Unknown;
+    bool incomplete = false;
+    QString reason;
+};
+
+QString optionalContentGroupLabel(const PDFOptionalContentProperties* properties, const PDFObjectReference& reference)
+{
+    if (properties && properties->hasOptionalContentGroup(reference))
+    {
+        const QString name = properties->getOptionalContentGroup(reference).getName();
+        if (!name.isEmpty())
+        {
+            return name;
+        }
+    }
+    return QStringLiteral("object %1 %2").arg(reference.objectNumber).arg(reference.generation);
+}
+
+OptionalContentGovernorReport evaluateOptionalContentGovernor(const PDFDocument* document,
+                                                              const PDFObject& governor,
+                                                              const PDFOptionalContentActivity& viewActivity,
+                                                              const PDFOptionalContentActivity& printActivity)
+{
+    OptionalContentGovernorReport report;
+    const PDFOptionalContentProperties* properties = printActivity.getProperties();
+
+    if (governor.isReference() && properties && properties->hasOptionalContentGroup(governor.getReference()))
+    {
+        const PDFObjectReference reference = governor.getReference();
+        report.kind = QStringLiteral("ocg");
+        report.groups = QStringList{ optionalContentGroupLabel(properties, reference) };
+        report.viewState = viewActivity.getState(reference);
+        report.printState = printActivity.getState(reference);
+        report.incomplete = report.viewState == OCState::Unknown || report.printState == OCState::Unknown;
+        if (report.incomplete)
+        {
+            report.reason = QStringLiteral("group state is unknown");
+        }
+        return report;
+    }
+
+    report.kind = QStringLiteral("ocmd");
+    const PDFObject resolved = document->getObject(governor);
+    if (!resolved.isDictionary())
+    {
+        report.incomplete = true;
+        report.reason = QStringLiteral("optional-content governor is not a group or membership dictionary");
+        return report;
+    }
+
+    const PDFDictionary* dictionary = resolved.getDictionary();
+    const bool hasExpression = dictionary->hasKey("VE");
+    const PDFObject policyObject = document->getObject(dictionary->get("P"));
+    report.policy = hasExpression ? QStringLiteral("VE")
+                                  : (policyObject.isName() ? QString::fromLatin1(policyObject.getString())
+                                                           : QStringLiteral("AnyOn"));
+
+    // Collect the groups the membership names, through /OCGs or the expression tree.
+    std::function<void(const PDFObject&, int)> collect = [&](const PDFObject& node, int depth)
+    {
+        if (depth > 32)
+        {
+            return;
+        }
+        if (node.isReference() && properties && properties->hasOptionalContentGroup(node.getReference()))
+        {
+            const QString label = optionalContentGroupLabel(properties, node.getReference());
+            if (!report.groups.contains(label))
+            {
+                report.groups.append(label);
+            }
+            return;
+        }
+        const PDFObject value = document->getObject(node);
+        if (value.isArray())
+        {
+            for (size_t index = 0; index < value.getArray()->getCount(); ++index)
+            {
+                collect(value.getArray()->getItem(index), depth + 1);
+            }
+        }
+    };
+    collect(dictionary->get(hasExpression ? "VE" : "OCGs"), 0);
+
+    PDFOptionalContentMembershipObject membership;
+    try
+    {
+        membership = PDFOptionalContentMembershipObject::create(document, governor);
+    }
+    catch (const PDFException& exception)
+    {
+        report.incomplete = true;
+        report.reason = QString::fromUtf8(exception.what());
+        return report;
+    }
+
+    if (!membership.isValid())
+    {
+        // A membership dictionary naming no groups and no expression shows its content.
+        if (!hasExpression && report.groups.isEmpty() && !dictionary->hasKey("OCGs"))
+        {
+            report.viewState = OCState::ON;
+            report.printState = OCState::ON;
+            return report;
+        }
+        report.incomplete = true;
+        report.reason = QStringLiteral("membership dictionary could not be parsed");
+        return report;
+    }
+
+    report.viewState = membership.evaluate(&viewActivity);
+    report.printState = membership.evaluate(&printActivity);
+    report.incomplete = report.viewState == OCState::Unknown || report.printState == OCState::Unknown;
+    if (report.incomplete)
+    {
+        report.reason = QStringLiteral("membership references a group with no known state");
+    }
+    return report;
+}
+
 class HiddenContentProcessor final : public PDFPageContentProcessor
 {
 public:
@@ -4653,6 +4783,7 @@ public:
                            const PDFFontCache* fontCache,
                            const PDFCMS* cms,
                            const PDFOptionalContentActivity* optionalContentActivity,
+                           const PDFOptionalContentActivity* viewActivity,
                            const PDFMeshQualitySettings& meshQualitySettings,
                            PDFProcessingBudget* budget,
                            qreal offPageAllowance) :
@@ -4663,7 +4794,9 @@ public:
                                 optionalContentActivity,
                                 QTransform(),
                                 meshQualitySettings,
-                                budget)
+                                budget),
+        m_printActivity(optionalContentActivity),
+        m_viewActivity(viewActivity)
     {
         if (page)
         {
@@ -4677,10 +4810,46 @@ public:
     }
 
     const QList<HiddenContentFinding>& findings() const { return m_findings; }
+    const QList<OptionalContentGovernorReport>& governors() const { return m_governors; }
+
+    /// Records an annotation's /OC entry, which the content stream never reaches.
+    void inspectAnnotationGovernor(const PDFObject& governor, const QString& key)
+    {
+        recordGovernor(governor, QStringLiteral("annotation"), key);
+    }
 
 protected:
+    bool isContentSuppressedByOC(PDFObjectReference ocgOrOcmd) override
+    {
+        if (ocgOrOcmd.isValid())
+        {
+            recordGovernor(PDFObject::createReference(ocgOrOcmd),
+                           m_currentOperator == Operator::PaintXObject ? QStringLiteral("xobject")
+                                                                       : QStringLiteral("marked-content"),
+                           QStringLiteral("%1 %2").arg(ocgOrOcmd.objectNumber).arg(ocgOrOcmd.generation));
+        }
+        return PDFPageContentProcessor::isContentSuppressedByOC(ocgOrOcmd);
+    }
+
     void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
     {
+        if (tag == "OC")
+        {
+            // A direct membership dictionary is never a reference, so the content
+            // processor cannot evaluate it; do it here instead of treating it as visible.
+            PDFObject governor = properties;
+            QString key = QStringLiteral("inline");
+            if (properties.isName() && getPropertiesDictionary())
+            {
+                governor = getPropertiesDictionary()->get(properties.getString());
+                key = QStringLiteral("inline:%1").arg(QString::fromLatin1(properties.getString()));
+            }
+            if (governor.isDictionary())
+            {
+                recordGovernor(governor, QStringLiteral("marked-content"), key);
+            }
+        }
+
         if (tag != "OC" || !isContentSuppressed())
         {
             return;
@@ -4696,7 +4865,12 @@ protected:
                 reference = property.getReference();
             }
         }
-        if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        if (reference.isValid() && !getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        {
+            // A membership dictionary is reported with its evaluation by the governor report.
+            return;
+        }
+        if (reference.isValid())
         {
             name = getDocument()->getCatalog()->getOptionalContentProperties()->getOptionalContentGroup(reference).getName();
             if (name.isEmpty())
@@ -4715,6 +4889,11 @@ protected:
                                      ProcessOrder processOrder,
                                      const QByteArray& operatorAsText) override
     {
+        if (processOrder == ProcessOrder::BeforeOperation)
+        {
+            m_currentOperator = currentOperator;
+        }
+
         if (processOrder != ProcessOrder::BeforeOperation || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
         {
             return;
@@ -4779,10 +4958,27 @@ protected:
     }
 
 private:
+    void recordGovernor(const PDFObject& governor, const QString& source, const QString& key)
+    {
+        if (!m_viewActivity || !m_printActivity || !m_recordedGovernors.insert(source + QLatin1Char('|') + key).second)
+        {
+            return;
+        }
+
+        OptionalContentGovernorReport report = evaluateOptionalContentGovernor(getDocument(), governor, *m_viewActivity, *m_printActivity);
+        report.source = source;
+        m_governors.append(report);
+    }
+
     QRectF m_toleratedBounds;
     QList<QRectF> m_paintedBounds;
     QStringList m_hiddenLayers;
     QList<HiddenContentFinding> m_findings;
+    QList<OptionalContentGovernorReport> m_governors;
+    std::set<QString> m_recordedGovernors;
+    const PDFOptionalContentActivity* m_printActivity = nullptr;
+    const PDFOptionalContentActivity* m_viewActivity = nullptr;
+    Operator m_currentOperator = Operator::Invalid;
 };
 
 void runHiddenContentCheck(PDFDocumentSession* session,
@@ -4797,6 +4993,7 @@ void runHiddenContentCheck(PDFDocumentSession* session,
 
     PDFDocument* document = session->getDocument();
     PDFOptionalContentActivity printActivity(document, OCUsage::Print, nullptr);
+    PDFOptionalContentActivity viewActivity(document, OCUsage::View, nullptr);
     const PDFCatalog* catalog = document->getCatalog();
     const PDFInteger pageCount = catalog->getPageCount();
     PDFMeshQualitySettings meshQualitySettings;
@@ -4814,10 +5011,80 @@ void runHiddenContentCheck(PDFDocumentSession* session,
                                          session->getFontCache(),
                                          session->getCMS(),
                                          &printActivity,
+                                         &viewActivity,
                                          meshQualitySettings,
                                          session->getProcessingBudget(),
                                          check.amountPt);
         processor.processContents();
+
+        if (check.id == QStringLiteral("hidden-layers"))
+        {
+            for (const PDFObjectReference& annotationReference : page->getAnnotations())
+            {
+                const PDFObject annotation = document->getObjectByReference(annotationReference);
+                if (annotation.isDictionary() && annotation.getDictionary()->hasKey("OC"))
+                {
+                    processor.inspectAnnotationGovernor(annotation.getDictionary()->get("OC"),
+                                                        QStringLiteral("%1 %2").arg(annotationReference.objectNumber).arg(annotationReference.generation));
+                }
+            }
+
+            for (const OptionalContentGovernorReport& governor : processor.governors())
+            {
+                const bool divergent = !governor.incomplete && governor.viewState != governor.printState;
+                const bool hiddenInPrint = !governor.incomplete && governor.printState == OCState::OFF;
+                // A plain group hidden in print from marked content is already reported by name.
+                const bool reportedByName = hiddenInPrint && governor.kind == QStringLiteral("ocg") && governor.source == QStringLiteral("marked-content");
+                if (!governor.incomplete && (reportedByName || (!divergent && !hiddenInPrint)))
+                {
+                    continue;
+                }
+
+                const auto stateName = [](OCState state)
+                {
+                    return state == OCState::ON ? QStringLiteral("on")
+                                                : (state == OCState::OFF ? QStringLiteral("off") : QStringLiteral("unknown"));
+                };
+                const QString subject = governor.kind == QStringLiteral("ocg") ? QStringLiteral("group") : QStringLiteral("membership dictionary");
+
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+                finding.page = int(pageIndex + 1);
+                finding.type = QStringLiteral("hidden-layers");
+                finding.checkId = check.id;
+                finding.severity = governor.incomplete ? QStringLiteral("error") : check.severity;
+                if (governor.incomplete)
+                {
+                    finding.message = PDFTranslationContext::tr("Optional-content %1 on page %2 could not be evaluated for print: %3.")
+                                          .arg(subject)
+                                          .arg(pageIndex + 1)
+                                          .arg(governor.reason);
+                }
+                else if (divergent)
+                {
+                    finding.message = governor.printState == OCState::OFF
+                                          ? PDFTranslationContext::tr("Optional-content %1 on page %2 is visible on screen but hidden in print.").arg(subject).arg(pageIndex + 1)
+                                          : PDFTranslationContext::tr("Optional-content %1 on page %2 is hidden on screen but printed.").arg(subject).arg(pageIndex + 1);
+                }
+                else
+                {
+                    finding.message = PDFTranslationContext::tr("Optional-content %1 on page %2 is hidden in print.").arg(subject).arg(pageIndex + 1);
+                }
+                finding.evidence.insert(QStringLiteral("confidence"), QStringLiteral("exact"));
+                finding.evidence.insert(QStringLiteral("governor"), governor.kind);
+                finding.evidence.insert(QStringLiteral("governor_source"), governor.source);
+                if (!governor.policy.isEmpty())
+                {
+                    finding.evidence.insert(QStringLiteral("policy"), governor.policy);
+                }
+                finding.evidence.insert(QStringLiteral("ocg_names"), QJsonArray::fromStringList(governor.groups));
+                finding.evidence.insert(QStringLiteral("view_state"), stateName(governor.viewState));
+                finding.evidence.insert(QStringLiteral("print_state"), stateName(governor.printState));
+                finding.evidence.insert(QStringLiteral("divergence"), divergent);
+                finding.evidence.insert(QStringLiteral("inspection_complete"), !governor.incomplete);
+                pushPreflightFinding(finding, finding.severity, errors, warnings);
+            }
+        }
 
         for (const HiddenContentFinding& source : processor.findings())
         {

@@ -44,6 +44,7 @@
 #include <QJsonObject>
 #include <QPainter>
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 
 #include <algorithm>
 #include <vector>
@@ -87,6 +88,8 @@ private slots:
     void run_fontIntegrity_reportsShownGlyphsMissingFromSubset();
     void classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces();
     void hiddenContent_checksAreRegistered();
+    void run_hiddenLayers_reportsOcmdScreenPrintDivergence();
+    void run_hiddenLayers_reportsUnevaluableMembershipAsIncomplete();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
@@ -969,6 +972,103 @@ void PreflightEngineTest::hiddenContent_checksAreRegistered()
     QVERIFY(engine.hasCheck(QStringLiteral("hidden-layers")));
     QVERIFY(engine.hasCheck(QStringLiteral("off-page-content")));
     QVERIFY(engine.hasCheck(QStringLiteral("obscured-content")));
+}
+
+void PreflightEngineTest::run_hiddenLayers_reportsOcmdScreenPrintDivergence()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ocmd-print-divergence.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Hidden layers") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("hidden-layers") },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.errors.isEmpty());
+    QCOMPARE(result.warnings.size(), 5);
+
+    QMap<QString, QString> directions;   // policy -> "view/print"
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QCOMPARE(finding.checkId, QStringLiteral("hidden-layers"));
+        QCOMPARE(finding.page, 1);
+        QCOMPARE(finding.evidence.value(QStringLiteral("governor")).toString(), QStringLiteral("ocmd"));
+        QCOMPARE(finding.evidence.value(QStringLiteral("divergence")).toBool(), true);
+        QVERIFY(!finding.evidence.value(QStringLiteral("ocg_names")).toArray().isEmpty());
+        directions.insert(finding.evidence.value(QStringLiteral("policy")).toString(),
+                          finding.evidence.value(QStringLiteral("view_state")).toString() + QLatin1Char('/') + finding.evidence.value(QStringLiteral("print_state")).toString());
+    }
+
+    QCOMPARE(directions.value(QStringLiteral("AllOn")), QStringLiteral("on/off"));
+    QCOMPARE(directions.value(QStringLiteral("AnyOn")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("AllOff")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("AnyOff")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("VE")), QStringLiteral("off/on"));
+}
+
+void PreflightEngineTest::run_hiddenLayers_reportsUnevaluableMembershipAsIncomplete()
+{
+    // The visibility expression names an operator the specification does not define.
+    const QByteArray content("/OC /M BDC 0 0 0 rg 10 10 20 20 re f EMC\n");
+    const QList<QByteArray> objects{
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [ 5 0 R ] /D << /BaseState /ON >> >> >>",
+        "<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 100 100 ] /Contents 4 0 R "
+        "/Resources << /Properties << /M 6 0 R >> >> >>",
+        "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream",
+        "<< /Type /OCG /Name (Layer) >>",
+        "<< /Type /OCMD /VE [ /Xor 5 0 R 5 0 R ] >>"
+    };
+
+    QByteArray bytes("%PDF-1.7\n");
+    QList<int> offsets;
+    for (int index = 0; index < objects.size(); ++index)
+    {
+        offsets.append(bytes.size());
+        bytes += QByteArray::number(index + 1) + " 0 obj\n" + objects.at(index) + "\nendobj\n";
+    }
+    const int xref = bytes.size();
+    bytes += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n0000000000 65535 f \n";
+    for (int offset : offsets)
+    {
+        bytes += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+    }
+    bytes += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R >>\nstartxref\n" +
+             QByteArray::number(xref) + "\n%%EOF\n";
+
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    file.write(bytes);
+    file.flush();
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(file.fileName());
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Hidden layers") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("hidden-layers") },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+    QCOMPARE(result.errors.first().evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
 }
 
 void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()

@@ -311,15 +311,15 @@
       "state": "landed"
     },
     {
-      "closed_by": "#115",
+      "closed_by": "hidden-layers",
       "deferral": null,
       "families": [
         "packaging"
       ],
-      "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+      "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
       "id": "hidden-layers-ocmd",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "#116",

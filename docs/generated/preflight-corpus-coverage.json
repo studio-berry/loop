@@ -130,7 +130,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "hidden-layers"
+        "hidden-layers",
+        "ocmd-print-divergence"
       ],
       "uninspected_fixtures": []
     },
