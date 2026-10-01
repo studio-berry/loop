@@ -98,8 +98,9 @@ struct PDFOverprintObservation
     quint64 overprintPixels = 0;
     /// Overprinted pixels whose painted colorants are all paper white (no ink).
     quint64 whiteOverprintPixels = 0;
-    /// Overprinted pixels composited under a non-Normal blend mode, fill alpha below one,
-    /// partial opacity or a knockout group, where overprint and transparency interact.
+    /// Overprinted pixels composited under a non-Normal blend mode, constant alpha below one
+    /// or a knockout group, where overprint and transparency interact. Antialiased edge
+    /// coverage is not counted.
     quint64 transparentOverprintPixels = 0;
 };
 

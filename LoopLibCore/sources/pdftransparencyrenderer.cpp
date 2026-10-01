@@ -3204,7 +3204,10 @@ void PDFTransparencyRenderer::flushDrawBuffer()
             observeOverprint(m_drawBuffer, m_drawBuffer.getModifiedRect(),
                              [this](size_t x, size_t y)
                              { return m_drawBuffer.getPixelContentMask(x, y); },
-                             enabledMask, getGraphicState()->getBlendMode(), 1.0, isTransparencyGroupKnockout());
+                             enabledMask, getGraphicState()->getBlendMode(),
+                             qMin(containsFilling ? getGraphicState()->getAlphaFilling() : 1.0,
+                                  containsStroking ? getGraphicState()->getAlphaStroking() : 1.0),
+                             isTransparencyGroupKnockout());
         }
 
         PDFFloatBitmap::blend(m_drawBuffer, *getImmediateBackdrop(), *getBackdrop(), *getInitialBackdrop(), *getPainterState()->softMask.getSoftMask(),
@@ -3249,7 +3252,6 @@ void PDFTransparencyRenderer::observeOverprint(const PDFFloatBitmap& source,
     const bool subtractive = format.hasProcessColorsSubtractive();
     const bool plainBlend = blendMode == BlendMode::Normal || blendMode == BlendMode::Compatible;
     const uint8_t shapeChannel = format.getShapeChannelIndex();
-    const uint8_t opacityChannel = format.getOpacityChannelIndex();
 
     for (int y = bounded.top(); y <= bounded.bottom(); ++y)
     {
@@ -3285,8 +3287,7 @@ void PDFTransparencyRenderer::observeOverprint(const PDFFloatBitmap& source,
                 ++m_overprintObservation.whiteOverprintPixels;
             }
 
-            const bool partialOpacity = opacityChannel != PDFPixelFormat::INVALID_CHANNEL_INDEX && pixel[opacityChannel] < 1.0f - Tolerance;
-            if (!plainBlend || alpha < 1.0 - Tolerance || partialOpacity || knockout)
+            if (!plainBlend || alpha < 1.0 - Tolerance || knockout)
             {
                 ++m_overprintObservation.transparentOverprintPixels;
             }
