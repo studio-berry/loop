@@ -172,13 +172,13 @@ confirmation — no full-page render.
 
 A bleed strip counts as populated only when artwork covers at least 10% of it, so
 a few stray marks that merely touch the strip do not pass. The bounds pass proves a
-strip populated only through images, shadings and filled rectangles; any other
-artwork (hairlines, strokes, text) that touches the strip is not proven. With
+strip populated only through the area that images and filled paths or glyphs
+actually paint inside it, cut by their clip; stroked artwork (hairlines, keylines)
+that touches the strip is not proven. With
 `raster_confirm: true` the strip raster decides such an edge (ink share of at least
 10%, at `probe_dpi`); without it, or when the strip exceeds `max_raster_pixels`, the
 page reports an informational `check-incomplete` finding instead of passing clean.
-A stroked rectangle outline cannot be told from a filled rectangle by bounds, and a
-white fill counts as artwork.
+A white fill counts as artwork.
 
 The default `loop-default` profile does **not** enable Tier-2. Use a separate
 profile to opt in (see `examples/profile-tiered-bleed.json`).

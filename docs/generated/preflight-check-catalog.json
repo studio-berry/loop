@@ -212,7 +212,7 @@
       "fixups": [
         "add-bleed"
       ],
-      "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through images, shadings and filled rectangles, so stroked or oddly shaped artwork is judged by raster confirmation or reported check-incomplete. A stroked rectangle outline cannot be told from a filled rectangle by bounds. White or near-white fills count as artwork.",
+      "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through the area that images and filled paths or glyphs actually paint inside it, cut by their clip, so stroked artwork such as hairlines and keylines is judged by raster confirmation or reported check-incomplete. White or near-white fills count as artwork.",
       "measures": "Whether painted content reaches the requested bleed margin.",
       "parameters": [
         {

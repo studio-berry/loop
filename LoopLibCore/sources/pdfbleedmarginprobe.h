@@ -55,9 +55,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeEdgeResult
     QRectF stripRect;
     /// Upper bound of the share of the strip covered by artwork bounds (0..1), set by the fast pass.
     qreal boundsCoverage = 0.0;
-    /// False when hasContent rests on bounds that touch enough of the strip, but the pieces proven
-    /// to fill their bounds (images, shadings, filled rectangles) cover less than minEdgeCoverage
-    /// of it, and no raster measurement confirmed it.
+    /// False when hasContent rests on bounds that touch enough of the strip, but the filled
+    /// geometry (images, filled paths and glyphs, clipped) paints less than minEdgeCoverage of
+    /// it, and no raster measurement confirmed it.
     bool confirmed = true;
 };
 
@@ -84,8 +84,8 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeResult
 /// Fast path: measures how much of each bleed strip the bounding rects from
 /// `PDFPrecompiledPage::calculateGraphicPieceInfos` cover. A strip is populated when that
 /// coverage reaches `minEdgeCoverage`, so a few stray marks do not count. No rasterization.
-/// Bounds prove a strip is populated only through images, shadings and filled rectangles; for any other
-/// piece the edge is left unconfirmed.
+/// The edge is confirmed only when images and filled paths, cut by their clip, actually paint
+/// `minEdgeCoverage` of the strip; strokes alone leave it unconfirmed.
 ///
 /// Raster path (raster_confirm): renders the four edge strips at probe_dpi and counts
 /// non-background pixels against `minEdgeCoverage`. It confirms or demotes every edge the bounds

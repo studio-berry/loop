@@ -886,6 +886,8 @@ PDFPrecompiledPage::GraphicPieceInfos PDFPrecompiledPage::calculateGraphicPieceI
     struct State
     {
         QTransform matrix;
+        QPainterPath clipPath;
+        bool clipped = false;
     };
     std::stack<State> stateStack;
     stateStack.emplace();
@@ -927,6 +929,8 @@ PDFPrecompiledPage::GraphicPieceInfos PDFPrecompiledPage::calculateGraphicPieceI
                     info.boundingRect = pagePath.controlPointRect();
                     info.pagePath = pagePath;
                     info.isFilled = data.brush.style() != Qt::NoBrush;
+                    info.isClipped = stateStack.top().clipped;
+                    info.clipPath = stateStack.top().clipPath;
 
                     const int elementCount = pagePath.elementCount();
                     for (int i = 0; i < elementCount; ++i)
@@ -977,6 +981,8 @@ PDFPrecompiledPage::GraphicPieceInfos PDFPrecompiledPage::calculateGraphicPieceI
                     info.type = GraphicPieceInfo::Type::Image;
                     info.boundingRect = pagePath.controlPointRect();
                     info.pagePath = pagePath;
+                    info.isClipped = stateStack.top().clipped;
+                    info.clipPath = stateStack.top().clipPath;
 
                     const int elementCount = pagePath.elementCount();
                     for (int i = 0; i < elementCount; ++i)
@@ -1060,7 +1066,10 @@ PDFPrecompiledPage::GraphicPieceInfos PDFPrecompiledPage::calculateGraphicPieceI
 
             case InstructionType::Clip:
             {
-                // Do nothing, we are just collecting information
+                State& state = stateStack.top();
+                const QPainterPath pageClip = state.matrix.map(m_clips[instruction.dataIndex].clipPath);
+                state.clipPath = state.clipped ? state.clipPath.intersected(pageClip) : pageClip;
+                state.clipped = true;
                 break;
             }
 
