@@ -346,7 +346,7 @@
   },
   "content-bleed": {
    "measures": "Whether painted content reaches the requested bleed margin.",
-   "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+   "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through images, shadings and filled rectangles, so stroked or oddly shaped artwork is judged by raster confirmation or reported check-incomplete. A stroked rectangle outline cannot be told from a filled rectangle by bounds. White or near-white fills count as artwork.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -405,6 +405,11 @@
      "finding_type": "needs-auto-bleed",
      "severity": "info",
      "condition": "always info: the page has a bleed gap and is a candidate for the add-bleed fixup."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "an edge's bounds touch enough of the strip but do not prove it solid, and raster_confirm is off or the strip raster exceeded max_raster_pixels, so the edge is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1443,14 +1448,14 @@
   {
    "id": "bleed-raster-strip-depth",
    "priority": "P2",
-   "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+   "gap": "content-bleed accepted any artwork bounds touching a bleed strip, and raster confirmation never re-checked an accepted edge, so sparse marks passed while the bleed margin was empty; strips now need 10% coverage by bounds or raster ink, and an edge bounds cannot prove solid is raster-checked or reported check-incomplete (filed as #120)",
    "families": [
     "sheetfed-offset",
     "packaging",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#120",
+   "state": "landed",
+   "closed_by": "content-bleed",
    "deferral": null
   },
   {

@@ -170,6 +170,16 @@ Tier-2 runs only when Tier-1 passes (boxes are adequate) and the profile include
 `raster_confirm: true`, pages flagged by the fast pass undergo a focused strip-raster
 confirmation — no full-page render.
 
+A bleed strip counts as populated only when artwork covers at least 10% of it, so
+a few stray marks that merely touch the strip do not pass. The bounds pass proves a
+strip populated only through images, shadings and filled rectangles; any other
+artwork (hairlines, strokes, text) that touches the strip is not proven. With
+`raster_confirm: true` the strip raster decides such an edge (ink share of at least
+10%, at `probe_dpi`); without it, or when the strip exceeds `max_raster_pixels`, the
+page reports an informational `check-incomplete` finding instead of passing clean.
+A stroked rectangle outline cannot be told from a filled rectangle by bounds, and a
+white fill counts as artwork.
+
 The default `loop-default` profile does **not** enable Tier-2. Use a separate
 profile to opt in (see `examples/profile-tiered-bleed.json`).
 
@@ -527,6 +537,8 @@ passes, and only the target check is exercised.
 | `content-bleed-missing.pdf` | tiered-bleed | fail (warnings) | `content-bleed`, `needs-auto-bleed` (artwork stops at trim) |
 | `content-bleed-raster-confirm.pdf` | tiered-bleed-raster | fail (warnings) | `bleed-margin-empty`, `needs-auto-bleed` (raster-confirmed empty margins) |
 | `content-bleed-three-of-four.pdf` | tiered-bleed | fail (warnings) | `content-bleed` (one empty edge only) |
+| `content-bleed-sparse-marks.pdf` | tiered-bleed | fail (warnings) | `content-bleed` (a 1 pt dot per edge is below the coverage floor) |
+| `content-bleed-hairline-margin.pdf` | tiered-bleed-raster | fail (warnings) | `bleed-margin-empty` (a diagonal hairline per edge inks under the floor; `check-incomplete` without raster) |
 | `ink-coverage-over.pdf` | test-ink-coverage | warning | `ink-coverage` (over-limit TAC region) |
 | `ink-coverage-ok.pdf` | test-ink-coverage | pass | clean TAC below the threshold |
 | `transparency-normal-cmyk.pdf` | test-transparency-risk | pass | matching CMYK group/content is clean |

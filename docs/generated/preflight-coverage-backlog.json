@@ -225,17 +225,17 @@
       "state": "open"
     },
     {
-      "closed_by": "#120",
+      "closed_by": "content-bleed",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
         "digital"
       ],
-      "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+      "gap": "content-bleed accepted any artwork bounds touching a bleed strip, and raster confirmation never re-checked an accepted edge, so sparse marks passed while the bleed margin was empty; strips now need 10% coverage by bounds or raster ink, and an edge bounds cannot prove solid is raster-checked or reported check-incomplete (filed as #120)",
       "id": "bleed-raster-strip-depth",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "#113",

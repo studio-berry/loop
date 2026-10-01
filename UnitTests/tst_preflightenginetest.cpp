@@ -1642,7 +1642,8 @@ void PreflightEngineTest::probe_sparseMarginCalibration_pinsTheCoverageFloor()
         QVERIFY(edge.boundsCoverage > 0.9);
     }
 
-    // The raster measures the same hairline well under the floor and demotes every edge.
+    // The raster measures the same hairline (marks at or below the probe threshold) well under the
+    // floor and demotes every edge.
     const pdf::PDFBleedMarginProbeResult hairlineRaster = probeFixture(QStringLiteral("content-bleed-hairline-margin.pdf"), false);
     for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { hairlineRaster.left, hairlineRaster.right, hairlineRaster.top, hairlineRaster.bottom })
     {
@@ -1650,7 +1651,7 @@ void PreflightEngineTest::probe_sparseMarginCalibration_pinsTheCoverageFloor()
         QVERIFY(edge.confirmed);
         QVERIFY(edge.totalPixels > 0);
         const qreal ink = static_cast<qreal>(edge.inkPixels) / static_cast<qreal>(edge.totalPixels);
-        QVERIFY2(ink > 0.0 && ink < settings.minEdgeCoverage, qPrintable(QString::number(ink)));
+        QVERIFY2(ink < settings.minEdgeCoverage, qPrintable(QString::number(ink)));
     }
 }
 

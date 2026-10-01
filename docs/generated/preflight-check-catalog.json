@@ -212,7 +212,7 @@
       "fixups": [
         "add-bleed"
       ],
-      "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+      "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through images, shadings and filled rectangles, so stroked or oddly shaped artwork is judged by raster confirmation or reported check-incomplete. A stroked rectangle outline cannot be told from a filled rectangle by bounds. White or near-white fills count as artwork.",
       "measures": "Whether painted content reaches the requested bleed margin.",
       "parameters": [
         {
@@ -265,6 +265,11 @@
         {
           "condition": "always info: the page has a bleed gap and is a candidate for the add-bleed fixup.",
           "finding_type": "needs-auto-bleed",
+          "severity": "info"
+        },
+        {
+          "condition": "an edge's bounds touch enough of the strip but do not prove it solid, and raster_confirm is off or the strip raster exceeded max_raster_pixels, so the edge is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
           "severity": "info"
         }
       ]
