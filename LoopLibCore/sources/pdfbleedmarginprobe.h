@@ -117,6 +117,6 @@ private:
     PDFDocumentSession* m_session;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFBLEEDMARGINPROBE_H
+#endif   // PDFBLEEDMARGINPROBE_H

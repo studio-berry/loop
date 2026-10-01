@@ -2275,8 +2275,8 @@ void runContentBleedCheck(PDFDocumentSession* session,
             }
 
             const QString reason = check.rasterConfirm
-                ? PDFTranslationContext::tr("the strip raster could not be measured within the pixel budget")
-                : PDFTranslationContext::tr("raster confirmation is off, so artwork bounds alone cannot show the strip is inked");
+                                       ? PDFTranslationContext::tr("the strip raster could not be measured within the pixel budget")
+                                       : PDFTranslationContext::tr("raster confirmation is off, so artwork bounds alone cannot show the strip is inked");
             PreflightFinding incomplete;
             incomplete.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
             incomplete.page = int(pageIndex + 1);

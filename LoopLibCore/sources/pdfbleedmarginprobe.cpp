@@ -75,7 +75,8 @@ QRectF targetBleedRect(const QRectF& reference, const QMarginsF& bleedMM)
     return QRectF(reference.left() - left,
                   reference.top() - bottom,
                   reference.width() + left + right,
-                  reference.height() + top + bottom).normalized();
+                  reference.height() + top + bottom)
+        .normalized();
 }
 
 QRect mapPageRectToImage(const QRectF& pageRect, const QTransform& pageToDevice, const QSize& imageSize)
@@ -104,10 +105,14 @@ PDFReal sideBleedPt(const QMarginsF& bleedMM, PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return bleedMM.left() * PDF_MM_TO_POINT;
-        case PDFBleedFixupSide::Right: return bleedMM.right() * PDF_MM_TO_POINT;
-        case PDFBleedFixupSide::Top: return bleedMM.top() * PDF_MM_TO_POINT;
-        case PDFBleedFixupSide::Bottom: return bleedMM.bottom() * PDF_MM_TO_POINT;
+        case PDFBleedFixupSide::Left:
+            return bleedMM.left() * PDF_MM_TO_POINT;
+        case PDFBleedFixupSide::Right:
+            return bleedMM.right() * PDF_MM_TO_POINT;
+        case PDFBleedFixupSide::Top:
+            return bleedMM.top() * PDF_MM_TO_POINT;
+        case PDFBleedFixupSide::Bottom:
+            return bleedMM.bottom() * PDF_MM_TO_POINT;
     }
     return 0.0;
 }
@@ -249,7 +254,7 @@ StripCoverage measureStripCoverage(const PDFPrecompiledPage::GraphicPieceInfos& 
     return coverage;
 }
 
-} // namespace
+}   // namespace
 
 PDFBleedMarginProbe::PDFBleedMarginProbe(PDFDocumentSession* session) :
     m_session(session)
@@ -257,8 +262,8 @@ PDFBleedMarginProbe::PDFBleedMarginProbe(PDFDocumentSession* session) :
 }
 
 PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
-                                                      size_t pageIndex,
-                                                      const PDFBleedMarginProbeSettings& settings)
+                                                     size_t pageIndex,
+                                                     const PDFBleedMarginProbeSettings& settings)
 {
     PDFBleedMarginProbeResult result = probeFast(page, pageIndex, settings);
 
@@ -327,8 +332,8 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
 }
 
 PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
-                                                          size_t pageIndex,
-                                                          const PDFBleedMarginProbeSettings& settings)
+                                                         size_t pageIndex,
+                                                         const PDFBleedMarginProbeSettings& settings)
 {
     PDFBleedMarginProbeResult result;
 
@@ -381,10 +386,18 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
             edgeResult.hasContent = true;
             switch (side)
             {
-                case PDFBleedFixupSide::Left: result.left = edgeResult; break;
-                case PDFBleedFixupSide::Right: result.right = edgeResult; break;
-                case PDFBleedFixupSide::Top: result.top = edgeResult; break;
-                case PDFBleedFixupSide::Bottom: result.bottom = edgeResult; break;
+                case PDFBleedFixupSide::Left:
+                    result.left = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Right:
+                    result.right = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Top:
+                    result.top = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Bottom:
+                    result.bottom = edgeResult;
+                    break;
             }
             continue;
         }
@@ -402,10 +415,18 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
 
         switch (side)
         {
-            case PDFBleedFixupSide::Left: result.left = edgeResult; break;
-            case PDFBleedFixupSide::Right: result.right = edgeResult; break;
-            case PDFBleedFixupSide::Top: result.top = edgeResult; break;
-            case PDFBleedFixupSide::Bottom: result.bottom = edgeResult; break;
+            case PDFBleedFixupSide::Left:
+                result.left = edgeResult;
+                break;
+            case PDFBleedFixupSide::Right:
+                result.right = edgeResult;
+                break;
+            case PDFBleedFixupSide::Top:
+                result.top = edgeResult;
+                break;
+            case PDFBleedFixupSide::Bottom:
+                result.bottom = edgeResult;
+                break;
         }
     }
 
@@ -413,10 +434,10 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeFast(const PDFPage* page,
 }
 
 PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
-                                                            size_t pageIndex,
-                                                            const PDFBleedMarginProbeSettings& settings,
-                                                            const QRectF& reference,
-                                                            const QRectF&)
+                                                           size_t pageIndex,
+                                                           const PDFBleedMarginProbeSettings& settings,
+                                                           const QRectF& reference,
+                                                           const QRectF&)
 {
     PDFBleedMarginProbeResult result;
 
@@ -446,8 +467,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
     features.setFlag(PDFRenderer::DisplayAnnotations, false);
 
     const QSizeF mediaSize = page->getRotatedMediaBox().size();
-    if (settings.dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height())
-        || mediaSize.width() <= 0.0 || mediaSize.height() <= 0.0)
+    if (settings.dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height()) || mediaSize.width() <= 0.0 || mediaSize.height() <= 0.0)
     {
         return result;
     }
@@ -456,9 +476,7 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
     const double fullWidthPxReal = std::ceil(mediaSize.width() * pointToPixel);
     const double fullHeightPxReal = std::ceil(mediaSize.height() * pointToPixel);
 
-    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal)
-        || fullWidthPxReal > static_cast<double>(std::numeric_limits<int>::max())
-        || fullHeightPxReal > static_cast<double>(std::numeric_limits<int>::max()))
+    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal) || fullWidthPxReal > static_cast<double>(std::numeric_limits<int>::max()) || fullHeightPxReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
@@ -489,10 +507,18 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
             edgeResult.hasContent = true;
             switch (side)
             {
-                case PDFBleedFixupSide::Left: result.left = edgeResult; break;
-                case PDFBleedFixupSide::Right: result.right = edgeResult; break;
-                case PDFBleedFixupSide::Top: result.top = edgeResult; break;
-                case PDFBleedFixupSide::Bottom: result.bottom = edgeResult; break;
+                case PDFBleedFixupSide::Left:
+                    result.left = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Right:
+                    result.right = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Top:
+                    result.top = edgeResult;
+                    break;
+                case PDFBleedFixupSide::Bottom:
+                    result.bottom = edgeResult;
+                    break;
             }
             continue;
         }
@@ -545,10 +571,18 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
 
         switch (side)
         {
-            case PDFBleedFixupSide::Left: result.left = edgeResult; break;
-            case PDFBleedFixupSide::Right: result.right = edgeResult; break;
-            case PDFBleedFixupSide::Top: result.top = edgeResult; break;
-            case PDFBleedFixupSide::Bottom: result.bottom = edgeResult; break;
+            case PDFBleedFixupSide::Left:
+                result.left = edgeResult;
+                break;
+            case PDFBleedFixupSide::Right:
+                result.right = edgeResult;
+                break;
+            case PDFBleedFixupSide::Top:
+                result.top = edgeResult;
+                break;
+            case PDFBleedFixupSide::Bottom:
+                result.bottom = edgeResult;
+                break;
         }
     }
 
@@ -570,9 +604,7 @@ bool PDFBleedMarginProbe::pixelIsInk(const QImage& image, int x, int y, int thre
     }
 
     // Premultiplied white/near-white background is empty margin, not ink.
-    if (qRed(pixel) >= 255 - threshold
-        && qGreen(pixel) >= 255 - threshold
-        && qBlue(pixel) >= 255 - threshold)
+    if (qRed(pixel) >= 255 - threshold && qGreen(pixel) >= 255 - threshold && qBlue(pixel) >= 255 - threshold)
     {
         return false;
     }
@@ -580,4 +612,4 @@ bool PDFBleedMarginProbe::pixelIsInk(const QImage& image, int x, int y, int thre
     return true;
 }
 
-} // namespace pdf
+}   // namespace pdf
