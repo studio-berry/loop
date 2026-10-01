@@ -42,7 +42,6 @@
                 "analysis_box": "bleed",
                 "area_mm2": 38.18152779481039,
                 "max_ink_pct": 300,
-                "min_region_area_mm2": 0.25,
                 "peak_ink_pct": 400,
                 "region_rank": 1
             },
