@@ -24,6 +24,9 @@ claims:
       - differential:UnitTestsStandardOracle
       - differential:UnitTestsConversionOracle
       - security:scripts/ci/check_source_integrity.py
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
 unresolved:
   - core:scripts/ci/check_independent_validation_gate.py
   - Only UnitTestsPreflightEngine, UnitTestsPreflightCorpus and UnitTestsBleedMarginProbe were built and run locally; the other listed unit, integration and differential lanes are proven by the linux-build and windows-build CI lanes, not by this worktree.
