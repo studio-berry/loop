@@ -206,7 +206,12 @@ This check is deliberately not enabled by `loop-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.
 Pages exceeding the raster pixel budget emit an informational page-scope finding,
 set the check status to `skipped`, and set `inspection_complete` to `false`;
-budget exhaustion never silently passes as a clean inspection.
+budget exhaustion never silently passes as a clean inspection. The
+`min_region_area_mm2` floor is physical, so a small rich-black element is
+reported on an A3 page exactly as on an A6 card. A region needs four raster pixels
+to be told apart from antialiasing; when `probe_dpi` is too coarse for that
+(the pixel area times four exceeds `min_region_area_mm2`) each page reports an
+informational `check-incomplete` finding instead of passing clean.
 
 ## Image downsampling fixup
 

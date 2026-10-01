@@ -1745,7 +1745,6 @@ void PreflightEngineTest::run_inkCoverage_reportsIsolatedOverLimitRegionOnLargeP
     QCOMPARE(result.warnings.first().type, QStringLiteral("ink-coverage"));
     const double areaMm2 = result.warnings.first().evidence.value(QStringLiteral("area_mm2")).toDouble();
     QVERIFY2(areaMm2 > 25.0 && areaMm2 < 50.0, qPrintable(QString::number(areaMm2)));
-    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("min_region_area_mm2")).toDouble(), 0.25);
     QVERIFY(result.warnings.first().evidence.value(QStringLiteral("peak_ink_pct")).toDouble() > 390.0);
 
     // The deprecated page-percentage floor no longer suppresses the region.

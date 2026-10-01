@@ -1,0 +1,59 @@
+{
+    "checks": [
+        {
+            "diagnostics": [
+                "deprecated:analysis_box; use restrictions.page_box"
+            ],
+            "id": "ink-coverage",
+            "scope_restrictions": {
+                "page_box": "bleed"
+            },
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - Ink Coverage",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "bbox": [
+                299.9893101482326,
+                499.5415356711003,
+                317.2686944127708,
+                517.2966142684401
+            ],
+            "check_id": "ink-coverage",
+            "evidence": {
+                "analysis_box": "bleed",
+                "area_mm2": 38.18152779481039,
+                "max_ink_pct": 300,
+                "min_region_area_mm2": 0.25,
+                "peak_ink_pct": 400,
+                "region_rank": 1
+            },
+            "message": "Total ink coverage 400% exceeds maximum 300% over 38 mm^2 on page 1",
+            "page": 1,
+            "scope": "object",
+            "scope_restrictions": {
+                "page_box": "bleed"
+            },
+            "severity": "warning",
+            "type": "ink-coverage"
+        }
+    ]
+}

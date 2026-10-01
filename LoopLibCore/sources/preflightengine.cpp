@@ -2458,7 +2458,6 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                 { QStringLiteral("peak_ink_pct"), region.peakInkCoverage * 100.0 },
                 { QStringLiteral("max_ink_pct"), check.maxInkPct },
                 { QStringLiteral("area_mm2"), region.areaMM2 },
-                { QStringLiteral("min_region_area_mm2"), check.minRegionAreaMm2 },
                 { QStringLiteral("analysis_box"), analysisBox },
                 { QStringLiteral("region_rank"), ++regionRank }
             };
