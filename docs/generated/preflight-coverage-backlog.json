@@ -287,16 +287,16 @@
       "state": "open"
     },
     {
-      "closed_by": "#114",
+      "closed_by": "font-integrity",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
       ],
-      "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+      "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
       "id": "font-glyph-coverage",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "thin-strokes",

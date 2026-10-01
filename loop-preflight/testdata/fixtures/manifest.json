@@ -873,6 +873,17 @@
     "notes": "#668 corpus gap: embedded FontFile2 truncated so inspectPDFFontIntegrity reports TruncatedProgram."
   },
   {
+    "id": "font-glyph-missing",
+    "pdf": "font-glyph-missing.pdf",
+    "profile": "testdata/profiles/test-font-integrity.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["font-integrity"]
+    },
+    "source": "hand-built",
+    "notes": "#114 regression: embedded TrueType subset parses cleanly but has no glyph for shown codes 0xE9 (page content), 0xEA (Form XObject) and 0xEB (Widget appearance stream). Passed clean before glyph coverage was audited."
+  },
+  {
     "id": "thin-parts-clear",
     "pdf": "thin-parts-clear.pdf",
     "profile": "testdata/profiles/test-thin-parts-clear.json",
