@@ -13,12 +13,33 @@ import subprocess
 from pathlib import Path
 
 from scripts.qualification import run_independent_validators as validators
-from scripts.qualification.compare_independent_renders import compare
 from scripts.qualification.verify_independent_packets import REQUIRED_TESTS, digest, seal, verify, write_json
 
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY = ROOT / "docs/independent-claims.json"
 
+
+def native_test_environment(test: dict, base: dict, oracle_directories: list[str]) -> dict:
+    properties = {item["name"]: item["value"] for item in test.get("properties", [])}
+    environment = dict(base)
+    for assignment in properties.get("ENVIRONMENT", []):
+        name, value = assignment.split("=", 1)
+        environment[name] = value
+    for modification in properties.get("ENVIRONMENT_MODIFICATION", []):
+        name, expression = modification.split("=", 1)
+        operation, value = expression.split(":", 1)
+        if operation == "path_list_prepend":
+            environment[name] = value + os.pathsep + environment.get(name, "")
+        elif operation == "path_list_append":
+            environment[name] = environment.get(name, "") + os.pathsep + value
+        elif operation == "set":
+            environment[name] = value
+        elif operation == "unset":
+            environment.pop(name, None)
+        else:
+            raise ValueError(f"Unsupported CTest environment modification: {operation}")
+    environment["PATH"] = os.pathsep.join(oracle_directories) + os.pathsep + environment.get("PATH", "")
+    return environment
 
 def run(build: Path, output: Path, distribution: Path, distribution_sha256: str, source_sha: str, run_url: str) -> int:
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha) or not re.fullmatch(r"[0-9a-f]{64}", distribution_sha256):
@@ -50,7 +71,7 @@ def run(build: Path, output: Path, distribution: Path, distribution_sha256: str,
         if not found or Path(found).resolve() != expected:
             raise ValueError("PATH resolved a different oracle than the pinned distribution")
     listing = subprocess.run(["ctest", "--test-dir", str(build), "-C", "Release", "--show-only=json-v1"], capture_output=True, check=True)
-    tests = {item["name"]: item["command"] for item in json.loads(listing.stdout)["tests"] if item["name"] in REQUIRED_TESTS}
+    tests = {item["name"]: item for item in json.loads(listing.stdout)["tests"] if item["name"] in REQUIRED_TESTS}
     if set(tests) != REQUIRED_TESTS:
         raise ValueError(f"Required native targets absent: {REQUIRED_TESTS - set(tests)}")
     shutil.copy2(build / "CMakeCache.txt", output / "CMakeCache.txt")
@@ -64,11 +85,16 @@ def run(build: Path, output: Path, distribution: Path, distribution_sha256: str,
     home = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$", cache, re.MULTILINE)
     if not home or Path(home.group(1)).resolve() != ROOT:
         raise ValueError("Build directory belongs to another source checkout")
-    for name, command in sorted(tests.items()):
+    for name, test in sorted(tests.items()):
+        report_name = name + ".xml"
+        command = [*test["command"], "-o", str(output / report_name) + ",xml"]
+        properties = {item["name"]: item["value"] for item in test.get("properties", [])}
+        working_directory = properties.get("WORKING_DIRECTORY", str(build))
+        test_environment = native_test_environment(test, env, sorted({str(path.parent) for path in tools.values()}))
         lane["binaries"][name] = digest(Path(command[0]))
         with (output / (name + ".log")).open("wb") as report:
-            completed = subprocess.run(command, env=env, cwd=build, stdout=report, stderr=subprocess.STDOUT, timeout=600, check=False)
-        lane["tests"][name] = {"command": command, "exit_code": completed.returncode}
+            completed = subprocess.run(command, env=test_environment, cwd=working_directory, stdout=report, stderr=subprocess.STDOUT, timeout=600, check=False)
+        lane["tests"][name] = {"command": command, "exit_code": completed.returncode, "working_directory": working_directory, "report": report_name}
         if completed.returncode != 0:
             failures.append(name)
     for fixture in inventory["fixtures"] + inventory["derived_fixtures"]:
@@ -98,6 +124,8 @@ def run(build: Path, output: Path, distribution: Path, distribution_sha256: str,
         if record["status"] != fixture["expected"]:
             failures.append(name)
     if not failures:
+        from scripts.qualification.compare_independent_renders import compare
+
         renders = compare(ROOT, inventory, output / "core-renders", output / "ghostscript", distribution)
         write_json(output / "ghostscript/measurements.json", renders)
         if renders["status"] != "passed":
@@ -108,6 +136,10 @@ def run(build: Path, output: Path, distribution: Path, distribution_sha256: str,
         if digest(ROOT / fixture["path"]) != fixture["sha256"]:
             lane["failures"].append("source fixture mutated: " + fixture["id"])
             lane["status"] = "rejected"
+    current = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    if current != source_sha or subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT).returncode != 0:
+        lane["failures"].append("source checkout changed during qualification")
+        lane["status"] = "rejected"
     seal(output, lane)
     if lane["status"] == "passed":
         verify(output, inventory, source_sha)

@@ -10,6 +10,7 @@ from unittest import mock
 from scripts.qualification import install_oracle_bundle as installer
 from scripts.qualification import verify_independent_packets as packets
 from scripts.qualification import run_independent_validators as validators
+from scripts.qualification import run_independent_packet as runner
 
 
 class PacketIntegrityTest(unittest.TestCase):
@@ -27,6 +28,16 @@ class PacketIntegrityTest(unittest.TestCase):
         packets.write_json(self.directory / "ghostscript/measurements.json", {"status": "passed", "fixtures": []})
         packets.seal(self.directory, self.lane)
 
+    def test_ctest_fixture_environment_and_runtime_paths_are_preserved(self):
+        test = {"properties": [
+            {"name": "ENVIRONMENT", "value": ["LOOP_FIXTURE_DATA_DIR=/source/UnitTests/testdata"]},
+            {"name": "ENVIRONMENT_MODIFICATION", "value": ["PATH=path_list_prepend:/qt/bin"]},
+        ]}
+        environment = runner.native_test_environment(test, {"PATH": "/system/bin"}, ["/oracle/bin"])
+        self.assertEqual(environment["LOOP_FIXTURE_DATA_DIR"], "/source/UnitTests/testdata")
+        self.assertEqual(environment["PATH"].split(runner.os.pathsep), ["/oracle/bin", "/qt/bin", "/system/bin"])
+        with self.assertRaisesRegex(ValueError, "Unsupported CTest"):
+            runner.native_test_environment({"properties": [{"name": "ENVIRONMENT_MODIFICATION", "value": ["PATH=unknown:value"]}]}, {}, [])
     def test_packet_members_and_source_are_bound(self):
         packets.verify(self.directory, self.inventory, "a" * 40)
         with self.assertRaisesRegex(ValueError, "Source SHA"):
