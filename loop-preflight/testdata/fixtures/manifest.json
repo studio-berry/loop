@@ -873,6 +873,28 @@
     "notes": "#668 corpus gap: small opaque mark fully covered by later opaque paint."
   },
   {
+    "id": "off-page-content-clipped",
+    "pdf": "off-page-content-clipped.pdf",
+    "profile": "testdata/profiles/test-off-page-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["off-page-content"]
+    },
+    "source": "generated",
+    "notes": "#118 regression: a 400 pt square spanning the page, painted under a clip wholly outside the page. Its raw bounds cover the page, so the bounds-only test passed it clean."
+  },
+  {
+    "id": "obscured-content-clipped",
+    "pdf": "obscured-content-clipped.pdf",
+    "profile": "testdata/profiles/test-obscured-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["obscured-content"]
+    },
+    "source": "generated",
+    "notes": "#118 regression: a mark clipped to a small patch and a mark covered only by two adjacent opaque rectangles. No covering object bounds contain the mark raw bounds, so the heuristic passed both clean."
+  },
+  {
     "id": "hidden-layers",
     "pdf": "hidden-layers.pdf",
     "profile": "testdata/profiles/test-hidden-layers.json",

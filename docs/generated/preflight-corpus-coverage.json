@@ -167,7 +167,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "obscured-content"
+        "obscured-content",
+        "obscured-content-clipped"
       ],
       "uninspected_fixtures": []
     },
@@ -176,7 +177,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "off-page-content"
+        "off-page-content",
+        "off-page-content-clipped"
       ],
       "uninspected_fixtures": []
     },
@@ -274,6 +276,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 78,
+  "source_fixtures": 80,
   "unattributed_findings": 1
 }

@@ -42,6 +42,7 @@
 #include <QJsonObject>
 #include <QPainter>
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 
 #include <algorithm>
 #include <vector>
@@ -84,6 +85,9 @@ private slots:
     void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
     void hiddenContent_checksAreRegistered();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
+    void run_offPageContent_judgesClippedGeometry();
+    void run_obscuredContent_judgesPaintedCoverage();
+    void run_obscuredContent_reportsBlendModeCoverAsIncomplete();
     void run_whiteOverprint_reportsWhiteImageOverprintFromCompositor();
     void run_transparencyRisk_reportsOverprintInteractionFromCompositor();
     void run_overprintCompositorProbe_skipsPagesWithoutOverprintAndReportsBudgetAsIncomplete();
@@ -948,6 +952,59 @@ void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
 
 namespace
 {
+// Builds a one-page 200 x 200 pt PDF from raw content and a resource dictionary body.
+QByteArray makeClipTestPdf(const QByteArray& content, const QByteArray& resources = QByteArray())
+{
+    const QList<QByteArray> objects{
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 200 200 ] /Contents 4 0 R /Resources << " + resources + " >> >>",
+        "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream"
+    };
+    QByteArray bytes("%PDF-1.7\n");
+    QList<int> offsets;
+    for (int index = 0; index < objects.size(); ++index)
+    {
+        offsets.append(bytes.size());
+        bytes += QByteArray::number(index + 1) + " 0 obj\n" + objects.at(index) + "\nendobj\n";
+    }
+    const int xref = bytes.size();
+    bytes += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n0000000000 65535 f \n";
+    for (int offset : offsets)
+    {
+        bytes += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+    }
+    bytes += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R >>\nstartxref\n" +
+             QByteArray::number(xref) + "\n%%EOF\n";
+    return bytes;
+}
+
+pdf::PreflightResult runClipTestCheck(const QByteArray& pdfBytes, const QString& checkId)
+{
+    QTemporaryFile file;
+    if (!file.open())
+    {
+        return pdf::PreflightResult();
+    }
+    file.write(pdfBytes);
+    file.flush();
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(file.fileName());
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Clip aware geometry") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), checkId },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") },
+                                            { QStringLiteral("amount_pt"), 0 } } } }
+    };
+    return engine.run(profile);
+}
+
 pdf::PreflightResult runCompositorFixture(const QString& fixtureName, const QString& checkId, const QJsonObject& extra = QJsonObject())
 {
     const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fixtureName;
@@ -970,6 +1027,74 @@ pdf::PreflightResult runCompositorFixture(const QString& fixtureName, const QStr
                                    { QStringLiteral("checks"), QJsonArray{ check } } });
 }
 }   // namespace
+
+void PreflightEngineTest::run_offPageContent_judgesClippedGeometry()
+{
+    const QString offPage = QStringLiteral("off-page-content");
+
+    // A mark spanning the page, under a clip wholly off the page, paints only off the page.
+    const pdf::PreflightResult clippedOff = runClipTestCheck(
+        makeClipTestPdf("q 300 300 100 100 re W n 0 g 0 0 400 400 re f Q\n"), offPage);
+    QCOMPARE(clippedOff.warnings.size(), 1);
+    QCOMPARE(clippedOff.warnings.first().type, offPage);
+
+    // A mark whose raw bounds are off the page but that the clip removes entirely
+    // paints nothing, so it is not off-page content.
+    const pdf::PreflightResult clippedAway = runClipTestCheck(
+        makeClipTestPdf("q 0 0 50 50 re W n 0 g 300 300 20 20 re f Q\n"), offPage);
+    QCOMPARE(clippedAway.warnings.size(), 0);
+
+    // The clip is restored by Q: the same mark after Q is off the page again.
+    const pdf::PreflightResult afterRestore = runClipTestCheck(
+        makeClipTestPdf("q 0 0 50 50 re W n Q 0 g 300 300 20 20 re f\n"), offPage);
+    QCOMPARE(afterRestore.warnings.size(), 1);
+
+    // A mark still inside the page after clipping stays clean.
+    const pdf::PreflightResult inside = runClipTestCheck(
+        makeClipTestPdf("q 10 10 100 100 re W n 0 g 0 0 200 200 re f Q\n"), offPage);
+    QCOMPARE(inside.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_obscuredContent_judgesPaintedCoverage()
+{
+    const QString obscured = QStringLiteral("obscured-content");
+
+    // Clipped mark covered by one opaque rectangle, and a mark covered by the union of two.
+    const pdf::PreflightResult covered = runClipTestCheck(
+        makeClipTestPdf("q 40 40 20 20 re W n 0 g 0 0 200 200 re f Q\n"
+                        "0.5 g 30 30 50 50 re f\n"
+                        "0 g 100 100 20 20 re f\n"
+                        "0.5 g 95 95 15 30 re f 110 95 15 30 re f\n"),
+        obscured);
+    QCOMPARE(covered.warnings.size(), 2);
+    QCOMPARE(covered.warnings.first().type, obscured);
+
+    // The covering rectangle's bounds contain the mark, but the cover is a triangle that misses it.
+    const pdf::PreflightResult missed = runClipTestCheck(
+        makeClipTestPdf("0 g 100 100 20 20 re f\n"
+                        "0.5 g 90 90 m 140 90 l 90 140 l f\n"),
+        obscured);
+    QCOMPARE(missed.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_obscuredContent_reportsBlendModeCoverAsIncomplete()
+{
+    const pdf::PreflightResult result = runClipTestCheck(
+        makeClipTestPdf("0 g 100 100 20 20 re f /GS0 gs 1 g 90 90 50 50 re f\n",
+                        "/ExtGState << /GS0 << /BM /Multiply >> >>"),
+        QStringLiteral("obscured-content"));
+    QVERIFY(!result.pass);
+    bool incomplete = false;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        if (finding.type == QStringLiteral("check-incomplete"))
+        {
+            incomplete = true;
+            QCOMPARE(finding.evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
+        }
+    }
+    QVERIFY(incomplete);
+}
 
 void PreflightEngineTest::run_whiteOverprint_reportsWhiteImageOverprintFromCompositor()
 {

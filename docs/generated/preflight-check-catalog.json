@@ -623,7 +623,7 @@
         "sheetfed-offset"
       ],
       "fixups": [],
-      "limitations": "Heuristic; not a RIP occlusion model.",
+      "limitations": "Painted vector geometry is intersected with the effective clip and covered in paint order; images, shadings and transparency are not modelled, a blend mode or soft mask over earlier paint reports the page incomplete, and findings stay heuristic, not a RIP occlusion model.",
       "measures": "Content covered by later painting.",
       "parameters": [
         {
@@ -659,7 +659,7 @@
         "digital"
       ],
       "fixups": [],
-      "limitations": "Clipping can hide false positives and false negatives.",
+      "limitations": "Painted bounds are intersected with the effective clip before the page test; stroke and degenerate geometry use rectangle bounds, and images and shadings are not inspected.",
       "measures": "Content whose bounds fall outside the page.",
       "parameters": [
         {
