@@ -286,6 +286,11 @@ struct InspectionFixture
         check.enabled = true;
         check.required = true;
         profile.checks.append(check);
+        pdf::PDFEvidenceRecord record;
+        record.id = QStringLiteral("facade-inspection-evidence");
+        record.fidelity = QStringLiteral("exact");
+        record.artifact.sha256 = result.documentRevisionDigest;
+        evidence.records.append(record);
     }
 
     QString addFinding()
