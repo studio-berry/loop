@@ -154,7 +154,7 @@ std::optional<DocumentInspectionToken> DocumentFacade::beginInspection(
     }
     m_inspectionProfile = profile;
     m_inspectionInputDigest = inputDigest;
-    const DocumentInspectionToken token{ ++m_inspectionRequest, m_generation, currentRevision() };
+    DocumentInspectionToken token{ ++m_inspectionRequest, m_generation, currentRevision() };
     m_inspectionToken = token;
     m_inspection = {};
     m_inspection.state = DocumentInspectionState::Running;

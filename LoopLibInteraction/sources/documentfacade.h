@@ -208,6 +208,7 @@ public:
                             const pdf::PreflightResult& result,
                             const pdf::PDFEvidenceGraph& evidence,
                             QString& error);
+    /// Closes result admission; the submitting host owns cancellation of its job.
     bool cancelInspection(const DocumentInspectionToken& token, QString& error);
     bool failInspection(const DocumentInspectionToken& token, const QString& code,
                         const QString& message, QString& error);
