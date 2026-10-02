@@ -314,7 +314,6 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
     m_typedError.clear();
     setFacets({});
     setOutputState(DocumentOutputState::None);
-    setState(DocumentState::Opening);
 
     m_pendingInvocation = invocation;
 
