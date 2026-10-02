@@ -66,34 +66,6 @@ QString resolveWorkerExecutable()
     return PdfWorkerClient::defaultWorkerExecutable();
 }
 
-bool stageProfile(const QString& profilePath, const QString& tempDir, QString* stagedPath, QString* error)
-{
-    const QFileInfo info(profilePath);
-    if (!info.exists() || !info.isFile())
-    {
-        if (error)
-        {
-            *error = PDFToolTranslationContext::tr("Profile not found: %1").arg(profilePath);
-        }
-        return false;
-    }
-    const QString target = QDir(tempDir).filePath(info.fileName());
-    if (QFile::exists(target))
-    {
-        QFile::remove(target);
-    }
-    if (!QFile::copy(profilePath, target))
-    {
-        if (error)
-        {
-            *error = PDFToolTranslationContext::tr("Failed to stage profile into worker temp.");
-        }
-        return false;
-    }
-    *stagedPath = target;
-    return true;
-}
-
 void publishWorkerResult(const PDFToolOptions& options, const WorkerClientResult& result)
 {
     if (options.executionContext)
@@ -212,13 +184,8 @@ PDFToolExitCode PDFToolWorkerOpenApplication::execute(const PDFToolOptions& opti
 
     PdfWorkerClient client;
     QString error;
-    if (!client.start(resolveWorkerExecutable(), inputPath, tempDir.path(), outputDir.path(), &error))
-    {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("worker.unavailable"), error);
-        return PDFToolExitCode::ProcessingFailure;
-    }
+    client.start(resolveWorkerExecutable(), inputPath, tempDir.path(), outputDir.path(), &error);
 
-    const qint64 firstPid = client.workerPid();
     const WorkerClientResult result = client.openDocument(inputPath, options.password, options.permissiveReading);
     publishWorkerResult(options, result);
 
@@ -227,21 +194,6 @@ PDFToolExitCode PDFToolWorkerOpenApplication::execute(const PDFToolOptions& opti
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error,
                          result.code.isEmpty() ? QStringLiteral("worker.unavailable") : result.code,
                          result.reason.isEmpty() ? PDFToolTranslationContext::tr("Worker open failed.") : result.reason);
-        // Prove the supervisor can replace a dead worker without restarting.
-        if (!client.isRunning())
-        {
-            QString replaceError;
-            if (client.replaceWorker(&replaceError) && options.executionContext)
-            {
-                const WorkerClientResult ping = client.ping();
-                QJsonObject data = result.response;
-                data.insert(QStringLiteral("replaced_worker"), true);
-                data.insert(QStringLiteral("previous_pid"), firstPid);
-                data.insert(QStringLiteral("replacement_pid"), client.workerPid());
-                data.insert(QStringLiteral("replacement_ping_ok"), ping.outcome == WorkerClientOutcome::Success);
-                options.executionContext->setData(data);
-            }
-        }
         return mapWorkerOutcome(result.outcome);
     }
 
@@ -303,23 +255,11 @@ PDFToolExitCode PDFToolWorkerPreflightApplication::execute(const PDFToolOptions&
         return PDFToolExitCode::InternalError;
     }
 
-    QString stagedProfile;
-    QString stageError;
-    if (!stageProfile(options.preflightProfilePath, tempDir.path(), &stagedProfile, &stageError))
-    {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("worker.profile"), stageError);
-        return PDFToolExitCode::InputError;
-    }
-
     PdfWorkerClient client;
     QString error;
-    if (!client.start(resolveWorkerExecutable(), inputPath, tempDir.path(), outputDir.path(), &error))
-    {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("worker.unavailable"), error);
-        return PDFToolExitCode::ProcessingFailure;
-    }
+    client.start(resolveWorkerExecutable(), inputPath, tempDir.path(), outputDir.path(), &error);
 
-    const WorkerClientResult result = client.preflight(inputPath, stagedProfile, outputDir.path(),
+    const WorkerClientResult result = client.preflight(inputPath, options.preflightProfilePath, outputDir.path(),
                                                        options.password, options.permissiveReading);
     publishWorkerResult(options, result);
 
@@ -331,8 +271,6 @@ PDFToolExitCode PDFToolWorkerPreflightApplication::execute(const PDFToolOptions&
                                       .arg(result.response.value(QStringLiteral("status")).toString()),
                                   options.outputCodec);
         }
-        // Findings are still a successful isolated run (not PASS-as-clean when
-        // status is findings); map findings to Findings exit when reported.
         if (result.response.value(QStringLiteral("status")).toString() == QLatin1String("findings"))
         {
             return PDFToolExitCode::Findings;

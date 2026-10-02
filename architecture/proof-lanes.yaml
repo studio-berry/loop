@@ -172,6 +172,8 @@ subsystems:
     summary: Preflight engine, corpus, and profile identity.
     owns_targets: true
     paths_from: agent-policy:preflight
+    paths:
+      - LoopLibCore/sources/pdfpreflightreceipt.cpp
     required:
       - kind: unit
         bind: policy
@@ -367,7 +369,7 @@ subsystems:
         id: agent-policy:pdftool
         executes: binding
   - id: pdf-worker-isolation
-    summary: "PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618)."
+    summary: "Linux and Windows worker containment, bounded IPC, receipt admission and privacy (#20)."
     owns_targets: true
     paths:
       - PdfTool/loop-pdf-worker-main.cpp
@@ -378,6 +380,12 @@ subsystems:
       - PdfTool/pdfworkerprotocol.h
       - PdfTool/pdfworkerclient.cpp
       - PdfTool/pdfworkerclient.h
+      - PdfTool/pdfworkerprocess.cpp
+      - PdfTool/pdfworkerprocess_win.cpp
+      - PdfTool/pdfworkerprocess.h
+      - PdfTool/worker-runtime.cmake
+      - PdfTool/write-worker-runtime.cmake
+      - UnitTests/pdfworkerprobe.cpp
       - PdfTool/pdftoolworker.cpp
       - PdfTool/pdftoolworker.h
       - UnitTests/tst_pdfworkerisolation.cpp

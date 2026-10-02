@@ -99,7 +99,21 @@ struct LOOPLIBCORESHARED_EXPORT PreflightInspectionReceipt
     QString fidelity;
     QStringList limitations;
     PreflightVerdict verdict;
+
+    QJsonObject toJson() const;
 };
+
+LOOPLIBCORESHARED_EXPORT bool preflightInspectionReceiptFromJson(
+    const QJsonObject& object, PreflightInspectionReceipt& receipt, QString& errorMessage);
+
+LOOPLIBCORESHARED_EXPORT bool validatePreflightInspectionReceipt(
+    const PreflightInspectionReceipt& receipt, const QString& inputDigest,
+    const PDFRevisionIdentity& revision, const PreflightProfileData& profile, QString& errorMessage);
+
+LOOPLIBCORESHARED_EXPORT PreflightInspectionReceipt buildTerminalPreflightReceipt(
+    const QString& inputDigest, const PDFRevisionIdentity& revision,
+    const QString& profileDigest, const QString& reasonCode);
+
 
 /// Binds one Core result to its input revision and evidence. The identity is
 /// stable for the same input, effective profile and coverage policy; a missing

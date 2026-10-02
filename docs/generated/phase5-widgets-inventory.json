@@ -92,6 +92,7 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loop-preflight/tools/CMakeLists.txt",
       "tools/CanvasBenchmark/CMakeLists.txt",
       "tools/CodeGenerator/CMakeLists.txt",
@@ -441,6 +442,7 @@
         "UnitTestsPageBoxCorpus",
         "UnitTestsPageMasterExport",
         "UnitTestsPdfToolContract",
+        "UnitTestsPdfWorkerIsolation",
         "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightInteraction",
@@ -560,6 +562,32 @@
       ]
     },
     {
+      "id": "LoopPdfWorkerProbe",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "advapi32",
+        "ws2_32"
+      ],
+      "direct_qt_modules": [
+        "Core"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "PdfExampleGenerator",
       "kind": "executable",
       "cmake": "tools/PdfExampleGenerator/CMakeLists.txt",
@@ -618,8 +646,10 @@
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Xml",
+        "advapi32",
         "ole32",
-        "sapi"
+        "sapi",
+        "userenv"
       ],
       "direct_qt_modules": [
         "Core",
@@ -2481,18 +2511,35 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
+        "LoopLibCore",
         "Qt6::Core",
-        "Qt6::Test"
+        "Qt6::Gui",
+        "Qt6::Test",
+        "advapi32",
+        "ole32",
+        "userenv",
+        "ws2_32"
       ],
       "direct_qt_modules": [
         "Core",
+        "Gui",
         "Test"
       ],
-      "transitive_targets": [],
-      "transitive_qt_modules": [],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
-        "Test"
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
@@ -3596,7 +3643,7 @@
     }
   ],
   "counts": {
-    "targets": 82,
+    "targets": 83,
     "installed_in_profile": 5,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,

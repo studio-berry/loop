@@ -24,7 +24,11 @@
 #define PDFWORKERCLIENT_H
 
 #include <QJsonObject>
-#include <QProcess>
+#include "pdfworkerprocess.h"
+#include "pdfpreflightverdict.h"
+#include <QTemporaryDir>
+#include <atomic>
+#include <optional>
 #include <QString>
 
 namespace pdftool
@@ -91,9 +95,14 @@ public:
 
 private:
     WorkerClientResult call(const QJsonObject& request, int timeoutMs);
-    WorkerClientResult fromWorkerFailure(const QString& op, const QString& reason);
+    WorkerClientResult fromWorkerFailure(const QJsonObject& request, const QString& code);
+    bool stageSnapshot(const QString& source, const QString& name, QString& target, QString& digest);
 
-    QProcess m_process;
+    WorkerProcess m_process;
+    QTemporaryDir m_snapshots;
+    std::atomic_bool m_cancelled{ false };
+    std::optional<pdf::PreflightProfileData> m_expectedProfile;
+
     QString m_workerExecutable;
     QString m_sandboxInput;
     QString m_sandboxTemp;

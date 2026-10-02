@@ -6992,7 +6992,8 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile,
                                      const QJsonObject& jobSpecBindings,
                                      const QJsonObject& cliBindings,
                                      const PDFRevalidationPlan& plan,
-                                     const std::optional<QSet<int>>& cliPages)
+                                     const std::optional<QSet<int>>& cliPages,
+                                     PreflightProfileData* effectiveProfile)
 {
     const PreflightProfileImportResult imported = importPreflightProfile(profile);
     if (!imported.ok)
@@ -7083,6 +7084,10 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile,
     data.profileIdentity = imported.identity.toJson();
     data.profileIdentity.insert(QStringLiteral("digest"), data.fileDigest);
     data.profileIdentity.insert(QStringLiteral("effective_digest"), data.effectiveDigest);
+    if (effectiveProfile)
+    {
+        *effectiveProfile = data;
+    }
     return run(data, plan);
 }
 

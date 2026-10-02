@@ -639,12 +639,34 @@ set_target_properties(UnitTestsPdfToolContract PROPERTIES
 )
 add_test(UnitTestsPdfToolContract "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPdfToolContract")
 
+add_executable(LoopPdfWorkerProbe
+    pdfworkerprobe.cpp
+    ${CMAKE_SOURCE_DIR}/PdfTool/pdfworkersandbox.cpp)
+target_link_libraries(LoopPdfWorkerProbe PRIVATE Qt6::Core)
+target_include_directories(LoopPdfWorkerProbe PRIVATE ${CMAKE_SOURCE_DIR}/PdfTool)
+if(WIN32)
+    target_link_libraries(LoopPdfWorkerProbe PRIVATE ws2_32 advapi32)
+endif()
+set_target_properties(LoopPdfWorkerProbe PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR})
+loop_stage_worker_runtime(LoopPdfWorkerProbe)
+
 add_executable(UnitTestsPdfWorkerIsolation
     tst_pdfworkerisolation.cpp
-)
-target_link_libraries(UnitTestsPdfWorkerIsolation PRIVATE Qt6::Core Qt6::Test)
-add_dependencies(UnitTestsPdfWorkerIsolation PdfTool loop-pdf-worker)
+    ${CMAKE_SOURCE_DIR}/PdfTool/pdfworkerclient.cpp
+    ${CMAKE_SOURCE_DIR}/PdfTool/pdfworkerprocess.cpp
+    ${CMAKE_SOURCE_DIR}/PdfTool/pdfworkerprocess_win.cpp)
+target_include_directories(UnitTestsPdfWorkerIsolation PRIVATE
+    ${CMAKE_SOURCE_DIR}/PdfTool ${CMAKE_SOURCE_DIR}/LoopLibCore/sources)
+if(WIN32)
+    target_compile_definitions(UnitTestsPdfWorkerIsolation PRIVATE _WIN32_WINNT=0x0A00)
+    target_link_libraries(UnitTestsPdfWorkerIsolation PRIVATE userenv advapi32 ole32 ws2_32)
+endif()
+target_link_libraries(UnitTestsPdfWorkerIsolation PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+add_dependencies(UnitTestsPdfWorkerIsolation PdfTool loop-pdf-worker LoopPdfWorkerProbe)
 target_compile_definitions(UnitTestsPdfWorkerIsolation PRIVATE
+    PDFWORKER_EXECUTABLE_PATH="$<TARGET_FILE:loop-pdf-worker>"
+    PDFWORKER_PROBE_PATH="$<TARGET_FILE:LoopPdfWorkerProbe>"
     PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
     LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
     LOOP_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
