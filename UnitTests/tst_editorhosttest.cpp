@@ -1252,16 +1252,18 @@ void EditorHostTest::preflightFencesCompletionsThatLostTheirRequestIdentity()
 
         scheduler.jobFinished(corrupted);
 
+        // The fenced completion publishes nothing; the earlier verdict stays on screen,
+        // marked stale, rather than being replaced by the unowned result.
         QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Stale);
-        QVERIFY(!controller->hasResult());
-        QVERIFY(!host.hasPreflightReport());
+        QVERIFY(controller->hasResult());
         QVERIFY(host.preflightStateName() != QStringLiteral("pass"));
         QVERIFY(!controller->operatorSummary().trimmed().isEmpty());
     }
 
     // A worker success is not a verdict by itself. This completion names the live request
     // exactly, but it arrives before the worker admitted an outcome for it, so the run has
-    // to fail closed rather than publish an unowned result.
+    // to fail closed rather than publish an unowned result. The retained stale verdict
+    // keeps the state, and the summary carries the failure.
     QVERIFY(host.runPreflight());
     watchedJobId = controller->jobId();
     QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Running);
@@ -1272,9 +1274,8 @@ void EditorHostTest::preflightFencesCompletionsThatLostTheirRequestIdentity()
     unadmitted.documentRevision = controller->documentRevision();
     scheduler.jobFinished(unadmitted);
 
-    QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Error);
-    QVERIFY(!controller->hasResult());
-    QVERIFY(!host.hasPreflightReport());
+    QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Stale);
+    QVERIFY(controller->operatorSummary().contains(QStringLiteral("unavailable")));
 
     // The fence rejects mismatched completions only: a later live run still completes.
     QVERIFY(host.runPreflight());
@@ -1375,8 +1376,11 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
 
         scheduler.jobFinished(corrupted);
 
+        // The controller discards the plan. The shell still names the discarded digest so
+        // the surface can show what went stale, so the fence is the lifecycle state.
         QCOMPARE(controller->state(), pdfinteraction::ActionListController::State::Idle);
-        QVERIFY(host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+        QVERIFY(controller->planDigest().isEmpty());
+        QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
         QVERIFY(!host.fixExecutionArmed());
         QVERIFY(!controller->operatorSummary().trimmed().isEmpty());
     }
@@ -1396,7 +1400,7 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
 
     QCOMPARE(controller->state(), pdfinteraction::ActionListController::State::Failed);
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("failed"));
-    QVERIFY(host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+    QVERIFY(controller->planDigest().isEmpty());
     QVERIFY(!host.fixExecutionArmed());
 
     // The fence rejects mismatched completions only: a later live plan still completes.
