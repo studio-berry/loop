@@ -1306,6 +1306,9 @@ void DocumentFacadeTest::inspectionInvalidation()
     else
         harness.facade->close();
     const auto invalidated = harness.facade->operatorState();
+    const bool replaced = change == QLatin1String("reopen") || change == QLatin1String("close");
+    QCOMPARE(invalidated.inspection.state, replaced ? pdfinteraction::DocumentInspectionState::NotChecked
+                                                    : pdfinteraction::DocumentInspectionState::Stale);
     QVERIFY(!invalidated.canActOnInspection());
     QVERIFY(!invalidated.inspection.receipt);
     QVERIFY(invalidated.inspection.findingIds.isEmpty());
@@ -1315,6 +1318,17 @@ void DocumentFacadeTest::inspectionInvalidation()
     QVERIFY(!harness.facade->selectFinding(findingId, error));
     QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
     QCOMPARE(harness.writer.writeCount, 0);
+    const auto next = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    if (change == QLatin1String("close"))
+    {
+        QVERIFY(!next);
+        return;
+    }
+    QVERIFY(next);
+    QVERIFY(next->request > token->request);
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(harness.facade->completeInspection(*next, fixture.result, fixture.evidence, error));
+    QCOMPARE(harness.facade->operatorState().inspection.receipt->revision, harness.context.getRevision());
 }
 
 void DocumentFacadeTest::inspectionStopsWhenContextIsDestroyed()
