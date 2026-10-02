@@ -4,3 +4,4 @@ claims:
   - id: typed-document-facade-operator-state
     evidence:
       - unit:agent-policy:interaction
+unresolved: []
