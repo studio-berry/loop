@@ -28,6 +28,7 @@
 #include "documentloader.h"
 #include "jobrelay.h"
 #include "jobsubmitter.h"
+#include "pdfpreflightverdict.h"
 
 #include <QFlags>
 #include <QObject>
@@ -37,6 +38,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace pdfinteraction
 {
@@ -87,6 +89,62 @@ enum class ShellDocumentStatus
 
 const char* getDocumentStateName(DocumentState state);
 const char* getShellDocumentStatusName(ShellDocumentStatus status);
+
+enum class DocumentInspectionState
+{
+    NotChecked,
+    Running,
+    Completed,
+    Cancelled,
+    Failed,
+    Stale
+};
+
+struct DocumentInspectionToken
+{
+    quint64 request = 0;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+
+    bool operator==(const DocumentInspectionToken&) const = default;
+};
+
+struct DocumentPlanIntent
+{
+    QString operationId;
+    QString findingId;
+    QString receiptIdentity;
+    pdf::PDFRevisionIdentity revision;
+};
+
+struct DocumentInspection
+{
+    DocumentInspectionState state = DocumentInspectionState::NotChecked;
+    int progress = 0;
+    std::optional<pdf::PreflightInspectionReceipt> receipt;
+    QStringList findingIds;
+    QString selectedFindingId;
+    std::optional<DocumentPlanIntent> planIntent;
+    QString failureCode;
+    QString failureMessage;
+};
+
+/// A value snapshot for both interactive and unattended hosts. A plan intent
+/// requests Core planning; it grants no mutation or publication authority.
+struct DocumentOperatorState
+{
+    DocumentState document = DocumentState::Empty;
+    DocumentFacets facets;
+    DocumentOutputState output = DocumentOutputState::None;
+    DocumentSource source;
+    QString documentKey;
+    pdf::PDFRevisionIdentity revision;
+    quint64 generation = 0;
+    DocumentInspection inspection;
+    QString failureCode;
+
+    bool canActOnInspection() const;
+};
 
 /// One presentation-facing document lifecycle.
 ///
@@ -141,6 +199,22 @@ public:
     const IDocumentRevisionSource& revisionSource() const noexcept { return m_revisionSource; }
     pdf::PDFRevisionIdentity currentRevision() const;
 
+    DocumentOperatorState operatorState() const;
+    std::optional<DocumentInspectionToken> beginInspection(const QString& inputDigest,
+                                                           const pdf::PreflightProfileData& profile,
+                                                           QString& error);
+    bool updateInspectionProgress(const DocumentInspectionToken& token, int progress, QString& error);
+    bool completeInspection(const DocumentInspectionToken& token,
+                            const pdf::PreflightResult& result,
+                            const pdf::PDFEvidenceGraph& evidence,
+                            QString& error);
+    bool cancelInspection(const DocumentInspectionToken& token, QString& error);
+    bool failInspection(const DocumentInspectionToken& token, const QString& code,
+                        const QString& message, QString& error);
+    bool selectFinding(const QString& findingId, QString& error);
+    bool requestPlan(const QString& operationId, QString& error);
+    void clearPlanIntent();
+
     /// Advances on every document replacement and on every close. A completion
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
@@ -168,6 +242,7 @@ public:
     bool cancelPendingOperation();
 
 signals:
+    void operatorStateChanged();
     void stateChanged(pdfinteraction::DocumentState state);
     void facetsChanged(pdfinteraction::DocumentFacets facets);
 
@@ -201,6 +276,8 @@ private:
     void setOutputState(DocumentOutputState outputState);
     void updateAvailability();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
+    bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
+    void invalidateInspection();
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a
@@ -220,6 +297,11 @@ private:
     DocumentOutputState m_outputState = DocumentOutputState::None;
     DocumentSource m_source;
     QString m_typedError;
+    DocumentInspection m_inspection;
+    DocumentInspectionToken m_inspectionToken;
+    pdf::PreflightProfileData m_inspectionProfile;
+    QString m_inspectionInputDigest;
+    quint64 m_inspectionRequest = 0;
 
     quint64 m_generation = 0;
     int m_rejectedCompletions = 0;

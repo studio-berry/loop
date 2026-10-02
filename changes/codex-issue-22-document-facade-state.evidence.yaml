@@ -1,0 +1,6 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: typed-document-facade-operator-state
+    evidence:
+      - unit:agent-policy:interaction

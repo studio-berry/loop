@@ -59,6 +59,11 @@ DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
     m_relay(new JobRelay, [](JobRelay* relay)
             { relay->deleteLater(); })
 {
+    connect(&m_revisionSource, &PDFDocumentContextSource::revisionChanged, this,
+            [this]()
+            { invalidateInspection(); });
+    connect(&context, &QObject::destroyed, this, [this]()
+            { invalidateInspection(); });
     m_handlersRegistered = registerHandlers();
     updateAvailability();
 }
@@ -300,6 +305,7 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
 
     supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
 
+    setState(DocumentState::Opening);
     // Replacement drops the previous identity before any new work is issued, so
     // nothing computed against it can be admitted into the new one.
     detachDocument();
@@ -633,6 +639,7 @@ void DocumentFacade::detachDocument()
     }
 
     ++m_generation;
+    m_inspection = {};
 
     // Availability computed against the previous document is not evidence about
     // the next one.
