@@ -28,10 +28,13 @@
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
+#include "pdfbleedmarginprobe.h"
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
 #include "pdffixupregistry.h"
+#include "pdffont.h"
+#include "pdffontintegrity.h"
 #include "pdfrepairoperation.h"
 #include "pdfobject.h"
 #include "pdfthinpartprobe.h"
@@ -42,6 +45,7 @@
 #include <QJsonObject>
 #include <QPainter>
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 
 #include <algorithm>
 #include <vector>
@@ -82,8 +86,18 @@ private slots:
     void thinPartProbe_reportsBoundedWidthAndPrecision();
     void fontIntegrity_checkIsRegistered();
     void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
+    void run_fontIntegrity_reportsShownGlyphsMissingFromSubset();
+    void classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces();
     void hiddenContent_checksAreRegistered();
+    void run_hiddenLayers_reportsOcmdScreenPrintDivergence();
+    void run_hiddenLayers_reportsUnevaluableMembershipAsIncomplete();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
+    void run_offPageContent_judgesClippedGeometry();
+    void run_obscuredContent_judgesPaintedCoverage();
+    void run_obscuredContent_reportsBlendModeCoverAsIncomplete();
+    void run_whiteOverprint_reportsWhiteImageOverprintFromCompositor();
+    void run_transparencyRisk_reportsOverprintInteractionFromCompositor();
+    void run_overprintCompositorProbe_skipsPagesWithoutOverprintAndReportsBudgetAsIncomplete();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
@@ -99,12 +113,18 @@ private slots:
     void legacyDecisionsWithoutSchemaKindStillLoad();
     void run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed();
     void run_contentBleedRasterConfirm_emitsBleedMarginEmptyAndNeedsAutoBleed();
+    void run_contentBleedSparseMarks_reportsEmptyMarginInsteadOfPassing();
+    void run_contentBleedHairlineWithoutRaster_reportsIncompleteNotClean();
+    void run_contentBleedHairlineWithRaster_reportsEveryEdgeEmpty();
+    void probe_sparseMarginCalibration_pinsTheCoverageFloor();
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
     void run_whiteOverprint_passesWhenOverprintOff();
     void run_whiteOverprint_emitsWarningInsideFormXObject();
     void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
     void run_inkCoverage_passesBelowLimitFixture();
     void run_inkCoverage_budgetAbortIsIncomplete();
+    void run_inkCoverage_reportsIsolatedOverLimitRegionOnLargePage();
+    void run_inkCoverage_reportsFloorFinerThanProbeResolutionAsIncomplete();
     void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
     void run_downsampleFixupAdvertisedForHighDpiImage();
     void run_imageResolutionBBoxMatchesCtmPlacement();
@@ -495,6 +515,8 @@ void PreflightEngineTest::parseProfile_rejectsInvalidInkCoverageParameters()
         { QStringLiteral("min_region_area_pct"), QJsonValue(-1) },
         { QStringLiteral("min_region_area_pct"), QJsonValue(101) },
         { QStringLiteral("min_region_area_pct"), QJsonValue(QStringLiteral("0.05")) },
+        { QStringLiteral("min_region_area_mm2"), QJsonValue(-1) },
+        { QStringLiteral("min_region_area_mm2"), QJsonValue(QStringLiteral("0.25")) },
         { QStringLiteral("max_regions_per_page"), QJsonValue(1.5) },
         { QStringLiteral("max_regions_per_page"), QJsonValue(QStringLiteral("20")) },
         { QStringLiteral("max_raster_pixels"), QJsonValue(0) },
@@ -901,6 +923,63 @@ void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
     QVERIFY(result.warnings.isEmpty());
 }
 
+void PreflightEngineTest::run_fontIntegrity_reportsShownGlyphsMissingFromSubset()
+{
+    // The subset parses cleanly but has no glyph for codes 0xE9 (page content),
+    // 0xEA (Form XObject) and 0xEB (annotation appearance stream).
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-glyph-missing.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Font integrity") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+
+    const pdf::PreflightFinding& finding = result.errors.first();
+    QCOMPARE(finding.checkId, QStringLiteral("font-integrity"));
+    QCOMPARE(finding.page, 1);
+    QCOMPARE(finding.evidence.value(QStringLiteral("font_resource")).toString(), QStringLiteral("F2+0"));
+    QCOMPARE(finding.evidence.value(QStringLiteral("inspection_complete")).toBool(), true);
+    QCOMPARE(finding.evidence.value(QStringLiteral("code_kind")).toString(), QStringLiteral("character-code"));
+    QCOMPARE(finding.evidence.value(QStringLiteral("missing_codes")).toArray(), (QJsonArray{ 0xE9, 0xEA, 0xEB }));
+    QVERIFY(finding.evidence.value(QStringLiteral("defects")).toArray().contains(QStringLiteral("MissingGlyph")));
+}
+
+void PreflightEngineTest::classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces()
+{
+    const QPainterPath* noGlyph = nullptr;
+    const QPainterPath empty;
+    QPainterPath outline;
+    outline.addRect(0, 0, 1, 1);
+
+    const auto glyphItem = [](const QPainterPath* path, QChar character, pdf::GID gid)
+    {
+        pdf::TextSequenceItem item(path, character, 500.0, 7);
+        item.glyphIndex = gid;
+        return item;
+    };
+
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(-120.0)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(pdf::TextSequenceItem(noGlyph, QChar(), 500.0, 7)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&outline, QChar('A'), 0)) == pdf::PDFShownGlyphDefect::Notdef);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar('A'), 12)) == pdf::PDFShownGlyphDefect::EmptyOutline);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar(' '), 12)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&empty, QChar(), 12)) == pdf::PDFShownGlyphDefect::None);
+    QVERIFY(pdf::classifyShownGlyph(glyphItem(&outline, QChar('A'), 12)) == pdf::PDFShownGlyphDefect::None);
+}
+
 void PreflightEngineTest::hiddenContent_checksAreRegistered()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -908,6 +987,103 @@ void PreflightEngineTest::hiddenContent_checksAreRegistered()
     QVERIFY(engine.hasCheck(QStringLiteral("hidden-layers")));
     QVERIFY(engine.hasCheck(QStringLiteral("off-page-content")));
     QVERIFY(engine.hasCheck(QStringLiteral("obscured-content")));
+}
+
+void PreflightEngineTest::run_hiddenLayers_reportsOcmdScreenPrintDivergence()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ocmd-print-divergence.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Hidden layers") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("hidden-layers") },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.errors.isEmpty());
+    QCOMPARE(result.warnings.size(), 5);
+
+    QMap<QString, QString> directions;   // policy -> "view/print"
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QCOMPARE(finding.checkId, QStringLiteral("hidden-layers"));
+        QCOMPARE(finding.page, 1);
+        QCOMPARE(finding.evidence.value(QStringLiteral("governor")).toString(), QStringLiteral("ocmd"));
+        QCOMPARE(finding.evidence.value(QStringLiteral("divergence")).toBool(), true);
+        QVERIFY(!finding.evidence.value(QStringLiteral("ocg_names")).toArray().isEmpty());
+        directions.insert(finding.evidence.value(QStringLiteral("policy")).toString(),
+                          finding.evidence.value(QStringLiteral("view_state")).toString() + QLatin1Char('/') + finding.evidence.value(QStringLiteral("print_state")).toString());
+    }
+
+    QCOMPARE(directions.value(QStringLiteral("AllOn")), QStringLiteral("on/off"));
+    QCOMPARE(directions.value(QStringLiteral("AnyOn")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("AllOff")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("AnyOff")), QStringLiteral("off/on"));
+    QCOMPARE(directions.value(QStringLiteral("VE")), QStringLiteral("off/on"));
+}
+
+void PreflightEngineTest::run_hiddenLayers_reportsUnevaluableMembershipAsIncomplete()
+{
+    // The visibility expression names an operator the specification does not define.
+    const QByteArray content("/OC /M BDC 0 0 0 rg 10 10 20 20 re f EMC\n");
+    const QList<QByteArray> objects{
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [ 5 0 R ] /D << /BaseState /ON >> >> >>",
+        "<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 100 100 ] /Contents 4 0 R "
+        "/Resources << /Properties << /M 6 0 R >> >> >>",
+        "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream",
+        "<< /Type /OCG /Name (Layer) >>",
+        "<< /Type /OCMD /VE [ /Xor 5 0 R 5 0 R ] >>"
+    };
+
+    QByteArray bytes("%PDF-1.7\n");
+    QList<int> offsets;
+    for (int index = 0; index < objects.size(); ++index)
+    {
+        offsets.append(bytes.size());
+        bytes += QByteArray::number(index + 1) + " 0 obj\n" + objects.at(index) + "\nendobj\n";
+    }
+    const int xref = bytes.size();
+    bytes += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n0000000000 65535 f \n";
+    for (int offset : offsets)
+    {
+        bytes += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+    }
+    bytes += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R >>\nstartxref\n" +
+             QByteArray::number(xref) + "\n%%EOF\n";
+
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    file.write(bytes);
+    file.flush();
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(file.fileName());
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Hidden layers") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("hidden-layers") },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+    QCOMPARE(result.errors.first().evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
 }
 
 void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
@@ -941,6 +1117,200 @@ void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
     QCOMPARE(result.warnings.first().type, QStringLiteral("off-page-content"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("off-page-content"));
     QVERIFY(result.warnings.first().bbox.isValid());
+}
+
+namespace
+{
+// Builds a one-page 200 x 200 pt PDF from raw content and a resource dictionary body.
+QByteArray makeClipTestPdf(const QByteArray& content, const QByteArray& resources = QByteArray())
+{
+    const QList<QByteArray> objects{
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 200 200 ] /Contents 4 0 R /Resources << " + resources + " >> >>",
+        "<< /Length " + QByteArray::number(content.size()) + " >>\nstream\n" + content + "endstream"
+    };
+    QByteArray bytes("%PDF-1.7\n");
+    QList<int> offsets;
+    for (int index = 0; index < objects.size(); ++index)
+    {
+        offsets.append(bytes.size());
+        bytes += QByteArray::number(index + 1) + " 0 obj\n" + objects.at(index) + "\nendobj\n";
+    }
+    const int xref = bytes.size();
+    bytes += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n0000000000 65535 f \n";
+    for (int offset : offsets)
+    {
+        bytes += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+    }
+    bytes += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R >>\nstartxref\n" +
+             QByteArray::number(xref) + "\n%%EOF\n";
+    return bytes;
+}
+
+pdf::PreflightResult runClipTestCheck(const QByteArray& pdfBytes, const QString& checkId)
+{
+    QTemporaryFile file;
+    if (!file.open())
+    {
+        return pdf::PreflightResult();
+    }
+    file.write(pdfBytes);
+    file.flush();
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(file.fileName());
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Clip aware geometry") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), checkId },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") },
+                                            { QStringLiteral("amount_pt"), 0 } } } }
+    };
+    return engine.run(profile);
+}
+
+pdf::PreflightResult runCompositorFixture(const QString& fixtureName, const QString& checkId, const QJsonObject& extra = QJsonObject())
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fixtureName;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        return pdf::PreflightResult();
+    }
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    QJsonObject check{ { QStringLiteral("id"), checkId }, { QStringLiteral("severity"), QStringLiteral("warning") } };
+    for (auto it = extra.begin(); it != extra.end(); ++it)
+    {
+        check.insert(it.key(), it.value());
+    }
+    return engine.run(QJsonObject{ { QStringLiteral("name"), QStringLiteral("Compositor overprint") },
+                                   { QStringLiteral("checks"), QJsonArray{ check } } });
+}
+}   // namespace
+
+void PreflightEngineTest::run_offPageContent_judgesClippedGeometry()
+{
+    const QString offPage = QStringLiteral("off-page-content");
+
+    // A mark spanning the page, under a clip wholly off the page, paints only off the page.
+    const pdf::PreflightResult clippedOff = runClipTestCheck(
+        makeClipTestPdf("q 300 300 100 100 re W n 0 g 0 0 400 400 re f Q\n"), offPage);
+    QCOMPARE(clippedOff.warnings.size(), 1);
+    QCOMPARE(clippedOff.warnings.first().type, offPage);
+
+    // A mark whose raw bounds are off the page but that the clip removes entirely
+    // paints nothing, so it is not off-page content.
+    const pdf::PreflightResult clippedAway = runClipTestCheck(
+        makeClipTestPdf("q 0 0 50 50 re W n 0 g 300 300 20 20 re f Q\n"), offPage);
+    QCOMPARE(clippedAway.warnings.size(), 0);
+
+    // The clip is restored by Q: the same mark after Q is off the page again.
+    const pdf::PreflightResult afterRestore = runClipTestCheck(
+        makeClipTestPdf("q 0 0 50 50 re W n Q 0 g 300 300 20 20 re f\n"), offPage);
+    QCOMPARE(afterRestore.warnings.size(), 1);
+
+    // A mark still inside the page after clipping stays clean.
+    const pdf::PreflightResult inside = runClipTestCheck(
+        makeClipTestPdf("q 10 10 100 100 re W n 0 g 0 0 200 200 re f Q\n"), offPage);
+    QCOMPARE(inside.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_obscuredContent_judgesPaintedCoverage()
+{
+    const QString obscured = QStringLiteral("obscured-content");
+
+    // Clipped mark covered by one opaque rectangle, and a mark covered by the union of two.
+    const pdf::PreflightResult covered = runClipTestCheck(
+        makeClipTestPdf("q 40 40 20 20 re W n 0 g 0 0 200 200 re f Q\n"
+                        "0.5 g 30 30 50 50 re f\n"
+                        "0 g 100 100 20 20 re f\n"
+                        "0.5 g 95 95 15 30 re f 110 95 15 30 re f\n"),
+        obscured);
+    QCOMPARE(covered.warnings.size(), 2);
+    QCOMPARE(covered.warnings.first().type, obscured);
+
+    // The covering rectangle's bounds contain the mark, but the cover is a triangle that misses it.
+    const pdf::PreflightResult missed = runClipTestCheck(
+        makeClipTestPdf("0 g 100 100 20 20 re f\n"
+                        "0.5 g 90 90 m 140 90 l 90 140 l f\n"),
+        obscured);
+    QCOMPARE(missed.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_obscuredContent_reportsBlendModeCoverAsIncomplete()
+{
+    const pdf::PreflightResult result = runClipTestCheck(
+        makeClipTestPdf("0 g 100 100 20 20 re f /GS0 gs 1 g 90 90 50 50 re f\n",
+                        "/ExtGState << /GS0 << /BM /Multiply >> >>"),
+        QStringLiteral("obscured-content"));
+    QVERIFY(!result.pass);
+    bool incomplete = false;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        if (finding.type == QStringLiteral("check-incomplete"))
+        {
+            incomplete = true;
+            QCOMPARE(finding.evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
+        }
+    }
+    QVERIFY(incomplete);
+}
+
+void PreflightEngineTest::run_whiteOverprint_reportsWhiteImageOverprintFromCompositor()
+{
+    const pdf::PreflightResult result = runCompositorFixture(QStringLiteral("white-overprint-image.pdf"), QStringLiteral("white-overprint"));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("source")).toString(), QStringLiteral("compositor"));
+    // A 40 pt image at 150 dpi covers about 7000 pixels.
+    const double whitePixels = result.warnings.first().evidence.value(QStringLiteral("white_overprint_pixels")).toDouble();
+    QVERIFY2(whitePixels > 5000.0 && whitePixels < 9000.0, qPrintable(QString::number(whitePixels)));
+}
+
+void PreflightEngineTest::run_transparencyRisk_reportsOverprintInteractionFromCompositor()
+{
+    const pdf::PreflightResult result = runCompositorFixture(QStringLiteral("transparency-overprint-knockout.pdf"), QStringLiteral("transparency-risk"));
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("transparency-overprint-interaction"));
+    QVERIFY(result.warnings.first().evidence.value(QStringLiteral("transparent_overprint_pixels")).toDouble() > 0.0);
+
+    // A plain overprint page with no transparency stays clean for transparency-risk.
+    const pdf::PreflightResult plain = runCompositorFixture(QStringLiteral("overprint-cmyk-mode1-on.pdf"), QStringLiteral("transparency-risk"));
+    QCOMPARE(plain.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_overprintCompositorProbe_skipsPagesWithoutOverprintAndReportsBudgetAsIncomplete()
+{
+    // No overprint declared: the compositor is not consulted and the page stays clean.
+    const pdf::PreflightResult none = runCompositorFixture(QStringLiteral("white-overprint-ok.pdf"), QStringLiteral("white-overprint"));
+    QCOMPARE(none.warnings.size(), 0);
+    QVERIFY(none.pass);
+
+    // A budget too small for the raster is reported by the probe as unrendered, never as clean.
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-image.pdf");
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFOverprintProbe probe(&session);
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    const pdf::PDFOverprintProbeResult limited = probe.probe(page, 150, 100);
+    QVERIFY(!limited.rendered);
+    QVERIFY(limited.budgetExceeded);
+    const pdf::PDFOverprintProbeResult full = probe.probe(page, 150, 250LL * 1000 * 1000);
+    QVERIFY(full.rendered);
+    QVERIFY(full.observation.whiteOverprintPixels > 0);
 }
 
 void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()
@@ -1524,6 +1894,132 @@ void PreflightEngineTest::run_contentBleedRasterConfirm_emitsBleedMarginEmptyAnd
     QCOMPARE(result.fixupsAvailable.first().id, QStringLiteral("add-bleed"));
 }
 
+namespace
+{
+pdf::PDFDocument readBleedFixture(const QString& name)
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + name;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        return pdf::PDFDocument();
+    }
+    return document;
+}
+}   // namespace
+
+void PreflightEngineTest::run_contentBleedSparseMarks_reportsEmptyMarginInsteadOfPassing()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-sparse-marks.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // A 1 pt dot per edge touches every strip but covers far less than the coverage floor.
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(false));
+    QVERIFY(result.pass);
+    QCOMPARE(result.warnings.size(), 2);
+    QCOMPARE(result.warnings.at(0).type, QStringLiteral("content-bleed"));
+    QVERIFY(result.warnings.at(0).message.contains(QStringLiteral("left, right, top, bottom")));
+    QCOMPARE(result.warnings.at(1).type, QStringLiteral("needs-auto-bleed"));
+}
+
+void PreflightEngineTest::run_contentBleedHairlineWithoutRaster_reportsIncompleteNotClean()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-hairline-margin.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // The hairline's bounds fill each strip, but bounds cannot show a stroke inks it: without
+    // raster confirmation the check must say so instead of passing.
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(false));
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.at(0).type, QStringLiteral("check-incomplete"));
+    QCOMPARE(result.warnings.at(0).checkId, QStringLiteral("content-bleed"));
+    QCOMPARE(result.warnings.at(0).evidence.value(QStringLiteral("raster_confirm")).toBool(), false);
+    QCOMPARE(result.warnings.at(0).evidence.value(QStringLiteral("inspection_complete")).toBool(), false);
+    QVERIFY(!result.pass);
+}
+
+void PreflightEngineTest::run_contentBleedHairlineWithRaster_reportsEveryEdgeEmpty()
+{
+    pdf::PDFDocument document = readBleedFixture(QStringLiteral("content-bleed-hairline-margin.pdf"));
+    QVERIFY(document.getCatalog() && document.getCatalog()->getPageCount() == 1);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const pdf::PreflightResult result = engine.run(tieredBleedProfile(true));
+    QVERIFY(result.pass);
+    int emptyEdges = 0;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QVERIFY(finding.type != QStringLiteral("check-incomplete"));
+        if (finding.type == QStringLiteral("bleed-margin-empty"))
+        {
+            ++emptyEdges;
+        }
+    }
+    QCOMPARE(emptyEdges, 4);
+}
+
+void PreflightEngineTest::probe_sparseMarginCalibration_pinsTheCoverageFloor()
+{
+    pdf::PDFBleedMarginProbeSettings settings;
+    const pdf::PDFReal bleedMm = pdf::convertPDFPointToMM(9.0);
+    settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+    settings.dpi = 150;
+    QCOMPARE(settings.minEdgeCoverage, 0.10);
+
+    auto probeFixture = [&settings](const QString& name, bool fastOnly)
+    {
+        pdf::PDFDocument document = readBleedFixture(name);
+        pdf::PDFDocumentSession session(&document);
+        pdf::PDFBleedMarginProbe probe(&session);
+        pdf::PDFBleedMarginProbeSettings local = settings;
+        local.fastOnly = fastOnly;
+        return probe.probe(document.getCatalog()->getPage(0), 0, local);
+    };
+
+    // Solid artwork across every strip: populated and proven by bounds alone.
+    const pdf::PDFBleedMarginProbeResult adequate = probeFixture(QStringLiteral("content-bleed-adequate.pdf"), true);
+    QVERIFY(adequate.allEdgesCovered());
+    QVERIFY(adequate.allEdgesConfirmed());
+    QVERIFY(adequate.left.boundsCoverage > 0.99);
+
+    // Stray dots: bounds coverage is a fraction of a percent, far under the floor.
+    const pdf::PDFBleedMarginProbeResult sparse = probeFixture(QStringLiteral("content-bleed-sparse-marks.pdf"), true);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { sparse.left, sparse.right, sparse.top, sparse.bottom })
+    {
+        QVERIFY(!edge.hasContent);
+        QVERIFY(edge.boundsCoverage > 0.0 && edge.boundsCoverage < 0.02);
+    }
+
+    // Diagonal hairline: bounds see a full strip but cannot prove it inked.
+    const pdf::PDFBleedMarginProbeResult hairlineBounds = probeFixture(QStringLiteral("content-bleed-hairline-margin.pdf"), true);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { hairlineBounds.left, hairlineBounds.right, hairlineBounds.top, hairlineBounds.bottom })
+    {
+        QVERIFY(edge.hasContent);
+        QVERIFY(!edge.confirmed);
+        QVERIFY(edge.boundsCoverage > 0.9);
+    }
+
+    // The raster measures the same hairline (marks at or below the probe threshold) well under the
+    // floor and demotes every edge.
+    const pdf::PDFBleedMarginProbeResult hairlineRaster = probeFixture(QStringLiteral("content-bleed-hairline-margin.pdf"), false);
+    for (const pdf::PDFBleedMarginProbeEdgeResult& edge : { hairlineRaster.left, hairlineRaster.right, hairlineRaster.top, hairlineRaster.bottom })
+    {
+        QVERIFY(!edge.hasContent);
+        QVERIFY(edge.confirmed);
+        QVERIFY(edge.totalPixels > 0);
+        const qreal ink = static_cast<qreal>(edge.inkPixels) / static_cast<qreal>(edge.totalPixels);
+        QVERIFY2(ink < settings.minEdgeCoverage, qPrintable(QString::number(ink)));
+    }
+}
+
 void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverprint()
 {
     const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
@@ -1710,6 +2206,83 @@ void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("skipped"));
     QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("ink coverage raster exceeds the pixel budget"));
     QVERIFY(!pdf::preflightAllowsCertification(result));
+}
+
+void PreflightEngineTest::run_inkCoverage_reportsIsolatedOverLimitRegionOnLargePage()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-isolated-region.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage isolated region") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("probe_dpi"), 150 },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("ink-coverage"));
+    const double areaMm2 = result.warnings.first().evidence.value(QStringLiteral("area_mm2")).toDouble();
+    QVERIFY2(areaMm2 > 25.0 && areaMm2 < 50.0, qPrintable(QString::number(areaMm2)));
+    QVERIFY(result.warnings.first().evidence.value(QStringLiteral("peak_ink_pct")).toDouble() > 390.0);
+
+    // The deprecated page-percentage floor no longer suppresses the region.
+    QJsonObject legacyCheck = profile.value(QStringLiteral("checks")).toArray().first().toObject();
+    legacyCheck.insert(QStringLiteral("min_region_area_pct"), 5.0);
+    const QJsonObject legacyProfile{ { QStringLiteral("name"), QStringLiteral("Ink coverage legacy floor") },
+                                     { QStringLiteral("checks"), QJsonArray{ legacyCheck } } };
+    QCOMPARE(engine.run(legacyProfile).warnings.size(), 1);
+}
+
+void PreflightEngineTest::run_inkCoverage_reportsFloorFinerThanProbeResolutionAsIncomplete()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-isolated-region.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    // At 20 dpi one pixel is about 1.6 mm^2, so a 0.25 mm^2 floor cannot be honored.
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage coarse probe") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("probe_dpi"), 20 },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    bool foundIncomplete = false;
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        if (finding.type == QStringLiteral("check-incomplete"))
+        {
+            foundIncomplete = true;
+            QVERIFY(finding.evidence.value(QStringLiteral("min_resolvable_area_mm2")).toDouble() > 0.25);
+        }
+    }
+    QVERIFY(foundIncomplete);
 }
 
 void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()

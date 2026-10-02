@@ -97,6 +97,11 @@ subsystems:
         id: UnitTestsBleedFixup
         policy_module: core
         executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsBleedMarginProbe
+        policy_module: core
+        executes: binding
       - kind: architecture
         bind: policy
         id: agent-policy:core

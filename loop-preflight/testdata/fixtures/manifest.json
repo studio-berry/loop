@@ -248,6 +248,28 @@
     "notes": "Artwork into left/right/top bleed strips only; Tier-1 emits exactly one content-bleed on the bottom edge."
   },
   {
+    "id": "content-bleed-sparse-marks",
+    "pdf": "content-bleed-sparse-marks.pdf",
+    "profile": "examples/profile-tiered-bleed.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["content-bleed"]
+    },
+    "source": "generated",
+    "notes": "#120 regression: the bleed margin holds only a 1 pt dot per edge. The artwork bounds touch every strip, so the bounds-only probe passed it clean. The strips now need 10% coverage, so each edge reports empty."
+  },
+  {
+    "id": "content-bleed-hairline-margin",
+    "pdf": "content-bleed-hairline-margin.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["content-bleed"]
+    },
+    "source": "generated",
+    "notes": "#120 regression: the bleed margin holds only a 0.1 pt diagonal hairline across each edge. Raster confirmation never re-checked an edge the bounds pass had already accepted, so it passed clean. Raster now demotes each edge to bleed-margin-empty because the hairline inks under 10% of the strip."
+  },
+  {
     "id": "ai-art-missing-bleed",
     "pdf": "ai-art-missing-bleed.pdf",
     "profile": "examples/profile-tiered-bleed-raster.json",
@@ -376,6 +398,28 @@
     "notes": "White overprint using an ICCBased color space."
   },
   {
+    "id": "white-overprint-image",
+    "pdf": "white-overprint-image.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["white-overprint"]
+    },
+    "source": "generated",
+    "notes": "#119 regression: a pure-white DeviceCMYK image painted with overprint on and OPM 1 over cyan. The page-view scan only inspects path paints, so it passed clean; under OPM 1 the compositor makes the white vanish."
+  },
+  {
+    "id": "transparency-overprint-knockout",
+    "pdf": "transparency-overprint-knockout.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["transparency-risk"]
+    },
+    "source": "generated",
+    "notes": "#119 regression: black painted with overprint, OPM 1 and alpha 0.5 inside a knockout CMYK transparency group over cyan. Only the Normal blend mode is used, so the blend scan passed it clean; how overprint, alpha and knockout combine is decided by the compositor."
+  },
+  {
     "id": "ink-coverage-over",
     "pdf": "ink-coverage-over.pdf",
     "profile": "testdata/profiles/test-ink-coverage.json",
@@ -387,6 +431,19 @@
     },
     "source": "generated",
     "notes": "CMYK patch at approximately 370% TAC on an otherwise light page; the test profile isolates the ink-coverage warning."
+  },
+  {
+    "id": "ink-coverage-isolated-region",
+    "pdf": "ink-coverage-isolated-region.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": {
+      "pass": true,
+      "check_ids": [
+        "ink-coverage"
+      ]
+    },
+    "source": "generated",
+    "notes": "#116 regression: one 6 mm square of 400% rich black on an otherwise blank A3 page. It covers about 0.03% of the page, under the old page-percentage floor, so the check passed it clean."
   },
   {
     "id": "ink-coverage-ok",
@@ -851,6 +908,28 @@
     "notes": "#668 corpus gap: small opaque mark fully covered by later opaque paint."
   },
   {
+    "id": "off-page-content-clipped",
+    "pdf": "off-page-content-clipped.pdf",
+    "profile": "testdata/profiles/test-off-page-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["off-page-content"]
+    },
+    "source": "generated",
+    "notes": "#118 regression: a 400 pt square spanning the page, painted under a clip wholly outside the page. Its raw bounds cover the page, so the bounds-only test passed it clean."
+  },
+  {
+    "id": "obscured-content-clipped",
+    "pdf": "obscured-content-clipped.pdf",
+    "profile": "testdata/profiles/test-obscured-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["obscured-content"]
+    },
+    "source": "generated",
+    "notes": "#118 regression: a mark clipped to a small patch and a mark covered only by two adjacent opaque rectangles. No covering object bounds contain the mark raw bounds, so the heuristic passed both clean."
+  },
+  {
     "id": "hidden-layers",
     "pdf": "hidden-layers.pdf",
     "profile": "testdata/profiles/test-hidden-layers.json",
@@ -862,6 +941,17 @@
     "notes": "#668 corpus gap: optional-content group OFF by default with OC-marked content."
   },
   {
+    "id": "ocmd-print-divergence",
+    "pdf": "ocmd-print-divergence.pdf",
+    "profile": "testdata/profiles/test-hidden-layers.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["hidden-layers"]
+    },
+    "source": "hand-built",
+    "notes": "#115 regression: five OCMDs (AllOn, AnyOn, AllOff, AnyOff, VE) over groups with opposite View and Print usage, on Form XObjects and marked content. Screen and print show different content; the scan passed it clean before membership dictionaries were evaluated for both usages."
+  },
+  {
     "id": "font-integrity-corrupt",
     "pdf": "font-integrity-corrupt.pdf",
     "profile": "testdata/profiles/test-font-integrity.json",
@@ -871,6 +961,17 @@
     },
     "source": "hand-built",
     "notes": "#668 corpus gap: embedded FontFile2 truncated so inspectPDFFontIntegrity reports TruncatedProgram."
+  },
+  {
+    "id": "font-glyph-missing",
+    "pdf": "font-glyph-missing.pdf",
+    "profile": "testdata/profiles/test-font-integrity.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["font-integrity"]
+    },
+    "source": "hand-built",
+    "notes": "#114 regression: embedded TrueType subset parses cleanly but has no glyph for shown codes 0xE9 (page content), 0xEA (Form XObject) and 0xEB (Widget appearance stream). Passed clean before glyph coverage was audited."
   },
   {
     "id": "thin-parts-clear",

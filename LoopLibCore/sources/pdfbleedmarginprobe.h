@@ -41,6 +41,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeSettings
     QMarginsF bleedMM = QMarginsF(3.0, 3.0, 3.0, 3.0);
     bool fastOnly = false;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
+    /// Share of a bleed strip that artwork must cover (by bounds) or ink (by raster)
+    /// before the edge counts as populated. A margin holding only a few stray marks is
+    /// below it and is reported as empty.
+    qreal minEdgeCoverage = 0.10;
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeEdgeResult
@@ -49,6 +53,12 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeEdgeResult
     int inkPixels = 0;
     int totalPixels = 0;
     QRectF stripRect;
+    /// Upper bound of the share of the strip covered by artwork bounds (0..1), set by the fast pass.
+    qreal boundsCoverage = 0.0;
+    /// False when hasContent rests on bounds that touch enough of the strip, but the filled
+    /// geometry (images, filled paths and glyphs, clipped) paints less than minEdgeCoverage of
+    /// it, and no raster measurement confirmed it.
+    bool confirmed = true;
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeResult
@@ -62,22 +72,31 @@ struct LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbeResult
     {
         return left.hasContent && right.hasContent && top.hasContent && bottom.hasContent;
     }
+
+    bool allEdgesConfirmed() const
+    {
+        return left.confirmed && right.confirmed && top.confirmed && bottom.confirmed;
+    }
 };
 
 /// Probes whether rendered artwork on a page extends into the bleed margin.
 ///
-/// Fast path: unions bounding rects from `PDFPrecompiledPage::calculateGraphicPieceInfos`
-/// and compares against the reference box expanded by the bleed amount. No rasterization.
+/// Fast path: measures how much of each bleed strip the bounding rects from
+/// `PDFPrecompiledPage::calculateGraphicPieceInfos` cover. A strip is populated when that
+/// coverage reaches `minEdgeCoverage`, so a few stray marks do not count. No rasterization.
+/// The edge is confirmed only when images and filled paths, cut by their clip, actually paint
+/// `minEdgeCoverage` of the strip; strokes alone leave it unconfirmed.
 ///
-/// Raster path (raster_confirm): renders only the four edge strips at probe_dpi
-/// and counts non-background pixels against a threshold.
+/// Raster path (raster_confirm): renders the four edge strips at probe_dpi and counts
+/// non-background pixels against `minEdgeCoverage`. It confirms or demotes every edge the bounds
+/// pass could not prove solid, and upgrades empty edges that the raster finds inked.
 class LOOPLIBCORESHARED_EXPORT PDFBleedMarginProbe
 {
 public:
     explicit PDFBleedMarginProbe(PDFDocumentSession* session);
 
-    /// Full probe: fast bounds pass first, then raster confirmation if the settings
-    /// request it and the fast pass flagged missing content on any side.
+    /// Full probe: fast bounds pass first, then raster confirmation if the settings request it
+    /// and the fast pass left any side empty or unconfirmed.
     PDFBleedMarginProbeResult probe(const PDFPage* page,
                                     size_t pageIndex,
                                     const PDFBleedMarginProbeSettings& settings);
@@ -98,6 +117,6 @@ private:
     PDFDocumentSession* m_session;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFBLEEDMARGINPROBE_H
+#endif   // PDFBLEEDMARGINPROBE_H
