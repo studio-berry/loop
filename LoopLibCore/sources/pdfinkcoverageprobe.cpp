@@ -83,6 +83,52 @@ QRectF resolveAnalysisBox(const PDFPage* page, PDFInkCoverageAnalysisBox request
     return media;
 }
 
+/// Device raster of an analysis box at a resolution. An empty size means the box
+/// cannot be rasterized.
+struct CompositorRaster
+{
+    QSize size;
+    QTransform pagePointToDevice;
+    bool budgetExceeded = false;
+};
+
+CompositorRaster planCompositorRaster(const PDFPage* page, const QRectF& analysisBox, int dpi, qint64 maxRasterPixels)
+{
+    CompositorRaster raster;
+    const PageRotation pageRotation = page->getPageRotation();
+    const QRectF rotatedAnalysisBox = PDFPage::getRotatedBox(analysisBox, pageRotation).normalized();
+    const qreal pointToPixel = static_cast<qreal>(dpi) / 72.0;
+    const double widthReal = std::ceil(rotatedAnalysisBox.width() * pointToPixel);
+    const double heightReal = std::ceil(rotatedAnalysisBox.height() * pointToPixel);
+
+    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0 || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    {
+        return raster;
+    }
+
+    const int width = qMax(1, static_cast<int>(widthReal));
+    const int height = qMax(1, static_cast<int>(heightReal));
+    if (maxRasterPixels > 0 && static_cast<qint64>(width) * static_cast<qint64>(height) > maxRasterPixels)
+    {
+        raster.budgetExceeded = true;
+        return raster;
+    }
+
+    raster.size = QSize(width, height);
+    raster.pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(rotatedAnalysisBox, QRect(QPoint(0, 0), raster.size), pageRotation);
+    return raster;
+}
+
+PDFTransparencyRendererSettings compositorRendererSettings()
+{
+    PDFTransparencyRendererSettings rendererSettings;
+    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::ActiveColorMask, false);
+    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SeparationSimulation, true);
+    rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
+    rendererSettings.renderPolicy = PDFRenderPolicy::forPreflightAnalysis();
+    return rendererSettings;
+}
+
 }   // namespace
 
 PDFInkCoverageProbe::PDFInkCoverageProbe(PDFDocumentSession* session) :
@@ -114,39 +160,15 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         return result;
     }
 
-    const PageRotation pageRotation = page->getPageRotation();
-    const QRectF rotatedAnalysisBox = PDFPage::getRotatedBox(analysisBox, pageRotation).normalized();
-    const QSizeF mediaSize = rotatedAnalysisBox.size();
-    const qreal pointToPixel = static_cast<qreal>(settings.dpi) / 72.0;
-    const double widthReal = std::ceil(mediaSize.width() * pointToPixel);
-    const double heightReal = std::ceil(mediaSize.height() * pointToPixel);
-
-    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0 || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    const CompositorRaster raster = planCompositorRaster(page, analysisBox, settings.dpi, settings.maxRasterPixels);
+    result.budgetExceeded = raster.budgetExceeded;
+    if (raster.size.isEmpty())
     {
         return result;
     }
 
-    const int width = qMax(1, static_cast<int>(widthReal));
-    const int height = qMax(1, static_cast<int>(heightReal));
-    const qint64 rasterPixels = static_cast<qint64>(width) * static_cast<qint64>(height);
-    if (settings.maxRasterPixels > 0 && rasterPixels > settings.maxRasterPixels)
-    {
-        result.budgetExceeded = true;
-        return result;
-    }
-
-    PDFTransparencyRendererSettings rendererSettings;
+    PDFTransparencyRendererSettings rendererSettings = compositorRendererSettings();
     rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SaveOriginalProcessImage, true);
-    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::ActiveColorMask, false);
-    rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SeparationSimulation, true);
-    rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
-    rendererSettings.renderPolicy = PDFRenderPolicy::forPreflightAnalysis();
-
-    const QSize imageSize(width, height);
-    const QTransform pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(
-        rotatedAnalysisBox,
-        QRect(QPoint(0, 0), imageSize),
-        pageRotation);
     PDFInkMapper inkMapper(nullptr, document);
     inkMapper.createSpotColors(true);
 
@@ -157,8 +179,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
                                      m_session->getOptionalContentActivity(),
                                      &inkMapper,
                                      rendererSettings,
-                                     pagePointToDevice);
-    renderer.beginPaint(imageSize);
+                                     raster.pagePointToDevice);
+    renderer.beginPaint(raster.size);
     renderer.processContents();
     renderer.endPaint();
     result.diagnostics = renderer.getRenderDiagnostics();
@@ -193,6 +215,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     const QSizeF pageSizeMM = page->getRectMM(analysisBox).size();
     const qreal pixelAreaMM2 = (pageSizeMM.width() * pageSizeMM.height()) / static_cast<qreal>(totalPixels);
     result.overLimitAreaMM2 = static_cast<qreal>(overLimitPixels) * pixelAreaMM2;
+    result.pixelAreaMM2 = pixelAreaMM2;
+    result.minResolvableAreaMM2 = pixelAreaMM2 * static_cast<qreal>(PDFInkCoverageProbeSettings::MinResolvablePixels);
 
     struct DeviceRegion
     {
@@ -256,8 +280,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
                 }
             }
 
-            const qreal areaRatio = static_cast<qreal>(region.pixelCount) / static_cast<qreal>(totalPixels);
-            if (areaRatio < settings.minRegionAreaRatio)
+            const qreal regionAreaMM2 = static_cast<qreal>(region.pixelCount) * pixelAreaMM2;
+            if (regionAreaMM2 < settings.minRegionAreaMM2 || region.pixelCount < PDFInkCoverageProbeSettings::MinResolvablePixels)
             {
                 continue;
             }
@@ -267,7 +291,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     }
 
     bool invertible = false;
-    const QTransform deviceToPage = pagePointToDevice.inverted(&invertible);
+    const QTransform deviceToPage = raster.pagePointToDevice.inverted(&invertible);
     if (!invertible)
     {
         result.regions.clear();
@@ -305,6 +329,59 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         result.regions.push_back(qMove(coverageRegion));
     }
 
+    return result;
+}
+
+PDFOverprintProbe::PDFOverprintProbe(PDFDocumentSession* session) :
+    m_session(session)
+{
+}
+
+PDFOverprintProbeResult PDFOverprintProbe::probe(const PDFPage* page, int dpi, qint64 maxRasterPixels)
+{
+    PDFOverprintProbeResult result;
+    if (!page || !m_session || dpi <= 0)
+    {
+        return result;
+    }
+
+    PDFDocument* document = m_session->getDocument();
+    if (!document)
+    {
+        return result;
+    }
+
+    const QRectF analysisBox = resolveAnalysisBox(page, PDFInkCoverageAnalysisBox::Bleed);
+    if (!isUsableBox(analysisBox))
+    {
+        return result;
+    }
+
+    const CompositorRaster raster = planCompositorRaster(page, analysisBox, dpi, maxRasterPixels);
+    result.budgetExceeded = raster.budgetExceeded;
+    if (raster.size.isEmpty())
+    {
+        return result;
+    }
+
+    PDFInkMapper inkMapper(nullptr, document);
+    inkMapper.createSpotColors(true);
+
+    PDFTransparencyRenderer renderer(page,
+                                     document,
+                                     m_session->getFontCache(),
+                                     m_session->getCMS(),
+                                     m_session->getOptionalContentActivity(),
+                                     &inkMapper,
+                                     compositorRendererSettings(),
+                                     raster.pagePointToDevice);
+    renderer.beginPaint(raster.size);
+    renderer.processContents();
+    renderer.endPaint();
+
+    result.rendered = true;
+    result.diagnostics = renderer.getRenderDiagnostics();
+    result.observation = renderer.getOverprintObservation();
     return result;
 }
 

@@ -297,6 +297,9 @@ public:
         std::array<uint8_t, 64> hash = {};   ///< Hash of all data
         std::array<uint8_t, 64> imageHash = {};   ///< Hash of the image only
         QPainterPath pagePath;
+        bool isFilled = false;   ///< Path piece painted with a fill brush (pagePath is the unstroked path)
+        bool isClipped = false;   ///< A clip was in effect when the piece was painted
+        QPainterPath clipPath;   ///< Clip in effect, in page coordinates (valid when isClipped)
     };
 
     using GraphicPieceInfos = std::vector<GraphicPieceInfo>;

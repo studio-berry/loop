@@ -79,9 +79,25 @@ public:
 struct TextSequenceItem
 {
     inline explicit TextSequenceItem() = default;
-    inline explicit TextSequenceItem(const QPainterPath* glyph, QChar character, PDFReal advance, CID cid) : glyph(glyph), character(character), advance(advance), cid(cid) { }
-    inline explicit TextSequenceItem(PDFReal advance) : character(), advance(advance) { }
-    inline explicit TextSequenceItem(const QByteArray* characterContentStream, QChar character, PDFReal advance, uint cid) : characterContentStream(characterContentStream), character(character), advance(advance), cid(cid) { }
+    inline explicit TextSequenceItem(const QPainterPath* glyph, QChar character, PDFReal advance, CID cid) :
+        glyph(glyph),
+        character(character),
+        advance(advance),
+        cid(cid)
+    {
+    }
+    inline explicit TextSequenceItem(PDFReal advance) :
+        character(),
+        advance(advance)
+    {
+    }
+    inline explicit TextSequenceItem(const QByteArray* characterContentStream, QChar character, PDFReal advance, uint cid) :
+        characterContentStream(characterContentStream),
+        character(character),
+        advance(advance),
+        cid(cid)
+    {
+    }
 
     inline bool isContentStream() const { return characterContentStream; }
     inline bool isCharacter() const { return glyph; }
@@ -93,11 +109,18 @@ struct TextSequenceItem
     QChar character;
     PDFReal advance = 0;
     CID cid = 0;
+    /// Glyph index in the font program; 0 is .notdef. Zero also for advances and Type 3 glyphs.
+    GID glyphIndex = 0;
 };
 
 struct TextSequence
 {
     std::vector<TextSequenceItem> items;
+
+    /// Shown codes (character codes of simple fonts, CIDs of composite fonts) that
+    /// resolved to no glyph, whatever their advance. Composite CID 0 is the default
+    /// whitespace and is never listed.
+    std::vector<CID> unresolvedCodes;
 };
 
 constexpr bool isTextRenderingModeFilled(TextRenderingMode mode)
@@ -295,7 +318,10 @@ public:
 
 private:
     /// Constructs new realized font
-    explicit PDFRealizedFont(IRealizedFontImpl* impl) : m_impl(impl) { }
+    explicit PDFRealizedFont(IRealizedFontImpl* impl) :
+        m_impl(impl)
+    {
+    }
 
     IRealizedFontImpl* m_impl;
 };
@@ -417,7 +443,7 @@ protected:
     bool m_hasToUnicode;
     GlyphIndices m_glyphIndices;
     GlyphNames m_glyphNames;
-    StandardFontType m_standardFontType; ///< Type of the standard font (or invalid, if it is not a standard font)
+    StandardFontType m_standardFontType;   ///< Type of the standard font (or invalid, if it is not a standard font)
 };
 
 class PDFType1Font : public PDFSimpleFont
@@ -468,7 +494,6 @@ public:
         m_realizedFontCacheLimit(realizedFontCacheLimit),
         m_document(nullptr)
     {
-
     }
 
     ~PDFFontCache();
@@ -543,7 +568,10 @@ private:
 class PDFCIDtoGIDMapper
 {
 public:
-    explicit inline PDFCIDtoGIDMapper(QByteArray&& mapping) : m_mapping(qMove(mapping)) { }
+    explicit inline PDFCIDtoGIDMapper(QByteArray&& mapping) :
+        m_mapping(qMove(mapping))
+    {
+    }
 
     /// Maps CID to GID (glyph identifier). Nullopt means no valid mapping exists.
     std::optional<GID> tryMap(CID cid) const
@@ -669,11 +697,16 @@ public:
     bool containsCode(unsigned int code, unsigned int byteCount) const;
 
 private:
-
     struct Entry
     {
         constexpr explicit inline Entry() = default;
-        constexpr explicit inline Entry(unsigned int from, unsigned int to, unsigned int byteCount, CID cid) : from(from), to(to), byteCount(byteCount), cid(cid) { }
+        constexpr explicit inline Entry(unsigned int from, unsigned int to, unsigned int byteCount, CID cid) :
+            from(from),
+            to(to),
+            byteCount(byteCount),
+            cid(cid)
+        {
+        }
 
         unsigned int from = 0;
         unsigned int to = 0;
@@ -777,7 +810,6 @@ public:
         m_defaultAdvance(defaultAdvance),
         m_advances(qMove(advances))
     {
-
     }
 
     virtual ~PDFType0Font() = default;
@@ -845,4 +877,4 @@ public:
 
 }   // namespace pdf
 
-#endif // PDFFONT_H
+#endif   // PDFFONT_H

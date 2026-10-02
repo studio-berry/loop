@@ -225,17 +225,17 @@
       "state": "open"
     },
     {
-      "closed_by": "#120",
+      "closed_by": "content-bleed",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
         "digital"
       ],
-      "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+      "gap": "content-bleed accepted any artwork bounds touching a bleed strip, and raster confirmation never re-checked an accepted edge, so sparse marks passed while the bleed margin was empty; strips now need 10% coverage by bounds or raster ink, and an edge bounds cannot prove solid is raster-checked or reported check-incomplete (filed as #120)",
       "id": "bleed-raster-strip-depth",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "#113",
@@ -287,16 +287,16 @@
       "state": "open"
     },
     {
-      "closed_by": "#114",
+      "closed_by": "font-integrity",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
       ],
-      "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+      "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
       "id": "font-glyph-coverage",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "thin-strokes",
@@ -311,28 +311,28 @@
       "state": "landed"
     },
     {
-      "closed_by": "#115",
+      "closed_by": "hidden-layers",
       "deferral": null,
       "families": [
         "packaging"
       ],
-      "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+      "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
       "id": "hidden-layers-ocmd",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
-      "closed_by": "#116",
+      "closed_by": "ink-coverage",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "web-offset",
         "newspaper"
       ],
-      "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+      "gap": "ink-coverage suppressed regions below min_region_area_pct, a fraction of the page, so an isolated over-limit element passed clean on a large page; the floor is now physical (min_region_area_mm2) and a probe_dpi too coarse to resolve it reports the page incomplete (filed as #116)",
       "id": "ink-coverage-raster-tac",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "#117",
@@ -362,27 +362,27 @@
       "state": "landed"
     },
     {
-      "closed_by": "#118",
+      "closed_by": "obscured-content",
       "deferral": null,
       "families": [
         "sheetfed-offset"
       ],
-      "gap": "obscured-content is a bounding-box heuristic rather than a RIP occlusion model, so covered content can pass clean",
+      "gap": "obscured-content compared raw bounding boxes, so content covered by clipped or combined opaque paint passed clean; it now covers painted, clipped vector geometry in paint order and reports a blend mode or soft mask over earlier paint as incomplete (filed as #118)",
       "id": "obscured-content-occlusion",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
-      "closed_by": "#118",
+      "closed_by": "off-page-content",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "digital"
       ],
-      "gap": "off-page-content compares painted bounds before clipping, so a clipped mark can be a false negative or a false positive",
+      "gap": "off-page-content compared painted bounds before clipping, so a clipped mark could be a false negative or a false positive; painted bounds are now intersected with the effective clip first (filed as #118)",
       "id": "off-page-content-clipping",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "output-intent",
@@ -410,29 +410,29 @@
       "state": "landed"
     },
     {
-      "closed_by": "#119",
+      "closed_by": "transparency-risk",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging",
         "digital"
       ],
-      "gap": "transparency-risk does not flatten and does not simulate overprint-plus-transparency interaction as a RIP does, so a press-only interaction passes clean",
+      "gap": "transparency-risk did not look at overprint-plus-transparency interaction, so a press-only interaction passed clean; it now reports overprint composited with a non-Normal blend mode, constant alpha or a knockout group from the compositor (filed as #119)",
       "id": "transparency-rip-interaction",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
-      "closed_by": "#119",
+      "closed_by": "white-overprint",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
       ],
-      "gap": "white-overprint reads page-view overprint state rather than the Output Preview or transparency renderer, so a renderer-dependent white overprint passes clean",
+      "gap": "white-overprint read page-view overprint state only, so white overprint that appears through the compositor (images, shadings, transparency) passed clean; pages that declare overprint are now also judged on the overprint-accurate compositor (filed as #119)",
       "id": "white-overprint-renderer",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "content-bleed",
