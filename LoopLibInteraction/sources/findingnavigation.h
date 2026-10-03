@@ -86,6 +86,9 @@ struct FindingNavigationRequest
     QRectF pageBounds;
     QStringList evidenceIds;
     QList<FindingEvidenceTarget> evidenceTargets;
+    QString effectiveProfileDigest;
+    QJsonObject coverageScope;
+    QString inspectionStatus;
 
     bool isValid() const
     {
@@ -121,6 +124,7 @@ enum class FindingNavigationOutcome
     UnsupportedCheck,
     DocumentFallback,
     PageFallback,
+    RegionTargeted,
     ObjectTargeted
 };
 
@@ -132,6 +136,13 @@ struct FindingNavigationResult
     QString findingId;
     QString checkId;
     QString reason;
+    QString documentKey;
+    QString documentRevision;
+    QString effectiveProfileDigest;
+    QStringList evidenceIds;
+    QJsonObject coverageScope;
+    QString inspectionStatus;
+    QRectF pageBounds;
     int pageIndex = -1;
     FindingInspectionMode inspectionMode = FindingInspectionMode::None;
     quint64 navigationGeneration = 0;
@@ -140,6 +151,7 @@ struct FindingNavigationResult
     {
         return outcome == FindingNavigationOutcome::DocumentFallback ||
                outcome == FindingNavigationOutcome::PageFallback ||
+               outcome == FindingNavigationOutcome::RegionTargeted ||
                outcome == FindingNavigationOutcome::ObjectTargeted;
     }
 };

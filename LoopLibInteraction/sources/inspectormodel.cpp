@@ -4,11 +4,13 @@
 #include "pdffixupregistry.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonValue>
 #include <QStringList>
 
 #include <QHash>
 #include <algorithm>
+#include <cmath>
 
 #include <utility>
 
@@ -263,6 +265,19 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
         addProperty(selection.properties, QStringLiteral("evidence-ids"), QStringLiteral("Evidence IDs"),
                     finding->evidenceIds.join(QStringLiteral(", ")), QStringLiteral("evidence"));
     }
+    addProperty(selection.properties, QStringLiteral("document-revision"), QStringLiteral("Document revision"),
+                finding->documentRevision, QStringLiteral("identity"));
+    addProperty(selection.properties, QStringLiteral("profile-name"), QStringLiteral("Profile"),
+                finding->profileName, QStringLiteral("identity"));
+    addProperty(selection.properties, QStringLiteral("profile-digest"), QStringLiteral("Effective profile digest"),
+                finding->effectiveProfileDigest.isEmpty() ? QStringLiteral("Unavailable in report") : finding->effectiveProfileDigest,
+                QStringLiteral("identity"));
+    addProperty(selection.properties, QStringLiteral("inspection-status"), QStringLiteral("Inspection"),
+                finding->inspectionStatus.isEmpty() ? QStringLiteral("Unavailable in report") : finding->inspectionStatus,
+                QStringLiteral("evidence"));
+    addProperty(selection.properties, QStringLiteral("coverage-scope"), QStringLiteral("Evidence coverage"),
+                finding->coverageScope.isEmpty() ? QStringLiteral("Unavailable in report") : QString::fromUtf8(QJsonDocument(finding->coverageScope).toJson(QJsonDocument::Compact)),
+                QStringLiteral("evidence"));
 
     const auto capability = FindingTargetingCapabilityRegistry::defaultRegistry().capabilityFor(finding->checkId);
     QString targeting;
@@ -274,17 +289,19 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     {
         targeting = QStringLiteral("Page navigation is unsupported for this check.");
     }
-    else if (!capability->supportsObjectTargeting)
+    else if (!capability->hasTarget())
     {
         targeting = QStringLiteral("Page navigation only; object targeting is unsupported for this check.");
     }
-    else if (finding->objectId.isEmpty())
+    else if (!finding->bbox.isValid() || finding->bbox.isEmpty() ||
+             !std::isfinite(finding->bbox.x()) || !std::isfinite(finding->bbox.y()) ||
+             !std::isfinite(finding->bbox.width()) || !std::isfinite(finding->bbox.height()))
     {
-        targeting = QStringLiteral("Page navigation only; no object identifier in the report.");
+        targeting = QStringLiteral("Page navigation only; no usable region bounds in the report.");
     }
-    else if (!finding->bbox.isValid() || finding->bbox.isEmpty())
+    else if (finding->objectId.isEmpty() || !capability->supportsObjectTargeting)
     {
-        targeting = QStringLiteral("Page navigation only; no object bounds in the report.");
+        targeting = QStringLiteral("Page region available from the report; no object target.");
     }
     else
     {
