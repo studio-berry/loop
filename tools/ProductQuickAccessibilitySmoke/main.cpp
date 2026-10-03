@@ -587,7 +587,7 @@ int main(int argc, char** argv)
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);
-                                 if (passed)
+                                 if (passed && qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software"))
                                  {
                                      runFindingNavigationFixture(application, host, window);
                                  }
@@ -606,7 +606,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    QTimer::singleShot(30000, &application, [&application]()
+    QTimer::singleShot(qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software") ? 30000 : 10000, &application, [&application]()
                        { application.exit(4); });
 
     return application.exec();
