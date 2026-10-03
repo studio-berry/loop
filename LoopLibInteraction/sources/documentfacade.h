@@ -34,7 +34,6 @@
 #include <QPointer>
 #include <QString>
 
-#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -87,6 +86,20 @@ enum class ShellDocumentStatus
 
 const char* getDocumentStateName(DocumentState state);
 const char* getShellDocumentStatusName(ShellDocumentStatus status);
+
+/// Presentation identity for one lifecycle request, using catalog and Core identities.
+struct DocumentOperation
+{
+    CommandInvocationId invocation = InvalidCommandInvocation;
+    CommandId command;
+    DocumentSource target;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+    QString jobId;
+    bool pending = false;
+    CommandResult result;
+    CommandResult retryCause;
+};
 
 /// One presentation-facing document lifecycle.
 ///
@@ -145,8 +158,8 @@ public:
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
 
-    /// How many terminal job results were dropped because their generation was
-    /// no longer current. A correct run of the lifecycle never admits one.
+    /// Terminal job results dropped because their request or document generation
+    /// was no longer current. A correct run of the lifecycle never admits one.
     int rejectedCompletionCount() const noexcept { return m_rejectedCompletions; }
 
     /// Marks the current document modified. Kept explicit rather than inferred:
@@ -164,12 +177,19 @@ public:
     CommandInvocationId save();
     CommandInvocationId saveAs(const QString& path);
 
+    DocumentOperation operation() const { return m_operation; }
+
+    /// Retries a failed or cancelled current request with a new invocation/job.
+    /// The prior terminal result remains available as the retry's cause.
+    CommandInvocationId retry();
+
     /// Requests cancellation of the lifecycle operation in flight.
     bool cancelPendingOperation();
 
 signals:
     void stateChanged(pdfinteraction::DocumentState state);
     void facetsChanged(pdfinteraction::DocumentFacets facets);
+    void operationChanged();
 
     /// Emitted after the new identity is established and the old one dropped.
     void documentReplaced(quint64 generation);
@@ -180,7 +200,8 @@ private:
     bool registerHandlers();
 
     void beginOpen(CommandInvocationId invocation, const DocumentSource& source);
-    void beginSave(CommandInvocationId invocation, const DocumentSource& target);
+    void beginSave(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target);
+    void beginOperation(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target);
     void performClose(CommandInvocationId invocation);
 
     void admitLoadResult(CommandInvocationId invocation, quint64 generation, DocumentLoadResult result);
@@ -190,9 +211,6 @@ private:
                           DocumentWriteResult result);
 
     void requestCancellation(CommandInvocationId invocation);
-    void resolveCancellation(CommandInvocationId invocation,
-                             QString jobId,
-                             std::shared_ptr<std::atomic_bool> workStarted);
 
     void detachDocument();
     void supersedePending(CommandTerminalState state, QString typedError);
@@ -231,14 +249,10 @@ private:
 
     CommandInvocationId m_pendingInvocation = InvalidCommandInvocation;
     QString m_pendingJobId;
+    DocumentOperation m_operation;
+    CommandResult m_retryCause;
 
     bool m_handlersRegistered = false;
-
-    /// Set by the worker as it starts. A job cancelled while still queued never
-    /// runs its work, so nothing would report a terminal state for it; this is
-    /// how the facade tells that case apart from work that is already running
-    /// and will report for itself.
-    std::shared_ptr<std::atomic_bool> m_pendingWorkStarted;
 };
 
 }   // namespace pdfinteraction

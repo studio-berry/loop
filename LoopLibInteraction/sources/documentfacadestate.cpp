@@ -23,11 +23,16 @@ const char* getDocumentStateName(DocumentState state)
 {
     switch (state)
     {
-        case DocumentState::Empty: return "empty";
-        case DocumentState::Opening: return "opening";
-        case DocumentState::Ready: return "ready";
-        case DocumentState::Closing: return "closing";
-        case DocumentState::Error: return "error";
+        case DocumentState::Empty:
+            return "empty";
+        case DocumentState::Opening:
+            return "opening";
+        case DocumentState::Ready:
+            return "ready";
+        case DocumentState::Closing:
+            return "closing";
+        case DocumentState::Error:
+            return "error";
     }
 
     return "empty";
@@ -37,11 +42,16 @@ const char* getShellDocumentStatusName(ShellDocumentStatus status)
 {
     switch (status)
     {
-        case ShellDocumentStatus::NoDocument: return "NO_DOCUMENT";
-        case ShellDocumentStatus::Open: return "OPEN";
-        case ShellDocumentStatus::Modified: return "MODIFIED";
-        case ShellDocumentStatus::OutputPending: return "OUTPUT_PENDING";
-        case ShellDocumentStatus::OutputSaved: return "OUTPUT_SAVED";
+        case ShellDocumentStatus::NoDocument:
+            return "NO_DOCUMENT";
+        case ShellDocumentStatus::Open:
+            return "OPEN";
+        case ShellDocumentStatus::Modified:
+            return "MODIFIED";
+        case ShellDocumentStatus::OutputPending:
+            return "OUTPUT_PENDING";
+        case ShellDocumentStatus::OutputSaved:
+            return "OUTPUT_SAVED";
     }
 
     return "NO_DOCUMENT";
@@ -139,12 +149,18 @@ void DocumentFacade::finishPending(CommandInvocationId invocation,
     if (m_pendingInvocation == invocation)
     {
         m_pendingInvocation = InvalidCommandInvocation;
-        m_pendingWorkStarted.reset();
+        m_operation.pending = false;
+        m_operation.result = { invocation, m_operation.command, state, typedError };
+        updateAvailability();
     }
 
     if (m_catalog)
     {
         m_catalog->finishInvocation(invocation, state, std::move(typedError));
+    }
+    if (m_operation.invocation == invocation)
+    {
+        Q_EMIT operationChanged();
     }
 }
 
