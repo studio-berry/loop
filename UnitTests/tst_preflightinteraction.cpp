@@ -164,6 +164,9 @@ private slots:
     void controllerRepresentsIncompleteRun();
     void controllerMarksAnInFlightRunStaleAndCancelsIt();
     void controllerRejectsDuplicateTerminalResults();
+    void operatorSemanticsDescribeVerdictLimitationsSelectionAndAvailability();
+    void operatorSemanticsKeepJobTerminalSeparateFromRetainedVerdict();
+    void operatorSemanticsRejectStaleSelectionAndNotifySameStateChanges();
     void overlayAdapterMapsStableIdsAndSeverities();
     void dockSelectionSetsFocusedOverlayPrimitive();
     void stalePresentationRetainsReportButClearsOverlayAndSelection();
@@ -350,6 +353,92 @@ void PreflightInteractionTest::controllerRejectsDuplicateTerminalResults()
     controller.markCheckSetStale();
     QCOMPARE(controller.state(), PreflightController::State::Stale);
     QVERIFY(controller.operatorSummary().contains(QStringLiteral("check set")));
+}
+
+void PreflightInteractionTest::operatorSemanticsDescribeVerdictLimitationsSelectionAndAvailability()
+{
+    PreflightController controller;
+    QVERIFY(controller.verdictDescription().contains(QStringLiteral("not been checked")));
+    QVERIFY(controller.limitationDescription().contains(QStringLiteral("unavailable")));
+    QVERIFY(!controller.runUnavailableReason().isEmpty());
+    QVERIFY(!controller.cancelUnavailableReason().isEmpty());
+    QVERIFY(!controller.exportUnavailableReason().isEmpty());
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-1"));
+    QVERIFY(controller.runUnavailableReason().isEmpty());
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QCOMPARE(controller.jobState(), PreflightController::JobState::Running);
+    QVERIFY(controller.jobDescription().contains(QStringLiteral("job-1 is running")));
+    QVERIFY(!controller.runUnavailableReason().isEmpty());
+    QVERIFY(controller.cancelUnavailableReason().isEmpty());
+
+    const auto finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("warning"), QRectF(1, 2, 3, 4));
+    auto result = resultWith({}, { finding });
+    result.inspectionComplete = false;
+    pdf::PreflightCheckStatus check;
+    check.id = QStringLiteral("fonts");
+    check.status = QStringLiteral("incomplete");
+    check.reason = QStringLiteral("Font evidence is unavailable");
+    result.checkStatuses = { check };
+    result.coverageScope = { { QStringLiteral("pages"), QJsonArray{ 1 } } };
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
+    QCOMPARE(controller.state(), PreflightController::State::Incomplete);
+    QCOMPARE(controller.jobState(), PreflightController::JobState::Completed);
+    QVERIFY(controller.verdictDescription().contains(QStringLiteral("incomplete"), Qt::CaseInsensitive));
+    QVERIFY(controller.limitationDescription().contains(check.reason));
+    QVERIFY(controller.limitationDescription().contains(QStringLiteral("\"pages\":[1]")));
+    QVERIFY(controller.exportUnavailableReason().isEmpty());
+    controller.findingsModel()->setSelectedFinding(finding.stableId());
+    QVERIFY(controller.selectedFindingDescription().contains(finding.stableId()));
+    QVERIFY(controller.selectedFindingDescription().contains(finding.message));
+    controller.clear();
+    QCOMPARE(controller.jobState(), PreflightController::JobState::None);
+    QVERIFY(!controller.exportUnavailableReason().isEmpty());
+    QVERIFY(controller.selectedFindingDescription().contains(QStringLiteral("No current")));
+}
+
+void PreflightInteractionTest::operatorSemanticsKeepJobTerminalSeparateFromRetainedVerdict()
+{
+    PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({})));
+    const auto verdict = controller.verdictDescription();
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    QVERIFY(controller.verdictDescription().contains(QStringLiteral("Previous accepted")));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QCOMPARE(controller.state(), PreflightController::State::Pass);
+    QCOMPARE(controller.verdictDescription(), verdict);
+    QCOMPARE(controller.jobState(), PreflightController::JobState::Cancelled);
+    QVERIFY(controller.jobDescription().contains(QStringLiteral("job-2 was cancelled")));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-3"));
+    QVERIFY(controller.failRun(QStringLiteral("job-3"), QStringLiteral("rev-1"), QStringLiteral("worker-failed")));
+    QCOMPARE(controller.state(), PreflightController::State::Pass);
+    QCOMPARE(controller.verdictDescription(), verdict);
+    QCOMPARE(controller.jobState(), PreflightController::JobState::Failed);
+    QVERIFY(controller.jobDescription().contains(QStringLiteral("worker-failed")));
+}
+
+void PreflightInteractionTest::operatorSemanticsRejectStaleSelectionAndNotifySameStateChanges()
+{
+    PreflightController controller;
+    const auto finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    QSignalSpy semantics(&controller, &PreflightController::operatorSemanticsChanged);
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    controller.findingsModel()->setSelectedFinding(finding.stableId());
+    const int before = semantics.count();
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
+    QVERIFY(controller.verdictDescription().contains(QStringLiteral("stale")));
+    QVERIFY(controller.selectedFindingDescription().contains(QStringLiteral("No current")));
+    QVERIFY(semantics.count() > before);
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-2"), {}, QStringLiteral("job-2"));
+    controller.markProfileStale();
+    QCOMPARE(controller.jobState(), PreflightController::JobState::Stale);
+    QVERIFY(controller.jobDescription().contains(QStringLiteral("superseded")));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-2"), {}, QStringLiteral("job-3"));
+    const int running = semantics.count();
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-2"), {}, QStringLiteral("job-4"));
+    QVERIFY(semantics.count() > running);
+    QVERIFY(controller.jobDescription().contains(QStringLiteral("job-4")));
 }
 
 void PreflightInteractionTest::overlayAdapterMapsStableIdsAndSeverities()
