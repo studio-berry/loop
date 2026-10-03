@@ -377,12 +377,18 @@ void DocumentFacade::finishPending(CommandInvocationId invocation,
     if (m_pendingInvocation == invocation)
     {
         m_pendingInvocation = InvalidCommandInvocation;
-        m_pendingWorkStarted.reset();
+        m_operation.pending = false;
+        m_operation.result = { invocation, m_operation.command, state, typedError };
+        updateAvailability();
     }
 
     if (m_catalog)
     {
         m_catalog->finishInvocation(invocation, state, std::move(typedError));
+    }
+    if (m_operation.invocation == invocation)
+    {
+        Q_EMIT operationChanged();
     }
 }
 

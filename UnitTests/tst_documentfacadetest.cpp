@@ -33,6 +33,8 @@
 #include <QtTest>
 
 #include <QFileInfo>
+#include <QScopeGuard>
+#include <QSemaphore>
 #include <QTemporaryDir>
 
 #include <atomic>
@@ -243,6 +245,24 @@ public:
     QStringList writtenPaths;
 };
 
+class DelayedDocumentLoader final : public pdfinteraction::IDocumentLoader
+{
+public:
+    pdfinteraction::DocumentLoadResult load(const pdfinteraction::DocumentSource&,
+                                            pdf::PDFJobContext&) override
+    {
+        started.release();
+        release.acquire();
+        pdfinteraction::DocumentLoadResult result;
+        result.outcome = pdfinteraction::DocumentLoadOutcome::Loaded;
+        result.document = buildDocument();
+        return result;
+    }
+
+    QSemaphore started;
+    QSemaphore release;
+};
+
 /// Everything one lifecycle test needs, wired the way a host would wire it.
 struct Harness
 {
@@ -330,6 +350,17 @@ private slots:
     void openFailureReportsTypedErrorAndBindsNoDocument();
     void openCancellationIsTerminalAndNotSuccess();
     void cancellingAQueuedOpenIsTerminal();
+    void cancellationRejectsAlreadyQueuedSuccess();
+    void failedOpenRetryPreservesCauseAndAllocatesIdentity();
+    void cancelledRetryRejectsReorderedCompletion_data();
+    void cancelledRetryRejectsReorderedCompletion();
+    void failedSaveRetryKeepsTargetAndRevision();
+    void cancelledSaveRetryRejectsPriorSuccess();
+    void retryRejectsStaleRevisionAndClosedDocument();
+    void supersessionCannotRetryWhileReplacingDocument();
+    void reopenRejectsPriorWriteCompletion();
+    void realWorkerCancellationAndTeardown_data();
+    void realWorkerCancellationAndTeardown();
 
     void replacementEstablishesNewIdentityBeforeNewWork();
     void supersededCompletionIsRejectedNotAdmitted();
@@ -667,6 +698,284 @@ void DocumentFacadeTest::cancellingAQueuedOpenIsTerminal()
     const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
     QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Cancelled);
     QCOMPARE(harness.facade->rejectedCompletionCount(), 0);
+}
+
+void DocumentFacadeTest::cancellationRejectsAlreadyQueuedSuccess()
+{
+    Harness harness;
+    QSignalSpy finished(&harness.catalog, &pdfinteraction::CommandCatalog::invocationFinished);
+    const auto invocation = harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    QCOMPARE(harness.loader.loadCount, 1);
+    QVERIFY(harness.facade->cancelPendingOperation());
+    QVERIFY(!harness.catalog.isPending(invocation));
+    QCOMPARE(harness.facade->operation().result.state, pdfinteraction::CommandTerminalState::Cancelled);
+
+    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
+    QCOMPARE(harness.facade->state(), pdfinteraction::DocumentState::Empty);
+    QCOMPARE(harness.context.getDocument(), nullptr);
+    QCOMPARE(finished.count(), 1);
+    QVERIFY(!harness.facade->cancelPendingOperation());
+}
+
+void DocumentFacadeTest::failedOpenRetryPreservesCauseAndAllocatesIdentity()
+{
+    Harness harness;
+    harness.loader.nextResult.outcome = pdfinteraction::DocumentLoadOutcome::Failed;
+    harness.loader.nextResult.typedError = QStringLiteral("document/read-failed");
+    QSignalSpy changed(harness.facade.get(), &pdfinteraction::DocumentFacade::operationChanged);
+    const auto first = harness.facade->open(QStringLiteral("/corpus/broken.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Error);
+    const auto failure = harness.facade->operation();
+    QVERIFY(!failure.pending);
+    QCOMPARE(failure.result.invocation, first);
+    QCOMPARE(failure.result.typedError, QStringLiteral("document/read-failed"));
+
+    harness.loader.nextResult.outcome = pdfinteraction::DocumentLoadOutcome::Loaded;
+    harness.loader.nextResult.typedError.clear();
+    const auto retried = harness.facade->retry();
+    QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
+    QVERIFY(retried != first);
+    const auto request = harness.facade->operation();
+    QVERIFY(request.pending);
+    QCOMPARE(request.invocation, retried);
+    QVERIFY(request.jobId != failure.jobId);
+    QVERIFY(request.generation > failure.generation);
+    QCOMPARE(request.retryCause, failure.result);
+    QCOMPARE(request.target.path, failure.target.path);
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QCOMPARE(harness.facade->operation().retryCause, failure.result);
+    QCOMPARE(harness.facade->operation().result.state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(harness.loader.requestedPaths, QStringList({ failure.target.path, failure.target.path }));
+    QCOMPARE(changed.count(), 4);
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+}
+
+void DocumentFacadeTest::cancelledRetryRejectsReorderedCompletion_data()
+{
+    QTest::addColumn<bool>("oldFinishesFirst");
+    QTest::newRow("old-before-retry") << true;
+    QTest::newRow("old-after-retry") << false;
+}
+
+void DocumentFacadeTest::cancelledRetryRejectsReorderedCompletion()
+{
+    QFETCH(bool, oldFinishesFirst);
+    Harness harness;
+    harness.submitter.runInline = false;
+    harness.submitter.cancelStopsQueuedWork = false;
+    QSignalSpy finished(&harness.catalog, &pdfinteraction::CommandCatalog::invocationFinished);
+    const auto first = harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    const auto oldRequest = harness.facade->operation();
+    QVERIFY(harness.facade->cancelPendingOperation());
+    const auto cause = harness.facade->operation().result;
+    QCOMPARE(cause.invocation, first);
+    QCOMPARE(cause.typedError, QStringLiteral("document/cancelled"));
+    const auto retried = harness.facade->retry();
+    QVERIFY(retried != first);
+    QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
+    const auto request = harness.facade->operation();
+    QCOMPARE(request.retryCause, cause);
+
+    if (oldFinishesFirst)
+    {
+        QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+        QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
+        QCOMPARE(harness.facade->state(), pdfinteraction::DocumentState::Opening);
+        QVERIFY(harness.facade->operation().pending);
+        QCOMPARE(harness.context.getDocument(), nullptr);
+    }
+    QVERIFY(harness.submitter.runDeferred(request.jobId));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    const auto revision = harness.facade->currentRevision();
+    if (!oldFinishesFirst)
+    {
+        harness.loader.nextResult.outcome = pdfinteraction::DocumentLoadOutcome::Failed;
+        harness.loader.nextResult.typedError = QStringLiteral("document/read-failed");
+        QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+        QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
+    }
+    QCOMPARE(harness.facade->currentRevision(), revision);
+    QCOMPARE(harness.facade->operation().invocation, retried);
+    QCOMPARE(harness.facade->operation().retryCause, cause);
+    QCOMPARE(harness.facade->operation().result.state, pdfinteraction::CommandTerminalState::Completed);
+    QVERIFY(harness.facade->typedError().isEmpty());
+    QCOMPARE(finished.count(), 2);
+}
+
+void DocumentFacadeTest::failedSaveRetryKeepsTargetAndRevision()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    harness.facade->markModified();
+    harness.writer.nextResult = { pdfinteraction::DocumentWriteOutcome::Failed, QStringLiteral("document/write-failed") };
+    const auto first = harness.facade->saveAs(QStringLiteral("/out/retry.pdf"));
+    QTRY_VERIFY(!harness.catalog.isPending(first));
+    const auto failed = harness.facade->operation();
+
+    harness.writer.nextResult = { pdfinteraction::DocumentWriteOutcome::Written, QString() };
+    const auto retried = harness.facade->retry();
+    QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
+    QVERIFY(retried != first);
+    QCOMPARE(harness.facade->operation().retryCause, failed.result);
+    QCOMPARE(harness.facade->operation().revision, failed.revision);
+    QCOMPARE(harness.facade->operation().generation, failed.generation);
+    QVERIFY(harness.facade->typedError().isEmpty());
+    QTRY_COMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::Saved);
+    QCOMPARE(harness.writer.writtenPaths, QStringList({ failed.target.path, failed.target.path }));
+    QVERIFY(!harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+}
+
+void DocumentFacadeTest::cancelledSaveRetryRejectsPriorSuccess()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    harness.facade->markModified();
+    harness.submitter.runInline = false;
+    harness.submitter.cancelStopsQueuedWork = false;
+    harness.facade->saveAs(QStringLiteral("/out/report.pdf"));
+    const auto oldRequest = harness.facade->operation();
+    QVERIFY(harness.facade->cancelPendingOperation());
+    const auto cause = harness.facade->operation().result;
+    QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    const auto retried = harness.facade->retry();
+    QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
+    const auto request = harness.facade->operation();
+    QCOMPARE(request.generation, oldRequest.generation);
+    QCOMPARE(request.revision, oldRequest.revision);
+    QVERIFY(!harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Cancelled));
+    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
+    QCOMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::Pending);
+    QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(harness.facade->source().path, QStringLiteral("/corpus/report.pdf"));
+
+    QVERIFY(harness.submitter.runDeferred(request.jobId));
+    QTRY_COMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::Saved);
+    QCOMPARE(harness.facade->operation().invocation, retried);
+    QCOMPARE(harness.facade->operation().retryCause, cause);
+    QCOMPARE(harness.facade->source().path, QStringLiteral("/out/report.pdf"));
+}
+
+void DocumentFacadeTest::retryRejectsStaleRevisionAndClosedDocument()
+{
+    Harness harness;
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+    harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    harness.writer.nextResult = { pdfinteraction::DocumentWriteOutcome::Failed, QStringLiteral("document/write-failed") };
+    const auto first = harness.facade->save();
+    QTRY_VERIFY(!harness.catalog.isPending(first));
+    harness.facade->markModified();
+    const int jobs = harness.submitter.submittedSpecs.size();
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.submitter.submittedSpecs.size(), jobs);
+    harness.facade->close();
+    QCOMPARE(harness.facade->operation().invocation, pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.facade->reopen(), pdfinteraction::InvalidCommandInvocation);
+}
+
+void DocumentFacadeTest::supersessionCannotRetryWhileReplacingDocument()
+{
+    Harness harness;
+    harness.submitter.runInline = false;
+    const auto first = harness.facade->open(QStringLiteral("/corpus/old.pdf"));
+    auto attemptedRetry = first;
+    connect(&harness.catalog, &pdfinteraction::CommandCatalog::invocationFinished,
+            harness.facade.get(), [&](const pdfinteraction::CommandResult& result)
+            {
+                if (result.invocation == first)
+                {
+                    attemptedRetry = harness.facade->retry();
+                } });
+    const auto current = harness.facade->open(QStringLiteral("/corpus/current.pdf"));
+    QCOMPARE(attemptedRetry, pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.facade->operation().invocation, current);
+    QCOMPARE(harness.submitter.submittedSpecs.size(), 2);
+    QVERIFY(harness.submitter.runDeferred(harness.facade->operation().jobId));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QCOMPARE(harness.facade->source().path, QStringLiteral("/corpus/current.pdf"));
+    QCOMPARE(harness.catalog.pendingInvocationCount(), 0);
+}
+
+void DocumentFacadeTest::reopenRejectsPriorWriteCompletion()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/report.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    const auto oldRevision = harness.facade->currentRevision();
+    const auto oldGeneration = harness.facade->documentGeneration();
+    harness.submitter.runInline = false;
+    harness.submitter.cancelStopsQueuedWork = false;
+    harness.facade->saveAs(QStringLiteral("/out/old.pdf"));
+    const auto oldRequest = harness.facade->operation();
+
+    harness.submitter.runInline = true;
+    const auto reopened = harness.facade->reopen();
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    const auto current = harness.facade->currentRevision();
+    QVERIFY(current != oldRevision);
+    QVERIFY(harness.facade->documentGeneration() > oldGeneration);
+    QVERIFY(harness.submitter.clearedKeys.contains(oldRevision.document.documentId));
+    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
+    QCOMPARE(harness.facade->currentRevision(), current);
+    QCOMPARE(harness.facade->source().path, QStringLiteral("/corpus/report.pdf"));
+    QCOMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::None);
+    QCOMPARE(harness.facade->operation().invocation, reopened);
+    QCOMPARE(harness.facade->operation().retryCause.invocation, pdfinteraction::InvalidCommandInvocation);
+}
+
+void DocumentFacadeTest::realWorkerCancellationAndTeardown_data()
+{
+    QTest::addColumn<bool>("destroyHost");
+    QTest::newRow("cancel-running-worker") << false;
+    QTest::newRow("destroy-host-with-running-worker") << true;
+}
+
+void DocumentFacadeTest::realWorkerCancellationAndTeardown()
+{
+    QFETCH(bool, destroyHost);
+    pdf::PDFDocumentContext context(nullptr);
+    DelayedDocumentLoader loader;
+    FakeDocumentWriter writer;
+    pdfinteraction::CommandCatalog catalog;
+    pdf::PDFJobScheduler scheduler(1);
+    pdfinteraction::PDFJobSchedulerSubmitter submitter(scheduler);
+    auto facade = std::make_unique<pdfinteraction::DocumentFacade>(context, submitter, loader, writer, catalog);
+    const auto releaseWorker = qScopeGuard([&loader]()
+                                           { loader.release.release(); });
+    QSignalSpy finished(&catalog, &pdfinteraction::CommandCatalog::invocationFinished);
+    const auto invocation = facade->open(QStringLiteral("/corpus/delayed.pdf"));
+    const QString job = facade->operation().jobId;
+    QVERIFY(loader.started.tryAcquire(1, 5000));
+    QCOMPARE(scheduler.snapshot(job).status, pdf::PDFJobStatus::Running);
+    if (destroyHost)
+    {
+        facade.reset();
+    }
+    else
+    {
+        QVERIFY(facade->cancelPendingOperation());
+        QCOMPARE(facade->state(), pdfinteraction::DocumentState::Empty);
+    }
+    QVERIFY(!catalog.isPending(invocation));
+    QCOMPARE(finished.count(), 1);
+    QCOMPARE(finished.first().first().value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Cancelled);
+    loader.release.release();
+    QVERIFY(scheduler.waitForFinished(job, 5000));
+    if (facade)
+    {
+        QTRY_COMPARE(facade->rejectedCompletionCount(), 1);
+        QCOMPARE(facade->state(), pdfinteraction::DocumentState::Empty);
+    }
+    QCoreApplication::sendPostedEvents();
+    QCOMPARE(context.getDocument(), nullptr);
+    QCOMPARE(finished.count(), 1);
 }
 
 void DocumentFacadeTest::replacementEstablishesNewIdentityBeforeNewWork()
