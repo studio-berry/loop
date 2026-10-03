@@ -583,7 +583,7 @@ int main(int argc, char** argv)
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);
-                                 if (passed && application.arguments().contains(QStringLiteral("--finding-navigation-fixture")))
+                                 if (passed)
                                  {
                                      runFindingNavigationFixture(application, host, window);
                                  }
@@ -602,7 +602,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    QTimer::singleShot(application.arguments().contains(QStringLiteral("--finding-navigation-fixture")) ? 30000 : 10000, &application, [&application]()
+    QTimer::singleShot(30000, &application, [&application]()
                        { application.exit(4); });
 
     return application.exec();
