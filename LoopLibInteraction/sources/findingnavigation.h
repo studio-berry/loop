@@ -88,7 +88,6 @@ struct FindingNavigationRequest
     QList<FindingEvidenceTarget> evidenceTargets;
     QString effectiveProfileDigest;
     QJsonObject coverageScope;
-    QString inspectionStatus;
 
     bool isValid() const
     {
@@ -141,7 +140,6 @@ struct FindingNavigationResult
     QString effectiveProfileDigest;
     QStringList evidenceIds;
     QJsonObject coverageScope;
-    QString inspectionStatus;
     QRectF pageBounds;
     int pageIndex = -1;
     FindingInspectionMode inspectionMode = FindingInspectionMode::None;

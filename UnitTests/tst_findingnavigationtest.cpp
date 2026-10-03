@@ -203,7 +203,6 @@ void FindingNavigationTest::evidenceUsesIndependentStateAndModeResetsOnDeselect(
     request.evidenceIds = { QStringLiteral("evidence-a") };
     request.effectiveProfileDigest = QStringLiteral("profile-1");
     request.coverageScope = { { QStringLiteral("pages"), QStringLiteral("2") } };
-    request.inspectionStatus = QStringLiteral("incomplete");
     request.evidenceTargets = { { QStringLiteral("evidence-a"), 2, QRectF(30.0, 30.0, 10.0, 10.0) },
                                 { QStringLiteral("unrelated"), 2, request.pageBounds },
                                 { QStringLiteral("evidence-a"), 4, request.pageBounds } };
@@ -215,7 +214,6 @@ void FindingNavigationTest::evidenceUsesIndependentStateAndModeResetsOnDeselect(
     QCOMPARE(result.documentRevision, request.documentRevision);
     QCOMPARE(result.effectiveProfileDigest, request.effectiveProfileDigest);
     QCOMPARE(result.coverageScope, request.coverageScope);
-    QCOMPARE(result.inspectionStatus, request.inspectionStatus);
     QCOMPARE(result.evidenceIds, request.evidenceIds);
     const QRectF deviceBounds = viewport.pagePointToViewportMatrix(1).mapRect(request.pageBounds);
     QVERIFY(QLineF(deviceBounds.center(), viewport.viewportRect().center()).length() < 2.0);
@@ -335,7 +333,6 @@ void FindingNavigationTest::reportContextFollowsStableFinding()
     report.errors = { finding };
     report.effectiveProfileDigest = QStringLiteral("effective-profile-1");
     report.coverageScope = { { QStringLiteral("pages"), QStringLiteral("selected") } };
-    report.inspectionComplete = false;
     pdfinteraction::PreflightFindingsModel model;
     model.replace(QStringLiteral("doc"), QStringLiteral("revision-1"), report);
     const auto request = pdfinteraction::FindingNavigationRequest::fromFinding(*model.finding(finding.stableId()));
@@ -343,12 +340,10 @@ void FindingNavigationTest::reportContextFollowsStableFinding()
     QCOMPARE(request.documentRevision, QStringLiteral("revision-1"));
     QCOMPARE(request.effectiveProfileDigest, report.effectiveProfileDigest);
     QCOMPARE(request.coverageScope, report.coverageScope);
-    QCOMPARE(request.inspectionStatus, QStringLiteral("incomplete"));
     QCOMPARE(request.evidenceTargets.size(), 1);
     QCOMPARE(request.evidenceTargets.front().pageBounds, finding.bbox);
     model.replace(QStringLiteral("doc"), QStringLiteral("revision-2"), { finding }, {});
     QVERIFY(model.finding(finding.stableId())->effectiveProfileDigest.isEmpty());
-    QVERIFY(model.finding(finding.stableId())->inspectionStatus.isEmpty());
 }
 
 void FindingNavigationTest::unusableBoundsFallBackToPage()

@@ -272,9 +272,6 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     addProperty(selection.properties, QStringLiteral("profile-digest"), QStringLiteral("Effective profile digest"),
                 finding->effectiveProfileDigest.isEmpty() ? QStringLiteral("Unavailable in report") : finding->effectiveProfileDigest,
                 QStringLiteral("identity"));
-    addProperty(selection.properties, QStringLiteral("inspection-status"), QStringLiteral("Inspection"),
-                finding->inspectionStatus.isEmpty() ? QStringLiteral("Unavailable in report") : finding->inspectionStatus,
-                QStringLiteral("evidence"));
     addProperty(selection.properties, QStringLiteral("coverage-scope"), QStringLiteral("Evidence coverage"),
                 finding->coverageScope.isEmpty() ? QStringLiteral("Unavailable in report") : QString::fromUtf8(QJsonDocument(finding->coverageScope).toJson(QJsonDocument::Compact)),
                 QStringLiteral("evidence"));

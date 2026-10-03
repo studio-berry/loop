@@ -71,7 +71,11 @@ void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host,
                              report.profileName = QStringLiteral("Finding navigation fixture");
                              report.effectiveProfileDigest = QStringLiteral("effective-profile-fixture");
                              report.coverageScope = { { QStringLiteral("pages"), QStringLiteral("2") } };
-                             report.inspectionComplete = false;
+                             pdf::PreflightCheckStatus checkStatus;
+                             checkStatus.id = finding.checkId;
+                             checkStatus.status = QStringLiteral("incomplete");
+                             checkStatus.reason = QStringLiteral("Only the selected page region was inspected");
+                             report.checkStatuses = { checkStatus };
                              if (!preflight->acceptResult(QStringLiteral("navigation-fixture"), preflight->documentRevision(), report))
                              {
                                  application.exit(6);
@@ -87,7 +91,7 @@ void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host,
                                  const QString id = inspector->data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString();
                                  const QString value = inspector->data(index, pdfinteraction::InspectorModel::ValueRole).toString();
                                  profileExposed |= id == QStringLiteral("profile-digest") && value == report.effectiveProfileDigest;
-                                 limitsExposed |= id == QStringLiteral("inspection-status") && value == QStringLiteral("incomplete");
+                                 limitsExposed |= id == QStringLiteral("check-reason") && value == checkStatus.reason;
                              }
                              if (host.currentPage() != 1 || host.zoom() <= zoomBefore || inspector->selectionId() != findingId ||
                                  !profileExposed || !limitsExposed)

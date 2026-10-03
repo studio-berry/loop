@@ -212,7 +212,6 @@ void PreflightFindingsModel::setReport(const pdf::PreflightResult& report)
         finding.profileName = report.profileName;
         finding.effectiveProfileDigest = report.effectiveProfileDigest;
         finding.coverageScope = report.coverageScope;
-        finding.inspectionStatus = report.inspectionComplete ? QStringLiteral("complete") : QStringLiteral("incomplete");
     }
     m_checkStatuses = report.checkStatuses;
     m_fixupsAvailable = report.fixupsAvailable;

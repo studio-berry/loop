@@ -59,7 +59,6 @@ struct PreflightFindingView
     QString profileName;
     QString effectiveProfileDigest;
     QJsonObject coverageScope;
-    QString inspectionStatus;
 };
 
 struct FindingOverlay

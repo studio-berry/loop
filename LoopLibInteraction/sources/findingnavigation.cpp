@@ -124,7 +124,6 @@ FindingNavigationRequest FindingNavigationRequest::fromFinding(const PreflightFi
     request.evidenceIds = finding.evidenceIds;
     request.effectiveProfileDigest = finding.effectiveProfileDigest;
     request.coverageScope = finding.coverageScope;
-    request.inspectionStatus = finding.inspectionStatus;
     if (finding.page > 0 && usableBounds(finding.bbox))
     {
         for (const QString& evidenceId : finding.evidenceIds)
@@ -300,7 +299,6 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
     result.effectiveProfileDigest = request.effectiveProfileDigest;
     result.evidenceIds = request.evidenceIds;
     result.coverageScope = request.coverageScope;
-    result.inspectionStatus = request.inspectionStatus;
 
     const std::optional<FindingTargetingCapability> capability = m_registry.capabilityFor(request.checkId);
     if (!request.isValid())
