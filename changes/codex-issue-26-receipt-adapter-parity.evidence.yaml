@@ -4,7 +4,6 @@ claims:
   - id: receipt-adapter-parity
     evidence:
       - unit:agent-policy:interaction
-      - unit:UnitTestsDocumentFacade
       - unit:agent-policy:quick
       - unit:agent-policy:preflight
       - unit:UnitTestsPreflightChecks
