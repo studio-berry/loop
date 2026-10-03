@@ -302,7 +302,7 @@ public:
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
                                           PDFDocument* reopenedCandidate,
-                                          QByteArray* candidateSha256 = nullptr) const;
+                                          QByteArray* candidateSha256 = nullptr);
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
@@ -321,6 +321,7 @@ public:
     /// persistence requirement.
     PDFOperationResult setRequestedSavePolicy(const PDFOperationSavePolicy& policy);
     PDFRepairStatus status() const { return m_status; }
+    const QJsonArray& artifactValidation() const { return m_artifactValidation; }
 
 private:
     struct Entry
@@ -342,6 +343,7 @@ private:
     QList<PDFRepairPlan> m_plans;
     QList<PDFRepairResult> m_results;
     PDFDocument m_candidate;
+    QJsonArray m_artifactValidation;
     PDFRepairStatus m_status = PDFRepairStatus::Planned;
     bool m_analyzed = false;
     bool m_hasCandidate = false;

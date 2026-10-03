@@ -33,6 +33,10 @@
 // shared channel-delta / differing-pixel budgets.
 
 #include "pdfcms.h"
+#include "pdfdocumentwriter.h"
+#include <QDir>
+#include <QCryptographicHash>
+#include <QJsonArray>
 #include "pdfdocument.h"
 #include "pdfdocumentreader.h"
 #include "pdfoptionalcontent.h"
@@ -45,6 +49,7 @@
 #include <QJsonObject>
 #include <QtTest>
 
+#include <algorithm>
 #include <limits>
 
 namespace
@@ -104,7 +109,7 @@ pdf::PDFDocument loadFixtureDocument(const QString& fixturePath)
     return document;
 }
 
-QImage renderDocumentPage(pdf::PDFDocument& document, bool separationSimulation)
+QImage renderDocumentPage(pdf::PDFDocument& document, bool separationSimulation, const QString& artifactName = {})
 {
     if (!document.getCatalog())
     {
@@ -130,10 +135,13 @@ QImage renderDocumentPage(pdf::PDFDocument& document, bool separationSimulation)
     settings.tileSize = QSize(32, 32);
     settings.multithreadingPathSampleThreshold = std::numeric_limits<int>::max();
     settings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, separationSimulation);
+    settings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SaveOriginalProcessImage, !artifactName.isEmpty());
     const QSize imageSize(128, 128);
     const QTransform pagePointToDevicePoint = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, QRect(QPoint(0, 0), imageSize));
     pdf::PDFTransparencyRenderer renderer(page, &document, &fontCache, &cms, &activity, &inkMapper, settings, pagePointToDevicePoint);
 
+    if (!artifactName.isEmpty())
+        renderer.setProcessColorSpace(pdf::PDFAbstractColorSpace::createDeviceColorSpaceByName(nullptr, &document, QByteArrayLiteral("DeviceCMYK")));
     renderer.beginPaint(imageSize);
     const auto errors = renderer.processContents();
     if (!errors.isEmpty())
@@ -141,6 +149,44 @@ QImage renderDocumentPage(pdf::PDFDocument& document, bool separationSimulation)
         return QImage();
     }
     renderer.endPaint();
+    if (!artifactName.isEmpty())
+    {
+        const QString directory = QString::fromUtf8(qgetenv("LOOP_INDEPENDENT_RENDER_DIR"));
+        if (!QDir().mkpath(directory))
+            return {};
+        const auto bitmap = renderer.getOriginalProcessBitmap();
+        const auto separations = inkMapper.getSeparations(4, true);
+        if (bitmap.getPixelFormat().getProcessColorChannelCount() != 4 ||
+            separations.size() != bitmap.getPixelFormat().getColorChannelCount())
+            return {};
+        QJsonArray channels;
+        for (size_t index = 0; index < separations.size(); ++index)
+        {
+            QImage plane(int(bitmap.getWidth()), int(bitmap.getHeight()), QImage::Format_Grayscale8);
+            const auto format = bitmap.getPixelFormat();
+            for (int y = 0; y < plane.height(); ++y)
+            {
+                uchar* row = plane.scanLine(y);
+                for (int x = 0; x < plane.width(); ++x)
+                {
+                    const auto pixel = bitmap.getPixel(size_t(x), size_t(y));
+                    const float opacity = format.hasOpacityChannel() ? pixel[format.getOpacityChannelIndex()] : 1.0f;
+                    row[x] = uchar(qRound(255.0f * (1.0f - std::clamp(pixel[index] * opacity, 0.0f, 1.0f))));
+                }
+            }
+            const QString name = QStringLiteral("%1.channel-%2.png").arg(artifactName).arg(index);
+            if (!plane.save(QDir(directory).filePath(name)))
+                return {};
+            channels.append(QJsonObject{ { QStringLiteral("name"), QString::fromUtf8(separations[index].name) },
+                                         { QStringLiteral("file"), name } });
+        }
+        QFile metadata(QDir(directory).filePath(artifactName + QStringLiteral(".json")));
+        if (!metadata.open(QIODevice::WriteOnly))
+            return {};
+        const QJsonObject record{ { QStringLiteral("width"), 128 }, { QStringLiteral("height"), 128 }, { QStringLiteral("renderer"), QStringLiteral("PDFTransparencyRenderer") }, { QStringLiteral("process_space"), QStringLiteral("DeviceCMYK") }, { QStringLiteral("paper"), QStringLiteral("opaque-white") }, { QStringLiteral("channel_encoding"), QStringLiteral("255*(1-ink*opacity)") }, { QStringLiteral("channels"), channels } };
+        if (metadata.write(QJsonDocument(record).toJson()) < 0)
+            return {};
+    }
     return renderer.toImage(false, true, pdf::PDFRGB{ 1.0f, 1.0f, 1.0f });
 }
 
@@ -264,6 +310,7 @@ private slots:
     void rendererDifferentialDoesNotDriftBeyondTolerance();
     void flattenThenRender_data();
     void flattenThenRender();
+    void exportIndependentRenders();
 };
 
 void OverprintRenderTest::render_data()
@@ -367,6 +414,34 @@ void OverprintRenderTest::flattenThenRender()
 
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
     compareRender(baseline, actual, expected);
+}
+
+void OverprintRenderTest::exportIndependentRenders()
+{
+    const QString directory = QString::fromUtf8(qgetenv("LOOP_INDEPENDENT_RENDER_DIR"));
+    if (directory.isEmpty())
+        QSKIP("Independent artifacts are exported only for qualification runs.");
+    const QStringList cases{ QStringLiteral("overprint-cmyk-mode0-off"), QStringLiteral("overprint-cmyk-mode0-on"),
+                             QStringLiteral("overprint-cmyk-mode1-off"), QStringLiteral("overprint-cmyk-mode1-on"),
+                             QStringLiteral("overprint-white-on"), QStringLiteral("overprint-separation-on"),
+                             QStringLiteral("overprint-multiply-on"), QStringLiteral("overprint-group-stroke-on"),
+                             QStringLiteral("transparency-normal-cmyk") };
+    QVERIFY(QDir().mkpath(directory));
+    for (const QString& name : cases)
+    {
+        pdf::PDFDocument document = loadFixtureDocument(fixturesDirectory() + QLatin1Char('/') + name + QStringLiteral(".pdf"));
+        QVERIFY(!renderDocumentPage(document, name.contains(QLatin1String("separation")), name).isNull());
+    }
+    pdf::PDFDocument document = loadFixtureDocument(fixturesDirectory() + QStringLiteral("/transparency-normal-cmyk.pdf"));
+    pdf::PDFTransparencyFlattenSettings settings;
+    settings.rasterizationDpi = 72;
+    settings.maxRasterPixels = 100000;
+    pdf::PDFTransparencyFlattenReport report;
+    QVERIFY(pdf::PDFTransparencyFlattener::apply(&document, settings, &report));
+    const QString name = QStringLiteral("flatten-transparency-normal-cmyk");
+    QVERIFY(!renderDocumentPage(document, false, name).isNull());
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(QDir(directory).filePath(name + QStringLiteral(".pdf")), &document, false));
 }
 
 QTEST_APPLESS_MAIN(OverprintRenderTest)

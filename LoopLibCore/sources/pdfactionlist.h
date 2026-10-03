@@ -26,6 +26,8 @@
 #include "pdfrepairoperation.h"
 #include "pdfobjectselector.h"
 
+#include "pdfstandardconversion.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
@@ -116,6 +118,8 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
     QJsonObject postflight;
     QJsonObject governed;
     QVector<PDFActionListStepResult> steps;
+    QList<PDFStandardConversionSettings> standardValidationRequirements;
+    QJsonArray independentValidation;
 
     QJsonObject toJson() const;
 };

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfrepairoperation.h"
+#include "pdfstandardconversion.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
 #include "preflightengine.h"
@@ -588,6 +589,7 @@ PDFOperationResult PDFRepairTransaction::analyze()
 
 PDFOperationResult PDFRepairTransaction::apply()
 {
+    m_artifactValidation = {};
     const PDFOperationResult savePolicyRefusal = refuseWeakenedSavePolicy();
     if (!savePolicyRefusal)
     {
@@ -715,8 +717,9 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
 
 PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candidatePath,
                                                             PDFDocument* reopenedCandidate,
-                                                            QByteArray* candidateSha256) const
+                                                            QByteArray* candidateSha256)
 {
+    m_artifactValidation = {};
     if (!m_hasCandidate)
     {
         return PDFOperationResult(QStringLiteral("Repair transaction has no candidate."));
@@ -742,6 +745,18 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         return saveRequestRefusal;
     }
 
+    QList<PDFStandardConversionSettings> requirements;
+    for (const auto& plan : m_plans)
+    {
+        if (plan.operationId == QLatin1String("standards-convert"))
+            requirements.append(standardConversionSettings(plan.parameters));
+    }
+    if (!requirements.isEmpty())
+    {
+        return PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
+                                                     reopenedCandidate, candidateSha256,
+                                                     &m_artifactValidation, m_options.operationControl);
+    }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
         [](PDFDocument*)

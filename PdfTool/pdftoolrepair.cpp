@@ -377,6 +377,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return transaction.status() == pdf::PDFRepairStatus::Cancelled ? PDFToolExitCode::Cancelled : PDFToolExitCode::ProcessingFailure;
     }
     reportJson.insert(QStringLiteral("results"), resultsJson(transaction.results()));
+    reportJson.insert(QStringLiteral("independent_validation"), transaction.artifactValidation());
 
     QTemporaryDir candidateDirectory;
     if (!candidateDirectory.isValid())
@@ -453,6 +454,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                                                                            &postflight,
                                                                            governedProfile);
     reportJson.insert(QStringLiteral("results"), resultsJson(transaction.results()));
+    reportJson.insert(QStringLiteral("independent_validation"), transaction.artifactValidation());
     if (options.preflightProfilePath.isEmpty())
     {
         reportJson.insert(QStringLiteral("postflight"), QJsonObject{

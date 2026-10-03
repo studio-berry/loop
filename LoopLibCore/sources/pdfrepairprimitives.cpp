@@ -501,45 +501,15 @@ public:
     }
 };
 
-PDFStandardConversionSettings standardConversionSettings(const QJsonObject& parameters)
-{
-    PDFStandardConversionSettings settings;
-    pdfStandardTargetFromString(parameters.value(QStringLiteral("target")).toString(), &settings.target);
-    settings.outputIntentIccData = QByteArray::fromBase64(parameters.value(QStringLiteral("target_icc_base64")).toString().toLatin1());
-    settings.outputIntentIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loop-output-intent")).toUtf8();
-    settings.outputIntentName = parameters.value(QStringLiteral("target_profile_name")).toString();
-    settings.normalizeColor = parameters.contains(QStringLiteral("normalize_color"))
-                                  ? parameters.value(QStringLiteral("normalize_color")).toBool()
-                                  : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
-    settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
-    settings.transparencyFlatten = parameters.contains(QStringLiteral("flatten_transparency"))
-                                       ? (parameters.value(QStringLiteral("flatten_transparency")).toBool()
-                                              ? PDFTransparencyFlattenPolicy::Always
-                                              : PDFTransparencyFlattenPolicy::Never)
-                                       : PDFTransparencyFlattenPolicy::Automatic;
-    settings.independentValidatorProgram = parameters.value(QStringLiteral("validator_program")).toString();
-    const QJsonValue validatorArguments = parameters.value(QStringLiteral("validator_arguments"));
-    if (validatorArguments.isArray())
-    {
-        for (const QJsonValue& value : validatorArguments.toArray())
-            settings.independentValidatorArguments.append(value.toString());
-    }
-    else
-    {
-        settings.independentValidatorArguments = QProcess::splitCommand(validatorArguments.toString());
-    }
-    settings.independentValidatorTimeoutMs = qBound(1000, parameters.value(QStringLiteral("validator_timeout_ms")).toInt(120000), 3600000);
-    settings.dryRunOnly = parameters.value(QStringLiteral("dry_run_only")).toBool(false);
-    return settings;
-}
 
 QJsonObject standardConversionParameterSchema()
 {
     return QJsonObject{
         { QStringLiteral("type"), QStringLiteral("object") },
         { QStringLiteral("additionalProperties"), false },
-        { QStringLiteral("required"), QJsonArray{ QStringLiteral("target"), QStringLiteral("target_icc_base64") } },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("target"), QStringLiteral("target_icc_base64"), QStringLiteral("validation_contract") } },
         { QStringLiteral("properties"), QJsonObject{
+                                            { QStringLiteral("validation_contract"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("enum"), QJsonArray{ 2 } } } },
                                             { QStringLiteral("target"), QJsonObject{
                                                                             { QStringLiteral("type"), QStringLiteral("string") },
                                                                             { QStringLiteral("enum"), QJsonArray::fromStringList(supportedPDFStandardTargets()) } } },
@@ -560,7 +530,7 @@ class PDFStandardConversionRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("standards-convert"); }
-    int version() const override { return 1; }
+    int version() const override { return 2; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Destructive; }
     QJsonObject parameterSchema() const override { return standardConversionParameterSchema(); }
     PDFRepairDomains domains() const override
@@ -587,6 +557,10 @@ public:
         if (!plan)
         {
             return PDFOperationResult(QStringLiteral("Standard conversion plan is null."));
+        }
+        if (parameters.value(QStringLiteral("validation_contract")).toInt() != 2)
+        {
+            return PDFOperationResult(QStringLiteral("standards-convert v2 requires validation_contract: 2; migrate the recipe for final-artifact validation."));
         }
         PDFStandardTarget target;
         if (!pdfStandardTargetFromString(parameters.value(QStringLiteral("target")).toString(), &target))
@@ -630,9 +604,9 @@ public:
             return PDFOperationResult(QStringLiteral("Standard conversion candidate or result is null."));
         }
         PDFStandardConversionReport report;
-        const PDFOperationResult conversionResult = PDFStandardConversion::apply(candidate,
-                                                                                 standardConversionSettings(plan.parameters),
-                                                                                 &report);
+        const PDFOperationResult conversionResult = PDFStandardConversion::prepare(candidate,
+                                                                                   standardConversionSettings(plan.parameters),
+                                                                                   &report);
         result->warnings.append(report.warnings);
         for (const PDFStandardConversionChange& change : report.changes)
         {
@@ -643,9 +617,9 @@ public:
                                      true });
         }
         PDFRepairValidationResult validation;
-        validation.status = conversionResult ? PDFRepairStatus::Passed : PDFRepairStatus::Failed;
+        validation.status = conversionResult ? PDFRepairStatus::Incomplete : PDFRepairStatus::Failed;
         validation.validatorId = QStringLiteral("independent-standard-validator");
-        validation.summary = conversionResult ? QStringLiteral("Independent validator and postflight passed.")
+        validation.summary = conversionResult ? QStringLiteral("Prepared; final artifact validation is pending.")
                                               : conversionResult.getErrorMessage();
         result->validations.append(validation);
         result->verdict = report.postflightAfter.value(QStringLiteral("verdict")).toObject();

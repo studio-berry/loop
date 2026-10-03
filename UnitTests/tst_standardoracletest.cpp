@@ -22,8 +22,13 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfstandardconversion.h"
+#include "independentvalidatorfixture.h"
 #include "pdftransparencyflattener.h"   // hasLiveTransparency
 
+#include "pdfdocumentwriter.h"
+
+#include <QBuffer>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QJsonDocument>
 #include <QPainter>
@@ -40,12 +45,18 @@ class StandardOracleTest : public QObject
 private slots:
     void missingValidatorIsError();
     void alwaysFailValidatorIsError();
-    void alwaysPassValidatorCanCommitPdfa();
+    void preparationCannotCertifyPdfa();
     void unconvertiblePdfxHasNoMarker();
     void veraPdfLaneSkipsWhenMissing();
     void explicitTransparencyOptOutIsHonoured();
     void opaqueDocumentIsNotRasterizedByTheFlattenPass();
     void explicitTransparencyOptOutBlocksPdfXConversion();
+    void artifactReport_data();
+    void artifactReport();
+    void rejectedArtifactPreservesDestination();
+    void cancelledArtifactCannotPass();
+    void unknownVersionAndMalformedReportRemainIncomplete();
+    void publishedDigestChangesAfterLaterMutation();
 };
 
 namespace
@@ -127,69 +138,35 @@ pdf::PDFStandardConversionSettings pdfaSettings(const QString& program)
 void StandardOracleTest::missingValidatorIsError()
 {
     pdf::PDFDocument document = emptyPage();
-    pdf::PDFStandardConversionSettings settings;
-    settings.target = pdf::PDFStandardTarget::PDFA2b;
-    settings.outputIntentIccData = loadCmykProfile();
+    pdf::PDFStandardConversionSettings settings = pdfaSettings({});
     if (settings.outputIntentIccData.isEmpty())
-    {
         QSKIP("Synthetic CMYK ICC profile is unavailable.");
-    }
     pdf::PDFStandardConversionReport report;
-    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
-    QVERIFY(!result);
+    QVERIFY(!pdf::PDFStandardConversion::prepare(&document, settings, &report));
     QVERIFY(!report.independentValidationPassed);
     QVERIFY(!report.conversionAttempted);
-    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("incomplete"));
-    QCOMPARE(report.validator.value(QStringLiteral("reason_code")).toString(), QStringLiteral("validator-not-configured"));
 }
 
 void StandardOracleTest::alwaysFailValidatorIsError()
 {
-    if (loadCmykProfile().isEmpty())
-    {
-        QSKIP("Synthetic CMYK ICC profile is unavailable.");
-    }
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    const QString script = writeExitStatusScript(directory, QStringLiteral("fail"), 1);
-    pdf::PDFDocument document = emptyPage();
-    pdf::PDFStandardConversionSettings settings = pdfaSettings(script);
-    pdf::PDFStandardConversionReport report;
-    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
-    QVERIFY(!result);
-    QVERIFY(!report.independentValidationPassed);
-    QVERIFY(!report.conversionAttempted);
-    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("rejected"));
-    QCOMPARE(report.validator.value(QStringLiteral("reason_code")).toString(), QStringLiteral("validator-rejected"));
-    QCOMPARE(report.validator.value(QStringLiteral("exit_status")).toString(), QStringLiteral("normal"));
-    QCOMPARE(report.validator.value(QStringLiteral("exit_code")).toInt(), 1);
-    QVERIFY(report.validator.value(QStringLiteral("input_bytes")).toInteger() > 0);
-    QVERIFY(report.validator.value(QStringLiteral("input_sha256")).toString().size() == 64);
-    QVERIFY(report.validator.value(QStringLiteral("duration_ms")).toInteger() >= 0);
+    pdf::PDFStandardConversionSettings settings = pdfaSettings(QStringLiteral("/bin/false"));
+    const auto result = pdf::PDFStandardConversion::validateArtifact(QByteArrayLiteral("%PDF-1.7"), settings);
+    QVERIFY(result.status != pdf::PDFArtifactValidationStatus::Passed);
 }
 
-void StandardOracleTest::alwaysPassValidatorCanCommitPdfa()
+void StandardOracleTest::preparationCannotCertifyPdfa()
 {
-    if (loadCmykProfile().isEmpty())
-    {
-        QSKIP("Synthetic CMYK ICC profile is unavailable.");
-    }
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    const QString script = writeExitStatusScript(directory, QStringLiteral("pass"), 0);
     pdf::PDFDocument document = emptyPage();
-    pdf::PDFStandardConversionSettings settings = pdfaSettings(script);
+    pdf::PDFStandardConversionSettings settings = pdfaSettings(QStringLiteral("verapdf"));
+    if (settings.outputIntentIccData.isEmpty())
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
     pdf::PDFStandardConversionReport report;
-    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
-    QVERIFY2(result, qPrintable(result.getErrorMessage()));
-    QVERIFY(report.independentValidationPassed);
+    report.independentValidationPassed = true;
+    report.postflightPassed = true;
+    QVERIFY(pdf::PDFStandardConversion::prepare(&document, settings, &report));
     QVERIFY(report.conversionAttempted);
-    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("passed"));
-    QCOMPARE(report.validator.value(QStringLiteral("exit_status")).toString(), QStringLiteral("normal"));
-    QCOMPARE(report.validator.value(QStringLiteral("exit_code")).toInt(), 0);
-    QVERIFY(report.validator.value(QStringLiteral("input_bytes")).toInteger() > 0);
-    QVERIFY(report.validator.value(QStringLiteral("input_sha256")).toString().size() == 64);
-    QVERIFY(report.validator.value(QStringLiteral("duration_ms")).toInteger() >= 0);
+    QVERIFY(!report.independentValidationPassed);
+    QVERIFY(!report.postflightPassed);
 }
 
 void StandardOracleTest::unconvertiblePdfxHasNoMarker()
@@ -207,7 +184,7 @@ void StandardOracleTest::unconvertiblePdfxHasNoMarker()
     settings.independentValidatorProgram = QStringLiteral("/bin/true");
     settings.independentValidatorArguments = QStringList{ QStringLiteral("{input}") };
     pdf::PDFStandardConversionReport report;
-    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
+    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::prepare(&document, settings, &report);
     QVERIFY(!result);
     QVERIFY(!report.conversionAttempted);
     QVERIFY(!report.independentValidationPassed);
@@ -247,16 +224,8 @@ void StandardOracleTest::explicitTransparencyOptOutIsHonoured()
         QVERIFY(change.id != QStringLiteral("transparency.flatten"));
     }
 
-    // ... and the apply path must not run the flattener either.
-    //
-    // apply()'s own result is deliberately not asserted: on this branch every
-    // PDF/X conversion fails at postflight for an unrelated, pre-existing reason
-    // (pdfxProfile() builds a profile with no "checks" array, which
-    // PreflightEngine::parseProfile() rejects with "Profile must define at least
-    // one check." - see LoopLibCore/sources/preflightengine.cpp:6110). The
-    // transparency_flatten report is the observable this task changes.
     pdf::PDFStandardConversionReport report;
-    pdf::PDFStandardConversion::apply(&document, settings, &report);
+    pdf::PDFStandardConversion::prepare(&document, settings, &report);
     QVERIFY(report.transparencyFlatten.isEmpty());
 }
 
@@ -273,10 +242,6 @@ void StandardOracleTest::opaqueDocumentIsNotRasterizedByTheFlattenPass()
     pdf::PDFDocument document = emptyPage();
     QVERIFY(!pdf::PDFTransparencyFlattener::hasLiveTransparency(&document));
 
-    // PDF/A-2b is deliberate: it takes the same flatten-and-CMYK apply path but
-    // has no PDF/X postflight, so apply() is guaranteed to commit and therefore
-    // to have reached the flatten stage. (A PDF/X target would make the
-    // precondition depend on the PDF/X rule set - see Task 13.)
     pdf::PDFStandardConversionSettings settings;
     settings.target = pdf::PDFStandardTarget::PDFA2b;
     settings.transparencyFlatten = pdf::PDFTransparencyFlattenPolicy::Always;
@@ -297,7 +262,7 @@ void StandardOracleTest::opaqueDocumentIsNotRasterizedByTheFlattenPass()
     }
 
     pdf::PDFStandardConversionReport report;
-    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
+    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::prepare(&document, settings, &report);
     QVERIFY2(result, qPrintable(result.getErrorMessage()));
     QVERIFY2(report.transparencyFlatten.isEmpty(),
              qPrintable(QString::fromUtf8(QJsonDocument(report.transparencyFlatten).toJson(QJsonDocument::Compact))));
@@ -332,6 +297,127 @@ void StandardOracleTest::explicitTransparencyOptOutBlocksPdfXConversion()
         [](const QString& blocker)
         { return blocker.startsWith(QStringLiteral("pdfx.transparency.allowed")); });
     QVERIFY2(blockedByTransparency, qPrintable(report.blockers.join(QStringLiteral(" | "))));
+}
+
+using independent_test::writeVeraPdfScript;
+
+void StandardOracleTest::artifactReport_data()
+{
+    QTest::addColumn<QString>("compliant");
+    QTest::addColumn<QString>("profile");
+    QTest::addColumn<bool>("mutate");
+    QTest::addColumn<int>("status");
+    using Status = pdf::PDFArtifactValidationStatus;
+    QTest::newRow("positive") << QStringLiteral("true") << QStringLiteral("PDF/A-2B validation profile") << false << int(Status::Passed);
+    QTest::newRow("zero-exit-rejection") << QStringLiteral("false") << QStringLiteral("PDF/A-2B validation profile") << false << int(Status::Rejected);
+    QTest::newRow("wrong-target") << QStringLiteral("true") << QStringLiteral("PDF/A-1B validation profile") << false << int(Status::Incomplete);
+    QTest::newRow("missing-verdict") << QString() << QStringLiteral("PDF/A-2B validation profile") << false << int(Status::Incomplete);
+    QTest::newRow("mutated-input") << QStringLiteral("true") << QStringLiteral("PDF/A-2B validation profile") << true << int(Status::Rejected);
+}
+
+void StandardOracleTest::artifactReport()
+{
+    QFETCH(QString, compliant);
+    QFETCH(QString, profile);
+    QFETCH(bool, mutate);
+    QFETCH(int, status);
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    auto settings = pdfaSettings(writeVeraPdfScript(directory, compliant, profile, mutate));
+    const auto result = pdf::PDFStandardConversion::validateArtifact(QByteArrayLiteral("%PDF-1.7 test bytes"), settings);
+    QCOMPARE(int(result.status), status);
+    QCOMPARE(result.artifactBytes, qint64(19));
+    QCOMPARE(result.artifactSha256.size(), 64);
+    QCOMPARE(result.reportSha256.size(), 64);
+}
+
+void StandardOracleTest::rejectedArtifactPreservesDestination()
+{
+    QTemporaryDir directory;
+    const QString destination = directory.filePath(QStringLiteral("output.pdf"));
+    QFile output(destination);
+    QVERIFY(output.open(QIODevice::WriteOnly));
+    output.write("existing output");
+    output.close();
+    auto settings = pdfaSettings(writeVeraPdfScript(directory, QStringLiteral("false"), QStringLiteral("PDF/A-2B validation profile"), false));
+    QJsonArray evidence;
+    QVERIFY(!pdf::PDFStandardConversion::writeCandidate(emptyPage(), destination, { settings }, nullptr, nullptr, &evidence));
+    QVERIFY(output.open(QIODevice::ReadOnly));
+    QCOMPARE(output.readAll(), QByteArrayLiteral("existing output"));
+    QCOMPARE(evidence.size(), 1);
+}
+
+void StandardOracleTest::cancelledArtifactCannotPass()
+{
+    class Cancelled final : public pdf::PDFOperationControl
+    {
+    public:
+        bool isOperationCancelled() const override { return true; }
+    } cancelled;
+    const auto result = pdf::PDFStandardConversion::validateArtifact(QByteArrayLiteral("bytes"), pdfaSettings(QStringLiteral("verapdf")), &cancelled);
+    QVERIFY(result.status != pdf::PDFArtifactValidationStatus::Passed);
+    QCOMPARE(result.reason, QStringLiteral("validator-cancelled"));
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("cancelled.pdf"));
+    QJsonArray evidence{ QJsonObject{ { QStringLiteral("status"), QStringLiteral("passed") } } };
+    QVERIFY(!pdf::PDFStandardConversion::writeCandidate(emptyPage(), path, {}, nullptr, nullptr, &evidence, &cancelled));
+    QVERIFY(evidence.isEmpty());
+    QVERIFY(!QFile::exists(path));
+}
+
+void StandardOracleTest::unknownVersionAndMalformedReportRemainIncomplete()
+{
+    QTemporaryDir directory;
+    const QString program = writeVeraPdfScript(directory, QStringLiteral("true"), QStringLiteral("PDF/A-2B validation profile"), false);
+    QFile script(program);
+    QVERIFY(script.open(QIODevice::ReadOnly));
+    QByteArray body = script.readAll();
+    script.close();
+    QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    script.write(QByteArray(body).replace("veraPDF 1.28.2", "unknown"));
+    script.close();
+    const auto unknown = pdf::PDFStandardConversion::validateArtifact(QByteArrayLiteral("bytes"), pdfaSettings(program));
+    QCOMPARE(unknown.status, pdf::PDFArtifactValidationStatus::Incomplete);
+    QCOMPARE(unknown.reason, QStringLiteral("validator-version-unsupported"));
+#ifdef Q_OS_WIN
+    body.replace("^</report^>", "");
+#else
+    body.replace("</report>", "");
+#endif
+    QVERIFY(script.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    script.write(body);
+    script.close();
+    const auto malformed = pdf::PDFStandardConversion::validateArtifact(QByteArrayLiteral("bytes"), pdfaSettings(program));
+    QCOMPARE(malformed.status, pdf::PDFArtifactValidationStatus::Incomplete);
+    QCOMPARE(malformed.reason, QStringLiteral("validator-report-invalid"));
+}
+
+void StandardOracleTest::publishedDigestChangesAfterLaterMutation()
+{
+    QTemporaryDir directory;
+    const auto settings = pdfaSettings(writeVeraPdfScript(directory, QStringLiteral("true"), QStringLiteral("PDF/A-2B validation profile"), false));
+    pdf::PDFDocument candidate = emptyPage();
+    QJsonArray evidence;
+    QByteArray validatedBytes;
+    pdf::PDFDocument reopened;
+    const QString path = directory.filePath(QStringLiteral("nested/output.pdf"));
+    QVERIFY(pdf::PDFStandardConversion::writeCandidate(candidate, path, { settings }, &reopened, &validatedBytes, &evidence));
+    QFile published(path);
+    QVERIFY(published.open(QIODevice::ReadOnly));
+    QCOMPARE(published.readAll(), validatedBytes);
+    const auto digest = QString::fromLatin1(QCryptographicHash::hash(validatedBytes, QCryptographicHash::Sha256).toHex());
+    QCOMPARE(evidence.first().toObject().value(QStringLiteral("artifact_sha256")).toString(), digest);
+    pdf::PDFDocumentBuilder builder(&reopened);
+    builder.setCatalogMetadata(QByteArrayLiteral("later mutation"));
+    candidate = builder.build();
+    QByteArray modifiedBytes;
+    QBuffer buffer(&modifiedBytes);
+    QVERIFY(buffer.open(QIODevice::WriteOnly));
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(&buffer, &candidate));
+    QVERIFY(modifiedBytes != validatedBytes);
+    const auto later = pdf::PDFStandardConversion::validateArtifact(modifiedBytes, settings);
+    QVERIFY(later.artifactSha256 != digest);
 }
 
 QTEST_APPLESS_MAIN(StandardOracleTest)

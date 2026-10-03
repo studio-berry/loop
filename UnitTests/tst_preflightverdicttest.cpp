@@ -71,6 +71,7 @@ private slots:
     void receiptTerminalStates_data();
     void receiptTerminalStates();
     void receiptRejectsMismatchedProvenance();
+    void receiptDisclosesIndependentRenderingLimit();
     void processExitCodes_matchPdfToolContract();
     void budgetExceeded_neverAllowsCertificate();
     void operatorSummary_distinguishesIncompleteFromPass();
@@ -1193,6 +1194,20 @@ void PreflightVerdictTest::receiptTerminalStates()
     {
         QVERIFY(!receipt.verdict.allowsCertificateIssuance());
     }
+}
+
+void PreflightVerdictTest::receiptDisclosesIndependentRenderingLimit()
+{
+    ReceiptFixture fixture;
+    fixture.profile.checks.first().id = QStringLiteral("ink-coverage");
+    fixture.result.checkStatuses.first().id = QStringLiteral("ink-coverage");
+    fixture.result.coverageScope.insert(QStringLiteral("enabled_checks"), QJsonArray{ QStringLiteral("ink-coverage") });
+    pdf::PreflightInspectionReceipt receipt;
+    QString error;
+    QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                 fixture.evidence, receipt, error));
+    QVERIFY(receipt.limitations.join(QLatin1Char(' ')).contains(QLatin1String("not independent print proof")));
+    QCOMPARE(receipt.verdict.state, pdf::PreflightVerdictState::Pass);
 }
 
 void PreflightVerdictTest::receiptRejectsMismatchedProvenance()

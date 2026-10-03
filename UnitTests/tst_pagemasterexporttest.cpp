@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfpagemasterexport.h"
+#include "independentvalidatorfixture.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfglobal.h"
@@ -65,6 +66,9 @@ class PageMasterExportTest : public QObject
 
 private slots:
     void pipelineOrder_geometryThenBleedThenWrite();
+    void standardValidationFailurePreservesExistingOutput();
+    void resume_standardsRevalidate_data();
+    void resume_standardsRevalidate();
     void pipelineOrder_skipsDisabledStages();
     void multiOutput_writesAll();
     void failure_assembleError_writesNothing();
@@ -417,6 +421,102 @@ qint64 readVmHWMKilobytes()
 }
 
 }   // namespace
+
+void PageMasterExportTest::standardValidationFailurePreservesExistingOutput()
+{
+    QTemporaryDir directory;
+    const auto settings = independent_test::settings(independent_test::writeVeraPdfScript(directory, QStringLiteral("false"), QStringLiteral("PDF/A-2B validation profile"), false));
+    QVERIFY(!settings.outputIntentIccData.isEmpty());
+    const auto source = buildFilledPage();
+    const QString path = directory.filePath(QStringLiteral("output.pdf"));
+    QFile existing(path);
+    QVERIFY(existing.open(QIODevice::WriteOnly));
+    existing.write("existing destination");
+    existing.close();
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, source);
+    job.outputFileNames.push_back(path);
+    job.overwriteFiles = true;
+    job.standardConversionSettings = settings;
+    job.hasStandardConversionSettings = true;
+    const auto result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(existing.open(QIODevice::ReadOnly));
+    QCOMPARE(existing.readAll(), QByteArrayLiteral("existing destination"));
+    const auto output = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+    QCOMPARE(output.value(QStringLiteral("independent_validation")).toArray().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("rejected"));
+}
+
+void PageMasterExportTest::resume_standardsRevalidate_data()
+{
+    QTest::addColumn<bool>("mutateOutput");
+    QTest::addColumn<bool>("actionList");
+    QTest::newRow("direct-unchanged") << false << false;
+    QTest::newRow("direct-mutated") << true << false;
+    QTest::newRow("action-list-unchanged") << false << true;
+    QTest::newRow("action-list-mutated") << true << true;
+}
+
+void PageMasterExportTest::resume_standardsRevalidate()
+{
+    QFETCH(bool, mutateOutput);
+    QFETCH(bool, actionList);
+    QTemporaryDir directory;
+    const QString profile = QStringLiteral("PDF/A-2B validation profile");
+    const auto settings = independent_test::settings(independent_test::writeVeraPdfScript(directory, QStringLiteral("true"), profile, false));
+    const auto source = buildFilledPage();
+    const QString path = directory.filePath(QStringLiteral("output.pdf"));
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, source);
+    job.documentSourceIdentities.emplace(0, testArtifactIdentity(QByteArrayLiteral("same-source"), QStringLiteral("application/pdf"), QStringLiteral("source.pdf")));
+    job.outputFileNames.push_back(path);
+    job.manifestPath = directory.filePath(QStringLiteral("manifest.json"));
+    job.overwriteFiles = true;
+    job.standardConversionSettings = settings;
+    job.hasStandardConversionSettings = true;
+    if (actionList)
+    {
+        job.hasStandardConversionSettings = false;
+        job.hasActionList = true;
+        job.actionList.id = QStringLiteral("convert");
+        job.actionList.name = job.actionList.id;
+        pdf::PDFActionListStep step;
+        step.id = QStringLiteral("convert");
+        step.operationId = QStringLiteral("standards-convert");
+        step.parameters = independent_test::parameters(settings);
+        job.actionList.steps.append(step);
+        job.hasPreflightGate = true;
+        job.preflightProfilePath = directory.filePath(QStringLiteral("preflight.json"));
+        QFile profileFile(job.preflightProfilePath);
+        QVERIFY(profileFile.open(QIODevice::WriteOnly));
+        profileFile.write(R"({"schema_version":1,"id":"standards-resume","version":"1.0.0","name":"Standards resume","checks":[{"id":"embedded-fonts","severity":"error"}],"fixups":[]})");
+        profileFile.close();
+        job.forcePreflight = true;
+    }
+    const auto initial = pdf::PDFPageMasterExport::run(job);
+    QVERIFY2(initial.success, qPrintable(initial.errorMessage));
+    QFile outputFile(path);
+    QVERIFY(outputFile.open(QIODevice::ReadOnly));
+    QByteArray retainedBytes = outputFile.readAll();
+    outputFile.close();
+    if (mutateOutput)
+    {
+        retainedBytes = QByteArrayLiteral("later artifact mutation");
+        QVERIFY(outputFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(outputFile.write(retainedBytes), retainedBytes.size());
+        outputFile.close();
+    }
+    independent_test::writeVeraPdfScript(directory, QStringLiteral("false"), profile, false);
+    job.resume = true;
+    const auto resumed = pdf::PDFPageMasterExport::run(job);
+    QVERIFY(!resumed.success);
+    QVERIFY(outputFile.open(QIODevice::ReadOnly));
+    QCOMPARE(outputFile.readAll(), retainedBytes);
+    const auto output = resumed.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+    QCOMPARE(output.value(QStringLiteral("independent_validation")).toArray().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("rejected"));
+}
 
 void PageMasterExportTest::pipelineOrder_geometryThenBleedThenWrite()
 {

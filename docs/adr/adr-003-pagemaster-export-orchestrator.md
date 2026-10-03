@@ -2,11 +2,11 @@
 
 **Status:** implemented
 **Implemented-at:** 5113b86fc7d0f1c5273f128075c84a00a016df8a
-**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
+**Last-verified:** 2026-09-30 @ 78638b18408cbc52074e55321973e56513e6433e
 **Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-311 / Cycle 2 sprint plan
-**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loop #30 Action List stage)
+**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loop #30 Action List stage); 2026-09-30 (Loop #18 final-artifact validation)
 
 ## Context
 
@@ -26,9 +26,11 @@ changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
   geometry validation / `PDFContourBleedFixup::apply` (optional) →
   `PDFBleedFixup::apply` (optional) → `PDFTransparencyFlattener::apply`
   (optional) → `PDFImageOptimizer::optimize` (optional) →
-  `PDFStandardConversion::apply` (optional) → preflight revalidation (optional)
-  → `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
-  assemble-all / optimize-all / write-all passes.
+  `PDFStandardConversion::prepare` (optional) → preflight revalidation (optional)
+  → candidate serialization → `PDFStandardConversion::validateArtifacts`
+  (when standards are requested) → publication of those same bytes. The artifact
+  digest is checked before and after validation and after publication. Stages run
+  **per output**, not as batch-wide assemble-all / optimize-all / write-all passes.
 - **Action List placement (#30):** PageMaster runs the existing
   `PDFActionListExecutor` after the initial preflight gate and before page
   geometry. The recipe is planned and executed against the isolated assembled
