@@ -56,6 +56,9 @@ struct PreflightFindingView
     /// longer counts as blocking in the document's verdict.
     bool waived = false;
     QJsonObject evidence;
+    QString profileName;
+    QString effectiveProfileDigest;
+    QJsonObject coverageScope;
 };
 
 struct FindingOverlay
