@@ -61,17 +61,60 @@ Pane {
             }
 
             Label {
+                objectName: "preflightVerdict"
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: {
-                    if (!host)
-                        return ""
-                    if (host.preflightOperatorSummary)
-                        return host.preflightOperatorSummary
-                    return qsTr("Preflight status: %1").arg(host.preflightStateName)
-                }
-                Accessible.name: root.host ? root.host.preflightStateVisual.accessibleName : qsTr("Preflight status")
+                activeFocusOnTab: true
+                text: root.host ? root.host.preflight.verdictDescription : qsTr("No accepted verdict is available.")
+                Accessible.role: Accessible.StaticText
+                Accessible.name: qsTr("Preflight verdict")
+                Accessible.description: text
+                Accessible.focusable: true
+                Accessible.focused: activeFocus
+                onTextChanged: if (visible) Accessible.announce(text)
             }
+        }
+
+        Label {
+            objectName: "preflightLimitations"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            activeFocusOnTab: true
+            text: root.host ? root.host.preflight.limitationDescription : qsTr("Inspection limitations are unavailable.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: qsTr("Preflight limitations")
+            Accessible.description: text
+            Accessible.focusable: true
+            Accessible.focused: activeFocus
+            onTextChanged: if (visible) Accessible.announce(text)
+        }
+
+        Label {
+            objectName: "preflightSelectedFinding"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            activeFocusOnTab: true
+            text: root.host ? root.host.preflight.selectedFindingDescription : qsTr("No current preflight finding is selected.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: qsTr("Selected preflight finding")
+            Accessible.description: text
+            Accessible.focusable: true
+            Accessible.focused: activeFocus
+            onTextChanged: if (visible) Accessible.announce(text)
+        }
+
+        Label {
+            objectName: "preflightJobStatus"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            activeFocusOnTab: true
+            text: root.host ? root.host.preflight.jobDescription : qsTr("No preflight job has been submitted.")
+            Accessible.role: Accessible.StaticText
+            Accessible.name: qsTr("Preflight job")
+            Accessible.description: text
+            Accessible.focusable: true
+            Accessible.focused: activeFocus
+            onTextChanged: if (visible) Accessible.announce(text)
         }
 
         RowLayout {
@@ -122,7 +165,9 @@ Pane {
                 return -1
             }
             Accessible.name: qsTr("Preflight profile")
-            Accessible.description: qsTr("Select a bundled or local validated preflight profile.")
+            Accessible.description: enabled ? qsTr("Select a bundled or local validated preflight profile.")
+                : root.host && root.host.preflightProfileEditing ? qsTr("Save or cancel the current profile edit before selecting another profile.")
+                : qsTr("The profile cannot change while preflight is running.")
             onActivated: function(index) {
                 if (root.host && model[index])
                     root.host.selectPreflightProfile(model[index].id)
@@ -138,6 +183,9 @@ Pane {
                 text: qsTr("Import Profile")
                 enabled: root.host && root.host.preflightStateName !== "running" && !root.host.preflightProfileEditing
                 Accessible.name: qsTr("Import preflight profile")
+                Accessible.description: enabled ? qsTr("Import and validate a preflight profile.")
+                    : root.host && root.host.preflightProfileEditing ? qsTr("Save or cancel the current profile edit before importing a profile.")
+                    : qsTr("Profiles cannot be imported while preflight is running.")
                 onClicked: if (root.host) root.host.requestPreflightProfileImport()
             }
 
@@ -146,6 +194,9 @@ Pane {
                 text: qsTr("Customize Profile")
                 enabled: root.host && root.host.preflightStateName !== "running" && !root.host.preflightProfileEditing
                 Accessible.name: qsTr("Customize preflight profile")
+                Accessible.description: enabled ? qsTr("Edit a copy of the selected preflight profile.")
+                    : root.host && root.host.preflightProfileEditing ? qsTr("A profile edit is already in progress.")
+                    : qsTr("Profiles cannot be edited while preflight is running.")
                 onClicked: if (root.host) root.host.beginPreflightProfileEdit()
             }
 
@@ -154,6 +205,8 @@ Pane {
                 text: qsTr("Export Profile")
                 enabled: root.host && root.host.preflightStateName !== "running"
                 Accessible.name: qsTr("Export preflight profile")
+                Accessible.description: enabled ? qsTr("Export the selected validated preflight profile.")
+                    : qsTr("Profiles cannot be exported while preflight is running.")
                 onClicked: if (root.host) root.host.requestPreflightProfileExport()
             }
         }
@@ -228,6 +281,7 @@ Pane {
                     text: qsTr("Save Fork")
                     enabled: root.host && root.host.preflightProfileEditing
                     Accessible.name: qsTr("Save preflight profile fork")
+                    Accessible.description: enabled ? qsTr("Save the edited copy as a new profile.") : qsTr("No profile edit is in progress.")
                     onClicked: if (root.host) root.host.requestPreflightProfileSave()
                 }
                 Button {
@@ -235,6 +289,7 @@ Pane {
                     text: qsTr("Cancel Edit")
                     enabled: root.host && root.host.preflightProfileEditing
                     Accessible.name: qsTr("Cancel preflight profile edit")
+                    Accessible.description: enabled ? qsTr("Discard the current profile edit.") : qsTr("No profile edit is in progress.")
                     onClicked: if (root.host) root.host.cancelPreflightProfileEdit()
                 }
             }
@@ -278,10 +333,11 @@ Pane {
             Button {
                 objectName: "runPreflightButton"
                 text: qsTr("Run Preflight")
-                enabled: root.host && root.host.hasDocument && root.host.preflightStateName !== "running"
+                enabled: root.host && root.host.preflightRunUnavailableReason.length === 0
                 Accessible.name: qsTr("Run preflight")
                 Accessible.role: Accessible.Button
-                Accessible.description: qsTr("Runs the selected validated preflight profile.")
+                Accessible.description: enabled ? qsTr("Runs the selected validated preflight profile.")
+                    : root.host ? root.host.preflightRunUnavailableReason : qsTr("No document host is available.")
                 onClicked: root.host.runPreflight()
             }
 
@@ -291,7 +347,8 @@ Pane {
                 enabled: root.host && root.host.preflightStateName === "running"
                 Accessible.name: qsTr("Cancel preflight")
                 Accessible.role: Accessible.Button
-                Accessible.description: qsTr("Cancels the running preflight job.")
+                Accessible.description: enabled ? qsTr("Cancels the running preflight job.")
+                    : root.host ? root.host.preflight.cancelUnavailableReason : qsTr("No document host is available.")
                 onClicked: root.host.cancelPreflight()
             }
 
@@ -301,7 +358,8 @@ Pane {
                 enabled: root.host && root.host.hasPreflightReport
                 Accessible.name: qsTr("Export preflight report")
                 Accessible.role: Accessible.Button
-                Accessible.description: qsTr("Exports the retained normalized preflight report as JSON.")
+                Accessible.description: enabled ? qsTr("Exports the retained normalized preflight report as JSON.")
+                    : root.host ? root.host.preflight.exportUnavailableReason : qsTr("No document host is available.")
                 onClicked: root.host.requestPreflightReportExport()
             }
 
@@ -351,6 +409,7 @@ Pane {
                 activeFocusOnTab: true
                 text: "%1 — %2".arg(model.severity).arg(model.message)
                 highlighted: model.selected
+                Accessible.selected: model.selected
                 Accessible.role: Accessible.ListItem
                 Accessible.name: model.message
                 Accessible.description: qsTr("Severity %1, scope %2, page %3, object %4, check %5, evidence %6")

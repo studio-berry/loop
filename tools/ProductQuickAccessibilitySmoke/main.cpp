@@ -2,8 +2,16 @@
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
+#include "preflightcontroller.h"
 
 #include <QAccessible>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QSaveFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -368,11 +376,184 @@ bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
 
 }   // namespace
 
+namespace
+{
+
+bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* window,
+                        EditorHost& host, pdfinteraction::PreflightController& controller)
+{
+    const QList<QPair<QString, QString>> descriptions = {
+        { QStringLiteral("preflightVerdict"), controller.verdictDescription() },
+        { QStringLiteral("preflightLimitations"), controller.limitationDescription() },
+        { QStringLiteral("preflightSelectedFinding"), controller.selectedFindingDescription() },
+        { QStringLiteral("preflightJobStatus"), controller.jobDescription() }
+    };
+    QJsonArray nodes;
+    for (const auto& entry : descriptions)
+    {
+        auto* item = window->findChild<QQuickItem*>(entry.first);
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        if (!accessible || !item->activeFocusOnTab() || !accessible->state().focusable ||
+            accessible->text(QAccessible::Description) != entry.second)
+        {
+            fprintf(stderr, "operator-probe inaccessible_status=%s\n", qPrintable(entry.first));
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), entry.second },
+                                  { QStringLiteral("focusable"), true } });
+    }
+    for (const QString& objectName : { QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") })
+    {
+        auto* item = window->findChild<QQuickItem*>(objectName);
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        if (!accessible || accessible->text(QAccessible::Description).isEmpty())
+        {
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), accessible->text(QAccessible::Description) },
+                                  { QStringLiteral("enabled"), item->isEnabled() } });
+    }
+    QJsonObject snapshot{ { QStringLiteral("stage"), stage },
+                          { QStringLiteral("window_handle"), QString::number(qulonglong(window->winId())) },
+                          { QStringLiteral("nodes"), nodes },
+                          { QStringLiteral("has_document"), host.hasDocument() },
+                          { QStringLiteral("native_accessibility_active"), QAccessible::isActive() },
+                          { QStringLiteral("graphics_api"), graphicsApiName(window->rendererInterface()->graphicsApi()) } };
+    QSaveFile output(QDir(directory).filePath(QStringLiteral("stage-%1.json").arg(stage)));
+    const QByteArray bytes = QJsonDocument(snapshot).toJson();
+    return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
+}
+
+void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, EditorHost& host,
+                        const QString& directory)
+{
+    auto* controller = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+    auto* timer = new QTimer(&application);
+    host.setWorkspace(EditorHost::Preflight);
+    window->hide();
+    window->show();
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, window, &host, controller, directory, applied = -1, opening = false]() mutable
+                     {
+                         QFile input(QDir(directory).filePath(QStringLiteral("stage.command")));
+                         if (!input.open(QIODevice::ReadOnly))
+                         {
+                             return;
+                         }
+                         bool valid = false;
+                         const int stage = input.readAll().trimmed().toInt(&valid);
+                         if (!valid || stage < 0 || stage > 6 || stage > applied + 1)
+                         {
+                             application.exit(6);
+                             return;
+                         }
+                         if (stage <= applied)
+                         {
+                             return;
+                         }
+                         if (stage == 1 && !host.hasDocument())
+                         {
+                             if (!opening)
+                             {
+                                 opening = true;
+                                 host.openInitialPath(QDir(directory).filePath(QStringLiteral("operator-fixture.pdf")));
+                             }
+                             return;
+                         }
+                         const QString key = controller->documentKey();
+                         const QString revision = controller->documentRevision();
+                         switch (stage)
+                         {
+                             case 0:
+                                 controller->clear();
+                                 break;
+                             case 1:
+                                 controller->beginRun(key, revision, QStringLiteral("operator-fixture-profile"), QStringLiteral("operator-fixture-job-1"));
+                                 break;
+                             case 2:
+                             {
+                                 pdf::PreflightResult result;
+                                 result.inspectionComplete = false;
+                                 result.coverageScope = { { QStringLiteral("pages"), QJsonArray{ 1 } } };
+                                 pdf::PreflightCheckStatus check;
+                                 check.id = QStringLiteral("fonts");
+                                 check.status = QStringLiteral("incomplete");
+                                 check.reason = QStringLiteral("Font evidence is unavailable");
+                                 result.checkStatuses = { check };
+                                 pdf::PreflightFinding finding;
+                                 finding.checkId = QStringLiteral("bleed");
+                                 finding.scope = QStringLiteral("page");
+                                 finding.page = 1;
+                                 finding.severity = QStringLiteral("warning");
+                                 finding.message = QStringLiteral("Bleed needs inspection");
+                                 finding.bbox = QRectF(1, 2, 3, 4);
+                                 result.warnings = { finding };
+                                 if (!controller->acceptResult(controller->jobId(), revision, result))
+                                 {
+                                     application.exit(6);
+                                     return;
+                                 }
+                                 host.selectFinding(finding.stableId());
+                                 break;
+                             }
+                             case 3:
+                                 controller->beginRun(key, revision, {}, QStringLiteral("operator-fixture-job-2"));
+                                 controller->cancelRun(controller->jobId());
+                                 break;
+                             case 4:
+                                 controller->beginRun(key, revision, {}, QStringLiteral("operator-fixture-job-3"));
+                                 controller->failRun(controller->jobId(), revision, QStringLiteral("Worker evidence is unavailable"));
+                                 break;
+                             case 5:
+                                 controller->markProfileStale();
+                                 break;
+                             case 6:
+                                 fprintf(stdout, "operator-probe status=pass native_accessibility_active=%d\n", QAccessible::isActive() ? 1 : 0);
+                                 application.exit(0);
+                                 return;
+                         }
+                         applied = stage;
+                         host.setWorkspace(EditorHost::Preflight);
+                         QTimer::singleShot(100, &application, [&application, window, &host, controller, directory, stage]()
+                                            {
+                                                if (!writeProbeSnapshot(directory, stage, window, host, *controller))
+                                                {
+                                                    application.exit(6);
+                                                } });
+                     });
+    timer->start(100);
+}
+
+}   // namespace
+
 int main(int argc, char** argv)
 {
     QGuiApplication application(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::ProductQuickAccessibilitySmoke);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
+
+    const QStringList arguments = application.arguments();
+    const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
+    const bool nativeProbe = probeArgument >= 0;
+    QString probeDirectory;
+    if (nativeProbe)
+    {
+        if (probeArgument + 1 >= arguments.size() || !QDir(arguments.at(probeArgument + 1)).exists())
+        {
+            return 6;
+        }
+        probeDirectory = arguments.at(probeArgument + 1);
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 100, 100));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        if (!writer.write(QDir(probeDirectory).filePath(QStringLiteral("operator-fixture.pdf")), &document, true))
+        {
+            return 6;
+        }
+    }
 
     EditorHost host;
     QQmlApplicationEngine engine;
@@ -397,11 +578,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (nativeProbe)
+                         {
+                             QTimer::singleShot(0, &application, [&application, window, &host, probeDirectory]()
+                                                { startOperatorProbe(application, window, host, probeDirectory); });
                              return;
                          }
 
@@ -480,7 +668,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    QTimer::singleShot(10000, &application, [&application]()
+    QTimer::singleShot(nativeProbe ? 120000 : 10000, &application, [&application]()
                        { application.exit(4); });
 
     return application.exec();
