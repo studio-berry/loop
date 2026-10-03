@@ -158,8 +158,8 @@ public:
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
 
-    /// How many terminal job results were dropped because their generation was
-    /// no longer current. A correct run of the lifecycle never admits one.
+    /// Terminal job results dropped because their request or document generation
+    /// was no longer current. A correct run of the lifecycle never admits one.
     int rejectedCompletionCount() const noexcept { return m_rejectedCompletions; }
 
     /// Marks the current document modified. Kept explicit rather than inferred:
