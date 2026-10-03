@@ -4,3 +4,4 @@ claims:
   - id: document-lifecycle-cancel-retry-reopen
     evidence:
       - unit:agent-policy:interaction
+unresolved: []
