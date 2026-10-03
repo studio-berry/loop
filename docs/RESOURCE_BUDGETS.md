@@ -22,7 +22,7 @@ the following conservative defaults:
 
 | Pool | Limit | Admission rule |
 |------|-------|----------------|
-| active document model | 256 MiB | interaction-priority hard boundary |
+| active document model | 640 MiB | interaction-priority hard boundary |
 | compiled/evidence cache | 128 MiB | insertion-order eviction, then reject |
 | raster/tile cache | 128 MiB | prefetch shed, then visible admission reject |
 | GPU texture cache | 128 MiB | source-image byte proxy; physical GPU bytes are unavailable (`-1`) |

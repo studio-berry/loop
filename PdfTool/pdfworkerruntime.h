@@ -26,7 +26,6 @@
 #include "pdfworkersandbox.h"
 
 #include <QJsonObject>
-#include <atomic>
 
 namespace pdftool::worker
 {
@@ -34,10 +33,9 @@ namespace pdftool::worker
 class WorkerRuntime
 {
 public:
-    explicit WorkerRuntime(WorkerSandboxPaths sandboxPaths);
+    explicit WorkerRuntime(WorkerSandboxPaths sandboxPaths, QJsonObject sandboxStatus);
 
     QJsonObject handleRequest(const QJsonObject& request);
-    void requestCancel();
 
 private:
     QJsonObject handlePing(const QString& id);
@@ -49,7 +47,6 @@ private:
 
     WorkerSandboxPaths m_sandboxPaths;
     QJsonObject m_sandboxStatus;
-    std::atomic_bool m_cancelRequested{ false };
 };
 
 }   // namespace pdftool::worker

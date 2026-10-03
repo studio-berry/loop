@@ -250,12 +250,10 @@ PDFRasterizer::PDFRasterizer(QObject* parent) :
     BaseClass(parent),
     m_rendererEngine(RendererEngine::Blend2D_SingleThread)
 {
-
 }
 
 PDFRasterizer::~PDFRasterizer()
 {
-
 }
 
 void PDFRasterizer::reset(RendererEngine rendererEngine)
@@ -446,16 +444,16 @@ void PDFRasterizerPool::render(const std::vector<PDFInteger>& pageIndices,
         const QSize imageSize = imageSizeGetter(page);
         const bool validImageSize = imageSize.width() > 0 && imageSize.height() > 0;
         const qint64 imageBytes = !validImageSize
-                                       ? 0
-                                       : static_cast<qint64>(imageSize.width()) <= std::numeric_limits<qint64>::max() / imageSize.height() / 4
-                                             ? static_cast<qint64>(imageSize.width()) * imageSize.height() * 4
-                                             : std::numeric_limits<qint64>::max();
+                                      ? 0
+                                  : static_cast<qint64>(imageSize.width()) <= std::numeric_limits<qint64>::max() / imageSize.height() / 4
+                                      ? static_cast<qint64>(imageSize.width()) * imageSize.height() * 4
+                                      : std::numeric_limits<qint64>::max();
         std::optional<PDFResourceReservation> imageReservation;
         if (m_resourceBudget && imageBytes > 0 &&
             !m_resourceBudget->tryReserve(PDFResourcePool::RasterTileCache,
-                                           imageBytes,
-                                           PDFResourcePriority::Visible,
-                                           QStringLiteral("benchmark raster image")))
+                                          imageBytes,
+                                          PDFResourcePriority::Visible,
+                                          QStringLiteral("benchmark raster image")))
         {
             m_resourceBudget->recordShed(PDFResourcePool::RasterTileCache);
             m_resourceBudgetExhausted.store(true, std::memory_order_release);
@@ -476,17 +474,30 @@ void PDFRasterizerPool::render(const std::vector<PDFInteger>& pageIndices,
 
         QImage image = rasterizer->render(pageIndex, page, &precompiledPage, imageSize, m_features, &annotationManager, cms.data(), PageRotation::None);
         qint64 pageRenderTime = pageTimer.elapsed();
-        release(rasterizer);
+        // A budgeted run keeps the rasterizer until the image is consumed, so the images
+        // alive at once never exceed the rasterizer count the raster tile pool was sized for.
+        if (!imageReservation)
+        {
+            release(rasterizer);
+        }
 
         // Now, process the image
-        PDFRenderedPageImage renderedPageImage;
-        renderedPageImage.pageIndex = pageIndex;
-        renderedPageImage.pageImage = qMove(image);
-        renderedPageImage.pageCompileTime = pageCompileTime;
-        renderedPageImage.pageWaitTime = pageWaitTime;
-        renderedPageImage.pageRenderTime = pageRenderTime;
-        renderedPageImage.pageTotalTime = totalPageTimer.elapsed();
-        processImage(renderedPageImage);
+        {
+            PDFRenderedPageImage renderedPageImage;
+            renderedPageImage.pageIndex = pageIndex;
+            renderedPageImage.pageImage = qMove(image);
+            renderedPageImage.pageCompileTime = pageCompileTime;
+            renderedPageImage.pageWaitTime = pageWaitTime;
+            renderedPageImage.pageRenderTime = pageRenderTime;
+            renderedPageImage.pageTotalTime = totalPageTimer.elapsed();
+            processImage(renderedPageImage);
+        }
+
+        if (imageReservation)
+        {
+            imageReservation.reset();
+            release(rasterizer);
+        }
 
         if (progress)
         {

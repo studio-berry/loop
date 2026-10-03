@@ -44,6 +44,7 @@
 #include <QTemporaryDir>
 #include <QTranslator>
 #include <QtTest>
+#include <limits>
 
 class PreflightVerdictTest : public QObject
 {
@@ -64,6 +65,9 @@ private slots:
     void cancellationMarkedIncomplete_isNotPass();
     void requiredCheckMissingStatus_isIncomplete();
     void receiptIdentity_matchesGoldenVector();
+    void receiptWireRoundTrip();
+    void receiptWireRejectsTampering();
+    void terminalReceiptPreservesUnknownIdentity();
     void receiptTerminalStates_data();
     void receiptTerminalStates();
     void receiptRejectsMismatchedProvenance();
@@ -1037,6 +1041,103 @@ void PreflightVerdictTest::receiptIdentity_matchesGoldenVector()
                                                   fixture.evidence, changedPolicy, error),
              qPrintable(error));
     QCOMPARE(changedPolicy.identity, QStringLiteral("931952b4c72f56e67fa371c94eb01bec4383cab251286a3c675c7d8dcada11f8"));
+}
+
+void PreflightVerdictTest::receiptWireRoundTrip()
+{
+    ReceiptFixture fixture;
+    fixture.revision.document.sourceDataHash = QByteArray::fromHex(fixture.result.documentRevisionDigest.toLatin1());
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("wire-evidence");
+    record.fidelity = QStringLiteral("exact");
+    fixture.evidence.records.append(record);
+    fixture.revision.documentRevision = std::numeric_limits<quint64>::max();
+    fixture.revision.cacheGeneration = (quint64(1) << 54) + 3;
+    fixture.revision.effectiveProfileIdentity = QStringLiteral("effective-policy");
+    pdf::PreflightInspectionReceipt receipt, decoded;
+    QString error;
+    QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                 fixture.evidence, receipt, error));
+    QVERIFY2(pdf::preflightInspectionReceiptFromJson(receipt.toJson(), decoded, error), qPrintable(error));
+    QCOMPARE(decoded.toJson(), receipt.toJson());
+    QCOMPARE(decoded.revision, fixture.revision);
+    fixture.profile.profileIdentity = receipt.profileIdentity;
+    fixture.profile.coverageScope = receipt.coverageScope;
+    QVERIFY2(pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, fixture.revision, fixture.profile, error), qPrintable(error));
+    auto changed = fixture.revision;
+    ++changed.cacheGeneration;
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, changed, fixture.profile, error));
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, QString(64, QLatin1Char('e')), fixture.revision, fixture.profile, error));
+    fixture.profile.effectiveDigest = QString(64, QLatin1Char('f'));
+    QVERIFY(!pdf::validatePreflightInspectionReceipt(decoded, decoded.inputDigest, fixture.revision, fixture.profile, error));
+}
+
+void PreflightVerdictTest::terminalReceiptPreservesUnknownIdentity()
+{
+    pdf::PDFRevisionIdentity revision;
+    revision.document.documentId = QStringLiteral("request-before-staging");
+    const auto terminal = pdf::buildTerminalPreflightReceipt({}, revision, {}, QStringLiteral("worker.snapshot-failed"));
+    pdf::PreflightInspectionReceipt parsed;
+    QString error;
+    QVERIFY2(pdf::preflightInspectionReceiptFromJson(terminal.toJson(), parsed, error), qPrintable(error));
+    QVERIFY(parsed.inputDigest.isEmpty());
+    QVERIFY(parsed.effectiveProfileDigest.isEmpty());
+    QVERIFY(!parsed.verdict.isPass());
+    auto forged = terminal.toJson();
+    auto verdict = forged.value(QStringLiteral("verdict")).toObject();
+    verdict.insert(QStringLiteral("state"), QStringLiteral("pass"));
+    forged.insert(QStringLiteral("verdict"), verdict);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(forged, parsed, error));
+}
+
+void PreflightVerdictTest::receiptWireRejectsTampering()
+{
+    ReceiptFixture fixture;
+    fixture.revision.document.sourceDataHash = QByteArray::fromHex(fixture.result.documentRevisionDigest.toLatin1());
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("wire-evidence");
+    record.fidelity = QStringLiteral("exact");
+    fixture.evidence.records.append(record);
+    pdf::PreflightInspectionReceipt receipt, decoded;
+    QString error;
+    QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,
+                                                 fixture.evidence, receipt, error));
+    auto json = receipt.toJson();
+    json.insert(QStringLiteral("schema"), QStringLiteral("loop.inspection-receipt.v99"));
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    json.insert(QStringLiteral("checks"), QJsonArray{});
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    auto checks = json.value(QStringLiteral("checks")).toArray();
+    auto check = checks.first().toObject();
+    check.insert(QStringLiteral("status"), QStringLiteral("unsupported"));
+    checks.replace(0, check);
+    json.insert(QStringLiteral("checks"), checks);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    json.insert(QStringLiteral("evidence_refs"), QJsonArray{});
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    checks = json.value(QStringLiteral("checks")).toArray();
+    check = checks.first().toObject();
+    check.insert(QStringLiteral("status"), QStringLiteral("invented-status"));
+    check.insert(QStringLiteral("complete"), false);
+    checks.replace(0, check);
+    json.insert(QStringLiteral("checks"), checks);
+    auto incompleteVerdict = json.value(QStringLiteral("verdict")).toObject();
+    incompleteVerdict.insert(QStringLiteral("state"), QStringLiteral("incomplete"));
+    json.insert(QStringLiteral("verdict"), incompleteVerdict);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    json = receipt.toJson();
+    auto revision = json.value(QStringLiteral("revision")).toObject();
+    revision.insert(QStringLiteral("cache_generation"), 0);
+    json.insert(QStringLiteral("revision"), revision);
+    QVERIFY(!pdf::preflightInspectionReceiptFromJson(json, decoded, error));
+    const auto failure = pdf::buildTerminalPreflightReceipt(receipt.inputDigest, fixture.revision,
+                                                            receipt.effectiveProfileDigest, QStringLiteral("worker.crashed"));
+    QVERIFY(pdf::preflightInspectionReceiptFromJson(failure.toJson(), decoded, error));
+    QVERIFY(!decoded.verdict.isPass());
 }
 
 void PreflightVerdictTest::receiptTerminalStates_data()

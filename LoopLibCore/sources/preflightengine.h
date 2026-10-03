@@ -37,6 +37,7 @@
 #include <QMap>
 #include <QRectF>
 #include <QSet>
+#include "pdfinkcoverageprobe.h"
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -44,6 +45,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <tuple>
 
 namespace pdf
 {
@@ -189,7 +191,9 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // ink-coverage parameters.
     qreal maxInkPct = 0.0;
+    /// Deprecated and no longer a suppression floor; accepted so existing profiles still load.
     qreal minRegionAreaPct = 0.05;
+    qreal minRegionAreaMm2 = 0.25;
     int maxRegionsPerPage = 20;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
     QString inkCoverageAnalysisBox = QStringLiteral("bleed");
@@ -421,7 +425,8 @@ public:
                         const QJsonObject& jobSpecBindings,
                         const QJsonObject& cliBindings,
                         const PDFRevalidationPlan& plan,
-                        const std::optional<QSet<int>>& cliPages);
+                        const std::optional<QSet<int>>& cliPages,
+                        PreflightProfileData* effectiveProfile = nullptr);
     PreflightResult run(const PreflightProfileData& profile);
     PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
     PreflightResult revalidate(const PreflightProfileData& profile,
@@ -455,6 +460,9 @@ private:
     const PDFOperationControl* m_operationControl = nullptr;
     std::map<QString, CheckRunner> m_checks;
     PDFEvidenceGraph m_activeGraph;
+    /// Compositor overprint probes of the current run, keyed by zero-based page index, probe
+    /// dpi and pixel budget, so checks sharing a raster setup render each page once between them.
+    std::map<std::tuple<int, int, qint64>, PDFOverprintProbeResult> m_overprintProbes;
 };
 
 }   // namespace pdf

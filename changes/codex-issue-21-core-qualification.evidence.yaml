@@ -1,0 +1,22 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: core-qualification-preparation
+    evidence:
+      - unit:scripts/qualification/test_check_core_qualification.py
+      - unit:scripts/ci/test_compare_package_boundary_evidence.py
+      - unit:core-qualification-ci
+  - id: qualification-ci-contract
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+  - id: qualification-proof-map
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: qualification-runbook
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved: []

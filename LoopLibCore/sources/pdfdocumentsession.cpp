@@ -258,9 +258,14 @@ PDFDocumentSession* PDFDocumentSession::create(PDFDocument* document,
     return new PDFDocumentSession(document, context, std::move(pageCacheBudget));
 }
 
-PDFDocumentSession* PDFDocumentSession::createForInspection(PDFDocument* document)
+PDFDocumentSession* PDFDocumentSession::createForInspection(PDFDocument* document, const QString& documentId)
 {
-    return new PDFDocumentSession(document, nullptr, nullptr, PDFDocumentSessionAdmission::Inspection);
+    auto* session = new PDFDocumentSession(document, nullptr, nullptr, PDFDocumentSessionAdmission::Inspection);
+    if (!documentId.isEmpty())
+    {
+        session->m_localDocumentIdentity.documentId = documentId;
+    }
+    return session;
 }
 
 void PDFDocumentSession::destroy(PDFDocumentSession* session) noexcept

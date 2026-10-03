@@ -44,6 +44,9 @@ class EvidenceGraphTest : public QObject
 private slots:
     void collectWithoutDocument_isIncomplete();
     void emptyPage_isComplete();
+    void cancelledCollection_isIncompleteAndCancelled();
+    void cancelledPreflight_reportsCancelled();
+    void pageScope_skipsUnselectedPages();
     void incompleteGraphCannotPass();
     void imageFamilyDualRunMatchesEngine();
     void colorantsFamilyDualRunMatchesEngine();
@@ -125,6 +128,12 @@ void assertFindingCitesGraphRecord(const QList<pdf::PreflightFinding>& findings,
     QFAIL(qPrintable(QStringLiteral("Expected finding type '%1' for check '%2'").arg(findingType, checkId)));
 }
 
+class CancelledOperationControl final : public pdf::PDFOperationControl
+{
+public:
+    bool isOperationCancelled() const override { return true; }
+};
+
 }   // namespace
 
 void EvidenceGraphTest::collectWithoutDocument_isIncomplete()
@@ -144,6 +153,62 @@ void EvidenceGraphTest::emptyPage_isComplete()
     const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::pdfEvidenceAllDomains());
     QVERIFY(graph.isComplete());
     QVERIFY(graph.incompleteReason.isEmpty());
+}
+
+void EvidenceGraphTest::cancelledCollection_isIncompleteAndCancelled()
+{
+    pdf::PDFDocument document = loadFixtureDocument("rich-black.pdf");
+    pdf::PDFDocumentSession session(&document);
+    const CancelledOperationControl cancelled;
+    pdf::PDFEvidenceCollectSettings settings;
+    settings.operationControl = &cancelled;
+
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::pdfEvidenceAllDomains(), settings);
+    QVERIFY(!graph.isComplete());
+    QCOMPARE(graph.incompleteReason, QStringLiteral("cancelled"));
+    QVERIFY(graph.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).isEmpty());
+}
+
+void EvidenceGraphTest::cancelledPreflight_reportsCancelled()
+{
+    pdf::PDFDocument document = loadFixtureDocument("rich-black.pdf");
+    pdf::PDFDocumentSession session(&document);
+    const CancelledOperationControl cancelled;
+
+    pdf::PreflightEngine engine(&session);
+    engine.setOperationControl(&cancelled);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Color inventory") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                            { QStringLiteral("severity"), QStringLiteral("info") },
+                                            { QStringLiteral("probe_dpi"), 150 },
+                                            { QStringLiteral("rich_black_k_percent"), 10 } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("cancelled"));
+}
+
+void EvidenceGraphTest::pageScope_skipsUnselectedPages()
+{
+    pdf::PDFDocument document = loadFixtureDocument("rich-black.pdf");
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph all = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants);
+    QVERIFY(!all.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).isEmpty());
+
+    pdf::PDFEvidenceCollectSettings settings;
+    settings.pageIndices = QSet<int>();
+    const pdf::PDFEvidenceGraph none = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants, settings);
+    QVERIFY(none.isComplete());
+    QVERIFY(none.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).isEmpty());
+
+    settings.pageIndices = QSet<int>{ 0 };
+    const pdf::PDFEvidenceGraph first = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants, settings);
+    QCOMPARE(first.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).size(),
+             all.recordsForTarget(pdf::PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")).size());
 }
 
 void EvidenceGraphTest::incompleteGraphCannotPass()

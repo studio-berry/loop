@@ -33,7 +33,10 @@ namespace pdftool::worker
 
 /// Wire protocol version for PdfTool supervisor ↔ loop-pdf-worker IPC.
 /// Newline-delimited JSON; allowlist ops only (not a general RPC).
-inline constexpr int PROTOCOL_VERSION = 1;
+inline constexpr int PROTOCOL_VERSION = 2;
+
+inline constexpr qint64 MAX_REQUEST_BYTES = 64 * 1024;
+inline constexpr qint64 MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 
 inline constexpr qint64 DEFAULT_RSS_LIMIT_BYTES = qint64(768) * 1024 * 1024;
 inline constexpr qint64 DEFAULT_CPU_SECONDS = 120;

@@ -42,7 +42,7 @@ Save-mode semantics for the source artifact are defined once in the generated
 catalog under `save_modes` and referenced per operation.
 
 Target scopes describe the current implicit selector behaviour. The shared
-selector AST tracked in GitHub #587 is not yet wired into repair plans; until it
+selector AST tracked in legacy #587 is not yet wired into repair plans; until it
 lands, operations declare whole-document, page, resource, or production-geometry
 scopes resolved during `analyze()`.
 

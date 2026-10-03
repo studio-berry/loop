@@ -212,7 +212,7 @@
       "fixups": [
         "add-bleed"
       ],
-      "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+      "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through the area that images and filled paths or glyphs actually paint inside it, cut by their clip, so stroked artwork such as hairlines and keylines is judged by raster confirmation or reported check-incomplete. White or near-white fills count as artwork.",
       "measures": "Whether painted content reaches the requested bleed margin.",
       "parameters": [
         {
@@ -265,6 +265,11 @@
         {
           "condition": "always info: the page has a bleed gap and is a candidate for the add-bleed fixup.",
           "finding_type": "needs-auto-bleed",
+          "severity": "info"
+        },
+        {
+          "condition": "an edge's bounds touch enough of the strip but do not prove it solid, and raster_confirm is off or the strip raster exceeded max_raster_pixels, so the edge is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
           "severity": "info"
         }
       ]
@@ -378,19 +383,21 @@
         "evidence.font_subtype",
         "evidence.embedded",
         "evidence.inspection_complete",
-        "evidence.defects"
+        "evidence.defects",
+        "evidence.code_kind",
+        "evidence.missing_codes"
       ],
       "families": [
         "sheetfed-offset",
         "digital"
       ],
       "fixups": [],
-      "limitations": "Not a full glyph-coverage audit.",
-      "measures": "Embedded font bytes that fail to parse or cmap.",
+      "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. Composite CID 0 (default whitespace) and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
+      "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
       "parameters": [],
       "severity": [
         {
-          "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error",
+          "condition": "an embedded font program fails to parse or its cmap cannot be read, or a shown code resolves to no usable glyph; a complete inspection keeps the check severity, an incomplete one is forced to error",
           "finding_type": "font-integrity",
           "severity": "error"
         }
@@ -405,14 +412,22 @@
         "message",
         "check_id",
         "evidence.confidence",
-        "evidence.ocg_name"
+        "evidence.ocg_name",
+        "evidence.governor",
+        "evidence.governor_source",
+        "evidence.policy",
+        "evidence.ocg_names",
+        "evidence.view_state",
+        "evidence.print_state",
+        "evidence.divergence",
+        "evidence.inspection_complete"
       ],
       "families": [
         "packaging"
       ],
       "fixups": [],
-      "limitations": "Does not enumerate every OCMD combination.",
-      "measures": "Optional content groups that hide print content.",
+      "limitations": "Evaluates the default configuration under the View and Print usages with its /AS events; alternate configurations and content an /OC entry governs on Form XObjects or annotations that are never painted are not evaluated. A governor that cannot be evaluated is reported incomplete.",
+      "measures": "Optional content groups and membership dictionaries (/P AnyOn, AllOn, AnyOff, AllOff and /VE) that hide print content, and content whose visibility differs between screen and print.",
       "parameters": [
         {
           "default": 9.0,
@@ -424,7 +439,7 @@
       ],
       "severity": [
         {
-          "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "an optional-content group referenced by print content is not printable by default, or a membership dictionary governing marked content, a Form XObject or an annotation is hidden in print or differs between screen and print; an optional-content governor that cannot be evaluated is forced to error with inspection_complete false. The profile's check severity (error|warning|info, default error) replaces the others and warning/info route the finding to warnings.",
           "finding_type": "hidden-layers",
           "severity": "error"
         }
@@ -523,9 +538,16 @@
           "type": "integer"
         },
         {
+          "default": 0.25,
+          "id": "min_region_area_mm2",
+          "meaning": "Smallest over-limit connected region, in mm^2 of physical area, that is reported. The default is about a 0.5 mm square, the smallest solid a press reproduces as a distinct area. A floor finer than four raster pixels at probe_dpi cannot be honored and reports the page incomplete.",
+          "range": ">= 0",
+          "type": "number"
+        },
+        {
           "default": 0.05,
           "id": "min_region_area_pct",
-          "meaning": "Smallest over-limit connected region, as a percentage of the page, that is reported.",
+          "meaning": "Deprecated and ignored; a page-relative floor let an isolated over-limit element pass clean on a large page. Use min_region_area_mm2.",
           "range": "0..100",
           "type": "number"
         },
@@ -560,12 +582,12 @@
       ],
       "severity": [
         {
-          "condition": "a connected region exceeds max_ink_pct over more than min_region_area_pct of the page. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "a connected region of at least min_region_area_mm2 exceeds max_ink_pct. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "ink-coverage",
           "severity": "error"
         },
         {
-          "condition": "the page raster exceeded max_raster_pixels, was unavailable, or reported non-exact fidelity, so the page is reported incomplete rather than clean.",
+          "condition": "the page raster exceeded max_raster_pixels, was unavailable, reported non-exact fidelity, or probe_dpi is too coarse to resolve min_region_area_mm2, so the page is reported incomplete rather than clean.",
           "finding_type": "check-incomplete",
           "severity": "info"
         }
@@ -623,7 +645,7 @@
         "sheetfed-offset"
       ],
       "fixups": [],
-      "limitations": "Heuristic; not a RIP occlusion model.",
+      "limitations": "Painted vector geometry is intersected with the effective clip and covered in paint order; images, shadings and transparency are not modelled, a blend mode or soft mask over earlier paint reports the page incomplete, and findings stay heuristic, not a RIP occlusion model.",
       "measures": "Content covered by later painting.",
       "parameters": [
         {
@@ -659,7 +681,7 @@
         "digital"
       ],
       "fixups": [],
-      "limitations": "Clipping can hide false positives and false negatives.",
+      "limitations": "Painted bounds are intersected with the effective clip before the page test; stroke and degenerate geometry use rectangle bounds, and images and shadings are not inspected.",
       "measures": "Content whose bounds fall outside the page.",
       "parameters": [
         {
@@ -1096,7 +1118,7 @@
         "digital"
       ],
       "fixups": [],
-      "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+      "limitations": "Does not flatten. Overprint composited with a non-Normal blend mode, constant alpha below one or a knockout group is reported from the compositor; the RIP result itself is not simulated.",
       "measures": "Live transparency blend modes and blend-space mismatches.",
       "parameters": [
         {
@@ -1117,6 +1139,16 @@
           "condition": "a page records one or more transparency blend-space mismatches. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "transparency-blend-space",
           "severity": "error"
+        },
+        {
+          "condition": "the compositor composites overprint under a non-Normal blend mode, constant alpha below one or a knockout group. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "finding_type": "transparency-overprint-interaction",
+          "severity": "error"
+        },
+        {
+          "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
+          "severity": "info"
         }
       ]
     },
@@ -1189,7 +1221,7 @@
         "packaging"
       ],
       "fixups": [],
-      "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+      "limitations": "Pages that declare overprint (/OP or /op in an ExtGState, including Form XObjects) are also rasterized on the overprint-accurate compositor at probe_dpi; sub-pixel white paint and annotation appearances are not seen there.",
       "measures": "White/knockout overprint flags on fills and strokes.",
       "parameters": [
         {
@@ -1202,9 +1234,14 @@
       ],
       "severity": [
         {
-          "condition": "a page paints white or near-white content with overprint set. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "a page paints white or near-white content with overprint set, or the compositor applies overprint to paper-white pixels (images, shadings, results of transparency) the page-view scan does not inspect. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "white-overprint",
           "severity": "error"
+        },
+        {
+          "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean.",
+          "finding_type": "check-incomplete",
+          "severity": "info"
         }
       ]
     }

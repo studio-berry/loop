@@ -97,6 +97,11 @@ subsystems:
         id: UnitTestsBleedFixup
         policy_module: core
         executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsBleedMarginProbe
+        policy_module: core
+        executes: binding
       - kind: architecture
         bind: policy
         id: agent-policy:core
@@ -167,6 +172,8 @@ subsystems:
     summary: Preflight engine, corpus, and profile identity.
     owns_targets: true
     paths_from: agent-policy:preflight
+    paths:
+      - LoopLibCore/sources/pdfpreflightreceipt.cpp
     required:
       - kind: unit
         bind: policy
@@ -275,6 +282,29 @@ subsystems:
         ref: .github/workflows/independent-qualification.yml
         contains: verify_independent_packets
         executes: binding
+  - id: core-qualification
+    summary: Internal L01 CI and package provenance checks; module admission remains reviewed.
+    paths:
+      - scripts/qualification/check_core_qualification.py
+      - scripts/qualification/test_check_core_qualification.py
+      - scripts/ci/compare_package_boundary_evidence.py
+      - scripts/ci/test_compare_package_boundary_evidence.py
+      - docs/CORE_QUALIFICATION.md
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_check_core_qualification.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_compare_package_boundary_evidence.py
+        executes: binding
+      - kind: unit
+        bind: workflow
+        id: core-qualification-ci
+        ref: .github/workflows/ci.yml
+        contains: scripts.qualification.test_check_core_qualification
+        executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
     paths:
@@ -380,7 +410,7 @@ subsystems:
         id: agent-policy:pdftool
         executes: binding
   - id: pdf-worker-isolation
-    summary: "PdfTool supervisor plus loop-pdf-worker isolation for untrusted open/preflight (#618)."
+    summary: "Linux and Windows worker containment, bounded IPC, receipt admission and privacy (#20)."
     owns_targets: true
     paths:
       - PdfTool/loop-pdf-worker-main.cpp
@@ -391,6 +421,12 @@ subsystems:
       - PdfTool/pdfworkerprotocol.h
       - PdfTool/pdfworkerclient.cpp
       - PdfTool/pdfworkerclient.h
+      - PdfTool/pdfworkerprocess.cpp
+      - PdfTool/pdfworkerprocess_win.cpp
+      - PdfTool/pdfworkerprocess.h
+      - PdfTool/worker-runtime.cmake
+      - PdfTool/write-worker-runtime.cmake
+      - UnitTests/pdfworkerprobe.cpp
       - PdfTool/pdftoolworker.cpp
       - PdfTool/pdftoolworker.h
       - UnitTests/tst_pdfworkerisolation.cpp

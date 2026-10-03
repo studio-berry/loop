@@ -1,0 +1,52 @@
+{
+    "checks": [
+        {
+            "id": "font-integrity",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "font-integrity",
+            "evidence": {
+                "code_kind": "character-code",
+                "defects": [
+                    "MissingGlyph"
+                ],
+                "embedded": true,
+                "font_resource": "F2+0",
+                "font_subtype": "4",
+                "inspection_complete": true,
+                "missing_codes": [
+                    233,
+                    234,
+                    235
+                ]
+            },
+            "message": "Font 'F2+0' on page 1 has no usable glyph for shown character codes: 233, 234, 235",
+            "page": 1,
+            "scope": "page",
+            "severity": "error",
+            "type": "font-integrity"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Font Integrity",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "a1974367f8e8fab6"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

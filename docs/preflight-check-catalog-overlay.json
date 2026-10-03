@@ -17,89 +17,138 @@
  "backlog_priority_rule": "P1 - no registered check inspects the defect class at all (a matrix not_covered entry), so a clean run is silent about it; P2 - a registered check inspects the class but its named limitation can suppress or misclassify a finding on defective content, which would be a false clean pass; P3 - a registered check inspects the class and the named limitation only narrows reported detail or fails closed as incomplete, so it cannot turn a defect into a silent pass.",
  "backlog_state_rule": "open - the gap is still present; landed - a registered check now covers the class and closed_by names that check id; closed - the filed issue that tracked the gap is closed.",
  "github_issues": {
-  "#12": {
+  "legacy#12": {
    "number": 12,
    "title": "Validate output-intent and ICC-profile presence, identity, and color-space consistency",
    "state": "CLOSED",
-   "milestone": "0.0.1"
+   "milestone": "0.0.1",
+   "repository": "legacy"
   },
-  "#47": {
-   "number": 47,
-   "title": "[Residual] Tier-2 bleed raster golden corpus + strip calibration",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#49": {
-   "number": 49,
-   "title": "[0.8.0] Overprint-correct rendering in standard and advanced renderers",
-   "state": "OPEN",
-   "milestone": "0.8.0"
-  },
-  "#70": {
+  "legacy#70": {
    "number": 70,
    "title": "Traverse nested Form XObjects, inherited resources, and appearance streams for embedded fonts",
    "state": "CLOSED",
-   "milestone": null
+   "milestone": null,
+   "repository": "legacy"
   },
-  "#124": {
+  "legacy#124": {
    "number": 124,
    "title": "Detect hidden, invisible, and off-page content in preflight",
    "state": "CLOSED",
-   "milestone": null
+   "milestone": null,
+   "repository": "legacy"
   },
-  "#130": {
+  "legacy#130": {
    "number": 130,
    "title": "Detect corrupt fonts, not just embedded/unembedded status",
    "state": "CLOSED",
-   "milestone": null
+   "milestone": null,
+   "repository": "legacy"
   },
-  "#131": {
+  "legacy#131": {
    "number": 131,
    "title": "Extend thin-part detection beyond simple strokes (expand #23)",
    "state": "CLOSED",
-   "milestone": null
+   "milestone": null,
+   "repository": "legacy"
   },
-  "#600": {
-   "number": 600,
-   "title": "Ink Manager: separation management and spot-color library",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#603": {
-   "number": 603,
-   "title": "Imposition: n-up, gang-up, booklets, creep, and sheet furniture",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#604": {
-   "number": 604,
-   "title": "Packaging production semantics: ISO 19593 Processing Steps, dielines, varnish/foil/white, barcode validation",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#605": {
-   "number": 605,
-   "title": "PDF/VT variable-data production: understanding, validation, and preservation",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#628": {
+  "legacy#628": {
    "number": 628,
    "title": "DeviceN dieline / spot geometry not detected (Separation-only collector)",
    "state": "CLOSED",
-   "milestone": "0.3.0"
+   "milestone": "0.3.0",
+   "repository": "legacy"
   },
-  "#664": {
-   "number": 664,
-   "title": "[0.3.0] No check inspects formal GWG 2022/2024 sheetfed or packaging conformance",
-   "state": "OPEN",
-   "milestone": null
-  },
-  "#665": {
+  "legacy#665": {
    "number": 665,
    "title": "[0.3.0] No check validates or produces PDF/X-5 and PDF/A-3 output",
    "state": "OPEN",
-   "milestone": null
+   "milestone": null,
+   "repository": "legacy"
+  },
+  "#113": {
+   "number": 113,
+   "title": "L01-08 \u2014 Classify ICC-based color by its painted space",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#114": {
+   "number": 114,
+   "title": "L01-09 \u2014 Audit glyph coverage in embedded fonts",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#115": {
+   "number": 115,
+   "title": "L01-10 \u2014 Evaluate optional-content membership for hidden content",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#116": {
+   "number": 116,
+   "title": "L01-11 \u2014 Stop isolated over-limit ink regions passing ink coverage",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#117": {
+   "number": 117,
+   "title": "L01-12 \u2014 Broaden invisible-content detection",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#118": {
+   "number": 118,
+   "title": "L01-13 \u2014 Make off-page and obscured-content geometry clip-aware",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#119": {
+   "number": 119,
+   "title": "L01-14 \u2014 Judge white overprint and transparency interaction on the authoritative renderer",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#120": {
+   "number": 120,
+   "title": "L01-15 \u2014 Close the sparse-mark bleed raster false pass",
+   "state": "OPEN",
+   "milestone": "L01 - Evidence Core",
+   "repository": "studio-berry/loop"
+  },
+  "#141": {
+   "number": 141,
+   "title": "X00-02 \u2014 Re-file parked legacy expansion candidates with value cases",
+   "state": "OPEN",
+   "milestone": null,
+   "repository": "studio-berry/loop"
+  },
+  "#142": {
+   "number": 142,
+   "title": "X00-03 \u2014 Per-named-colorant ink limits for DeviceN and spot separations",
+   "state": "OPEN",
+   "milestone": null,
+   "repository": "studio-berry/loop"
+  },
+  "#143": {
+   "number": 143,
+   "title": "X00-04 \u2014 Barcode, slug, Braille, and dieline geometry validation",
+   "state": "OPEN",
+   "milestone": null,
+   "repository": "studio-berry/loop"
+  },
+  "#144": {
+   "number": 144,
+   "title": "X00-05 \u2014 Standards currency: PDF/X-6, PDF 2.0 output intents, and GWG 2022 check sets",
+   "state": "OPEN",
+   "milestone": null,
+   "repository": "studio-berry/loop"
   }
  },
  "checks": {
@@ -297,7 +346,7 @@
   },
   "content-bleed": {
    "measures": "Whether painted content reaches the requested bleed margin.",
-   "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+   "limitations": "A strip counts as populated only above a 10% coverage floor (artwork bounds, or raster ink with raster_confirm). Bounds prove a strip populated only through the area that images and filled paths or glyphs actually paint inside it, cut by their clip, so stroked artwork such as hairlines and keylines is judged by raster confirmation or reported check-incomplete. White or near-white fills count as artwork.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -356,6 +405,11 @@
      "finding_type": "needs-auto-bleed",
      "severity": "info",
      "condition": "always info: the page has a bleed gap and is a candidate for the add-bleed fixup."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "an edge's bounds touch enough of the strip but do not prove it solid, and raster_confirm is off or the strip raster exceeded max_raster_pixels, so the edge is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -468,8 +522,8 @@
    "fixups": []
   },
   "font-integrity": {
-   "measures": "Embedded font bytes that fail to parse or cmap.",
-   "limitations": "Not a full glyph-coverage audit.",
+   "measures": "Embedded font bytes that fail to parse or cmap, and shown character codes or CIDs that resolve to no glyph, .notdef, or an empty outline.",
+   "limitations": "Glyph coverage audits codes shown in page content, Form XObjects and annotation appearance streams of embedded TrueType, Type 1 and CID fonts. Composite CID 0 (default whitespace) and Type 3 glyph procedures are not reported; a page whose content cannot be processed is reported incomplete.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -480,7 +534,7 @@
     {
      "finding_type": "font-integrity",
      "severity": "error",
-     "condition": "an embedded font program fails to parse or its cmap cannot be read; a complete inspection keeps the check severity, an incomplete one is forced to error"
+     "condition": "an embedded font program fails to parse or its cmap cannot be read, or a shown code resolves to no usable glyph; a complete inspection keeps the check severity, an incomplete one is forced to error"
     }
    ],
    "evidence": [
@@ -495,13 +549,15 @@
     "evidence.font_subtype",
     "evidence.embedded",
     "evidence.inspection_complete",
-    "evidence.defects"
+    "evidence.defects",
+    "evidence.code_kind",
+    "evidence.missing_codes"
    ],
    "fixups": []
   },
   "hidden-layers": {
-   "measures": "Optional content groups that hide print content.",
-   "limitations": "Does not enumerate every OCMD combination.",
+   "measures": "Optional content groups and membership dictionaries (/P AnyOn, AllOn, AnyOff, AllOff and /VE) that hide print content, and content whose visibility differs between screen and print.",
+   "limitations": "Evaluates the default configuration under the View and Print usages with its /AS events; alternate configurations and content an /OC entry governs on Form XObjects or annotations that are never painted are not evaluated. A governor that cannot be evaluated is reported incomplete.",
    "coverage": "partial",
    "families": [
     "packaging"
@@ -519,7 +575,7 @@
     {
      "finding_type": "hidden-layers",
      "severity": "error",
-     "condition": "an optional-content group referenced by print content is not printable by default. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "an optional-content group referenced by print content is not printable by default, or a membership dictionary governing marked content, a Form XObject or an annotation is hidden in print or differs between screen and print; an optional-content governor that cannot be evaluated is forced to error with inspection_complete false. The profile's check severity (error|warning|info, default error) replaces the others and warning/info route the finding to warnings."
     }
    ],
    "evidence": [
@@ -529,7 +585,15 @@
     "message",
     "check_id",
     "evidence.confidence",
-    "evidence.ocg_name"
+    "evidence.ocg_name",
+    "evidence.governor",
+    "evidence.governor_source",
+    "evidence.policy",
+    "evidence.ocg_names",
+    "evidence.view_state",
+    "evidence.print_state",
+    "evidence.divergence",
+    "evidence.inspection_complete"
    ],
    "fixups": []
   },
@@ -607,11 +671,18 @@
      "meaning": "Resolution of the area-coverage raster."
     },
     {
+     "id": "min_region_area_mm2",
+     "type": "number",
+     "default": 0.25,
+     "range": ">= 0",
+     "meaning": "Smallest over-limit connected region, in mm^2 of physical area, that is reported. The default is about a 0.5 mm square, the smallest solid a press reproduces as a distinct area. A floor finer than four raster pixels at probe_dpi cannot be honored and reports the page incomplete."
+    },
+    {
      "id": "min_region_area_pct",
      "type": "number",
      "default": 0.05,
      "range": "0..100",
-     "meaning": "Smallest over-limit connected region, as a percentage of the page, that is reported."
+     "meaning": "Deprecated and ignored; a page-relative floor let an isolated over-limit element pass clean on a large page. Use min_region_area_mm2."
     },
     {
      "id": "max_regions_per_page",
@@ -646,12 +717,12 @@
     {
      "finding_type": "ink-coverage",
      "severity": "error",
-     "condition": "a connected region exceeds max_ink_pct over more than min_region_area_pct of the page. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "a connected region of at least min_region_area_mm2 exceeds max_ink_pct. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
     },
     {
      "finding_type": "check-incomplete",
      "severity": "info",
-     "condition": "the page raster exceeded max_raster_pixels, was unavailable, or reported non-exact fidelity, so the page is reported incomplete rather than clean."
+     "condition": "the page raster exceeded max_raster_pixels, was unavailable, reported non-exact fidelity, or probe_dpi is too coarse to resolve min_region_area_mm2, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -712,7 +783,7 @@
   },
   "obscured-content": {
    "measures": "Content covered by later painting.",
-   "limitations": "Heuristic; not a RIP occlusion model.",
+   "limitations": "Painted vector geometry is intersected with the effective clip and covered in paint order; images, shadings and transparency are not modelled, a blend mode or soft mask over earlier paint reports the page incomplete, and findings stay heuristic, not a RIP occlusion model.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset"
@@ -747,7 +818,7 @@
   },
   "off-page-content": {
    "measures": "Content whose bounds fall outside the page.",
-   "limitations": "Clipping can hide false positives and false negatives.",
+   "limitations": "Painted bounds are intersected with the effective clip before the page test; stroke and degenerate geometry use rectangle bounds, and images and shadings are not inspected.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1184,7 +1255,7 @@
   },
   "transparency-risk": {
    "measures": "Live transparency blend modes and blend-space mismatches.",
-   "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+   "limitations": "Does not flatten. Overprint composited with a non-Normal blend mode, constant alpha below one or a knockout group is reported from the compositor; the RIP result itself is not simulated.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1210,6 +1281,16 @@
      "finding_type": "transparency-blend-space",
      "severity": "error",
      "condition": "a page records one or more transparency blend-space mismatches. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "transparency-overprint-interaction",
+     "severity": "error",
+     "condition": "the compositor composites overprint under a non-Normal blend mode, constant alpha below one or a knockout group. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1278,7 +1359,7 @@
   },
   "white-overprint": {
    "measures": "White/knockout overprint flags on fills and strokes.",
-   "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+   "limitations": "Pages that declare overprint (/OP or /op in an ExtGState, including Form XObjects) are also rasterized on the overprint-accurate compositor at probe_dpi; sub-pixel white paint and annotation appearances are not seen there.",
    "coverage": "partial",
    "families": [
     "sheetfed-offset",
@@ -1297,7 +1378,12 @@
     {
      "finding_type": "white-overprint",
      "severity": "error",
-     "condition": "a page paints white or near-white content with overprint set. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+     "condition": "a page paints white or near-white content with overprint set, or the compositor applies overprint to paper-white pixels (images, shadings, results of transparency) the page-view scan does not inspect. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings."
+    },
+    {
+     "finding_type": "check-incomplete",
+     "severity": "info",
+     "condition": "the compositor raster exceeded max_raster_pixels, was unavailable, or reported non-exact overprint fidelity, so the page is reported incomplete rather than clean."
     }
    ],
    "evidence": [
@@ -1323,7 +1409,7 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#604",
+   "closed_by": "#143",
    "deferral": null
   },
   {
@@ -1337,7 +1423,7 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#600",
+   "closed_by": "#142",
    "deferral": null
   },
   {
@@ -1349,7 +1435,7 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "#664",
+   "closed_by": "#144",
    "deferral": null
   },
   {
@@ -1362,7 +1448,7 @@
     "newspaper"
    ],
    "state": "open",
-   "closed_by": "#603",
+   "closed_by": "#141",
    "deferral": null
   },
   {
@@ -1375,13 +1461,13 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "#605",
+   "closed_by": "#141",
    "deferral": null
   },
   {
    "id": "pdfx5-pdfa3-output",
    "priority": "P3",
-   "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as #665)",
+   "gap": "PDF/X-5n, PDF/X-5g, and PDF/A-3 are not produced or validated; conformance-claims reports a declared level as unsupported instead of a silent pass (filed as legacy#665)",
    "families": [
     "sheetfed-offset",
     "packaging",
@@ -1394,14 +1480,14 @@
   {
    "id": "bleed-raster-strip-depth",
    "priority": "P2",
-   "gap": "content-bleed raster confirmation is opt-in and the strip probe reads at probe_dpi, so sparse marks below probe_threshold can pass while the bleed margin is empty",
+   "gap": "content-bleed accepted any artwork bounds touching a bleed strip, and raster confirmation never re-checked an accepted edge, so sparse marks passed while the bleed margin was empty; strips now need 10% coverage by bounds or raster ink, and an edge bounds cannot prove solid is raster-checked or reported check-incomplete (filed as #120)",
    "families": [
     "sheetfed-offset",
     "packaging",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "#47",
+   "state": "landed",
+   "closed_by": "content-bleed",
    "deferral": null
   },
   {
@@ -1416,8 +1502,8 @@
     "digital"
    ],
    "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture whose ICC space resolves to an allowed alternate, so the false pass is reproducible rather than argued."
+   "closed_by": "#113",
+   "deferral": null
   },
   {
    "id": "dieline-geometry",
@@ -1427,109 +1513,109 @@
     "packaging"
    ],
    "state": "open",
-   "closed_by": "#604",
+   "closed_by": "#143",
    "deferral": null
   },
   {
    "id": "font-glyph-coverage",
    "priority": "P2",
-   "gap": "font-integrity parses the embedded program and its cmap but is not a glyph-coverage audit, so a missing glyph that still parses passes clean",
+   "gap": "shown character codes that resolve to no glyph, .notdef, or an empty outline in an embedded font that still parses were unchecked; font-integrity now audits them per page, form and annotation appearance (filed as #114)",
    "families": [
     "sheetfed-offset",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture with a parsable embedded program that is missing a used glyph."
+   "state": "landed",
+   "closed_by": "font-integrity",
+   "deferral": null
   },
   {
    "id": "hidden-layers-ocmd",
    "priority": "P2",
-   "gap": "the shared hidden-content scan does not enumerate every optional-content membership-dictionary combination, so an unprintable configuration passes clean",
+   "gap": "membership dictionaries (every /P policy and /VE expressions) on marked content, Form XObjects and annotations were not evaluated for print, so an unprintable configuration passed clean; hidden-layers now evaluates them under the View and Print usages and reports screen-versus-print divergence (filed as #115)",
    "families": [
     "packaging"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture with an optional-content membership configuration that hides print content."
+   "state": "landed",
+   "closed_by": "hidden-layers",
+   "deferral": null
   },
   {
    "id": "ink-coverage-raster-tac",
    "priority": "P2",
-   "gap": "ink-coverage is a raster probe that suppresses regions below min_region_area_pct, so an isolated over-limit element passes clean",
+   "gap": "ink-coverage suppressed regions below min_region_area_pct, a fraction of the page, so an isolated over-limit element passed clean on a large page; the floor is now physical (min_region_area_mm2) and a probe_dpi too coarse to resolve it reports the page incomplete (filed as #116)",
    "families": [
     "sheetfed-offset",
     "web-offset",
     "newspaper"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture with an isolated over-limit element below min_region_area_pct."
+   "state": "landed",
+   "closed_by": "ink-coverage",
+   "deferral": null
   },
   {
    "id": "invisible-content-breadth",
    "priority": "P2",
-   "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as #124)",
+   "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as legacy#124)",
    "families": [
     "sheetfed-offset",
     "packaging"
    ],
    "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture painting an invisible class outside text render mode 3 and zero-alpha graphics state."
+   "closed_by": "#117",
+   "deferral": null
   },
   {
    "id": "obscured-content-occlusion",
    "priority": "P2",
-   "gap": "obscured-content is a bounding-box heuristic rather than a RIP occlusion model, so covered content can pass clean",
+   "gap": "obscured-content compared raw bounding boxes, so content covered by clipped or combined opaque paint passed clean; it now covers painted, clipped vector geometry in paint order and reports a blend mode or soft mask over earlier paint as incomplete (filed as #118)",
    "families": [
     "sheetfed-offset"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture where a bounding-box heuristic cannot see the occlusion a RIP would."
+   "state": "landed",
+   "closed_by": "obscured-content",
+   "deferral": null
   },
   {
    "id": "off-page-content-clipping",
    "priority": "P2",
-   "gap": "off-page-content compares painted bounds before clipping, so a clipped mark can be a false negative or a false positive",
+   "gap": "off-page-content compared painted bounds before clipping, so a clipped mark could be a false negative or a false positive; painted bounds are now intersected with the effective clip first (filed as #118)",
    "families": [
     "sheetfed-offset",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture whose clipped mark exposes the pre-clip bounds comparison."
+   "state": "landed",
+   "closed_by": "off-page-content",
+   "deferral": null
   },
   {
    "id": "transparency-rip-interaction",
    "priority": "P2",
-   "gap": "transparency-risk does not flatten and does not simulate overprint-plus-transparency interaction as a RIP does, so a press-only interaction passes clean",
+   "gap": "transparency-risk did not look at overprint-plus-transparency interaction, so a press-only interaction passed clean; it now reports overprint composited with a non-Normal blend mode, constant alpha or a knockout group from the compositor (filed as #119)",
    "families": [
     "sheetfed-offset",
     "packaging",
     "digital"
    ],
-   "state": "open",
-   "closed_by": "unfiled",
-   "deferral": "Deferred: filing needs a fixture reproducing an overprint-plus-transparency interaction only a RIP flattens."
+   "state": "landed",
+   "closed_by": "transparency-risk",
+   "deferral": null
   },
   {
    "id": "white-overprint-renderer",
    "priority": "P2",
-   "gap": "white-overprint reads page-view overprint state rather than the Output Preview or transparency renderer, so a renderer-dependent white overprint passes clean",
+   "gap": "white-overprint read page-view overprint state only, so white overprint that appears through the compositor (images, shadings, transparency) passed clean; pages that declare overprint are now also judged on the overprint-accurate compositor (filed as #119)",
    "families": [
     "sheetfed-offset",
     "packaging"
    ],
-   "state": "open",
-   "closed_by": "#49",
+   "state": "landed",
+   "closed_by": "white-overprint",
    "deferral": null
   },
   {
    "id": "corrupt-embedded-fonts",
    "priority": "P2",
-   "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as #130)",
+   "gap": "embedded font programs that fail to parse, or lose their cmap, were unchecked; font-integrity now reports them (filed as legacy#130)",
    "families": [
     "sheetfed-offset",
     "digital"
@@ -1546,7 +1632,7 @@
     "packaging"
    ],
    "state": "closed",
-   "closed_by": "#628",
+   "closed_by": "legacy#628",
    "deferral": null
   },
   {
@@ -1564,7 +1650,7 @@
   {
    "id": "nested-font-resources",
    "priority": "P2",
-   "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as #70)",
+   "gap": "fonts used only inside nested Form XObjects, inherited resources, or annotation appearance streams were unchecked; embedded-fonts now traverses them (filed as legacy#70)",
    "families": [
     "sheetfed-offset",
     "web-offset",
@@ -1579,7 +1665,7 @@
   {
    "id": "output-intent-identity",
    "priority": "P2",
-   "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as #12)",
+   "gap": "output intent presence, identity, subtype, and ICC payload were unchecked; output-intent now validates them (filed as legacy#12)",
    "families": [
     "sheetfed-offset",
     "web-offset",
@@ -1593,7 +1679,7 @@
   {
    "id": "thin-filled-parts",
    "priority": "P2",
-   "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as #131)",
+   "gap": "thin filled parts, not only strokes, were unchecked for a minimum width; thin-parts now measures them (filed as legacy#131)",
    "families": [
     "packaging"
    ],

@@ -32,7 +32,7 @@
     "config": {
       "resident_limit_bytes": 805306368,
       "pool_limits_bytes": {
-        "active-document-model": 268435456,
+        "active-document-model": 671088640,
         "compiled-evidence-cache": 134217728,
         "raster-tile-cache": 134217728,
         "gpu-texture-cache": 134217728,
@@ -45,7 +45,7 @@
     "resident_high_water_bytes": 0,
     "pressure": "normal",
     "pools": {
-      "active-document-model": { "limit_bytes": 268435456, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "active-document-model": { "limit_bytes": 671088640, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
       "compiled-evidence-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
       "raster-tile-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
       "gpu-texture-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },

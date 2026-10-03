@@ -83,7 +83,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFResourceBudgetConfig
     /// resident ceiling is reached; active model and a visible request remain
     /// hard admission boundaries.
     std::array<qsizetype, PDFResourcePoolCount> poolLimits = {
-        256 * MiB,   // active document model
+        640 * MiB,   // active document model
         128 * MiB,   // compiled/evidence cache
         128 * MiB,   // raster/tile cache
         128 * MiB,   // GPU/texture accounted proxy
