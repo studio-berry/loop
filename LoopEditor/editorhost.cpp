@@ -1073,6 +1073,24 @@ QString EditorHost::preflightStateName() const
     return preflightStateToString(m_preflight.state());
 }
 
+QString EditorHost::preflightRunUnavailableReason() const
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return tr("Open a document before running preflight.");
+    }
+    if (m_preflight.state() == pdfinteraction::PreflightController::State::Running)
+    {
+        return m_preflight.runUnavailableReason();
+    }
+    const auto profile = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                      [this](const PreflightProfileChoice& choice)
+                                      { return choice.id == m_selectedPreflightProfileId; });
+    return profile == m_preflightProfiles.cend() || !profile->valid
+               ? tr("Select a validated preflight profile before running preflight.")
+               : QString();
+}
+
 QVariantMap EditorHost::preflightStateVisual() const
 {
     const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(preflightStateName());
@@ -1365,8 +1383,7 @@ void EditorHost::announceDocumentState(const QString& message)
 
 bool EditorHost::runPreflight()
 {
-    if (!hasDocument() || m_preflight.state() == pdfinteraction::PreflightController::State::Running ||
-        !m_session->revisionSource())
+    if (!preflightRunUnavailableReason().isEmpty())
     {
         return false;
     }

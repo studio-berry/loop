@@ -35,6 +35,104 @@ PreflightController::PreflightController(pdf::PDFJobScheduler* scheduler, QObjec
 {
     qRegisterMetaType<State>();
     qRegisterMetaType<EvidenceNavigationRequest>();
+    connect(&m_findings, &PreflightFindingsModel::selectedFindingIdChanged,
+            this, &PreflightController::operatorSemanticsChanged);
+}
+
+QString PreflightController::verdictDescription() const
+{
+    if (!m_hasResult)
+    {
+        return tr("Preflight has not been checked. No accepted verdict is available.");
+    }
+    if (m_state == State::Stale || m_retainedState == State::Stale)
+    {
+        return tr("Previous result is stale. %1").arg(m_verdictSummary);
+    }
+    if (m_state == State::Running)
+    {
+        return tr("Previous accepted result. %1 A new inspection is running.").arg(m_verdictSummary);
+    }
+    return m_verdictSummary;
+}
+
+QString PreflightController::limitationDescription() const
+{
+    if (!m_hasResult)
+    {
+        return tr("Inspection limitations are unavailable until a result is accepted.");
+    }
+    QStringList details;
+    for (const pdf::PreflightCheckStatus& check : m_result.checkStatuses)
+    {
+        if (!check.reason.isEmpty())
+        {
+            details.append(tr("%1: %2 (%3)").arg(check.id, check.reason, check.status));
+        }
+    }
+    if (!m_result.coverageScope.isEmpty())
+    {
+        details.append(tr("Reported coverage: %1").arg(QString::fromUtf8(QJsonDocument(m_result.coverageScope).toJson(QJsonDocument::Compact))));
+    }
+    const QString description = details.isEmpty()
+                                    ? tr("No per-check limitation or coverage details were reported.")
+                                    : details.join(QStringLiteral(". "));
+    return m_state == State::Stale || m_retainedState == State::Stale
+               ? tr("Previous report is stale. %1").arg(description)
+               : description;
+}
+
+QString PreflightController::selectedFindingDescription() const
+{
+    const QString id = m_findings.selectedFindingId();
+    if (!m_hasResult || m_state == State::Stale || m_state == State::Running ||
+        m_findings.documentKey() != m_documentKey || !m_findings.containsCurrent(id, m_documentRevision))
+    {
+        return tr("No current preflight finding is selected.");
+    }
+    const PreflightFindingView* finding = m_findings.finding(id);
+    return tr("Selected finding %1. %2. Severity %3. Scope %4. Page %5.")
+        .arg(finding->id, finding->message, finding->severity, finding->scope)
+        .arg(finding->page);
+}
+
+QString PreflightController::jobDescription() const
+{
+    switch (m_jobState)
+    {
+        case JobState::None:
+            return tr("No preflight job has been submitted.");
+        case JobState::Running:
+            return tr("Preflight job %1 is running.").arg(m_jobId);
+        case JobState::Completed:
+            return tr("Preflight job %1 completed. %2").arg(m_jobId, m_verdictSummary);
+        case JobState::Cancelled:
+            return tr("Preflight job %1 was cancelled. %2").arg(m_jobId, m_operatorSummary);
+        case JobState::Failed:
+            return tr("Preflight job %1 failed. %2").arg(m_jobId, m_operatorSummary);
+        case JobState::Stale:
+            return tr("Preflight job %1 was superseded because its input changed.").arg(m_jobId);
+    }
+    return {};
+}
+
+QString PreflightController::runUnavailableReason() const
+{
+    if (m_documentKey.isEmpty() || m_documentRevision.isEmpty())
+    {
+        return tr("Open a document before running preflight.");
+    }
+    return m_state == State::Running ? tr("A preflight job is already running.") : QString();
+}
+
+QString PreflightController::cancelUnavailableReason() const
+{
+    return m_state == State::Running ? QString() : tr("No preflight job is running.");
+}
+
+QString PreflightController::exportUnavailableReason() const
+{
+    return m_hasResult ? QString() : tr("No accepted preflight report is available to export.");
 }
 
 void PreflightController::setState(State state)
@@ -56,6 +154,7 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     {
         markStale(QStringLiteral("Preflight is stale for the current revision."));
     }
+    Q_EMIT operatorSemanticsChanged();
 }
 
 bool PreflightController::updateProgress(const QString& jobId,
@@ -87,8 +186,10 @@ void PreflightController::beginRun(QString documentKey,
     m_cancelRequested = false;
     m_progress = 0;
     m_operatorSummary = QStringLiteral("Preflight is running.");
+    m_jobState = JobState::Running;
     setState(State::Running);
     Q_EMIT progressChanged(m_progress);
+    Q_EMIT operatorSemanticsChanged();
 }
 
 bool PreflightController::acceptResult(const QString& jobId,
@@ -110,6 +211,8 @@ bool PreflightController::acceptResult(const QString& jobId,
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
+    m_verdictSummary = tr("%1. %2").arg(pdf::preflightVerdictStateToString(verdict.state), m_operatorSummary);
+    m_jobState = JobState::Completed;
     switch (verdict.state)
     {
         case pdf::PreflightVerdictState::Pass:
@@ -126,6 +229,7 @@ bool PreflightController::acceptResult(const QString& jobId,
             break;
     }
     m_retainedState = m_state;
+    Q_EMIT operatorSemanticsChanged();
     return true;
 }
 
@@ -137,7 +241,9 @@ bool PreflightController::failRun(const QString& jobId, const QString& documentR
     }
 
     m_operatorSummary = QStringLiteral("Preflight failed: %1").arg(std::move(errorMessage));
+    m_jobState = JobState::Failed;
     restoreRetainedState(State::Error);
+    Q_EMIT operatorSemanticsChanged();
     return true;
 }
 
@@ -150,7 +256,9 @@ bool PreflightController::cancelRun(const QString& jobId)
     m_cancelRequested = true;
     cancelSchedulerJob();
     m_operatorSummary = QStringLiteral("Preflight was cancelled.");
+    m_jobState = JobState::Cancelled;
     restoreRetainedState(State::Cancelled);
+    Q_EMIT operatorSemanticsChanged();
     return true;
 }
 
@@ -194,6 +302,7 @@ void PreflightController::markStale(QString summary)
         // changed rather than that they pressed Cancel.
         m_cancelRequested = true;
         cancelSchedulerJob();
+        m_jobState = JobState::Stale;
     }
 
     m_operatorSummary = std::move(summary);
@@ -202,6 +311,7 @@ void PreflightController::markStale(QString summary)
         m_retainedState = State::Stale;
     }
     setState(State::Stale);
+    Q_EMIT operatorSemanticsChanged();
 }
 
 void PreflightController::restoreRetainedState(State terminalState)
@@ -229,6 +339,8 @@ void PreflightController::clear()
     m_findings.clear();
     m_result = pdf::PreflightResult();
     m_hasResult = false;
+    m_verdictSummary.clear();
+    m_jobState = JobState::None;
     m_retainedState = State::NotChecked;
     m_operatorSummary.clear();
     m_jobId.clear();
@@ -236,6 +348,7 @@ void PreflightController::clear()
     m_cancelRequested = false;
     setState(State::NotChecked);
     Q_EMIT progressChanged(m_progress);
+    Q_EMIT operatorSemanticsChanged();
 }
 
 QByteArray PreflightController::serializedReport(const QString& documentPath) const
