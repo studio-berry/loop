@@ -38,6 +38,29 @@ Pane {
         anchors.fill: parent
         spacing: 8
 
+        GroupBox {
+            objectName: "inspectionReceiptPresentation"
+            Layout.fillWidth: true
+            visible: root.host && root.host.inspectionPresentation.hasReceipt
+            title: qsTr("Inspection receipt")
+            ColumnLayout {
+                width: parent.width
+                Repeater {
+                    model: root.host ? root.host.inspectionPresentation.lines : []
+                    Label {
+                        required property int index
+                        required property string modelData
+                        objectName: "inspectionReceiptLine" + index
+                        Layout.fillWidth: true
+                        wrapMode: Text.WrapAnywhere
+                        text: modelData
+                        Accessible.name: text
+                        activeFocusOnTab: true
+                    }
+                }
+            }
+        }
+
         // Canonical state badge. The colour, the icon and the accessible name are rendered from
         // LoopLibQuick through EditorHost (preflightStateColor / preflightStateVisual); this file
         // decides nothing about pass or severity, and invents no state wording of its own. The icon

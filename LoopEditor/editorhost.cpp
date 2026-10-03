@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "editorhost.h"
+#include "documentoperatorpresentation.h"
 
 #include "focusrestoration.h"
 #include "hittestsource.h"
@@ -1070,6 +1071,9 @@ void EditorHost::acknowledgeSearchPanel()
 
 QString EditorHost::preflightStateName() const
 {
+    const auto state = m_session->facade().operatorState();
+    if (state.inspection.receipt)
+        return pdf::preflightVerdictStateToString(state.inspection.receipt->verdict.state);
     return preflightStateToString(m_preflight.state());
 }
 
@@ -1095,7 +1099,15 @@ QColor EditorHost::preflightStateColor() const
 
 QString EditorHost::preflightOperatorSummary() const
 {
+    const auto state = m_session->facade().operatorState();
+    if (state.inspection.receipt)
+        return pdf::preflightVerdictOperatorSummary(state.inspection.receipt->verdict);
     return m_preflight.operatorSummary();
+}
+
+QVariantMap EditorHost::inspectionPresentation() const
+{
+    return pdfinteraction::editorInspectionPresentation(m_session->facade().operatorState());
 }
 
 QVariantMap EditorHost::preflightCertificateStateVisual() const
@@ -2897,6 +2909,8 @@ void EditorHost::connectFacade()
                 }
             });
 
+    connect(&m_session->facade(), &pdfinteraction::DocumentFacade::operatorStateChanged,
+            this, &EditorHost::presentationChanged);
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
             {
                 syncDocumentLifecycle();

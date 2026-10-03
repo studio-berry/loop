@@ -1,9 +1,18 @@
 #include "editorhost.h"
+#include "documentviewsession.h"
+#include "documentoperatorpresentation.h"
+#include "receiptparityfixture.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
 
 #include <QAccessible>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QSaveFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -368,11 +377,148 @@ bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
 
 }   // namespace
 
+namespace
+{
+
+bool saveParityArtifact(const QString& path, const QByteArray& bytes)
+{
+    QSaveFile file(path);
+    return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+}
+
+QQuickItem* findReceiptLine(QQuickItem* root, const QString& name)
+{
+    if (root->objectName() == name)
+        return root;
+    for (QQuickItem* child : root->childItems())
+    {
+        if (QQuickItem* found = findReceiptLine(child, name))
+            return found;
+    }
+    return nullptr;
+}
+
+void runReceiptParity(QGuiApplication& application, QQuickWindow* window, EditorHost& host,
+                      const QString& directory)
+{
+    auto* session = host.findChild<DocumentViewSession*>();
+    auto* timer = new QTimer(&application);
+    host.setWorkspace(EditorHost::Preflight);
+    host.openInitialPath(QDir(directory).filePath(QStringLiteral("adapter-fixture.pdf")));
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, window, &host, session, directory, timer, stage = 0, observations = QJsonArray{}]() mutable
+                     {
+                         if (!host.hasDocument())
+                             return;
+                         timer->stop();
+                         const auto verdict = pdf::PreflightVerdictState(stage);
+                         receiptparity::Fixture fixture(verdict, QString::fromLatin1(session->facade().currentRevision().document.sourceDataHash.toHex()));
+                         QString error;
+                         auto& facade = session->facade();
+                         const auto token = facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+                         if (!token || !facade.completeInspection(*token, fixture.result, fixture.evidence, error))
+                         {
+                             fprintf(stderr, "receipt-parity admission_error=%s\n", qPrintable(error));
+                             application.exit(7);
+                             return;
+                         }
+                         auto state = facade.operatorState();
+                         if (state.canActOnInspection())
+                         {
+                             if (!facade.selectFinding(state.inspection.findingIds.first(), error))
+                             {
+                                 application.exit(7);
+                                 return;
+                             }
+                             state = facade.operatorState();
+                         }
+                         host.setWorkspace(EditorHost::Preflight);
+                         QTimer::singleShot(200, &application,
+                                            [&application, window, &host, directory, timer, state, &stage, &observations]()
+                                            {
+                                                const QJsonObject editor = QJsonObject::fromVariantMap(host.inspectionPresentation());
+                                                const QJsonObject expected = pdfinteraction::inspectionPresentation(state);
+                                                QStringList rendered;
+                                                bool visible = true;
+                                                const QJsonArray lines = expected.value(QStringLiteral("lines")).toArray();
+                                                for (int index = 0; index < lines.size(); ++index)
+                                                {
+                                                    auto* item = findReceiptLine(window->contentItem(), QStringLiteral("inspectionReceiptLine%1").arg(index));
+                                                    if (!item)
+                                                    {
+                                                        fprintf(stderr, "receipt-parity missing_rendered_line=%d\n", index);
+                                                        application.exit(7);
+                                                        return;
+                                                    }
+                                                    rendered.append(item->property("text").toString());
+                                                    const QRectF bounds(item->mapToScene(QPointF()), QSizeF(item->width(), item->height()));
+                                                    visible &= item->isVisible() && bounds.width() > 0 && bounds.height() > 0 &&
+                                                               QRectF(0, 0, window->width(), window->height()).contains(bounds);
+                                                }
+                                                const QByteArray headless = pdfinteraction::headlessInspectionPresentation(state);
+                                                const QString name = pdf::preflightVerdictStateToString(state.inspection.receipt->verdict.state);
+                                                const QDir output(directory);
+                                                const QImage screenshot = window->grabWindow();
+                                                if (editor != expected || host.preflightStateName() != name ||
+                                                    host.preflightOperatorSummary() != pdf::preflightVerdictOperatorSummary(state.inspection.receipt->verdict) ||
+                                                    rendered.join(QLatin1Char('\n')).toUtf8() != headless || !visible || screenshot.isNull() ||
+                                                    !saveParityArtifact(output.filePath(name + QStringLiteral("-receipt.json")), pdf::canonicalJson(state.inspection.receipt->toJson())) ||
+                                                    !saveParityArtifact(output.filePath(name + QStringLiteral("-headless.txt")), headless) ||
+                                                    !screenshot.save(output.filePath(name + QStringLiteral("-editor.png"))))
+                                                {
+                                                    fprintf(stderr, "receipt-parity comparison_failed=%s visible=%d screenshot=%d\n", qPrintable(name), visible, !screenshot.isNull());
+                                                    application.exit(7);
+                                                    return;
+                                                }
+                                                QJsonObject observation = editor;
+                                                observation.insert(QStringLiteral("renderedLines"), QJsonArray::fromStringList(rendered));
+                                                observations.append(observation);
+                                                fprintf(stdout, "receipt-parity verdict=%s receipt_sha256=%s\n", qPrintable(name),
+                                                        qPrintable(editor.value(QStringLiteral("receiptSha256")).toString()));
+                                                ++stage;
+                                                if (stage == 4)
+                                                {
+                                                    const QJsonObject report{
+                                                        { QStringLiteral("status"), QStringLiteral("pass") },
+                                                        { QStringLiteral("source_sha"), qEnvironmentVariable("LOOP_PARITY_SOURCE_SHA") },
+                                                        { QStringLiteral("graphics_api"), graphicsApiName(window->rendererInterface()->graphicsApi()) },
+                                                        { QStringLiteral("observations"), observations }
+                                                    };
+                                                    application.exit(saveParityArtifact(output.filePath(QStringLiteral("adapter-parity.json")), QJsonDocument(report).toJson()) ? 0 : 7);
+                                                }
+                                                else
+                                                    timer->start();
+                                            });
+                     });
+    timer->start(100);
+}
+
+}   // namespace
+
 int main(int argc, char** argv)
 {
     QGuiApplication application(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::ProductQuickAccessibilitySmoke);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
+
+    const QStringList arguments = application.arguments();
+    const int parityArgument = arguments.indexOf(QStringLiteral("--receipt-parity"));
+    const bool receiptParity = parityArgument >= 0;
+    QString parityDirectory;
+    if (receiptParity)
+    {
+        if (parityArgument + 1 >= arguments.size() || QDir(arguments.at(parityArgument + 1)).exists())
+            return 7;
+        parityDirectory = arguments.at(parityArgument + 1);
+        if (!QDir().mkpath(parityDirectory))
+            return 7;
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 100, 100));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        if (!writer.write(QDir(parityDirectory).filePath(QStringLiteral("adapter-fixture.pdf")), &document, true))
+            return 7;
+    }
 
     EditorHost host;
     QQmlApplicationEngine engine;
@@ -397,11 +543,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host](QObject* object, const QUrl&)
+                     [&application, &host, receiptParity, parityDirectory](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (receiptParity)
+                         {
+                             QTimer::singleShot(0, &application, [&application, window, &host, parityDirectory]()
+                                                { runReceiptParity(application, window, host, parityDirectory); });
                              return;
                          }
 
@@ -480,7 +633,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    QTimer::singleShot(10000, &application, [&application]()
+    QTimer::singleShot(receiptParity ? 30000 : 10000, &application, [&application]()
                        { application.exit(4); });
 
     return application.exec();

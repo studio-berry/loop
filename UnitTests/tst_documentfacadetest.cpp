@@ -40,6 +40,8 @@
 
 #include "commandcatalog.h"
 #include "documentfacade.h"
+#include "documentoperatorpresentation.h"
+#include "../tools/ProductQuickAccessibilitySmoke/receiptparityfixture.h"
 #include "documentloader.h"
 #include "jobsubmitter.h"
 
@@ -354,6 +356,9 @@ private slots:
     void inspectionInvalidation_data();
     void inspectionInvalidation();
     void inspectionStopsWhenContextIsDestroyed();
+    void receiptAdapterParity_data();
+    void receiptAdapterParity();
+    void receiptAdaptersPreserveTruthWhenIntentsAreUnavailable();
 
     void realDocumentRoundTripsThroughCoreReaderAndWriter();
 };
@@ -1356,6 +1361,93 @@ void DocumentFacadeTest::inspectionStopsWhenContextIsDestroyed()
     QVERIFY(!absent.canActOnInspection());
     QVERIFY(!facade.completeInspection(*token, fixture.result, fixture.evidence, error));
     QVERIFY(!facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+}
+
+void DocumentFacadeTest::receiptAdapterParity_data()
+{
+    inspectionVerdictContract_data();
+}
+
+void DocumentFacadeTest::receiptAdapterParity()
+{
+    QFETCH(int, verdict);
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/adapter-parity.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    receiptparity::Fixture fixture{ pdf::PreflightVerdictState(verdict) };
+    QString error;
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY2(token.has_value(), qPrintable(error));
+    QVERIFY2(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error), qPrintable(error));
+    auto state = harness.facade->operatorState();
+    QVERIFY(state.inspection.receipt);
+    const auto receipt = *state.inspection.receipt;
+    QCOMPARE(int(receipt.verdict.state), verdict);
+    if (verdict == int(pdf::PreflightVerdictState::Incomplete))
+    {
+        QCOMPARE(pdf::reducePreflightVerdict(fixture.result).state, pdf::PreflightVerdictState::Pass);
+        QVERIFY(receipt.limitations.contains(QStringLiteral("Raster evidence is unavailable.")));
+    }
+    QCOMPARE(state.inspection.findingIds.size(), 1);
+    if (state.canActOnInspection())
+    {
+        QVERIFY(harness.facade->selectFinding(state.inspection.findingIds.first(), error));
+        state = harness.facade->operatorState();
+    }
+    const QJsonObject editor = QJsonObject::fromVariantMap(pdfinteraction::editorInspectionPresentation(state));
+    const QJsonObject neutral = pdfinteraction::inspectionPresentation(state);
+    QCOMPARE(editor, neutral);
+    QCOMPARE(editor.value(QStringLiteral("receipt")).toObject(), receipt.toJson());
+    QCOMPARE(editor.value(QStringLiteral("verdict")).toObject(), receipt.verdict.toJson());
+    QCOMPARE(editor.value(QStringLiteral("coverage")).toObject(), receipt.coverageScope);
+    QCOMPARE(editor.value(QStringLiteral("limitations")).toArray(), QJsonArray::fromStringList(receipt.limitations));
+    QCOMPARE(editor.value(QStringLiteral("findingIds")).toArray(), QJsonArray::fromStringList(state.inspection.findingIds));
+    const QStringList expectedIntents = state.canActOnInspection()
+                                            ? QStringList{ QStringLiteral("selectFinding"), QStringLiteral("requestPlan") }
+                                            : QStringList{};
+    QCOMPARE(editor.value(QStringLiteral("availableIntents")).toArray(), QJsonArray::fromStringList(expectedIntents));
+    const QStringList expectedLines{
+        QStringLiteral("Verdict: %1").arg(pdf::preflightVerdictOperatorSummary(receipt.verdict)),
+        QStringLiteral("Coverage: %1").arg(QString::fromUtf8(pdf::canonicalJson(fixture.result.coverageScope))),
+        QStringLiteral("Limitations: %1").arg(receipt.limitations.join(QStringLiteral("; "))),
+        QStringLiteral("Findings: %1").arg(state.inspection.findingIds.first()),
+        state.canActOnInspection() ? QStringLiteral("Available intents: Select finding, Request plan")
+                                   : QStringLiteral("Available intents: ")
+    };
+    QCOMPARE(editor.value(QStringLiteral("lines")).toArray(), QJsonArray::fromStringList(expectedLines));
+    QCOMPARE(pdfinteraction::headlessInspectionPresentation(state), expectedLines.join(QLatin1Char('\n')).toUtf8());
+    qInfo().noquote() << "adapter-parity" << pdf::preflightVerdictStateToString(receipt.verdict.state)
+                      << "receipt_sha256=" + editor.value(QStringLiteral("receiptSha256")).toString();
+}
+
+void DocumentFacadeTest::receiptAdaptersPreserveTruthWhenIntentsAreUnavailable()
+{
+    Harness harness;
+    QCOMPARE(pdfinteraction::headlessInspectionPresentation(harness.facade->operatorState()), QByteArray());
+    harness.facade->open(QStringLiteral("/corpus/adapter-parity.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    receiptparity::Fixture fixture{ pdf::PreflightVerdictState::Pass };
+    QString error;
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    QCOMPARE(pdfinteraction::headlessInspectionPresentation(harness.facade->operatorState()), QByteArray());
+    QVERIFY(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    auto state = harness.facade->operatorState();
+    const QJsonObject before = pdfinteraction::inspectionPresentation(state);
+    QVERIFY(harness.facade->selectFinding(state.inspection.findingIds.first(), error));
+    QVERIFY(harness.facade->requestPlan(QStringLiteral("add-bleed"), error));
+    auto planned = pdfinteraction::inspectionPresentation(harness.facade->operatorState());
+    QVERIFY(planned.value(QStringLiteral("availableIntents")).toArray().contains(QStringLiteral("clearPlanIntent")));
+    state.revision.documentRevision++;
+    const QJsonObject stale = pdfinteraction::inspectionPresentation(state);
+    QVERIFY(stale.value(QStringLiteral("availableIntents")).toArray().isEmpty());
+    QCOMPARE(stale.value(QStringLiteral("receipt")), before.value(QStringLiteral("receipt")));
+    QCOMPARE(stale.value(QStringLiteral("verdict")), before.value(QStringLiteral("verdict")));
+    state = harness.facade->operatorState();
+    state.output = pdfinteraction::DocumentOutputState::Pending;
+    const QJsonObject pending = pdfinteraction::inspectionPresentation(state);
+    QCOMPARE(pending.value(QStringLiteral("availableIntents")).toArray(), QJsonArray{ QStringLiteral("clearPlanIntent") });
+    QCOMPARE(pending.value(QStringLiteral("receipt")), before.value(QStringLiteral("receipt")));
 }
 
 QTEST_GUILESS_MAIN(DocumentFacadeTest)

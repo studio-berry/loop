@@ -106,6 +106,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantMap preflightStateVisual READ preflightStateVisual NOTIFY presentationChanged)
     Q_PROPERTY(QColor preflightStateColor READ preflightStateColor NOTIFY presentationChanged)
     Q_PROPERTY(QString preflightOperatorSummary READ preflightOperatorSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap inspectionPresentation READ inspectionPresentation NOTIFY presentationChanged)
     Q_PROPERTY(QString preflightCertificateStateName READ preflightCertificateStateName NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap preflightCertificateStateVisual READ preflightCertificateStateVisual NOTIFY presentationChanged)
     Q_PROPERTY(QColor preflightCertificateStateColor READ preflightCertificateStateColor NOTIFY presentationChanged)
@@ -210,6 +211,7 @@ public:
     QColor preflightStateColor() const;
 
     QString preflightOperatorSummary() const;
+    QVariantMap inspectionPresentation() const;
     QString preflightCertificateStateName() const noexcept { return m_preflightCertificateStateName; }
     QVariantMap preflightCertificateStateVisual() const;
     QColor preflightCertificateStateColor() const;
