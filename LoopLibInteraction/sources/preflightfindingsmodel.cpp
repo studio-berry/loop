@@ -207,6 +207,12 @@ void PreflightFindingsModel::replace(QString documentKey,
 
 void PreflightFindingsModel::setReport(const pdf::PreflightResult& report)
 {
+    for (PreflightFindingView& finding : m_findings)
+    {
+        finding.profileName = report.profileName;
+        finding.effectiveProfileDigest = report.effectiveProfileDigest;
+        finding.coverageScope = report.coverageScope;
+    }
     m_checkStatuses = report.checkStatuses;
     m_fixupsAvailable = report.fixupsAvailable;
     Q_EMIT reportChanged();

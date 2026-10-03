@@ -9,6 +9,7 @@
 #include <QtTest>
 
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -83,6 +84,8 @@ private slots:
     void pageFallbackRevealsPageWithoutInventingObjectTarget();
     void objectNavigationUsesContextMarginAndStableSelection();
     void evidenceUsesIndependentStateAndModeResetsOnDeselect();
+    void reportContextFollowsStableFinding();
+    void unusableBoundsFallBackToPage();
     void staleRequestsClearPresentationAndCannotBecomeCurrent();
 };
 
@@ -197,10 +200,24 @@ void FindingNavigationTest::evidenceUsesIndependentStateAndModeResetsOnDeselect(
     auto request = requestFor(QStringLiteral("test-check"), QStringLiteral("stable-finding"),
                               QStringLiteral("doc"), revision.toString());
     request.pageBounds = QRectF(20.0, 20.0, 20.0, 20.0);
-    request.evidenceTargets = { { QStringLiteral("evidence-a"), 2, QRectF(30.0, 30.0, 10.0, 10.0) } };
+    request.evidenceIds = { QStringLiteral("evidence-a") };
+    request.effectiveProfileDigest = QStringLiteral("profile-1");
+    request.coverageScope = { { QStringLiteral("pages"), QStringLiteral("2") } };
+    request.evidenceTargets = { { QStringLiteral("evidence-a"), 2, QRectF(30.0, 30.0, 10.0, 10.0) },
+                                { QStringLiteral("unrelated"), 2, request.pageBounds },
+                                { QStringLiteral("evidence-a"), 4, request.pageBounds } };
     const pdfinteraction::FindingNavigationResult result = navigator.navigate(request);
 
-    QCOMPARE(result.outcome, pdfinteraction::FindingNavigationOutcome::PageFallback);
+    QCOMPARE(result.outcome, pdfinteraction::FindingNavigationOutcome::RegionTargeted);
+    QCOMPARE(result.pageBounds, request.pageBounds);
+    QCOMPARE(result.documentKey, request.documentKey);
+    QCOMPARE(result.documentRevision, request.documentRevision);
+    QCOMPARE(result.effectiveProfileDigest, request.effectiveProfileDigest);
+    QCOMPARE(result.coverageScope, request.coverageScope);
+    QCOMPARE(result.evidenceIds, request.evidenceIds);
+    const QRectF deviceBounds = viewport.pagePointToViewportMatrix(1).mapRect(request.pageBounds);
+    QVERIFY(QLineF(deviceBounds.center(), viewport.viewportRect().center()).length() < 2.0);
+    QVERIFY(qAbs(deviceBounds.width() * 1.4 - viewport.viewportRect().width() * 0.75) < 2.0);
     QCOMPARE(result.inspectionMode, pdfinteraction::FindingInspectionMode::Probe);
     QCOMPARE(modeRequests.size(), 1);
     QCOMPARE(overlays.evidence().size(), 1);
@@ -291,6 +308,72 @@ void FindingNavigationTest::staleRequestsClearPresentationAndCannotBecomeCurrent
     const pdfinteraction::FindingNavigationResult staleUnknown = navigator.navigate(staleRequest);
     QCOMPARE(staleUnknown.outcome, pdfinteraction::FindingNavigationOutcome::Stale);
     QVERIFY(!interaction.state().selected().isValid());
+
+    QVERIFY(navigator.navigate(currentRequest).accepted());
+    const qreal zoomBeforeReplacement = viewport.zoom();
+    const QPoint offsetBeforeReplacement = viewport.offset();
+    revisions.revision.document.documentId = QStringLiteral("replacement-doc");
+    revisions.revision.document.sourceDataHash = QByteArrayLiteral("replacement");
+    const auto replaced = navigator.navigate(currentRequest);
+    QCOMPARE(replaced.outcome, pdfinteraction::FindingNavigationOutcome::Stale);
+    QCOMPARE(viewport.zoom(), zoomBeforeReplacement);
+    QCOMPARE(viewport.offset(), offsetBeforeReplacement);
+    QVERIFY(!navigator.isCurrent(current));
+    QVERIFY(!interaction.state().selected().isValid());
+}
+
+void FindingNavigationTest::reportContextFollowsStableFinding()
+{
+    pdf::PreflightFinding finding;
+    finding.checkId = QStringLiteral("bleed");
+    finding.page = 2;
+    finding.bbox = QRectF(10, 20, 30, 40);
+    finding.evidenceIds = { QStringLiteral("evidence-1") };
+    pdf::PreflightResult report;
+    report.errors = { finding };
+    report.effectiveProfileDigest = QStringLiteral("effective-profile-1");
+    report.coverageScope = { { QStringLiteral("pages"), QStringLiteral("selected") } };
+    pdfinteraction::PreflightFindingsModel model;
+    model.replace(QStringLiteral("doc"), QStringLiteral("revision-1"), report);
+    const auto request = pdfinteraction::FindingNavigationRequest::fromFinding(*model.finding(finding.stableId()));
+    QCOMPARE(request.findingId, finding.stableId());
+    QCOMPARE(request.documentRevision, QStringLiteral("revision-1"));
+    QCOMPARE(request.effectiveProfileDigest, report.effectiveProfileDigest);
+    QCOMPARE(request.coverageScope, report.coverageScope);
+    QCOMPARE(request.evidenceTargets.size(), 1);
+    QCOMPARE(request.evidenceTargets.front().pageBounds, finding.bbox);
+    model.replace(QStringLiteral("doc"), QStringLiteral("revision-2"), { finding }, {});
+    QVERIFY(model.finding(finding.stableId())->effectiveProfileDigest.isEmpty());
+}
+
+void FindingNavigationTest::unusableBoundsFallBackToPage()
+{
+    FakeRevisionSource revisions;
+    revisions.revision.document.documentId = QStringLiteral("doc");
+    revisions.revision.document.sourceDataHash = QByteArrayLiteral("doc");
+    revisions.revision.documentRevision = 1;
+    FakeGeometrySource geometry;
+    pdfinteraction::ViewportController viewport;
+    viewport.setPixelPerMM(2.0);
+    viewport.setViewportSizePx(QSize(240, 240));
+    viewport.setGeometrySource(&geometry);
+    pdfinteraction::OverlayBuilder overlays(viewport);
+    pdfinteraction::HitTestDispatcher hitTest;
+    pdfinteraction::InteractionController interaction(revisions, viewport, hitTest, overlays);
+    pdfinteraction::FindingCanvasNavigator navigator(revisions, viewport, interaction, overlays,
+                                                     pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry());
+    auto request = requestFor(QStringLiteral("bleed"), QStringLiteral("finding"), QStringLiteral("doc"), revisions.revision.toString());
+    for (const QRectF& bounds : { QRectF(), QRectF(0, 0, -1, 10),
+                                  QRectF(std::numeric_limits<qreal>::quiet_NaN(), 0, 10, 10),
+                                  QRectF(0, 0, std::numeric_limits<qreal>::infinity(), 10) })
+    {
+        request.pageBounds = bounds;
+        const auto result = navigator.navigate(request);
+        QCOMPARE(result.outcome, pdfinteraction::FindingNavigationOutcome::PageFallback);
+        QVERIFY(result.pageBounds.isEmpty());
+        QCOMPARE(viewport.zoom(), 1.0);
+        QVERIFY(!interaction.state().selected().isValid());
+    }
 }
 
 QTEST_GUILESS_MAIN(FindingNavigationTest)
