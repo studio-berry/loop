@@ -475,7 +475,8 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
                              case 2:
                              {
                                  pdf::PreflightResult result;
-                                 result.inspectionComplete = false;
+                                 result.errorCode = QStringLiteral("evidence-incomplete");
+                                 result.errorMessage = QStringLiteral("Font evidence is unavailable");
                                  result.coverageScope = { { QStringLiteral("pages"), QJsonArray{ 1 } } };
                                  pdf::PreflightCheckStatus check;
                                  check.id = QStringLiteral("fonts");
