@@ -4,6 +4,7 @@
 
 #include <QtGlobal>
 
+#include <cmath>
 #include <utility>
 
 namespace pdfinteraction
@@ -67,7 +68,9 @@ FindingInspectionMode modeForCapability(const FindingTargetingCapability& capabi
 
 bool usableBounds(const QRectF& bounds)
 {
-    return !bounds.isNull() && !bounds.isEmpty() && bounds.width() > 0.0 && bounds.height() > 0.0;
+    return std::isfinite(bounds.x()) && std::isfinite(bounds.y()) &&
+           std::isfinite(bounds.width()) && std::isfinite(bounds.height()) &&
+           bounds.width() > 0.0 && bounds.height() > 0.0;
 }
 
 }   // namespace
@@ -100,6 +103,8 @@ const char* getFindingNavigationOutcomeName(FindingNavigationOutcome outcome)
             return "document-fallback";
         case FindingNavigationOutcome::PageFallback:
             return "page-fallback";
+        case FindingNavigationOutcome::RegionTargeted:
+            return "region-targeted";
         case FindingNavigationOutcome::ObjectTargeted:
             return "object-targeted";
     }
@@ -117,6 +122,8 @@ FindingNavigationRequest FindingNavigationRequest::fromFinding(const PreflightFi
     request.objectId = finding.objectId;
     request.pageBounds = finding.bbox;
     request.evidenceIds = finding.evidenceIds;
+    request.effectiveProfileDigest = finding.effectiveProfileDigest;
+    request.coverageScope = finding.coverageScope;
     if (finding.page > 0 && usableBounds(finding.bbox))
     {
         for (const QString& evidenceId : finding.evidenceIds)
@@ -287,6 +294,11 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
     FindingNavigationResult result;
     result.findingId = request.findingId;
     result.checkId = request.checkId;
+    result.documentKey = request.documentKey;
+    result.documentRevision = request.documentRevision;
+    result.effectiveProfileDigest = request.effectiveProfileDigest;
+    result.evidenceIds = request.evidenceIds;
+    result.coverageScope = request.coverageScope;
 
     const std::optional<FindingTargetingCapability> capability = m_registry.capabilityFor(request.checkId);
     if (!request.isValid())
@@ -343,9 +355,14 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
             selection.id = request.findingId;
             selection.pageBounds = request.pageBounds.normalized();
 
-            const bool objectTargeted = hasCapability(declared, FindingNavigationCapability::ObjectTargeting) &&
-                                        !request.objectId.isEmpty() &&
+            const bool canTargetObject = declared.supportsObjectTargeting && !request.objectId.isEmpty();
+            const bool regionTargeted = (canTargetObject || declared.supportsOverlayEvidence) &&
                                         focusRegion(pageIndex, request.pageBounds, declared.contextMargin);
+            const bool objectTargeted = canTargetObject && regionTargeted;
+            if (regionTargeted)
+            {
+                result.pageBounds = request.pageBounds;
+            }
             if (usableBounds(request.pageBounds) && hasCapability(declared, FindingNavigationCapability::OverlayEvidence))
             {
                 m_interaction->selectTarget(selection);
@@ -360,7 +377,8 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
                 QList<InteractionTarget> evidence;
                 for (const FindingEvidenceTarget& candidate : request.evidenceTargets)
                 {
-                    if (candidate.evidenceId.isEmpty() || candidate.page <= 0 || !usableBounds(candidate.pageBounds))
+                    if (!request.evidenceIds.contains(candidate.evidenceId) || candidate.evidenceId.isEmpty() ||
+                        candidate.page <= 0 || candidate.page > m_viewport->pageCount() || !usableBounds(candidate.pageBounds))
                     {
                         continue;
                     }
@@ -375,9 +393,12 @@ FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigation
                 m_overlays->setEvidence(std::move(evidence));
             }
 
-            result.outcome = objectTargeted ? FindingNavigationOutcome::ObjectTargeted : FindingNavigationOutcome::PageFallback;
-            result.reason = objectTargeted ? QStringLiteral("finding-navigation/object-targeted")
-                                           : QStringLiteral("finding-navigation/page-fallback");
+            result.outcome = FindingNavigationOutcome::PageFallback;
+            if (regionTargeted)
+            {
+                result.outcome = objectTargeted ? FindingNavigationOutcome::ObjectTargeted : FindingNavigationOutcome::RegionTargeted;
+            }
+            result.reason = QStringLiteral("finding-navigation/") + QString::fromLatin1(getFindingNavigationOutcomeName(result.outcome));
 
             if (hasCapability(declared, FindingNavigationCapability::InspectionMode))
             {
@@ -455,7 +476,8 @@ bool FindingCanvasNavigator::isCurrent(const FindingNavigationResult& result) co
 
     const pdf::PDFRevisionIdentity current = m_revisions->currentRevision();
     return current.isValid() && result.findingId == m_currentFindingId && result.checkId == m_currentCheckId &&
-           result.navigationGeneration == m_navigationGeneration && m_currentDocumentRevision == current.toString();
+           result.documentKey == current.document.documentId && result.documentRevision == current.toString() &&
+           m_currentDocumentRevision == current.toString();
 }
 
 }   // namespace pdfinteraction
