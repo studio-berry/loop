@@ -524,7 +524,7 @@ void runIncompleteInspectionFixture(QGuiApplication& application, EditorHost& ho
     host.openFileUrl(QUrl::fromLocalFile(fixture));
     auto* timer = new QTimer(&application);
     QObject::connect(timer, &QTimer::timeout, &application,
-                     [&application, &host, timer, phase = 0]() mutable
+                     [&application, &host, timer, directory, phase = 0]() mutable
                      {
                          auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
                          if (!host.hasDocument() || !preflight)
