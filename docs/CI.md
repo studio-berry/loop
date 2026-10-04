@@ -43,6 +43,26 @@ When a Windows test run fails, GitHub Actions uploads its CTest logs as the
 artifact in the related issue or release attachment; do not add local build or
 test output to the repository.
 
+## Installed-package accessibility qualification
+
+The MSI and AppImage workflows qualify the product Quick shell against the
+**installed** tree, after `cmake --install` and before packaging. Each workflow
+runs `scripts/run-product-quick-a11y-smoke.ps1` twice — native (platform-default
+graphics backend) and `QT_QUICK_BACKEND=software` — and writes a machine-readable
+record per run (`quick-a11y-native.json`, `quick-a11y-software.json`) beside the
+existing text transcripts. Windows additionally drives the native UI Automation
+client via `scripts/run-installed-quick-a11y-uia.ps1`
+(`quick-a11y-native-uia.json`) and requires it. The records are staged from the
+installed tree, so the harness runs against the installed LoopLibCore/LoopLibQuick
+and deployed Qt closure rather than the developer build tree.
+
+`scripts/ci/verify_quick_accessibility_evidence.py` is the fail-closed gate: it
+rejects a missing, failed, or non-installed-tree lane and any attempt to satisfy
+the native claim with a software-only record. Linux marks the OS accessibility
+backend lane unavailable (`quick-a11y-native-accessibility-unavailable.txt`)
+because a headless runner has no AT-SPI bus; an absent lane is a recorded fact,
+not a pass.
+
 ## Generated dependency state
 
 The dependency source of truth remains `vcpkg.json`,
