@@ -1080,6 +1080,13 @@ QString EditorHost::previewFidelitySummary() const
     {
         return tr("Not current evidence: %1").arg(previewStaleReason());
     }
+    if (state == QLatin1String("authoritative") && !pageFidelityIsExact())
+    {
+        return tr("Fidelity authoritative but still approximate, origin output-preview: this page is "
+                  "rendered with the overprint-accurate compositor, yet its diagnostics report an "
+                  "approximation (%1). Do not read it as an exact render.")
+            .arg(pageFidelityReason());
+    }
     if (state == QLatin1String("authoritative"))
     {
         return tr("Fidelity authoritative, origin output-preview: this page is rendered with the "
