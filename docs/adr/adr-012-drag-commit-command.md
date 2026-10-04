@@ -14,7 +14,7 @@ completed drag and deliberately stops there. The Quick host is the owner and it
 drops the session:
 
 ```cpp
-// LoopEditor/editorhost.cpp:3579-3586
+// LoopEditor/editorhost.cpp:3600-3607
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 {
     Q_UNUSED(session);
@@ -25,7 +25,7 @@ void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 }
 ```
 
-The signal is connected at `LoopEditor/editorhost.cpp:2941-2946`. The emission
+The signal is connected at `LoopEditor/editorhost.cpp:2963-2967`. The emission
 site is `LoopLibInteraction/sources/interactioncontroller.cpp:343-351`:
 
 ```cpp
@@ -187,7 +187,7 @@ completed against; that is an interaction-layer delta, not a protected one.
 
 Both are `declared` / `unclassified` with no handler in the Quick shell:
 `docs/loop-shell-actions.json:1045` (`actionRedo`) and `:1459` (`actionUndo`);
-`ShellToolBar.qml:107-117` invokes them and `LoopEditor/editorhost.cpp:234-235`
+`ShellToolBar.qml:107-117` invokes them and `LoopEditor/editorhost.cpp:233-234`
 only routes their label group. They are inert today, exactly as the drag commit
 is.
 
