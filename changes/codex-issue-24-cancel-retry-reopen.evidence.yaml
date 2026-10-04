@@ -4,4 +4,7 @@ claims:
   - id: document-lifecycle-cancel-retry-reopen
     evidence:
       - unit:agent-policy:interaction
+  - id: cancelled-write-retry-waits-for-worker-termination
+    evidence:
+      - unit:agent-policy:interaction
 unresolved: []
