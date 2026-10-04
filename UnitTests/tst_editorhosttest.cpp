@@ -254,6 +254,7 @@ private slots:
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void fixRollbackReturnsToARecordedRevision();
+    void previewFidelityNamesTheOriginAndSwitchesExplicitly();
 };
 
 void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
@@ -1374,6 +1375,73 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
     QVERIFY(host.planActionList());
     QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
     QVERIFY(!host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+}
+
+void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
+{
+    // #28 acceptance: the preview names render fidelity AND origin on the ordinary canvas
+    // and in the Production Preview, an overprint-sensitive page switches to the
+    // authoritative render explicitly, and approximate canvas pixels are never presented
+    // as print-safe evidence.
+
+    // A synthetic document with no overprint content: the fast canvas path renders it
+    // exactly, and the host still refuses to certify it - the interactive preview proves a
+    // render path, never publication safety.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("preview-fidelity.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("exact"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
+    QVERIFY(!host.previewRequiresAuthoritative());
+    QVERIFY(!host.ensureAuthoritativePreview());
+    QVERIFY(!host.previewFidelitySummary().trimmed().isEmpty());
+
+    // The explicit configuration switch moves this page to the output-preview origin; the
+    // projected state and origin follow the coordinator immediately.
+    host.toggleCurrentPageFidelity();
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("output-preview"));
+    QVERIFY(!host.previewRequiresAuthoritative());
+
+    // A real overprint fixture: the fast canvas path is the overprint-sensitive
+    // approximation. The host must say so, must name the fast canvas origin, must expose the
+    // explicit switch, and must never dress the approximation as a pass.
+    const QString overprintPath =
+        preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
+    QVERIFY2(QFileInfo::exists(overprintPath), qPrintable(overprintPath));
+
+    EditorHost overprintHost;
+    overprintHost.openFileUrl(QUrl::fromLocalFile(overprintPath));
+    QTRY_VERIFY_WITH_TIMEOUT(overprintHost.hasDocument(), 30000);
+    overprintHost.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_VERIFY_WITH_TIMEOUT(overprintHost.previewFidelityStateName() == QStringLiteral("approximate"), 30000);
+    QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
+    QVERIFY(overprintHost.previewRequiresAuthoritative());
+    QVERIFY(overprintHost.previewFidelitySummary().contains(QStringLiteral("print-safe output")));
+
+    const QVariantMap approximate = overprintHost.previewFidelityVisual();
+    QVERIFY(approximate.value(QStringLiteral("kind")).toString() != QStringLiteral("Passed"));
+    QVERIFY(approximate.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+
+    QVERIFY(overprintHost.ensureAuthoritativePreview());
+    QCOMPARE(overprintHost.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("output-preview"));
+    QVERIFY(!overprintHost.previewRequiresAuthoritative());
+    QVERIFY(!overprintHost.ensureAuthoritativePreview());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

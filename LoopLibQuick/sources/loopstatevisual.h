@@ -120,6 +120,27 @@ LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreflightStateVisual(const QString& s
 /// every state carries a shape no other state uses, so the state survives without colour.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName);
 
+/// Render fidelity and origin of the interactive preview (#28). The state name is derived
+/// from four facts the host already holds: whether a document is open, whether the preview
+/// is stale for the open revision, whether the current page is showing the authoritative
+/// output-preview render, and whether that page's render is diagnostic-exact.
+///
+/// `approximate` is the overprint-sensitive page on the fast canvas path: overprint is not
+/// simulated there, so those pixels are never proof of print-safe output. `authoritative`
+/// is the only state that names the output-preview origin. No preview state reaches a pass
+/// treatment: the interactive preview proves a page's render path, never publication safety.
+LOOPLIBQUICK_EXPORT QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact);
+
+/// Which render path produced the preview's pixels, for a state name above: `none`,
+/// `fast-canvas` or `output-preview`. Rendering only, no analysis.
+LOOPLIBQUICK_EXPORT QString previewFidelityOriginName(const QString& stateName);
+
+/// Canonical treatment for a preview fidelity state name. Each state takes a shape no other
+/// preview state uses, and `approximate` (the fast canvas path on overprint-sensitive
+/// content) can never be read as proof of print-safe output: no preview state carries a pass
+/// colour or a check.
+LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName);
+
 }   // namespace pdfquick::tokens
 
 #endif   // LOOPSTATEVISUAL_H
