@@ -841,14 +841,16 @@ void DocumentFacadeTest::cancelledSaveRetryRejectsPriorSuccess()
     QVERIFY(harness.facade->cancelPendingOperation());
     const auto cause = harness.facade->operation().result;
     QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.submitter.deferredJobCount(), 1);
+    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
     const auto retried = harness.facade->retry();
     QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
     const auto request = harness.facade->operation();
     QCOMPARE(request.generation, oldRequest.generation);
     QCOMPARE(request.revision, oldRequest.revision);
     QVERIFY(!harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Cancelled));
-    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
-    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
     QCOMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::Pending);
     QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
     QCOMPARE(harness.facade->source().path, QStringLiteral("/corpus/report.pdf"));
