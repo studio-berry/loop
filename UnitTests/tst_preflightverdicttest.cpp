@@ -1215,6 +1215,10 @@ void PreflightVerdictTest::receiptDisclosesIndependentRenderingLimit()
     fixture.profile.checks.first().id = QStringLiteral("ink-coverage");
     fixture.result.checkStatuses.first().id = QStringLiteral("ink-coverage");
     fixture.result.coverageScope.insert(QStringLiteral("enabled_checks"), QJsonArray{ QStringLiteral("ink-coverage") });
+    pdf::PDFEvidenceRecord record;
+    record.id = QStringLiteral("evidence-1");
+    record.fidelity = QStringLiteral("exact");
+    fixture.evidence.records.append(record);
     pdf::PreflightInspectionReceipt receipt;
     QString error;
     QVERIFY(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, fixture.revision,

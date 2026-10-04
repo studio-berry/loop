@@ -793,7 +793,7 @@ public:
         }
         else
         {
-            declared.allPages = true;
+            declared.documentWide = true;
         }
         return declared;
     }

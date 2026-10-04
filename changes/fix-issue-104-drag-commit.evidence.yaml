@@ -9,4 +9,10 @@ claims:
       - unit:UnitTests/tst_repairoperationtest.cpp
       - unit:UnitTests/tst_interactioncontrollertest.cpp
       - unit:UnitTests/tst_editorhosttest.cpp
-unresolved: []
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - translate-page-box ships without a built-in recipe, so a drag proposes a move that executes only after the operator imports a recipe offering it; no end-to-end plan, approve and execute run of a drag-committed move was performed.
+  - Only page boxes are draggable; findings, guides and text have no commit path.

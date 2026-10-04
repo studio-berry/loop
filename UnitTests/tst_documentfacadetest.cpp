@@ -404,7 +404,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // library that lost its resource would present an empty command set as a
     // working one, so this also pins the resource wiring.
     QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
-    QCOMPARE(catalog.descriptors().size(), 107);
+    QCOMPARE(catalog.descriptors().size(), 108);
 
     const pdfinteraction::CommandDescriptor* open =
         catalog.descriptor(pdfinteraction::DocumentFacade::OpenCommandId);
