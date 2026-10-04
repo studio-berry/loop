@@ -71,7 +71,7 @@
     "A workspace switch never discards a preflight report or changes its bound document revision.",
     "Document state, production state, and preflight state remain separate and inspectable.",
     "The shell owns navigation and context selection; Core and PdfTool remain the semantic owners of PDF operations.",
-    "Compare remains an explicit OPEN product decision until issue #193 and the release exit gate approve absorption.",
+    "Compare is presented by the LoopEditor Quick shell over Core comparison facts (repair diff and finding delta); the LoopDiff executable absorption remains an OPEN product decision tracked by docs/product-surface.json.",
     "A missing action disposition blocks shell integration instead of inventing a default route."
   ],
   "status_contract": {

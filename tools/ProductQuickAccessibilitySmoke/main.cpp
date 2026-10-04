@@ -285,8 +285,8 @@ QString visibleWorkspacePaneName(QQuickWindow* window)
     return QString();
 }
 
-/// #586 acceptance: no *enabled* workspace destination may resolve to the placeholder
-/// pane, and every destination it reaches must expose a screen-reader name and role.
+/// #586 acceptance: every workspace destination resolves to a real surface (never the
+/// retired placeholder pane) carrying a screen-reader name and role.
 bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
 {
     struct Entry
@@ -295,9 +295,9 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         const char* expectedObjectName;
         QAccessible::Role expectedRole;
     };
-    // Every enabled destination must resolve to real content carrying a screen-reader name
-    // and role. Compare stays a visible but disabled destination by product decision
-    // (#560): the assertion is that it cannot be reached, not that it renders.
+    // Every destination must resolve to real content carrying a screen-reader name and
+    // role. Compare is a real surface now: it renders the comparison facts ComparePane
+    // projects from EditorHost, not placeholder content.
     static const Entry entries[] = {
         { EditorHost::Document, "documentPane", QAccessible::Pane },
         { EditorHost::Preflight, "preflightPane", QAccessible::Grouping },
@@ -305,6 +305,7 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         { EditorHost::Pages, "pagesProductionPane", QAccessible::Grouping },
         { EditorHost::Inspect, "inspectPane", QAccessible::Grouping },
         { EditorHost::Fix, "actionListPane", QAccessible::Grouping },
+        { EditorHost::Compare, "comparePane", QAccessible::Grouping },
     };
 
     bool passed = true;
@@ -316,8 +317,7 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         const QString visible = visibleWorkspacePaneName(window);
         const bool enabled = host.isWorkspaceEnabled(entry.workspace);
         const bool nameMatches = visible == QString::fromLatin1(entry.expectedObjectName);
-        const bool reachable = enabled && nameMatches &&
-                               visible != QStringLiteral("workspacePlaceholderPane");
+        const bool reachable = enabled && nameMatches;
         const bool accessible = reachable && verifyNamedAccessibility(window, visible, entry.expectedRole, true);
 
         if (!reachable || !accessible)
@@ -333,20 +333,24 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         }
     }
 
-    // The disabled destination may not be entered, and entering it must not silently show
-    // placeholder content in place of a real surface.
+    // Compare must be enterable and resolve to its own pane, never placeholder content.
     host.setWorkspace(EditorHost::Fix);
     QCoreApplication::processEvents();
     const bool beforeCompare = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
     host.setWorkspace(EditorHost::Compare);
     QCoreApplication::processEvents();
-    const bool compareDisabled = !host.isWorkspaceEnabled(EditorHost::Compare);
-    const bool compareDidNotNavigate = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
-    if (!compareDisabled || !beforeCompare || !compareDidNotNavigate)
+    const bool compareEnabled = host.isWorkspaceEnabled(EditorHost::Compare);
+    const bool compareReachable = visibleWorkspacePaneName(window) == QStringLiteral("comparePane");
+    fprintf(stdout,
+            "product-quick-a11y-smoke compare_workspace_enabled=%d reachable=%d before=%d\n",
+            compareEnabled ? 1 : 0,
+            compareReachable ? 1 : 0,
+            beforeCompare ? 1 : 0);
+    if (!beforeCompare || !compareEnabled || !compareReachable)
     {
         fprintf(stderr,
-                "product-quick-a11y-smoke disabled_workspace_reachable workspace=%d visible=%s\n",
-                static_cast<int>(EditorHost::Compare),
+                "product-quick-a11y-smoke compare_workspace_unreachable enabled=%d visible=%s\n",
+                compareEnabled ? 1 : 0,
                 visibleWorkspacePaneName(window).toLocal8Bit().constData());
         passed = false;
     }

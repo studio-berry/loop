@@ -133,3 +133,14 @@ metrics:
     fixture_class: regression
     agent_tunable: false
     todo: UnitTestsGovernedExecution pins golden digests. TODO publish a machine-readable digest artifact count for this budget.
+  - id: compare-review-delta-classification
+    subsystem: quick
+    lane: unit
+    comparison: minimum
+    minimum: 1
+    unit: golden-delta-vectors
+    enforcement: declared
+    harness: pending
+    fixture_class: regression
+    agent_tunable: false
+    todo: UnitTestsProductOperatorLoop pins the Core finding-delta classification for the golden comparison pair. TODO publish a machine-readable comparison-vector count for this budget.

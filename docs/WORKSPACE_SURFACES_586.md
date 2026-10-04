@@ -98,10 +98,24 @@ own; activating a page row uses the same navigation the rest of the shell does.
 
 ## Compare
 
-Compare remains a visible but disabled destination, per the #560 decision: the
-placeholder pane is still what the stack holds for it, `isWorkspaceEnabled(
-Compare)` is false, and the accessibility smoke asserts that entering it is
-refused rather than that it renders something.
+`ComparePane` presents the comparison Core already produced for the plan or run on
+screen: the before/after artifact identities (`sourceSha256`, `candidateSha256`,
+`publishedSha256`), the technical finding delta (`resolved`/`unchanged`/
+`introduced`/`incomplete` from `PDFRepairFindingDelta`), the attributes the
+comparison preserved (the plan's declared change surface, the findings carried
+through unchanged, the save policy that keeps the source) and the risk it left
+unresolved (declared risk, introduced and not-fully-rechecked findings, warnings).
+Every field is a read-only projection of `EditorHost.compareReview()`, which
+composes `fixPlanIdentity`, `fixPreview`, `fixRecheck` and `fixSignOff`; the pane
+derives no identity and holds no second comparison model.
+
+The operator can navigate a material delta: each entry routes to the step that
+produced it (`navigateCompareDelta`), never mutating a document or rerunning the
+comparison. A stale preview or a plan or published digest that is not the plan on
+screen sets `blocked` and `blockedReason`; the pane says which revision the
+comparison belongs to and refuses navigation rather than silently refreshing it.
+`isWorkspaceEnabled(Compare)` is true, and the accessibility smoke asserts the
+pane renders with a screen-reader name and role like every other destination.
 
 ## A crash the surfaces exposed
 

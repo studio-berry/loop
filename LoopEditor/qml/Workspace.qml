@@ -28,7 +28,7 @@ Item {
     }
 
     function setWorkspaceFromRail(workspaceValue) {
-        if (!host || workspaceValue === EditorHost.Compare) {
+        if (!host) {
             return
         }
         host.setWorkspace(workspaceValue)
@@ -62,7 +62,7 @@ Item {
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Grouping
                 Accessible.name: qsTr("Workspace rail")
-                Accessible.description: qsTr("Switch between document, production, preflight, inspection, and fix workspaces.")
+                Accessible.description: qsTr("Switch between document, production, preflight, inspection, fix, and comparison workspaces.")
 
                 Keys.onPressed: function(event) {
                     if (!root.host) {
@@ -79,7 +79,7 @@ Item {
                         event.accepted = true
                         return
                     } else if (event.key === Qt.Key_End) {
-                        root.host.setWorkspace(EditorHost.Fix)
+                        root.host.setWorkspace(EditorHost.Compare)
                         event.accepted = true
                         return
                     }
@@ -90,10 +90,11 @@ Item {
 
                     var current = root.workspaceIndex(root.host.workspace)
                     var candidate = current + direction
-                    while (candidate >= 0 && candidate < 6) {
+                    while (candidate >= 0 && candidate < 7) {
                         var candidateWorkspace = [EditorHost.Document, EditorHost.Preflight,
                                                   EditorHost.ProductionPreview, EditorHost.Pages,
-                                                  EditorHost.Inspect, EditorHost.Fix][candidate]
+                                                  EditorHost.Inspect, EditorHost.Fix,
+                                                  EditorHost.Compare][candidate]
                         if (root.host.isWorkspaceEnabled(candidateWorkspace)) {
                             root.host.setWorkspace(candidateWorkspace)
                             event.accepted = true
@@ -130,12 +131,8 @@ Item {
                             checked: host && host.workspace === modelData.workspace
                             onClicked: root.setWorkspaceFromRail(modelData.workspace)
                             Accessible.role: Accessible.Button
-                            Accessible.name: modelData.workspace === EditorHost.Compare
-                                ? qsTr("Compare workspace (product decision pending)")
-                                : qsTr("%1 workspace").arg(modelData.label)
-                            Accessible.description: modelData.workspace === EditorHost.Compare
-                                ? qsTr("Compare is disabled until the product decision is approved.")
-                                : ""
+                            Accessible.name: qsTr("%1 workspace").arg(modelData.label)
+                            Accessible.description: ""
                         }
                     }
 
@@ -177,11 +174,8 @@ Item {
                     host: root.host
                 }
 
-                WorkspacePlaceholderPane {
+                ComparePane {
                     host: root.host
-                    titleText: qsTr("Compare")
-                    descriptionText: qsTr("Compare remains deferred pending the product decision.")
-                    Accessible.name: qsTr("Compare workspace placeholder")
                 }
             }
         }
