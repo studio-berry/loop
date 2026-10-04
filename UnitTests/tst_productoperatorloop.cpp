@@ -11,6 +11,9 @@
 #include "pdfdocumentwriter.h"
 #include "preflightfindingsmodel.h"
 #include "previewstatemodel.h"
+#include "loopstatevisual.h"
+#include "looptokens.h"
+#include "preflightprofileresolver.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -18,8 +21,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -168,6 +173,7 @@ private slots:
     void operatorLoop_blockedOutputProducesActionableFailure();
     void openDetectPinpointInspectUnderstandState();
     void findingNavigationMovesCanvasToTheFindingPage();
+    void partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument();
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
     void cancellationLeavesNoAcceptedResult();
@@ -499,6 +505,78 @@ void ProductOperatorLoopTest::findingNavigationMovesCanvasToTheFindingPage()
     QCOMPARE(inspector->selectionKind(), InspectorModel::SelectionKind::Finding);
     QCOMPARE(inspector->selectionId(), findingId);
     QCOMPARE(host.currentPage(), 1);
+}
+
+void ProductOperatorLoopTest::partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument()
+{
+    // #27 failure case. The representative document (bleed-missing.pdf, one page) is inspected
+    // under the corpus `restriction-pages` restriction: the profile scopes its only enabled check
+    // to page 2 of a one-page document, so Core cannot collect that check's evidence and reduces
+    // the report to an `incomplete` verdict (reason_code `unsupported-scope`) instead of a clean
+    // pass. The operator shell must present exactly that partial inspection - progress while it
+    // runs, an incomplete verdict after it - and must never render a clear document.
+    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY2(QFileInfo::exists(source), source.toUtf8().constData());
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("loop-test-partial-inspection") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Partial inspection fixture") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } } } } });
+    const QString profilePath = directory.filePath(QStringLiteral("partial-inspection.json"));
+    {
+        QFile output(profilePath);
+        QVERIFY(output.open(QIODevice::WriteOnly));
+        const QByteArray bytes = QJsonDocument(profile).toJson();
+        QCOMPARE(output.write(bytes), bytes.size());
+    }
+
+    EditorHost host;
+    QVERIFY2(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)),
+             "the restricted inspection profile must import and become the selected profile");
+    QVERIFY(host.selectedPreflightProfileId().endsWith(QStringLiteral("partial-inspection.json")));
+
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QCOMPARE(host.pageCount(), 1);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+
+    auto* preflight = qobject_cast<PreflightController*>(host.preflight());
+    QVERIFY(preflight);
+    QSignalSpy progressSpy(preflight, &PreflightController::progressChanged);
+
+    // The operator sees progress while the inspection is live...
+    QVERIFY(host.runPreflight());
+    QCOMPARE(host.preflightStateName(), QStringLiteral("running"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY2(!progressSpy.isEmpty(), "the operator must observe preflight progress while it runs");
+    QCOMPARE(preflight->property("progress").toInt(), 100);
+
+    // ...and a partial inspection stays visible as incomplete, never as a clear document.
+    QCOMPARE(host.preflightStateName(), QStringLiteral("incomplete"));
+    QVERIFY2(host.preflightStateName() != QStringLiteral("pass"),
+             "a partial inspection must never present as a clean pass");
+    QVERIFY(host.hasPreflightReport());
+    QVERIFY2(host.preflightOperatorSummary().trimmed().contains(QStringLiteral("finish inspecting")),
+             qPrintable(host.preflightOperatorSummary()));
+    QVERIFY2(preflight->limitationDescription().trimmed().contains(QStringLiteral("bleed")),
+             qPrintable(preflight->limitationDescription()));
+
+    // The rendered treatment is Core's incomplete state itself, not a re-derived or pass-like one.
+    const pdfquick::tokens::LoopStateVisual expected =
+        pdfquick::tokens::resolvePreflightStateVisual(QStringLiteral("incomplete"));
+    QCOMPARE(expected.kind, pdfquick::tokens::StateKind::Incomplete);
+    const QVariantMap visual = host.preflightStateVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), pdfquick::tokens::stateKindName(expected.kind));
+    QCOMPARE(visual.value(QStringLiteral("colorRole")).toString(), pdfquick::tokens::colorRoleName(expected.colorRole));
+    QCOMPARE(visual.value(QStringLiteral("icon")).toString(), pdfquick::tokens::stateIconName(expected.icon));
+    QCOMPARE(visual.value(QStringLiteral("accessibleName")).toString(), pdfquick::tokens::stateAccessibleName(expected.kind));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+    QVERIFY(visual.value(QStringLiteral("icon")).toString() != QStringLiteral("Checkmark"));
+    QVERIFY(visual.value(QStringLiteral("accessibleName")).toString() != QStringLiteral("Passed"));
 }
 
 void ProductOperatorLoopTest::workspaceTransitionsKeepTheOpenDocumentBound()

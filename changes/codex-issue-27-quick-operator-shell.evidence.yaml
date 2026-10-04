@@ -1,0 +1,8 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: quick-partial-inspection-stays-visible-and-never-clear
+    evidence:
+      - unit:agent-policy:quick
+unresolved:
+  - The native-UIA host inspection lane (tools/ProductQuickAccessibilitySmoke/inspect-windows-uia.ps1, --operator-native-probe) is a Windows-only manual lane with no workflow caller, so it was not run here; the software-backend Quick interaction smoke was run locally and both its fixtures passed.
