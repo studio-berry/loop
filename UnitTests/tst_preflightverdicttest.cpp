@@ -1145,6 +1145,7 @@ void PreflightVerdictTest::receiptTerminalStates_data()
     QTest::addColumn<QString>("caseName");
     QTest::addColumn<pdf::PreflightVerdictState>("expected");
     QTest::newRow("pass") << QStringLiteral("pass") << pdf::PreflightVerdictState::Pass;
+    QTest::newRow("no-evidence") << QStringLiteral("no-evidence") << pdf::PreflightVerdictState::Incomplete;
     QTest::newRow("fail") << QStringLiteral("fail") << pdf::PreflightVerdictState::Fail;
     QTest::newRow("missing-required") << QStringLiteral("missing-required") << pdf::PreflightVerdictState::Incomplete;
     QTest::newRow("unsupported") << QStringLiteral("unsupported") << pdf::PreflightVerdictState::Incomplete;
@@ -1158,6 +1159,13 @@ void PreflightVerdictTest::receiptTerminalStates()
     QFETCH(QString, caseName);
     QFETCH(pdf::PreflightVerdictState, expected);
     ReceiptFixture fixture;
+    if (caseName != QLatin1String("no-evidence"))
+    {
+        pdf::PDFEvidenceRecord record;
+        record.id = QStringLiteral("evidence-1");
+        record.fidelity = QStringLiteral("exact");
+        fixture.evidence.records.append(record);
+    }
     if (caseName == QLatin1String("fail"))
     {
         fixture.result.errors.append(blockingFinding());
@@ -1190,6 +1198,11 @@ void PreflightVerdictTest::receiptTerminalStates()
              qPrintable(error));
     QCOMPARE(receipt.verdict.state, expected);
     QCOMPARE(receipt.verdict.isPass(), expected == pdf::PreflightVerdictState::Pass);
+    if (caseName == QLatin1String("no-evidence"))
+    {
+        pdf::PreflightInspectionReceipt parsed;
+        QVERIFY2(pdf::preflightInspectionReceiptFromJson(receipt.toJson(), parsed, error), qPrintable(error));
+    }
     if (expected == pdf::PreflightVerdictState::Incomplete)
     {
         QVERIFY(!receipt.verdict.allowsCertificateIssuance());
