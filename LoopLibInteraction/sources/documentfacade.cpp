@@ -262,6 +262,15 @@ CommandInvocationId DocumentFacade::retry()
         return InvalidCommandInvocation;
     }
 
+    if (m_operation.command != OpenCommandId)
+    {
+        const pdf::PDFJobStatus status = m_submitter->snapshot(m_operation.jobId).status;
+        if (status == pdf::PDFJobStatus::Queued || status == pdf::PDFJobStatus::Running)
+        {
+            return InvalidCommandInvocation;
+        }
+    }
+
     const CommandId command = m_operation.command;
     QVariantMap parameters;
     if (command == OpenCommandId || command == SaveAsCommandId)
