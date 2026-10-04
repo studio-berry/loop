@@ -23,6 +23,8 @@
 #include "pdfrepairoperation.h"
 
 #include "pdfbleedfixup.h"
+#include "pdfcatalog.h"
+#include "pdfdocumentbuilder.h"
 #include "pdfimagedownsamplefixup.h"
 #include "pdfimageoptimizer.h"
 #include "pdfrgbtocmykfixup.h"
@@ -627,12 +629,263 @@ public:
     }
 };
 
+struct PageBoxTranslation
+{
+    PDFObjectReference pageReference;
+    int pageIndex = -1;
+    QString box;
+    QRectF before;
+    QRectF after;
+};
+
+QRectF pageBoxOf(const PDFPage& page, const QString& box)
+{
+    if (box == QLatin1String("media"))
+    {
+        return page.getMediaBox();
+    }
+    if (box == QLatin1String("crop"))
+    {
+        return page.getCropBox();
+    }
+    if (box == QLatin1String("bleed"))
+    {
+        return page.getBleedBox();
+    }
+    if (box == QLatin1String("trim"))
+    {
+        return page.getTrimBox();
+    }
+    return page.getArtBox();
+}
+
+bool containsBox(const QRectF& outer, const QRectF& inner)
+{
+    constexpr qreal tolerance = 1e-6;
+    return inner.left() >= outer.left() - tolerance && inner.right() <= outer.right() + tolerance &&
+           inner.top() >= outer.top() - tolerance && inner.bottom() <= outer.bottom() + tolerance;
+}
+
+QJsonObject translatePageBoxParameterSchema()
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("box"), QStringLiteral("page_index"), QStringLiteral("dx"), QStringLiteral("dy") } },
+        { QStringLiteral("properties"), QJsonObject{
+                                            { QStringLiteral("box"), QJsonObject{
+                                                                         { QStringLiteral("type"), QStringLiteral("string") },
+                                                                         { QStringLiteral("enum"), QJsonArray{ QStringLiteral("media"), QStringLiteral("crop"), QStringLiteral("bleed"), QStringLiteral("trim"), QStringLiteral("art") } } } },
+                                            { QStringLiteral("page_index"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 0 } } },
+                                            { QStringLiteral("dx"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("number") } } },
+                                            { QStringLiteral("dy"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("number") } } } } }
+    };
+}
+
+/// Resolves a translate-page-box request against the source document. The
+/// translation is in unrotated PDF user space, the same space the page-box
+/// hit-test targets report. A result that would leave a box outside the media
+/// box, or the trim box outside the bleed box, is refused rather than repaired.
+PDFOperationResult resolvePageBoxTranslation(const PDFDocument& document,
+                                             const QJsonObject& parameters,
+                                             PageBoxTranslation* translation)
+{
+    if (!translation)
+    {
+        return PDFOperationResult(QStringLiteral("Page-box translation output is null."));
+    }
+    const QString box = parameters.value(QStringLiteral("box")).toString();
+    static const QStringList boxes = { QStringLiteral("media"), QStringLiteral("crop"), QStringLiteral("bleed"), QStringLiteral("trim"), QStringLiteral("art") };
+    if (!boxes.contains(box))
+    {
+        return PDFOperationResult(QStringLiteral("Unknown page box '%1'.").arg(box));
+    }
+    const QJsonValue pageIndexValue = parameters.value(QStringLiteral("page_index"));
+    const QJsonValue dxValue = parameters.value(QStringLiteral("dx"));
+    const QJsonValue dyValue = parameters.value(QStringLiteral("dy"));
+    if (!pageIndexValue.isDouble() || !dxValue.isDouble() || !dyValue.isDouble())
+    {
+        return PDFOperationResult(QStringLiteral("page_index, dx and dy are required numbers."));
+    }
+    const double dx = dxValue.toDouble();
+    const double dy = dyValue.toDouble();
+    if (!std::isfinite(dx) || !std::isfinite(dy))
+    {
+        return PDFOperationResult(QStringLiteral("Translation must be finite."));
+    }
+    if (dx == 0.0 && dy == 0.0)
+    {
+        return PDFOperationResult(QStringLiteral("Translation is zero; nothing to move."));
+    }
+
+    const PDFCatalog* catalog = document.getCatalog();
+    const int pageIndex = pageIndexValue.toInt(-1);
+    if (!catalog || pageIndex < 0 || pageIndex >= int(catalog->getPageCount()))
+    {
+        return PDFOperationResult(QStringLiteral("Page index %1 is outside the document.").arg(pageIndex));
+    }
+    const PDFPage* page = catalog->getPage(pageIndex);
+    if (!page)
+    {
+        return PDFOperationResult(QStringLiteral("Page %1 is not available.").arg(pageIndex));
+    }
+
+    const QRectF before = pageBoxOf(*page, box);
+    const QRectF after = before.translated(dx, dy);
+    if (box == QLatin1String("media"))
+    {
+        for (const QString& inner : { QStringLiteral("crop"), QStringLiteral("bleed"), QStringLiteral("trim"), QStringLiteral("art") })
+        {
+            if (!containsBox(after, pageBoxOf(*page, inner)))
+            {
+                return PDFOperationResult(QStringLiteral("Moving the media box would leave the %1 box outside it.").arg(inner));
+            }
+        }
+    }
+    else
+    {
+        if (!containsBox(page->getMediaBox(), after))
+        {
+            return PDFOperationResult(QStringLiteral("Moving the %1 box would leave it outside the media box.").arg(box));
+        }
+        if (box == QLatin1String("trim") && !containsBox(page->getBleedBox(), after))
+        {
+            return PDFOperationResult(QStringLiteral("Moving the trim box would leave it outside the bleed box."));
+        }
+        if (box == QLatin1String("bleed") && !containsBox(after, page->getTrimBox()))
+        {
+            return PDFOperationResult(QStringLiteral("Moving the bleed box would leave the trim box outside it."));
+        }
+    }
+
+    translation->pageReference = page->getPageReference();
+    translation->pageIndex = pageIndex;
+    translation->box = box;
+    translation->before = before;
+    translation->after = after;
+    return PDFOperationResult(true);
+}
+
+QString describeBox(const QRectF& rect)
+{
+    return QStringLiteral("[%1 %2 %3 %4]").arg(rect.left()).arg(rect.top()).arg(rect.right()).arg(rect.bottom());
+}
+
+class PDFTranslatePageBoxRepair final : public PDFRepairOperation
+{
+public:
+    QString id() const override { return QStringLiteral("translate-page-box"); }
+    PDFRepairRisk risk() const override { return PDFRepairRisk::Low; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("page-box translation must preserve the trusted source")); }
+    QJsonObject parameterSchema() const override { return translatePageBoxParameterSchema(); }
+    PDFRepairDomains domains() const override { return PDFRepairDomain::PageGeometry; }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject& parameters) const override
+    {
+        // No evidence domain tracks page geometry, so the empty domain set makes
+        // PDFOperationImpact::isFullRevalidation() true: a box move reruns the profile.
+        PDFOperationImpact declared;
+        declared.declared = true;
+        declared.impactComplete = true;
+        const QJsonValue pageIndex = parameters.value(QStringLiteral("page_index"));
+        if (pageIndex.isDouble() && pageIndex.toInt(-1) >= 0)
+        {
+            declared.pages.insert(pageIndex.toInt());
+        }
+        else
+        {
+            declared.allPages = true;
+        }
+        return declared;
+    }
+
+    PDFOperationResult analyze(const PDFDocument& source,
+                               const QJsonObject& parameters,
+                               PDFRepairPlan* plan) const override
+    {
+        if (!plan)
+        {
+            return PDFOperationResult(QStringLiteral("Page-box translation plan is null."));
+        }
+        plan->operationId = id();
+        plan->operationVersion = version();
+        plan->parameters = parameters;
+        plan->risk = risk();
+        plan->domains = domains();
+        plan->expectedChanges.pageBoxes = true;
+        plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
+                             PDFRepairValidatorKind::NormalPreflight };
+
+        PageBoxTranslation translation;
+        const PDFOperationResult resolved = resolvePageBoxTranslation(source, parameters, &translation);
+        if (!resolved)
+        {
+            plan->unsupportedReasons.append(resolved.getErrorMessage());
+            return resolved;
+        }
+        plan->targets.append({ translation.pageIndex, {}, QStringLiteral("pages/%1/%2-box").arg(translation.pageIndex).arg(translation.box) });
+        return PDFOperationResult(true);
+    }
+
+    PDFOperationResult apply(PDFDocument* candidate,
+                             const PDFRepairPlan& plan,
+                             PDFRepairResult* result) const override
+    {
+        if (!candidate || !result)
+        {
+            return PDFOperationResult(QStringLiteral("Page-box translation candidate or result is null."));
+        }
+        PageBoxTranslation translation;
+        const PDFOperationResult resolved = resolvePageBoxTranslation(*candidate, plan.parameters, &translation);
+        if (!resolved)
+        {
+            return resolved;
+        }
+
+        PDFDocumentModifier modifier(candidate);
+        PDFDocumentBuilder* builder = modifier.getBuilder();
+        if (translation.box == QLatin1String("media"))
+        {
+            builder->setPageMediaBox(translation.pageReference, translation.after);
+        }
+        else if (translation.box == QLatin1String("crop"))
+        {
+            builder->setPageCropBox(translation.pageReference, translation.after);
+        }
+        else if (translation.box == QLatin1String("bleed"))
+        {
+            builder->setPageBleedBox(translation.pageReference, translation.after);
+        }
+        else if (translation.box == QLatin1String("trim"))
+        {
+            builder->setPageTrimBox(translation.pageReference, translation.after);
+        }
+        else
+        {
+            builder->setPageArtBox(translation.pageReference, translation.after);
+        }
+        modifier.markReset();
+        if (!modifier.finalize())
+        {
+            return PDFOperationResult(QStringLiteral("Failed to finalize page-box translation."));
+        }
+        *candidate = *modifier.getDocument();
+
+        result->changes.append({ { translation.pageIndex, {}, QStringLiteral("pages/%1/%2-box").arg(translation.pageIndex).arg(translation.box) },
+                                 QStringLiteral("page-box"),
+                                 describeBox(translation.before),
+                                 describeBox(translation.after),
+                                 true });
+        return PDFOperationResult(true);
+    }
+};
+
 const bool registerBuiltInRepairOperations = []
 {
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFAddBleedRepair>());
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFDownsampleImagesRepair>());
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFRgbToCmykRepair>());
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFStandardConversionRepair>());
+    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFTranslatePageBoxRepair>());
     return true;
 }();
 

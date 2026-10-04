@@ -104,6 +104,7 @@ private slots:
     void standardsTransactionRejectsFinalArtifact();
     void builtInOperations_declareSavePolicies();
     void everyRegisteredOperationDeclaresItsSavePolicy();
+    void translatePageBoxMovesOnePageBoxAndRefusesAnInvalidMove();
     void noNonIncrementalOperationCanBeAppendedToASignedSource();
     void transactionRejectsAWeakenedSavePolicyBeforeMutation();
     void saveRequestRefusesToWriteOverTheTrustedSource();
@@ -240,6 +241,57 @@ void RepairOperationTest::everyRegisteredOperationDeclaresItsSavePolicy()
     QVERIFY(undeclared.invalidatesSignatures);
     QVERIFY(!pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit")).isUndeclared());
 }
+void RepairOperationTest::translatePageBoxMovesOnePageBoxAndRefusesAnInvalidMove()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageBleedBox(page, QRectF(5, 5, 190, 190));
+    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
+    const pdf::PDFDocument source = builder.build();
+
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("translate-page-box"));
+    QVERIFY(operation != nullptr);
+    QCOMPARE(operation->savePolicy().mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+    QVERIFY(operation->impact(&source, QJsonObject{ { QStringLiteral("page_index"), 0 } }).isFullRevalidation());
+
+    const auto request = [](const QString& box, double dx, double dy)
+    {
+        return QJsonObject{ { QStringLiteral("box"), box },
+                            { QStringLiteral("page_index"), 0 },
+                            { QStringLiteral("dx"), dx },
+                            { QStringLiteral("dy"), dy } };
+    };
+
+    pdf::PDFRepairPlan plan;
+    QVERIFY(operation->analyze(source, request(QStringLiteral("trim"), 2.0, 3.0), &plan));
+    QCOMPARE(plan.targets.size(), 1);
+
+    pdf::PDFDocument candidate = source;
+    pdf::PDFRepairResult result;
+    QVERIFY(operation->apply(&candidate, plan, &result));
+    QCOMPARE(result.changes.size(), 1);
+    const pdf::PDFPage* moved = candidate.getCatalog()->getPage(0);
+    QCOMPARE(moved->getTrimBox(), QRectF(12, 13, 180, 180));
+    QCOMPARE(moved->getBleedBox(), QRectF(5, 5, 190, 190));
+    QCOMPARE(source.getCatalog()->getPage(0)->getTrimBox(), QRectF(10, 10, 180, 180));
+
+    const QList<QJsonObject> refused = {
+        request(QStringLiteral("trim"), 20.0, 0.0),
+        request(QStringLiteral("bleed"), 6.0, 0.0),
+        request(QStringLiteral("crop"), 1.0, 0.0),
+        request(QStringLiteral("media"), 1.0, 0.0),
+        request(QStringLiteral("trim"), 0.0, 0.0),
+        request(QStringLiteral("frame"), 1.0, 0.0),
+        QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") }, { QStringLiteral("page_index"), 7 }, { QStringLiteral("dx"), 1.0 }, { QStringLiteral("dy"), 0.0 } },
+    };
+    for (const QJsonObject& parameters : refused)
+    {
+        pdf::PDFRepairPlan refusedPlan;
+        QVERIFY2(!operation->analyze(source, parameters, &refusedPlan), qPrintable(QJsonDocument(parameters).toJson(QJsonDocument::Compact)));
+        QVERIFY(!refusedPlan.unsupportedReasons.isEmpty());
+    }
+}
+
 void RepairOperationTest::noNonIncrementalOperationCanBeAppendedToASignedSource()
 {
     const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();

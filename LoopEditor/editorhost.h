@@ -442,6 +442,7 @@ private:
     void registerShellHandlers();
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
+    bool requestMoveSelection(const QVariantMap& parameters);
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();

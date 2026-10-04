@@ -1,8 +1,8 @@
 # Quick canvas-editor gaps: Select/Hand tools and drag commit
 
-Two gaps found while planning the canvas-editor GUI work. Gap 1 is now fixed by
-the tool-vocabulary work for issue #103; gap 2 remains open and is tracked as
-issue #104.
+Two gaps found while planning the canvas-editor GUI work. Gap 1 is fixed by
+the tool-vocabulary work for issue #103. Gap 2 is fixed for page boxes by issue
+#104 (ADR-012); findings, guides and text remain undraggable.
 
 Verified against `origin/dev` at `e9953734`.
 
@@ -45,7 +45,7 @@ Coverage: `UnitTestsInteractionController` slots
 `verifyToolSelection` in `tools/ProductQuickAccessibilitySmoke/main.cpp`, which
 reads the live buttons' `checked` state back after driving the host.
 
-## 2. Completed drags are discarded
+## 2. Completed drags are discarded — fixed for page boxes (#104)
 
 `InteractionController` emits exactly one `dragCompleted(DragSession)` per
 completed drag and deliberately leaves the commit to its owner. The Quick host
@@ -84,7 +84,16 @@ translate.
 Per `AGENTS.md`, a required change to a protected schema or central type is
 reported rather than invented.
 
-## Why no code accompanies gap 2
+### How it was fixed
+
+`EditorHost::onDragCompleted` re-checks the session's fence, then invokes the new
+`actionMoveSelection` command (`docs/loop-shell-actions.json`, 108 actions) for a
+`PageBox` target. The command routes the move into the Fix workspace as a bound
+`translate-page-box` operation, so plan, approval and execute stay the governed
+flow. See `docs/adr/adr-012-drag-commit-command.md`, "Implementation notes".
+The move needs a recipe that offers `translate-page-box`; none ships built in.
+
+## Why no code accompanied gap 2 at first
 
 Gap 2 needs a decision that a patch cannot make: it is a new public contract
 entry with undo, revision-fencing, and payload questions still open. The tool

@@ -201,6 +201,7 @@ private Q_SLOTS:
     void hoverRepeatDoesNotRebuildFrame();
     void clickSelectsWithoutDragging();
     void dragPreservesGrabOffset();
+    void completedDragCarriesTheFenceItCompletedAgainst();
     void dragBelowThresholdIsAClick();
     void escapeCancelsDragWithoutCommit();
     void focusLossCancelsDrag();
@@ -375,6 +376,31 @@ void InteractionControllerTest::dragPreservesGrabOffset()
 
     QCOMPARE(dragSpy.size(), 1);
     QVERIFY(!m_controller->state().drag().has_value());
+}
+
+void InteractionControllerTest::completedDragCarriesTheFenceItCompletedAgainst()
+{
+    const QPointF pressPagePoint(38.0, 38.0);
+    const QPoint pressPx = viewportPointFor(*m_viewport, pressPagePoint);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, pressPx, 2, Qt::LeftButton));
+
+    std::optional<pdfinteraction::DragSession> completed;
+    connect(m_controller.get(),
+            &pdfinteraction::InteractionController::dragCompleted,
+            this,
+            [&completed](pdfinteraction::DragSession session)
+            { completed = std::move(session); });
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, 3, Qt::LeftButton, Qt::LeftButton));
+    const QPoint movePx = viewportPointFor(*m_viewport, QPointF(58.0, 38.0));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, 4, Qt::NoButton, Qt::LeftButton));
+    const pdfinteraction::RevisionFencedToken fence = m_controller->token();
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, movePx, 5, Qt::LeftButton));
+
+    QVERIFY(completed.has_value());
+    QVERIFY(completed->fence.isValid());
+    QCOMPARE(completed->fence, fence);
 }
 
 void InteractionControllerTest::dragBelowThresholdIsAClick()

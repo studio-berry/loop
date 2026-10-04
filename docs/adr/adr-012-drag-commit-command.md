@@ -1,8 +1,8 @@
 # ADR-012: A governed move command for the drag-commit hand-off
 
-**Status:** proposed
-**Implemented-at:** not implemented
-**Last-verified:** 2026-10-03 @ 0f2f7599e3e17ce4e57bfdedfce85582c8f51115
+**Status:** accepted
+**Implemented-at:** issue #104 (actionMoveSelection, translate-page-box, DragSession.fence)
+**Last-verified:** 2026-10-04 @ e54dce1bc39df8b51dce9137d957804f78992421
 **Superseded-by:** none
 **Date:** 2026-10-03
 **Deciders:** Loop owner (issue #104); interaction boundary owners
@@ -309,6 +309,33 @@ are out of scope until their geometry semantics are decided.
 4. Add the `DragSession` revision accessor and assert in
    `UnitTestsInteractionController` that the completed session reports the
    token it was fenced against.
+
+## Implementation notes (issue #104)
+
+The recommendation was adopted for page boxes only, with these differences from
+the sketch above:
+
+- `actionMoveSelection` is registered by `EditorHost` and does not mutate the
+  document. It switches to the Fix workspace and binds `box`, `page_index`, `dx`
+  and `dy` for the recipe that offers `translate-page-box`, exactly as an
+  Inspect corrective-operation intent does. Plan, approval and execute stay the
+  Fix workspace's, so the command catalog is still the only route in and the
+  Fix workspace is still the only place a document changes.
+- With no recipe offering `translate-page-box`, the command fails with
+  `move/rejected` and the host announces that a recipe is needed; there is no
+  built-in recipe, so the drag proposes a move but cannot execute one until the
+  operator imports one.
+- `translate-page-box` (LoopLibCore) takes `box` (`media`, `crop`, `bleed`,
+  `trim`, `art`), `page_index`, `dx`, `dy` in unrotated PDF user space. It moves
+  one box and refuses a result that leaves a box outside the media box, the trim
+  box outside the bleed box, or the media box away from an inner box. It saves
+  as a new artifact and declares a page-scoped impact with no evidence domain,
+  which `PDFOperationImpact::isFullRevalidation()` treats as a full profile
+  rerun.
+- `DragSession::fence` carries the token `completeDrag()` accepted. `EditorHost`
+  discards a drag whose fence no longer equals the facade's current revision
+  before it invokes the command.
+- `actionUndo` and `actionRedo` are unchanged (Q4).
 
 ## Local verification limit
 

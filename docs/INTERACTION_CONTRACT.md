@@ -31,7 +31,10 @@ changes which pages are wanted, not what a wanted page should look like, and can
 in-flight renders on every pointer delta is exactly what it forbids.
 
 Commit is not this layer's. A completed drag is emitted as a `DragSession`; the owner routes
-it through P4-S2's `CommandCatalog`, which stays the only mutation path.
+it through P4-S2's `CommandCatalog`, which stays the only mutation path. The
+completed session carries the `RevisionFencedToken` it completed against
+(`DragSession::fence`) so the owner can re-check it before invoking. For a page
+box the command is `actionMoveSelection` (ADR-012).
 
 ## Input intents
 

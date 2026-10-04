@@ -241,7 +241,8 @@ std::optional<DragSession> InteractionState::completeDrag(const RevisionFencedTo
         return std::nullopt;
     }
 
-    const DragSession session = *m_drag;
+    DragSession session = *m_drag;
+    session.fence = token;
     clearTransient();
 
     if (!session.exceededThreshold)

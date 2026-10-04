@@ -130,6 +130,10 @@ struct DragSession
     /// Where the target would land if the drag completed now. Presentation only:
     /// it feeds the overlay, never the document.
     QRectF previewPageBounds;
+
+    /// The fence this drag completed against. completeDrag() already refuses a
+    /// stale token; carrying it lets the consumer re-check before it mutates.
+    RevisionFencedToken fence;
 };
 
 /// A cheap, per-event, revision-fenced snapshot of what the pointer is doing.
