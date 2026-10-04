@@ -6,18 +6,23 @@
 #include "inspectormodel.h"
 #include "loopcanvasitem.h"
 #include "operatoracceptancehelpers.h"
+#include "pdfartifactidentity.h"
+#include "pdfpreflightverdict.h"
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "preflightfindingsmodel.h"
 #include "previewstatemodel.h"
 
+#include <QCryptographicHash>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QQuickWindow>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -152,6 +157,79 @@ QString processDetail(bool started, int exitCode, const QByteArray& stdOut, cons
         .arg(QString::fromUtf8(stdErr).trimmed().left(1024));
 }
 
+QJsonObject runPdfToolJson(const QStringList& arguments, int* exitCode, QByteArray* stdErr)
+{
+    QByteArray stdOut;
+    int code = -1;
+    operatoracceptance::runPdfTool(pdfToolPath(), arguments, &stdOut, stdErr, &code);
+    if (exitCode)
+    {
+        *exitCode = code;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
+    return parseError.error == QJsonParseError::NoError && document.isObject() ? document.object() : QJsonObject{};
+}
+
+/// The receipt the isolated worker presents for one file inspection.
+QJsonObject workerReceipt(const QString& fixture, const QString& profile, int* exitCode, QByteArray* stdErr)
+{
+    const QJsonObject envelope = runPdfToolJson({ QStringLiteral("worker-preflight"), fixture,
+                                                  QStringLiteral("--profile"), profile,
+                                                  QStringLiteral("--console-format"), QStringLiteral("json") },
+                                                exitCode, stdErr);
+    return envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("receipt")).toObject();
+}
+
+QStringList jsonStringArray(const QJsonValue& value)
+{
+    QStringList values;
+    for (const QJsonValue& item : value.toArray())
+    {
+        values.append(item.toString());
+    }
+    return values;
+}
+
+QStringList advertisedFixupIds(const QJsonObject& report)
+{
+    QStringList ids;
+    for (const QJsonValue& value : report.value(QStringLiteral("fixups_available")).toArray())
+    {
+        ids.append(value.toObject().value(QStringLiteral("id")).toString());
+    }
+    ids.sort();
+    return ids;
+}
+
+QMap<QString, QString> checkOutcomes(const QJsonArray& checks)
+{
+    QMap<QString, QString> outcomes;
+    for (const QJsonValue& value : checks)
+    {
+        const QJsonObject check = value.toObject();
+        outcomes.insert(check.value(QStringLiteral("id")).toString(),
+                        check.value(QStringLiteral("status")).toString() + QLatin1Char('/') +
+                            check.value(QStringLiteral("reason")).toString());
+    }
+    return outcomes;
+}
+
+/// Core derives the receipt identity from the input digest, the effective
+/// profile digest and the evaluated coverage scope. Reproducing it from a
+/// report's own provenance is what shows both adapters bound one receipt.
+QString receiptIdentity(const QJsonObject& report)
+{
+    const QJsonObject identity{
+        { QStringLiteral("kind"), QStringLiteral("loop.inspection-receipt-identity.v1") },
+        { QStringLiteral("input_digest"), report.value(QStringLiteral("document_revision_digest")).toString() },
+        { QStringLiteral("effective_profile_digest"), report.value(QStringLiteral("effective_profile_digest")).toString() },
+        { QStringLiteral("coverage_scope"), report.value(QStringLiteral("coverage_scope")) }
+    };
+    return QString::fromLatin1(QCryptographicHash::hash(pdf::canonicalJson(identity), QCryptographicHash::Sha256).toHex());
+}
+
 }   // namespace
 
 class ProductOperatorLoopTest final : public QObject
@@ -171,6 +249,7 @@ private slots:
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
     void cancellationLeavesNoAcceptedResult();
+    void adapterParityOverOneInspectionReceipt();
 };
 
 void ProductOperatorLoopTest::initTestCase()
@@ -573,6 +652,147 @@ void ProductOperatorLoopTest::cancellationLeavesNoAcceptedResult()
     QCOMPARE(preflight->state(), PreflightController::State::Cancelled);
     QVERIFY(!preflight->hasResult());
     QVERIFY(!host.hasPreflightReport());
+}
+
+void ProductOperatorLoopTest::adapterParityOverOneInspectionReceipt()
+{
+    // Issue #26: one inspection over one fixture, read by both presentation
+    // adapters. The Editor host renders the accepted inspection; the isolated
+    // worker presents the receipt and the CLI presents the report for the same
+    // bytes. Every comparison below is across surfaces, not within one.
+    const QString fixture = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QString profile = operatoracceptance::defaultProfilePath();
+    QVERIFY2(QFileInfo::exists(fixture), fixture.toUtf8().constData());
+    QVERIFY2(QFileInfo::exists(profile), profile.toUtf8().constData());
+
+    operatoracceptance::OperatorLoopTrace trace(QStringLiteral("adapter-parity-one-receipt"));
+
+    EditorHost host;
+    trace.note(QStringLiteral("editor-open"), fixture);
+    host.openFileUrl(QUrl::fromLocalFile(fixture));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    auto* preflight = qobject_cast<PreflightController*>(host.preflight());
+    QVERIFY(preflight);
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(preflight->state() != PreflightController::State::Running, 30000);
+    QCOMPARE(preflight->state(), PreflightController::State::Findings);
+
+    const QJsonObject editorReport = QJsonDocument::fromJson(preflight->serializedReport(fixture)).object();
+    QVERIFY2(!editorReport.isEmpty(), "the Editor must present the accepted report");
+    QStringList editorFindingIds;
+    for (int row = 0; row < preflight->findingsModel()->rowCount(); ++row)
+    {
+        editorFindingIds.append(preflight->findingsModel()
+                                    ->data(preflight->findingsModel()->index(row, 0),
+                                           pdfinteraction::PreflightFindingsModel::FindingIdRole)
+                                    .toString());
+    }
+
+    int receiptExit = -1;
+    QByteArray receiptError;
+    const QJsonObject receiptJson = workerReceipt(fixture, profile, &receiptExit, &receiptError);
+    QVERIFY2(!receiptJson.isEmpty(), qPrintable(QString::fromUtf8(receiptError)));
+    pdf::PreflightInspectionReceipt receipt;
+    QString receiptParseError;
+    QVERIFY2(pdf::preflightInspectionReceiptFromJson(receiptJson, receipt, receiptParseError),
+             qPrintable(receiptParseError));
+
+    int repeatExit = -1;
+    QByteArray repeatError;
+    const QJsonObject repeatReceipt = workerReceipt(fixture, profile, &repeatExit, &repeatError);
+    QCOMPARE(repeatExit, receiptExit);
+    QCOMPARE(repeatReceipt.value(QStringLiteral("identity")).toString(),
+             receiptJson.value(QStringLiteral("identity")).toString());
+
+    QTemporaryDir outputDirectory;
+    QVERIFY(outputDirectory.isValid());
+    const QString headlessReportPath = outputDirectory.filePath(QStringLiteral("preflight-report.json"));
+    int reportExit = -1;
+    QByteArray reportError;
+    runPdfToolJson({ QStringLiteral("preflight"), fixture,
+                     QStringLiteral("--profile"), profile,
+                     QStringLiteral("--report-file"), headlessReportPath,
+                     QStringLiteral("--console-format"), QStringLiteral("json") },
+                   &reportExit, &reportError);
+    QJsonObject headlessReport;
+    QVERIFY2(readJsonObject(headlessReportPath, &headlessReport), qPrintable(QString::fromUtf8(reportError)));
+
+    // Finding identity: the receipt's blocking ids are exactly what the Editor
+    // lists and what the CLI reports.
+    const QJsonObject receiptVerdict = receiptJson.value(QStringLiteral("verdict")).toObject();
+    const QStringList blockingIds = jsonStringArray(receiptVerdict.value(QStringLiteral("blocking_finding_ids")));
+    QVERIFY2(!blockingIds.isEmpty(), "the fixture must establish a blocking finding");
+    QCOMPARE(jsonStringArray(editorReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("blocking_finding_ids"))),
+             blockingIds);
+    QCOMPARE(jsonStringArray(headlessReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("blocking_finding_ids"))),
+             blockingIds);
+    for (const QString& findingId : blockingIds)
+    {
+        QVERIFY2(editorFindingIds.contains(findingId), qPrintable(findingId));
+    }
+    QCOMPARE(jsonStringArray(receiptVerdict.value(QStringLiteral("waived_finding_ids"))),
+             jsonStringArray(editorReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("waived_finding_ids"))));
+
+    // Verdict: one Core reducer decides the state, and the CLI's exit code is its
+    // published mapping.
+    const QString verdictState = receiptVerdict.value(QStringLiteral("state")).toString();
+    QVERIFY(!verdictState.isEmpty());
+    QCOMPARE(editorReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(), verdictState);
+    QCOMPARE(headlessReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(), verdictState);
+    QCOMPARE(headlessReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("reason_code")).toString(),
+             editorReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("reason_code")).toString());
+    QCOMPARE(reportExit, pdf::preflightVerdictProcessExitCode(receipt.verdict.state));
+    QCOMPARE(receiptExit, pdf::preflightVerdictProcessExitCode(receipt.verdict.state));
+
+    // Coverage: the evaluated scope is recorded once and reported unchanged.
+    const QJsonObject coverageScope = receiptJson.value(QStringLiteral("coverage_scope")).toObject();
+    QVERIFY2(!coverageScope.isEmpty(), "the receipt must record the evaluated coverage scope");
+    QCOMPARE(editorReport.value(QStringLiteral("coverage_scope")).toObject(), coverageScope);
+    QCOMPARE(headlessReport.value(QStringLiteral("coverage_scope")).toObject(), coverageScope);
+
+    // Limitations: Core records which checks did not complete; the Editor renders
+    // those reasons, and no surface narrows the recorded check outcome.
+    QVERIFY2(!receipt.limitations.isEmpty(), "the receipt must record its limitations");
+    const QMap<QString, QString> editorChecks = checkOutcomes(editorReport.value(QStringLiteral("checks")).toArray());
+    const QMap<QString, QString> headlessChecks = checkOutcomes(headlessReport.value(QStringLiteral("checks")).toArray());
+    int comparedChecks = 0;
+    for (const QJsonValue& value : receiptJson.value(QStringLiteral("checks")).toArray())
+    {
+        const QJsonObject check = value.toObject();
+        if (check.value(QStringLiteral("status")).toString().isEmpty())
+        {
+            continue;
+        }
+        const QString outcome = check.value(QStringLiteral("status")).toString() + QLatin1Char('/') +
+                                check.value(QStringLiteral("reason")).toString();
+        QCOMPARE(editorChecks.value(check.value(QStringLiteral("id")).toString()), outcome);
+        QCOMPARE(headlessChecks.value(check.value(QStringLiteral("id")).toString()), outcome);
+        ++comparedChecks;
+        if (!check.value(QStringLiteral("complete")).toBool() && !check.value(QStringLiteral("reason")).toString().isEmpty())
+        {
+            QVERIFY2(preflight->limitationDescription().contains(check.value(QStringLiteral("reason")).toString()),
+                     qPrintable(preflight->limitationDescription()));
+        }
+    }
+    QVERIFY2(comparedChecks > 0, "the receipt must record a check outcome to compare");
+
+    // Available intents: both surfaces advertise the same corrective operations,
+    // and the Editor exposes the same terminal availability for them.
+    const QStringList editorFixups = advertisedFixupIds(editorReport);
+    QVERIFY2(!editorFixups.isEmpty(), "a blocking bleed finding must advertise its corrective operation");
+    QCOMPARE(advertisedFixupIds(headlessReport), editorFixups);
+    QVERIFY(preflight->exportUnavailableReason().isEmpty());
+    QVERIFY(!preflight->cancelUnavailableReason().isEmpty());
+
+    // The exact receipt identity, recomputed from the Editor's own provenance.
+    const QString inputDigest = editorReport.value(QStringLiteral("document_revision_digest")).toString();
+    const QString profileDigest = editorReport.value(QStringLiteral("effective_profile_digest")).toString();
+    QCOMPARE(inputDigest, inputDigest.toLower());
+    QCOMPARE(profileDigest, profileDigest.toLower());
+    const QString identity = receiptIdentity(editorReport);
+    QCOMPARE(identity, receiptJson.value(QStringLiteral("identity")).toString());
+    trace.note(QStringLiteral("receipt-identity"), identity);
+    trace.complete();
 }
 
 QTEST_MAIN(ProductOperatorLoopTest)

@@ -1,0 +1,11 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: adapter-parity-over-one-inspection-receipt
+    evidence:
+      - unit:agent-policy:quick
+      - unit:UnitTests/tst_productoperatorloop.cpp
+      - unit:UnitTests/operatoracceptancehelpers.h
+      - unit:UnitTestsPdfWorkerIsolation
+      - integration:tools/ProductQuickAccessibilitySmoke/main.cpp
+unresolved: []
