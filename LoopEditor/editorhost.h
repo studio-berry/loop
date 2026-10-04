@@ -533,7 +533,6 @@ private:
     pdf::PDFActionList m_actionListDraft;
     bool m_actionListDraftValid = false;
     int m_commandEpoch = 0;
-    pdfinteraction::InteractionTool m_activeTool = pdfinteraction::InteractionTool::Select;
     bool m_documentBound = false;
     bool m_searchPanelVisible = false;
     bool m_fullscreenRequested = false;

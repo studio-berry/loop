@@ -489,7 +489,9 @@ bool EditorHost::unsupported() const
 
 QString EditorHost::activeTool() const
 {
-    return QString::fromLatin1(pdfinteraction::getInteractionToolName(m_activeTool));
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    return QString::fromLatin1(pdfinteraction::getInteractionToolName(
+        interaction ? interaction->activeTool() : pdfinteraction::InteractionTool::Select));
 }
 
 bool EditorHost::setActiveTool(const QString& toolId)
@@ -500,18 +502,20 @@ bool EditorHost::setActiveTool(const QString& toolId)
         return false;
     }
 
-    if (m_activeTool == *tool)
+    // The controller is the single source of truth for the tool; it cancels an in-flight
+    // drag with ToolChanged (#141 AC3) and the host only forwards the operator's choice.
+    pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (!interaction)
+    {
+        return false;
+    }
+
+    if (interaction->activeTool() == *tool)
     {
         return true;
     }
 
-    m_activeTool = *tool;
-    if (pdfinteraction::InteractionController* interaction = m_session->interaction())
-    {
-        // The controller cancels an in-flight drag with ToolChanged (#141 AC3);
-        // the host only records the operator's choice.
-        interaction->setActiveTool(m_activeTool);
-    }
+    interaction->setActiveTool(*tool);
     Q_EMIT activeToolChanged();
     return true;
 }
