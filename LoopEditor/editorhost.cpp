@@ -1096,6 +1096,14 @@ QVariantMap EditorHost::compareReview() const
     QVariantList materialDeltas;
     QVariantList steps;
     QString highestRisk;
+    // Core names risk low < medium < high < destructive; a name outside that set ranks above all of them.
+    const QStringList riskOrder{ QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),
+                                 QStringLiteral("destructive") };
+    const auto riskRank = [&riskOrder](const QString& risk)
+    {
+        const qsizetype position = riskOrder.indexOf(risk);
+        return position < 0 ? riskOrder.size() : position;
+    };
     QString savePolicyMode;
     QString savePolicyRationale;
     for (int index = 0; index < result.steps.size(); ++index)
@@ -1110,9 +1118,10 @@ QVariantMap EditorHost::compareReview() const
                 declaredChangeAttributes.append(it.key());
             }
         }
-        if (highestRisk.isEmpty())
+        const QString stepRisk = stepPlan.value(QStringLiteral("risk")).toString();
+        if (highestRisk.isEmpty() || riskRank(stepRisk) > riskRank(highestRisk))
         {
-            highestRisk = stepPlan.value(QStringLiteral("risk")).toString();
+            highestRisk = stepRisk;
         }
         if (savePolicyMode.isEmpty())
         {
@@ -1254,13 +1263,17 @@ bool EditorHost::navigateCompareDelta(int deltaIndex)
         return false;
     }
 
+    if (!inspectActionListStep(stepIndex))
+    {
+        return false;
+    }
+
     setWorkspace(LoopWorkspace::Inspect);
-    const bool inspected = inspectActionListStep(stepIndex);
-    if (inspected && !findingId.isEmpty())
+    if (!findingId.isEmpty())
     {
         selectFinding(findingId);
     }
-    return inspected;
+    return true;
 }
 
 QString EditorHost::productionStateName() const
