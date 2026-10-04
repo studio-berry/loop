@@ -118,20 +118,44 @@ ToolBar {
             Accessible.name: qsTr("Redo")
         }
         ToolSeparator {}
+        ButtonGroup {
+            id: toolGroup
+            exclusive: true
+        }
         ToolButton {
+            id: selectToolButton
             objectName: "selectToolButton"
             text: qsTr("Select")
             checkable: true
-            checked: true
             activeFocusOnTab: true
+            onClicked: if (root.host) root.host.setActiveTool("select")
+            Accessible.role: Accessible.RadioButton
             Accessible.name: qsTr("Select tool")
+            ButtonGroup.group: toolGroup
+            // The button reflects the host's tool; the exclusive group makes the
+            // pair a single-select, so Select and Hand can never both show
+            // checked (issue #103).
+            Binding {
+                target: selectToolButton
+                property: "checked"
+                value: !!root.host && root.host.activeTool === "select"
+            }
         }
         ToolButton {
+            id: handToolButton
             objectName: "handToolButton"
             text: qsTr("Hand")
             checkable: true
             activeFocusOnTab: true
+            onClicked: if (root.host) root.host.setActiveTool("hand")
+            Accessible.role: Accessible.RadioButton
             Accessible.name: qsTr("Hand tool")
+            ButtonGroup.group: toolGroup
+            Binding {
+                target: handToolButton
+                property: "checked"
+                value: !!root.host && root.host.activeTool === "hand"
+            }
         }
         ToolSeparator {}
         ToolButton {

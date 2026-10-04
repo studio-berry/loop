@@ -1,59 +1,49 @@
 # Quick canvas-editor gaps: Select/Hand tools and drag commit
 
-Two gaps found while planning the canvas-editor GUI work, recorded here so the
-next session does not have to rediscover them. Neither is fixed; both are
-tracked as issues #103 and #104. No production source is changed by this
-document.
+Two gaps found while planning the canvas-editor GUI work. Gap 1 is now fixed by
+the tool-vocabulary work for issue #103; gap 2 remains open and is tracked as
+issue #104.
 
 Verified against `origin/dev` at `e9953734`.
 
-## 1. The Select and Hand toolbar buttons do nothing
+## 1. The Select and Hand toolbar buttons do nothing — fixed (#103)
 
-`LoopEditor/qml/ShellToolBar.qml:121-135` presents `Select` and `Hand` as
-checkable tool buttons. Neither has an `onClicked` handler, neither is bound to
-`activeTool`, and the two can be checked independently.
+`LoopEditor/qml/ShellToolBar.qml` presented `Select` and `Hand` as checkable
+tool buttons. Neither had an `onClicked` handler, neither was bound to
+`activeTool`, and the two could be checked independently.
 
-### The obvious fix is wrong
+Wiring the buttons to the existing setter alone would have made two dead
+controls look live while changing no observable behavior: `InteractionController`
+never read `m_activeTool` to branch pointer behavior. Issue #103 therefore
+required a vocabulary and real Hand/Select pointer semantics, not QML wiring.
 
-`InteractionController::m_activeTool` is currently **write-only**. Across
-`LoopLibInteraction` and `LoopLibQuick`, every reference is:
+### How it was fixed
 
-| Location | Use |
-| --- | --- |
-| `interactioncontroller.cpp:106` | equality guard on set |
-| `interactioncontroller.cpp:111` | assignment |
-| `interactioncontroller.h:113` | inline getter |
-| `interactioncontroller.h:208` | declaration |
-| `loopcanvasitem.cpp:190-197` | getter, and an equality guard on set |
-| `loopcanvasitem.h:100,141,162` | property, declaration, notify signal |
+- The vocabulary is defined in [INTERACTION_CONTRACT.md](INTERACTION_CONTRACT.md)
+  under "Tools (issue #103)" and typed as `pdfinteraction::InteractionTool` in
+  `LoopLibInteraction/sources/interactionstate.h`. A name outside the vocabulary
+  is refused at the host boundary; it is never coerced into a default.
+- `InteractionController::handlePointerPress` routes a left press to
+  `InteractionKind::Pan` when the active tool is Hand and otherwise keeps the
+  Select selection/drag path; `handlePointerRelease` ends a Hand pan on the left
+  button. Select is the default and retains the pre-vocabulary behavior.
+- `EditorHost` exposes an `activeTool` property and a `setActiveTool` invokable
+  that parses the name once and routes the parsed tool to the session's
+  interaction controller.
+- `LoopEditor/qml/ShellToolBar.qml` binds both buttons' `checked` to
+  `host.activeTool` inside an exclusive `ButtonGroup`, so they are a
+  single-select that reflects the real tool.
+- Cancel-on-change stays as it was: `setActiveTool` still calls
+  `cancelActive(InteractionCancelReason::ToolChanged)` (issue #141 AC3), so a
+  tool change mid-drag drops the gesture and commits nothing.
 
-Nothing reads the value to branch behavior. `handlePointerPress`
-(`interactioncontroller.cpp:226-268`) routes pan to `m_panButton`, which
-defaults to middle mouse, and routes selection and drag off pointer button,
-modifiers, and `InteractionTargetKind`. The active tool is not consulted.
-
-`LoopCanvasItem::activeTool` is also declared `READ` only
-(`loopcanvasitem.h:100`), so the C++ setter has never been reachable from QML.
-
-Wiring the buttons to the existing setter would make two dead controls look
-live while changing no observable behavior. That is a worse defect than the
-current honest-but-inert one, because the operator loses the ability to tell
-the feature is absent.
-
-### What a real fix needs
-
-1. A tool vocabulary defined in a contract, not implied by control labels. Tool
-   IDs are free-form today; the only test uses `"measure"`
-   (`UnitTests/tst_interactioncontrollertest.cpp:448`), which no production path
-   sets.
-2. Hand/select pointer semantics: Hand claims left-drag for panning and
-   suppresses selection and drag initiation; Select retains today's behavior.
-3. Cancel-on-change stays as it is. `setActiveTool` already calls
-   `cancelActive(InteractionCancelReason::ToolChanged)` (issue #141 AC3), so a
-   tool change must not leave a half-applied transform.
-
-This is a missing feature rather than a defect, and the behavior change lands in
-the `interaction` boundary.
+Coverage: `UnitTestsInteractionController` slots
+`handToolPansLeftDragAndSuppressesSelection`, `selectToolRetainsSelectionAndDrag`,
+`toolVocabularyNamesRoundTrip` and `toolChangeCancelsDrag`;
+`UnitTestsQuickCanvas::toolSelectionRoundTrips`;
+`UnitTestsShellKeyboard::activeToolIsExposedAndValidated`; and
+`verifyToolSelection` in `tools/ProductQuickAccessibilitySmoke/main.cpp`, which
+reads the live buttons' `checked` state back after driving the host.
 
 ## 2. Completed drags are discarded
 
@@ -61,7 +51,7 @@ the `interaction` boundary.
 completed drag and deliberately leaves the commit to its owner. The Quick host
 is that owner, and it drops the session.
 
-`LoopEditor/editorhost.cpp:3579-3586`:
+`LoopEditor/editorhost.cpp`:
 
 ```cpp
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
@@ -79,7 +69,7 @@ and have nothing committed.
 
 ### Why it is a contract change, not a patch
 
-`docs/INTERACTION_CONTRACT.md:33-34` states that the owner routes the session
+`docs/INTERACTION_CONTRACT.md` states that the owner routes the session
 through `CommandCatalog`, "which stays the only mutation path." The command it
 names was never added. All 107 IDs in `docs/loop-shell-actions.json` are
 navigation, create, color, bookmark, or render actions; none is a move or
@@ -94,24 +84,12 @@ translate.
 Per `AGENTS.md`, a required change to a protected schema or central type is
 reported rather than invented.
 
-## Why no code accompanies this document
+## Why no code accompanies gap 2
 
-Both gaps need a decision that a patch cannot make. The tool semantics are a
-feature design; the drag command is a new public contract entry with undo,
-revision-fencing, and payload questions still open. The plumbing that would
-carry the tool choice — an `activeTool` property and a `setActiveTool` invokable
-on `EditorHost`, routing through the attached canvas to the existing controller
-— was prototyped and reverted, because on its own it is a no-op. It is
-straightforward to re-derive once the semantics exist.
-
-## Local verification limit
-
-The mapped test lanes cannot be run in this checkout. `build-local/` does not
-exist, and `C:/.dev/repos/loop/.local-vcpkg/` — the `CMAKE_TOOLCHAIN_FILE`
-referenced by every build cache under `C:/.dev/build/` — has been removed.
-Restoring vcpkg and configuring are both approval-required under
-`agent-policy.json`. This document is therefore unproven by build or test; it
-records findings from source reading and search, and each claim above cites the
-file and line it was read from.
+Gap 2 needs a decision that a patch cannot make: it is a new public contract
+entry with undo, revision-fencing, and payload questions still open. The tool
+plumbing prototyped and reverted while writing this document — an `activeTool`
+property and a `setActiveTool` invokable on `EditorHost` — is exactly what gap
+1's fix now re-derives, because the semantics it needed exist.
 
 Refs #103, #104

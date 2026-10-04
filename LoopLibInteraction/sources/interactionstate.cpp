@@ -50,6 +50,33 @@ const char* getInteractionKindName(InteractionKind kind)
     return "unknown";
 }
 
+const char* getInteractionToolName(InteractionTool tool)
+{
+    switch (tool)
+    {
+        case InteractionTool::Select:
+            return "select";
+        case InteractionTool::Hand:
+            return "hand";
+    }
+
+    return "unknown";
+}
+
+std::optional<InteractionTool> interactionToolFromName(const QString& name)
+{
+    if (name == QLatin1String("select"))
+    {
+        return InteractionTool::Select;
+    }
+    if (name == QLatin1String("hand"))
+    {
+        return InteractionTool::Hand;
+    }
+
+    return std::nullopt;
+}
+
 const char* getInteractionCancelReasonName(InteractionCancelReason reason)
 {
     switch (reason)
