@@ -156,8 +156,8 @@ if ($Backend -eq "software") {
     if ($graphicsApi -in @("unknown", "null", "unrecognized", "absent")) {
         throw "Native backend run did not initialize a known graphics backend (graphics_api=$graphicsApi)."
     }
-    if ($Platform -ne "offscreen" -and $graphicsApi -eq "software") {
-        throw "Native backend run on platform $Platform fell back to the software rasterizer; the native claim cannot be made."
+    if ($graphicsApi -eq "software") {
+        throw "Native backend run on platform $Platform reported the software rasterizer; the native claim cannot be made."
     }
 }
 

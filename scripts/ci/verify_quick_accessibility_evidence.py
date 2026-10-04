@@ -146,8 +146,8 @@ def verify(
         graphics_api = observed.get("graphics_api")
         if not isinstance(graphics_api, str) or graphics_api.casefold() in UNKNOWN_GRAPHICS_APIS:
             errors.append(f"native backend evidence selected an unknown graphics backend: {graphics_api!r}")
-        if observed.get("qpa_platform") != "offscreen" and graphics_api == "software":
-            errors.append("native backend evidence fell back to the software rasterizer on a real platform")
+        if graphics_api == "software":
+            errors.append("native backend evidence fell back to the software rasterizer")
 
     if software is not None:
         if software.get("backend") != "software":
