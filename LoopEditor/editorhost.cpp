@@ -487,6 +487,39 @@ bool EditorHost::unsupported() const
     return m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Unsupported);
 }
 
+QString EditorHost::activeTool() const
+{
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    return QString::fromLatin1(pdfinteraction::getInteractionToolName(
+        interaction ? interaction->activeTool() : pdfinteraction::InteractionTool::Select));
+}
+
+bool EditorHost::setActiveTool(const QString& toolId)
+{
+    const std::optional<pdfinteraction::InteractionTool> tool = pdfinteraction::interactionToolFromName(toolId);
+    if (!tool)
+    {
+        return false;
+    }
+
+    // The controller is the single source of truth for the tool; it cancels an in-flight
+    // drag with ToolChanged (#141 AC3) and the host only forwards the operator's choice.
+    pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (!interaction)
+    {
+        return false;
+    }
+
+    if (interaction->activeTool() == *tool)
+    {
+        return true;
+    }
+
+    interaction->setActiveTool(*tool);
+    Q_EMIT activeToolChanged();
+    return true;
+}
+
 QObject* EditorHost::preflight()
 {
     return &m_preflight;
