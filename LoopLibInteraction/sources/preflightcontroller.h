@@ -41,6 +41,13 @@ class PreflightController final : public QObject
     Q_PROPERTY(PreflightFindingsModel* findingsModel READ findingsModel CONSTANT)
     Q_PROPERTY(QString operatorSummary READ operatorSummary NOTIFY stateChanged)
     Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
+    Q_PROPERTY(QString verdictDescription READ verdictDescription NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString limitationDescription READ limitationDescription NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString selectedFindingDescription READ selectedFindingDescription NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString jobDescription READ jobDescription NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString runUnavailableReason READ runUnavailableReason NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString cancelUnavailableReason READ cancelUnavailableReason NOTIFY operatorSemanticsChanged)
+    Q_PROPERTY(QString exportUnavailableReason READ exportUnavailableReason NOTIFY operatorSemanticsChanged)
 
 public:
     enum class State
@@ -55,6 +62,17 @@ public:
         Error
     };
     Q_ENUM(State)
+
+    enum class JobState
+    {
+        None,
+        Running,
+        Completed,
+        Cancelled,
+        Failed,
+        Stale
+    };
+    Q_ENUM(JobState)
 
     struct EvidenceNavigationRequest
     {
@@ -83,6 +101,14 @@ public:
     QString jobId() const { return m_jobId; }
     int progress() const noexcept { return m_progress; }
     bool hasResult() const noexcept { return m_hasResult; }
+    JobState jobState() const noexcept { return m_jobState; }
+    QString verdictDescription() const;
+    QString limitationDescription() const;
+    QString selectedFindingDescription() const;
+    QString jobDescription() const;
+    QString runUnavailableReason() const;
+    QString cancelUnavailableReason() const;
+    QString exportUnavailableReason() const;
     QByteArray serializedReport(const QString& documentPath) const;
 
     void setCurrentRevision(QString documentKey, QString documentRevision);
@@ -100,6 +126,7 @@ public:
 signals:
     void stateChanged(pdfinteraction::PreflightController::State state);
     void progressChanged(int progress);
+    void operatorSemanticsChanged();
     void navigationRequested(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
 
 private:
@@ -120,6 +147,8 @@ private:
     bool m_hasResult = false;
     State m_retainedState = State::NotChecked;
     pdf::PreflightResult m_result;
+    QString m_verdictSummary;
+    JobState m_jobState = JobState::None;
     pdf::PDFJobScheduler* m_scheduler = nullptr;
 };
 

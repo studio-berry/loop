@@ -281,6 +281,52 @@ struct Harness
     std::unique_ptr<pdfinteraction::DocumentFacade> facade;
 };
 
+struct InspectionFixture
+{
+    pdf::PreflightResult result;
+    pdf::PreflightProfileData profile;
+    pdf::PDFEvidenceGraph evidence;
+
+    InspectionFixture()
+    {
+        result.documentRevisionDigest = QString(64, QLatin1Char('a'));
+        result.effectiveProfileDigest = QString(64, QLatin1Char('b'));
+        result.coverageScope = QJsonObject{
+            { QStringLiteral("claim"), QStringLiteral("Enabled checks only.") },
+            { QStringLiteral("enabled_checks"), QJsonArray{ QStringLiteral("bleed") } }
+        };
+        pdf::PreflightCheckStatus status;
+        status.id = QStringLiteral("bleed");
+        status.status = QStringLiteral("ok");
+        result.checkStatuses.append(status);
+        profile.effectiveDigest = result.effectiveProfileDigest;
+        profile.coverageScope = result.coverageScope;
+        pdf::PreflightCheckConfig check;
+        check.id = status.id;
+        check.enabled = true;
+        check.required = true;
+        profile.checks.append(check);
+        pdf::PDFEvidenceRecord record;
+        record.id = QStringLiteral("facade-inspection-evidence");
+        record.fidelity = QStringLiteral("exact");
+        record.artifact.sha256 = result.documentRevisionDigest;
+        evidence.records.append(record);
+    }
+
+    QString addFinding()
+    {
+        pdf::PreflightFinding finding;
+        finding.checkId = QStringLiteral("bleed");
+        finding.type = QStringLiteral("bleed-missing");
+        finding.scope = QStringLiteral("page");
+        finding.page = 1;
+        finding.severity = QStringLiteral("error");
+        finding.message = QStringLiteral("Bleed is missing.");
+        result.errors.append(finding);
+        return finding.stableId();
+    }
+};
+
 }   // namespace
 
 class DocumentFacadeTest : public QObject
@@ -329,6 +375,16 @@ private slots:
     void markModifiedFencesTheCapturedRevision();
 
     void shellStatusProjectionIsPinned();
+    void operatorSnapshotTracksLifecycle();
+    void inspectionVerdictContract_data();
+    void inspectionVerdictContract();
+    void inspectionProgressAndTerminalAdmission();
+    void inspectionCancellationAndFailure();
+    void inspectionSelectionAndPlanIntent();
+    void inspectionRejectsInvalidEvidenceWithoutMutation();
+    void inspectionInvalidation_data();
+    void inspectionInvalidation();
+    void inspectionStopsWhenContextIsDestroyed();
 
     void realDocumentRoundTripsThroughCoreReaderAndWriter();
 };
@@ -1288,6 +1344,329 @@ void DocumentFacadeTest::realDocumentRoundTripsThroughCoreReaderAndWriter()
     QCOMPARE(facade.state(), pdfinteraction::DocumentState::Empty);
     QCOMPARE(context.getDocument(), nullptr);
     QCOMPARE(facade.rejectedCompletionCount(), 0);
+}
+
+void DocumentFacadeTest::operatorSnapshotTracksLifecycle()
+{
+    using namespace pdfinteraction;
+    Harness harness;
+    QString error;
+    InspectionFixture fixture;
+    QVERIFY(!harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("absent"), error));
+    QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
+    QVERIFY(!harness.facade->operatorState().revision.isValid());
+
+    QList<DocumentState> observed;
+    connect(harness.facade.get(), &DocumentFacade::operatorStateChanged, this, [&]()
+            { observed.append(harness.facade->operatorState().document); });
+    harness.submitter.runInline = false;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QCOMPARE(harness.facade->operatorState().document, DocumentState::Opening);
+    QVERIFY(!harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+    QVERIFY(harness.submitter.runDeferred(QStringLiteral("job-1")));
+    QTRY_COMPARE(harness.facade->state(), DocumentState::Ready);
+    const auto ready = harness.facade->operatorState();
+    QCOMPARE(ready.revision, harness.context.getRevision());
+    QCOMPARE(ready.documentKey, harness.context.getDocumentIdentity().documentId);
+    QCOMPARE(ready.generation, harness.facade->documentGeneration());
+    harness.facade->close();
+    QVERIFY(observed.contains(DocumentState::Opening));
+    QVERIFY(observed.contains(DocumentState::Ready));
+    QVERIFY(observed.contains(DocumentState::Closing));
+    QVERIFY(observed.contains(DocumentState::Empty));
+    QVERIFY(!harness.facade->operatorState().revision.isValid());
+
+    harness.loader.nextResult.outcome = DocumentLoadOutcome::Failed;
+    harness.loader.nextResult.typedError = QStringLiteral("document/invalid-pdf");
+    harness.submitter.runInline = true;
+    harness.facade->open(QStringLiteral("/corpus/bad.pdf"));
+    QTRY_COMPARE(harness.facade->state(), DocumentState::Error);
+    QCOMPARE(harness.facade->operatorState().failureCode, QStringLiteral("document/invalid-pdf"));
+    QVERIFY(!harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+    QCOMPARE(harness.writer.writeCount, 0);
+}
+
+void DocumentFacadeTest::inspectionVerdictContract_data()
+{
+    QTest::addColumn<int>("verdict");
+    QTest::newRow("pass") << int(pdf::PreflightVerdictState::Pass);
+    QTest::newRow("fail") << int(pdf::PreflightVerdictState::Fail);
+    QTest::newRow("incomplete") << int(pdf::PreflightVerdictState::Incomplete);
+    QTest::newRow("error") << int(pdf::PreflightVerdictState::Error);
+}
+
+void DocumentFacadeTest::inspectionVerdictContract()
+{
+    QFETCH(int, verdict);
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    switch (pdf::PreflightVerdictState(verdict))
+    {
+        case pdf::PreflightVerdictState::Pass:
+            break;
+        case pdf::PreflightVerdictState::Fail:
+            fixture.addFinding();
+            break;
+        case pdf::PreflightVerdictState::Incomplete:
+            fixture.result.inspectionComplete = false;
+            break;
+        case pdf::PreflightVerdictState::Error:
+            fixture.result.errorCode = QStringLiteral("engine-error");
+            fixture.result.errorMessage = QStringLiteral("Inspection failed.");
+            break;
+    }
+    QString error;
+    pdf::PreflightInspectionReceipt coreReceipt;
+    QVERIFY2(pdf::buildPreflightInspectionReceipt(fixture.result, fixture.profile, harness.context.getRevision(),
+                                                  fixture.evidence, coreReceipt, error),
+             qPrintable(error));
+    QCOMPARE(int(coreReceipt.verdict.state), verdict);
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    QVERIFY2(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error), qPrintable(error));
+    const auto snapshot = harness.facade->operatorState();
+    QCOMPARE(snapshot.inspection.state, pdfinteraction::DocumentInspectionState::Completed);
+    QVERIFY(snapshot.inspection.receipt);
+    QCOMPARE(snapshot.inspection.receipt->toJson(), coreReceipt.toJson());
+    QCOMPARE(snapshot.inspection.progress, 100);
+    // Both adapter shapes consume this same value without deriving identity or verdict.
+    const QString editorSummary = pdf::preflightVerdictOperatorSummary(snapshot.inspection.receipt->verdict);
+    const QJsonObject cliReceipt = snapshot.inspection.receipt->toJson();
+    QCOMPARE(editorSummary, pdf::preflightVerdictOperatorSummary(coreReceipt.verdict));
+    QCOMPARE(cliReceipt, coreReceipt.toJson());
+    QCOMPARE(snapshot.canActOnInspection(), verdict != int(pdf::PreflightVerdictState::Error));
+}
+
+void DocumentFacadeTest::inspectionProgressAndTerminalAdmission()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    QString error;
+    QSignalSpy changes(harness.facade.get(), &pdfinteraction::DocumentFacade::operatorStateChanged);
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    QVERIFY(!harness.facade->operatorState().canActOnInspection());
+    QVERIFY(!harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+    QVERIFY(!harness.facade->updateInspectionProgress(*token, -1, error));
+    QVERIFY(!harness.facade->updateInspectionProgress(*token, 101, error));
+    QVERIFY(harness.facade->updateInspectionProgress(*token, 50, error));
+    QVERIFY(!harness.facade->updateInspectionProgress(*token, 49, error));
+    auto wrongToken = *token;
+    ++wrongToken.request;
+    QVERIFY(!harness.facade->completeInspection(wrongToken, fixture.result, fixture.evidence, error));
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("absent"), error));
+    QCOMPARE(harness.facade->operatorState().inspection.progress, 50);
+    QVERIFY(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    const int terminalSignals = changes.count();
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(!harness.facade->updateInspectionProgress(*token, 100, error));
+    QVERIFY(!harness.facade->cancelInspection(*token, error));
+    QVERIFY(!harness.facade->failInspection(*token, QStringLiteral("late"), QStringLiteral("Late failure"), error));
+    QCOMPARE(changes.count(), terminalSignals);
+    QCOMPARE(harness.facade->operatorState().inspection.state, pdfinteraction::DocumentInspectionState::Completed);
+}
+
+void DocumentFacadeTest::inspectionCancellationAndFailure()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    QString error;
+    const auto cancelled = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(cancelled);
+    QVERIFY(harness.facade->cancelInspection(*cancelled, error));
+    QCOMPARE(harness.facade->operatorState().inspection.state, pdfinteraction::DocumentInspectionState::Cancelled);
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("absent"), error));
+    QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
+    QVERIFY(!harness.facade->completeInspection(*cancelled, fixture.result, fixture.evidence, error));
+    const auto failed = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(failed);
+    QVERIFY(failed->request > cancelled->request);
+    QVERIFY(!harness.facade->updateInspectionProgress(*cancelled, 30, error));
+    QVERIFY(!harness.facade->failInspection(*failed, {}, {}, error));
+    QVERIFY(harness.facade->failInspection(*failed, QStringLiteral("inspection/worker-failed"),
+                                           QStringLiteral("Worker exited."), error));
+    const auto failure = harness.facade->operatorState();
+    QCOMPARE(failure.inspection.state, pdfinteraction::DocumentInspectionState::Failed);
+    QCOMPARE(failure.inspection.failureCode, QStringLiteral("inspection/worker-failed"));
+    QCOMPARE(failure.inspection.failureMessage, QStringLiteral("Worker exited."));
+    QVERIFY(!failure.inspection.receipt);
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("absent"), error));
+    QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
+    const auto retry = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(retry);
+    QVERIFY(harness.facade->operatorState().inspection.failureCode.isEmpty());
+    QVERIFY(harness.facade->completeInspection(*retry, fixture.result, fixture.evidence, error));
+}
+
+void DocumentFacadeTest::inspectionSelectionAndPlanIntent()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    const QString findingId = fixture.addFinding();
+    QString error;
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    QVERIFY(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("unknown"), error));
+    QVERIFY(harness.facade->selectFinding(findingId, error));
+    QVERIFY(!harness.facade->requestPlan({}, error));
+    QVERIFY(harness.facade->requestPlan(QStringLiteral("add-bleed"), error));
+    const auto planned = harness.facade->operatorState();
+    QVERIFY(planned.inspection.planIntent);
+    QCOMPARE(planned.inspection.planIntent->findingId, findingId);
+    QCOMPARE(planned.inspection.planIntent->receiptIdentity, planned.inspection.receipt->identity);
+    QCOMPARE(planned.inspection.planIntent->revision, planned.revision);
+    QCOMPARE(harness.writer.writeCount, 0);
+    harness.facade->clearPlanIntent();
+    QVERIFY(!harness.facade->operatorState().inspection.planIntent);
+    QVERIFY(harness.facade->requestPlan(QStringLiteral("add-bleed"), error));
+    QVERIFY(!harness.facade->selectFinding(QStringLiteral("unknown"), error));
+    QVERIFY(harness.facade->operatorState().inspection.planIntent);
+    QVERIFY(harness.facade->selectFinding({}, error));
+    QVERIFY(!harness.facade->operatorState().inspection.planIntent);
+    QVERIFY(harness.facade->operatorState().inspection.selectedFindingId.isEmpty());
+    const auto repeat = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(repeat);
+    QVERIFY(!harness.facade->operatorState().inspection.receipt);
+}
+
+void DocumentFacadeTest::inspectionRejectsInvalidEvidenceWithoutMutation()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    QString error;
+    QVERIFY(!harness.facade->beginInspection({}, fixture.profile, error));
+    auto invalidProfile = fixture.profile;
+    invalidProfile.effectiveDigest.clear();
+    QVERIFY(!harness.facade->beginInspection(fixture.result.documentRevisionDigest, invalidProfile, error));
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    auto wrongResult = fixture.result;
+    wrongResult.documentRevisionDigest = QString(64, QLatin1Char('c'));
+    QVERIFY(!harness.facade->completeInspection(*token, wrongResult, fixture.evidence, error));
+    wrongResult = fixture.result;
+    wrongResult.effectiveProfileDigest = QString(64, QLatin1Char('c'));
+    QVERIFY(!harness.facade->completeInspection(*token, wrongResult, fixture.evidence, error));
+    auto wrongEvidence = fixture.evidence;
+    wrongEvidence.revision = harness.facade->currentRevision();
+    ++wrongEvidence.revision.cacheGeneration;
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, wrongEvidence, error));
+    fixture.addFinding();
+    fixture.result.errors.append(fixture.result.errors.first());
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!harness.facade->operatorState().inspection.receipt);
+    QCOMPARE(harness.facade->operatorState().inspection.state, pdfinteraction::DocumentInspectionState::Running);
+    fixture.result.errors.removeLast();
+    QVERIFY(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+}
+
+void DocumentFacadeTest::inspectionInvalidation_data()
+{
+    QTest::addColumn<QString>("change");
+    QTest::addColumn<bool>("completed");
+    for (const QString& change : { QStringLiteral("modify"), QStringLiteral("cache"), QStringLiteral("profile"),
+                                   QStringLiteral("reopen"), QStringLiteral("close") })
+    {
+        QTest::newRow(qPrintable(change + QStringLiteral("-running"))) << change << false;
+        QTest::newRow(qPrintable(change + QStringLiteral("-completed"))) << change << true;
+    }
+}
+
+void DocumentFacadeTest::inspectionInvalidation()
+{
+    QFETCH(QString, change);
+    QFETCH(bool, completed);
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    const QString findingId = fixture.addFinding();
+    QString error;
+    const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    if (completed)
+    {
+        QVERIFY(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+        QVERIFY(harness.facade->selectFinding(findingId, error));
+        QVERIFY(harness.facade->requestPlan(QStringLiteral("repair"), error));
+    }
+    if (change == QLatin1String("modify"))
+        harness.context.markModified();
+    else if (change == QLatin1String("cache"))
+        harness.context.invalidateCaches();
+    else if (change == QLatin1String("profile"))
+        harness.context.setEffectiveProfileIdentity(QStringLiteral("changed-profile"));
+    else if (change == QLatin1String("reopen"))
+    {
+        harness.facade->reopen();
+        QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    }
+    else
+        harness.facade->close();
+    const auto invalidated = harness.facade->operatorState();
+    const bool replaced = change == QLatin1String("reopen") || change == QLatin1String("close");
+    QCOMPARE(invalidated.inspection.state, replaced ? pdfinteraction::DocumentInspectionState::NotChecked
+                                                    : pdfinteraction::DocumentInspectionState::Stale);
+    QVERIFY(!invalidated.canActOnInspection());
+    QVERIFY(!invalidated.inspection.receipt);
+    QVERIFY(invalidated.inspection.findingIds.isEmpty());
+    QVERIFY(invalidated.inspection.selectedFindingId.isEmpty());
+    QVERIFY(!invalidated.inspection.planIntent);
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(!harness.facade->selectFinding(findingId, error));
+    QVERIFY(!harness.facade->requestPlan(QStringLiteral("repair"), error));
+    QCOMPARE(harness.writer.writeCount, 0);
+    const auto next = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    if (change == QLatin1String("close"))
+    {
+        QVERIFY(!next);
+        return;
+    }
+    QVERIFY(next);
+    QVERIFY(next->request > token->request);
+    QVERIFY(!harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(harness.facade->completeInspection(*next, fixture.result, fixture.evidence, error));
+    QCOMPARE(harness.facade->operatorState().inspection.receipt->revision, harness.context.getRevision());
+}
+
+void DocumentFacadeTest::inspectionStopsWhenContextIsDestroyed()
+{
+    auto context = std::make_unique<pdf::PDFDocumentContext>(nullptr);
+    FakeJobSubmitter submitter;
+    FakeDocumentLoader loader;
+    loader.nextResult.outcome = pdfinteraction::DocumentLoadOutcome::Loaded;
+    FakeDocumentWriter writer;
+    pdfinteraction::CommandCatalog catalog;
+    pdfinteraction::DocumentFacade facade(*context, submitter, loader, writer, catalog);
+    facade.open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(facade.state(), pdfinteraction::DocumentState::Ready);
+    InspectionFixture fixture;
+    QString error;
+    const auto token = facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
+    QVERIFY(token);
+    QVERIFY(facade.completeInspection(*token, fixture.result, fixture.evidence, error));
+    context.reset();
+    const auto absent = facade.operatorState();
+    QCOMPARE(absent.document, pdfinteraction::DocumentState::Error);
+    QCOMPARE(absent.failureCode, QStringLiteral("document/context-gone"));
+    QVERIFY(!absent.revision.isValid());
+    QVERIFY(!absent.inspection.receipt);
+    QVERIFY(!absent.canActOnInspection());
+    QVERIFY(!facade.completeInspection(*token, fixture.result, fixture.evidence, error));
+    QVERIFY(!facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
 }
 
 QTEST_GUILESS_MAIN(DocumentFacadeTest)
