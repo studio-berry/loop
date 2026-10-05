@@ -2522,6 +2522,14 @@ bool EditorHost::cancelActionList()
 
 bool EditorHost::confirmActionListPlan()
 {
+    // "Approve and run" must not execute a plan nobody reviewed: the armed path binds
+    // execution to the operator's approval of the exact plan digest on the current
+    // revision. An unreviewed plan is refused here.
+    if (!fixExecutionArmed())
+    {
+        announceDocumentState(tr("Approve the current correction plan before running it."));
+        return false;
+    }
     return runActionList();
 }
 

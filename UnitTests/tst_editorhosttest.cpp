@@ -256,6 +256,7 @@ private slots:
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
+    void confirmActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
 };
@@ -1679,6 +1680,74 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!overprintHost.previewRequiresAuthoritative());
     QVERIFY(!overprintHost.ensureAuthoritativePreview());
+}
+
+void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("unreviewed.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("unreviewed-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("unreviewed-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    // "Approve and run" must not execute an unreviewed plan: without the armed review
+    // the call is refused and nothing is published.
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.confirmActionListPlan());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("planned"));
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // The gate is the review, not the plan: the same call is admitted once armed.
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.fixExecutionArmed());
+    QVERIFY(host.confirmActionListPlan());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

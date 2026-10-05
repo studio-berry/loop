@@ -134,6 +134,7 @@ private slots:
     void rgbToCmykRefusesToWriteOverItsOwnInput();
     void repairRefusesToWriteOverItsOwnInput();
     void repairRefusesRepeatedParameterAssignment();
+    void repairRefusesStaleApprovalBeforeWrite();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
     void benchmarkWithoutPreflightProfileIsIncomplete();
@@ -967,6 +968,63 @@ void PdfToolContractTest::repairRefusesToWriteOverItsOwnInput()
     QCOMPARE(legitimate.exitCode, 0);
     QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
     QVERIFY(QFile::exists(candidatePath));
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+}
+
+void PdfToolContractTest::repairRefusesStaleApprovalBeforeWrite()
+{
+    // The gateway is the one decision point: an approval file whose plan digest does
+    // not name the analyzed plan is refused before any destination write.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const QString approvalPath = directory.filePath(QStringLiteral("approval.json"));
+    {
+        QFile approval(approvalPath);
+        QVERIFY(approval.open(QIODevice::WriteOnly));
+        const QJsonObject approvalObject{
+            { QStringLiteral("schema"), QStringLiteral("loop.governed-approval") },
+            { QStringLiteral("schema_version"), 1 },
+            { QStringLiteral("plan_digest"), QString(64, QLatin1Char('d')) },
+            { QStringLiteral("source_sha256"), QString::fromLatin1(inputDigest.toHex()) },
+            { QStringLiteral("candidate_sha256"), QString(64, QLatin1Char('e')) },
+            { QStringLiteral("approval"), QJsonObject{
+                                              { QStringLiteral("kind"), QStringLiteral("human") },
+                                              { QStringLiteral("actorId"), QStringLiteral("operator") },
+                                              { QStringLiteral("decision"), QStringLiteral("approve") },
+                                              { QStringLiteral("decidedUtc"), QStringLiteral("2026-01-01T00:00:00Z") } } }
+        };
+        QVERIFY(approval.write(QJsonDocument(approvalObject).toJson()) > 0);
+        approval.close();
+    }
+
+    const QString outputPath = directory.filePath(QStringLiteral("stale-output.pdf"));
+    const ToolRun refused = runPdfTool({ QStringLiteral("repair"),
+                                         inputPath,
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                         QStringLiteral("--param"), QStringLiteral("force=true"),
+                                         QStringLiteral("--profile"), profilePath,
+                                         QStringLiteral("--approval-file"), approvalPath,
+                                         QStringLiteral("--output"), outputPath,
+                                         QStringLiteral("--console-format"), QStringLiteral("json") });
+
+    verifyEnvelope(refused, 2, QStringLiteral("repair"));
+    const QJsonObject diagnostic = findDiagnostic(refused, QStringLiteral("repair.approval-invalid"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(refused.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("reason_code")).toString(),
+             QStringLiteral("approval-stale"));
+    QVERIFY(refused.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QVERIFY(!QFile::exists(outputPath));
     QCOMPARE(fileDigest(inputPath), inputDigest);
 }
 

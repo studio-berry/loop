@@ -1858,110 +1858,105 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         }
 
         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
-        // Stage the exact bytes through the atomic writer, then hand control to the
-        // optional commit seam while the output's final path is still untouched. The
-        // staging write is mirrored from PDFSafeFileWriter::writeData() so a short write
-        // is still reported as failure rather than as a truncated output.
-        const auto stageOutput = [&job, &fileName, &candidateData, &actionListOperationControl](QIODevice* device) -> bool
-        {
-            const qint64 written = device->write(candidateData);
-            if (written != candidateData.size())
-            {
-                return false;
-            }
+        const QString sourceRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(canonicalJson(sourceIdentities), QCryptographicHash::Sha256).toHex());
+        const QString planDigest = exportConfigurationDigest(job, sourceIdentities, effectiveProfileDigest);
 
-            if (job.beforeOutputCommit)
-            {
-                job.beforeOutputCommit(fileName);
-            }
-            return !PDFOperationControl::isOperationCancelled(&actionListOperationControl);
-        };
-        const PDFOperationResult writeResult = PDFSafeFileWriter::writeDevice(
-            fileName,
-            stageOutput,
-            job.overwriteFiles ? PDFSafeFileWriter::OverwritePolicy::Overwrite : PDFSafeFileWriter::OverwritePolicy::Fail);
-        if (!writeResult)
-        {
-            const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
-                                                                "Could not write document to '%1'.")
-                                        .arg(fileName);
-            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifestForJob(manifestPath, manifest);
-            finishProgressIfActive(activeProgress(job));
-            result.manifest = manifest;
-            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
-        }
-
-        QFile publishedArtifact(fileName);
-        if (!publishedArtifact.open(QIODevice::ReadOnly) || publishedArtifact.readAll() != candidateData)
-        {
-            const QString message = QStringLiteral("Published artifact identity does not match independent validation.");
-            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifestForJob(manifestPath, manifest);
-            finishProgressIfActive(activeProgress(job));
-            result.manifest = manifest;
-            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
-        }
-        publishedArtifact.close();
-
+        // Every PageMaster output, preflight-gated or not, publishes through the one
+        // governed gateway. The gateway stages the bytes, finalizes against the staged
+        // file (revalidate + sign off when a profile is in scope), runs the existing
+        // beforeOutputCommit seam, and only then commits to the final path.
         PDFGovernedExecutionApproval governedApproval;
         PDFGovernedExecutionRevalidation governedRevalidation;
         PDFGovernedExecutionSignOff governedSignOff;
         bool governedSignedOff = false;
+        governedApproval.planDigest = planDigest;
+        governedApproval.sourceSha256 = sourceRevisionDigest;
+        governedApproval.candidateSha256 = candidateSha256;
+        governedApproval.approval.actorId = QStringLiteral("PageMaster");
+        governedApproval.approval.decision = QStringLiteral("approve");
+        governedApproval.approval.evidenceSha256 = planDigest;
+        governedApproval.approval.decisionReference = QStringLiteral("pagemaster-plan:%1").arg(planDigest);
+        governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
         if (runPreflight)
         {
-            const QString sourceRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(canonicalJson(sourceIdentities), QCryptographicHash::Sha256).toHex());
-            const QString planDigest = exportConfigurationDigest(job, sourceIdentities, effectiveProfileDigest);
-            governedApproval.planDigest = planDigest;
-            governedApproval.sourceSha256 = sourceRevisionDigest;
-            governedApproval.candidateSha256 = candidateSha256;
             governedApproval.effectiveProfileDigest = effectiveProfileDigest;
             governedApproval.approval.kind = PDFApprovalKind::Policy;
-            governedApproval.approval.actorId = QStringLiteral("PageMaster");
-            governedApproval.approval.decision = QStringLiteral("approve");
             governedApproval.approval.policyId = QStringLiteral("pagemaster-preflight");
             governedApproval.approval.rationale = QStringLiteral("PageMaster output passed the configured preflight gate before publication.");
-            governedApproval.approval.evidenceSha256 = planDigest;
-            governedApproval.approval.decisionReference = QStringLiteral("pagemaster-plan:%1").arg(planDigest);
-            governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+        }
+        else
+        {
+            governedApproval.approval.kind = PDFApprovalKind::System;
+            governedApproval.approval.policyId = QStringLiteral("pagemaster-no-preflight");
+            governedApproval.approval.rationale = QStringLiteral("PageMaster output was published without a preflight profile.");
+        }
 
-            // PageMaster has no operation-history store in scope, so revocation
-            // cannot be resolved here; #37 centralizes execution where the chain
-            // becomes available. The profile in scope is the resolved profile.
-            PDFApprovalAuthorizationContext authorizationContext;
-            authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
-            authorizationContext.expectedProfileDigest = effectiveProfileDigest;
+        // PageMaster has no operation-history store in scope, so revocation cannot be
+        // resolved here; #37 centralizes execution where the chain becomes available.
+        PDFApprovalAuthorizationContext authorizationContext;
+        authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+        authorizationContext.expectedProfileDigest = runPreflight ? effectiveProfileDigest : QString();
 
-            const PDFOperationResult governedResult = finalizeGovernedPublication(governedApproval,
-                                                                                  planDigest,
-                                                                                  sourceRevisionDigest,
-                                                                                  candidateSha256,
-                                                                                  fileName,
-                                                                                  preflightProfile,
-                                                                                  QStringLiteral("PageMaster"),
-                                                                                  QStringLiteral("pagemaster-postflight"),
-                                                                                  &governedRevalidation,
-                                                                                  &governedSignOff,
-                                                                                  authorizationContext);
-            governedSignedOff = bool(governedResult);
+        PDFGovernedMutationRequest mutation;
+        mutation.approval = governedApproval;
+        mutation.authorization = authorizationContext;
+        mutation.planDigest = planDigest;
+        mutation.sourceSha256 = sourceRevisionDigest;
+        mutation.candidateBytes = candidateData;
+        mutation.destinationPath = fileName;
+        mutation.overwritePolicy = job.overwriteFiles ? PDFSafeFileWriter::OverwritePolicy::Overwrite : PDFSafeFileWriter::OverwritePolicy::Fail;
+        mutation.profile = runPreflight ? preflightProfile : QJsonObject();
+        mutation.profileDigest = runPreflight ? effectiveProfileDigest : QString();
+        mutation.signOffActor = QStringLiteral("PageMaster");
+        mutation.signOffPolicy = QStringLiteral("pagemaster-postflight");
+        mutation.requireRevalidation = runPreflight;
+        mutation.publishOnRevalidationFailure = runPreflight && job.forcePreflight;
+        mutation.operationControl = &actionListOperationControl;
+        if (job.beforeOutputCommit)
+        {
+            mutation.beforeCommit = [&job, &fileName]()
+            { job.beforeOutputCommit(fileName); };
+        }
+
+        PDFGovernedMutationReceipt mutationReceipt;
+        const PDFOperationResult mutationResult = pdf::executeGovernedMutation(mutation, &mutationReceipt);
+        if (!mutationResult)
+        {
+            if (mutationReceipt.status == QStringLiteral("cancelled"))
+            {
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            const QString message =
+                mutationReceipt.reasonCode == QStringLiteral("revalidation-failed")
+                    ? QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                  "Published output '%1' failed governed revalidation: %2.")
+                          .arg(fileName, mutationResult.getErrorMessage())
+                    : QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                  "Could not write document to '%1'.")
+                          .arg(fileName);
+            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+            persistManifestForJob(manifestPath, manifest);
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
+        governedRevalidation = mutationReceipt.revalidation;
+        governedSignOff = mutationReceipt.signOff;
+        governedSignedOff = governedSignOff.isValid();
+        if (runPreflight)
+        {
             setOutputGovernedPublication(manifest,
                                          int(index),
                                          governedApproval,
                                          governedRevalidation,
                                          governedSignOff,
                                          governedSignedOff,
-                                         governedSignedOff ? QStringLiteral("signed-off") : QStringLiteral("revalidation-failed"));
-            if (!governedResult && !(job.forcePreflight && governedRevalidation.bytesVerified))
-            {
-                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
-                                                                    "Published output '%1' failed governed revalidation: %2.")
-                                            .arg(fileName, governedResult.getErrorMessage());
-                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-                persistManifestForJob(manifestPath, manifest);
-                finishProgressIfActive(activeProgress(job));
-                result.manifest = manifest;
-                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
-            }
+                                         mutationReceipt.reasonCode == QStringLiteral("revalidation-forced")
+                                             ? QStringLiteral("revalidation-failed")
+                                             : QStringLiteral("signed-off"));
         }
         else
         {

@@ -39,6 +39,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QDateTime>
+#include <QTemporaryDir>
 
 namespace pdftool
 {
@@ -181,6 +182,7 @@ PDFToolExitCode statusExitCode(const pdf::PDFActionListExecutionResult& result)
 }
 
 bool recordActionListHistory(const QString& outputPath,
+                             const QString& stagedCandidatePath,
                              const QByteArray& sourceData,
                              const QByteArray& candidateData,
                              const QString& operationId,
@@ -216,37 +218,6 @@ bool recordActionListHistory(const QString& outputPath,
             *error = historyError.isEmpty() ? QStringLiteral("Could not register Action List history artifacts.") : historyError;
         return false;
     }
-    pdf::PDFOperationHistoryExecution execution;
-    execution.operationId = operationId;
-    execution.input = input.artifact;
-    execution.parameters = parameters;
-    QUuid executionId;
-    if (!history.beginExecution(execution, &executionId))
-    {
-        if (error)
-            *error = QStringLiteral("Could not begin Action List history.");
-        return false;
-    }
-    pdf::PDFOperationHistoryEvent running;
-    running.executionId = executionId;
-    running.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
-    running.status = pdf::PDFOperationHistoryStatus::Running;
-    running.operatorIdentity = QStringLiteral("PdfTool");
-    running.documentRevisionDigest = sourceSha256;
-    running.approval.kind = pdf::PDFApprovalKind::System;
-    running.approval.actorId = QStringLiteral("PdfTool");
-    running.approval.decision = QStringLiteral("approve");
-    running.approval.policyId = QStringLiteral("action-list-plan");
-    running.approval.rationale = QStringLiteral("Action List plan was validated before publication.");
-    running.approval.evidenceSha256 = planDigest;
-    running.approval.decisionReference = QStringLiteral("action-list-plan:%1").arg(planDigest);
-    running.approval.decidedUtc = QDateTime::currentDateTimeUtc();
-    if (!history.appendEvent(running))
-    {
-        if (error)
-            *error = QStringLiteral("Could not append Action List history start.");
-        return false;
-    }
 
     const QString expectedProfileDigest = preflightProfile.isEmpty() ? QString() : pdf::computeProfileDigest(preflightProfile);
     pdf::PDFApprovalAuthorizationContext authorizationContext;
@@ -259,57 +230,53 @@ bool recordActionListHistory(const QString& outputPath,
     governedApproval.sourceSha256 = sourceSha256;
     governedApproval.candidateSha256 = candidateSha256;
     governedApproval.effectiveProfileDigest = expectedProfileDigest;
-    governedApproval.approval = running.approval;
-    pdf::PDFGovernedExecutionRevalidation revalidation;
-    pdf::PDFGovernedExecutionSignOff signOff;
-    const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(governedApproval,
-                                                                                    planDigest,
-                                                                                    sourceSha256,
-                                                                                    candidateSha256,
-                                                                                    outputPath,
-                                                                                    preflightProfile,
-                                                                                    QStringLiteral("PdfTool"),
-                                                                                    QStringLiteral("action-list-postflight"),
-                                                                                    &revalidation,
-                                                                                    &signOff,
-                                                                                    authorizationContext);
-    QJsonObject governedSummary{
-        { QStringLiteral("approval"), governedApproval.toJson() },
-        { QStringLiteral("revalidation"), revalidation.toJson() },
-        { QStringLiteral("sign_off"), signOff.toJson() }
-    };
-    summary->insert(QStringLiteral("governed"), governedSummary);
-    if (!governedResult)
-    {
-        pdf::PDFOperationHistoryEvent failed;
-        failed.executionId = executionId;
-        failed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
-        failed.status = pdf::PDFOperationHistoryStatus::Failed;
-        failed.operatorIdentity = QStringLiteral("PdfTool");
-        failed.documentRevisionDigest = candidateSha256;
-        failed.resultSummary = *summary;
-        failed.approval = governedApproval.approval;
-        history.appendEvent(failed);
-        if (error)
-            *error = governedResult.getErrorMessage();
-        return false;
-    }
+    governedApproval.approval.kind = pdf::PDFApprovalKind::System;
+    governedApproval.approval.actorId = QStringLiteral("PdfTool");
+    governedApproval.approval.decision = QStringLiteral("approve");
+    governedApproval.approval.policyId = QStringLiteral("action-list-plan");
+    governedApproval.approval.rationale = QStringLiteral("Action List plan was validated before publication.");
+    governedApproval.approval.evidenceSha256 = planDigest;
+    governedApproval.approval.decisionReference = QStringLiteral("action-list-plan:%1").arg(planDigest);
+    governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
 
-    pdf::PDFOperationHistoryEvent accepted;
-    accepted.executionId = executionId;
-    accepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
-    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
-    accepted.operatorIdentity = signOff.approval.actorId;
-    accepted.documentRevisionDigest = candidateSha256;
-    accepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
-    accepted.output = output.artifact;
-    accepted.resultSummary = *summary;
-    accepted.reportArtifactSha256 = signOff.revalidationReportSha256;
-    accepted.approval = signOff.approval;
-    if (!history.appendEvent(accepted))
+    const auto recordGovernedSummary = [summary, &governedApproval](const pdf::PDFGovernedMutationReceipt& receipt)
+    {
+        summary->insert(QStringLiteral("governed"), QJsonObject{
+                                                        { QStringLiteral("approval"), governedApproval.toJson() },
+                                                        { QStringLiteral("revalidation"), receipt.revalidation.toJson() },
+                                                        { QStringLiteral("sign_off"), receipt.signOff.toJson() },
+                                                        { QStringLiteral("receipt"), receipt.toJson() } });
+        return *summary;
+    };
+
+    pdf::PDFGovernedMutationRequest mutation;
+    mutation.approval = governedApproval;
+    mutation.authorization = authorizationContext;
+    mutation.planDigest = planDigest;
+    mutation.sourceSha256 = sourceSha256;
+    mutation.candidateBytes = candidateData;
+    mutation.stagedCandidatePath = stagedCandidatePath;
+    mutation.destinationPath = outputPath;
+    mutation.overwritePolicy = pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite;
+    mutation.profile = preflightProfile;
+    mutation.profileDigest = expectedProfileDigest;
+    mutation.signOffActor = QStringLiteral("PdfTool");
+    mutation.signOffPolicy = QStringLiteral("action-list-postflight");
+    mutation.history = &history;
+    mutation.operationId = operationId;
+    mutation.inputArtifact = input.artifact;
+    mutation.parameters = parameters;
+    mutation.outputArtifact = output.artifact;
+    mutation.resultSummary = recordGovernedSummary;
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    const pdf::PDFOperationResult mutationResult = pdf::executeGovernedMutation(mutation, &receipt);
+    // Record the governed block even on a nonpublication receipt.
+    recordGovernedSummary(receipt);
+    if (!mutationResult)
     {
         if (error)
-            *error = QStringLiteral("Could not append Action List accepted history.");
+            *error = mutationResult.getErrorMessage();
         return false;
     }
     const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
@@ -480,16 +447,22 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                 }
                 else
                 {
+                    QTemporaryDir stagingDirectory;
+                    const QString stagedCandidatePath =
+                        stagingDirectory.isValid() ? stagingDirectory.filePath(QStringLiteral("candidate.pdf")) : QString();
                     QByteArray candidateData;
                     pdf::PDFDocument reopened;
-                    const pdf::PDFOperationResult serializeResult = pdf::PDFStandardConversion::writeCandidate(candidate, output, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
+                    const pdf::PDFOperationResult serializeResult =
+                        stagedCandidatePath.isEmpty()
+                            ? pdf::PDFOperationResult(QStringLiteral("Unable to create a staging directory for the Action List output."))
+                            : pdf::PDFStandardConversion::writeCandidate(candidate, stagedCandidatePath, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
                     item.insert(QStringLiteral("independent_validation"), executionResult.independentValidation);
                     if (!serializeResult)
                     {
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
                         item.insert(QStringLiteral("error"), serializeResult.getErrorMessage());
                     }
-                    else if (!readBytesFile(output, &candidateData, &error))
+                    else if (!readBytesFile(stagedCandidatePath, &candidateData, &error))
                     {
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
                         item.insert(QStringLiteral("error"), error);
@@ -498,6 +471,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                     {
                         QString historyError;
                         if (!recordActionListHistory(output,
+                                                     stagedCandidatePath,
                                                      sourceData,
                                                      candidateData,
                                                      actionList.id,
@@ -581,16 +555,25 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
         const PDFToolExitCode outputCheck = validateDestructiveOutput(options, options.actionListOutputDocument);
         if (outputCheck != PDFToolExitCode::Success)
             return outputCheck;
+        QTemporaryDir stagingDirectory;
+        const QString stagedCandidatePath =
+            stagingDirectory.isValid() ? stagingDirectory.filePath(QStringLiteral("candidate.pdf")) : QString();
         QByteArray candidateData;
         pdf::PDFDocument reopened;
-        if (const pdf::PDFOperationResult serializeResult = pdf::PDFStandardConversion::writeCandidate(candidate, options.actionListOutputDocument, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
+        if (stagedCandidatePath.isEmpty())
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-serialize-failed"),
+                             QStringLiteral("Unable to create a staging directory for the Action List output."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        if (const pdf::PDFOperationResult serializeResult = pdf::PDFStandardConversion::writeCandidate(candidate, stagedCandidatePath, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
             !serializeResult)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-serialize-failed"), serializeResult.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
         data.insert(QStringLiteral("independent_validation"), executionResult.independentValidation);
-        if (!readBytesFile(options.actionListOutputDocument, &candidateData, &error))
+        if (!readBytesFile(stagedCandidatePath, &candidateData, &error))
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-read-failed"), error);
             return PDFToolExitCode::ProcessingFailure;
@@ -598,6 +581,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
         data.insert(QStringLiteral("output"), QJsonObject{ { QStringLiteral("path"), options.actionListOutputDocument }, { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex()) } });
         QString historyError;
         if (!recordActionListHistory(options.actionListOutputDocument,
+                                     stagedCandidatePath,
                                      sourceData,
                                      candidateData,
                                      actionList.id,
