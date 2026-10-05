@@ -306,9 +306,12 @@ public:
 
 const bool registerProductionRepairOperations = []
 {
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFValidateWideFormatRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFPlanContourBleedRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFPlaceGrommetsRepair>());
+    const PDFOperationResult validateWideFormatRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFValidateWideFormatRepair>());
+    Q_ASSERT(bool(validateWideFormatRegistered));
+    const PDFOperationResult contourBleedRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFPlanContourBleedRepair>());
+    Q_ASSERT(bool(contourBleedRegistered));
+    const PDFOperationResult placeGrommetsRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFPlaceGrommetsRepair>());
+    Q_ASSERT(bool(placeGrommetsRegistered));
     return true;
 }();
 

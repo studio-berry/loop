@@ -175,6 +175,14 @@ bool parseParameters(const QStringList& assignments, QJsonObject* parameters, QS
         {
             return false;
         }
+        if (parameters->contains(key))
+        {
+            if (error)
+            {
+                *error = PDFToolTranslationContext::tr("Repair parameter '%1' was assigned more than once.").arg(key);
+            }
+            return false;
+        }
         parameters->insert(key, value);
     }
     return true;

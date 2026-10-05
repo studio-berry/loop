@@ -31,6 +31,7 @@
 #include <QCryptographicHash>
 #include <QFile>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -80,6 +81,10 @@ private slots:
     void canonicalJson_goldenVectorsMatchPinnedDigests();
     void canonicalJson_absentKeysDifferFromNull();
     void canonicalJson_scalarRootsAreWrapped();
+
+    // Registry identity bound into the plan digest (L04-01 / #33)
+    void registryDigest_isStableLowercaseHex();
+    void planDigest_matchesPinnedGoldenVector();
 
     // D2 — preview has no publication authority
     void previewDoesNotPublishWithoutGovernedGateway();
@@ -399,6 +404,49 @@ void GovernedExecutionTest::canonicalJson_scalarRootsAreWrapped()
     QCOMPARE(canonical, QByteArrayLiteral("[true]"));
 }
 
+void GovernedExecutionTest::registryDigest_isStableLowercaseHex()
+{
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    const QString first = registry.digest();
+    QCOMPARE(first, registry.digest());
+    QCOMPARE(first.size(), 64);
+    QVERIFY(QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(first).hasMatch());
+
+    // Registry identity is content-derived: two empty registries agree, and an
+    // empty registry differs from the built-in set.
+    pdf::PDFRepairRegistry isolated;
+    pdf::PDFRepairRegistry another;
+    QCOMPARE(isolated.digest(), another.digest());
+    QVERIFY(isolated.digest() != first);
+}
+
+void GovernedExecutionTest::planDigest_matchesPinnedGoldenVector()
+{
+    // Reproducibility contract for expected-plan-digests.json: two version-1
+    // plans — add-bleed {"bleed_mm": 3.0, "force": true} and
+    // production.validate-wide-format {"geometry": {}} — source SHA-256
+    // "aa...a" (64 characters), save policy saveAsNewArtifact("golden vector")
+    // on both plans and the envelope, and the built-in registry digest.
+    pdf::PDFRepairPlan primitive;
+    primitive.operationId = QStringLiteral("add-bleed");
+    primitive.parameters = QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                        { QStringLiteral("force"), true } };
+    pdf::PDFRepairPlan production;
+    production.operationId = QStringLiteral("production.validate-wide-format");
+    production.parameters = QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } };
+    const QString sourceSha256 = QStringLiteral("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    const pdf::PDFOperationSavePolicy savePolicy = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("golden vector"));
+    primitive.savePolicy = savePolicy;
+    production.savePolicy = savePolicy;
+
+    const QJsonObject expected = loadGoldenObject(QStringLiteral("expected-plan-digests.json"));
+    QVERIFY2(!expected.isEmpty(), "expected-plan-digests.json must exist");
+    const QString pinned = expected.value(QStringLiteral("plan_digest")).toString();
+    QVERIFY(!pinned.isEmpty());
+
+    QCOMPARE(pdf::computeOperationPlanDigest({ primitive, production }, sourceSha256, savePolicy), pinned);
+}
+
 void GovernedExecutionTest::previewDoesNotPublishWithoutGovernedGateway()
 {
     pdf::PDFDocumentBuilder builder;
@@ -459,12 +507,14 @@ void GovernedExecutionTest::planDigest_excludesDestinationPath()
         { QStringLiteral("schema_version"), QStringLiteral("1.0") },
         { QStringLiteral("source_sha256"), sourceSha256 },
         { QStringLiteral("save_policy"), savePolicy.toJson() },
+        { QStringLiteral("registry_digest"), pdf::PDFRepairRegistry::instance().digest() },
         { QStringLiteral("plans"), QJsonArray{ plan.toJson() } }
     };
     const QJsonObject canonical = pdf::canonicalizeJson(envelope).toObject();
     QVERIFY(!canonical.contains(QStringLiteral("destination")));
     QVERIFY(!canonical.contains(QStringLiteral("output_path")));
     QVERIFY(!canonical.contains(QStringLiteral("outputPath")));
+    QVERIFY(canonical.contains(QStringLiteral("registry_digest")));
     QCOMPARE(digest, sha256Hex(pdf::canonicalJson(envelope)));
 
     // Destination is an execution input only: two destinations share one plan digest.

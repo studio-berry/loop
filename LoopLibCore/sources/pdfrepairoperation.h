@@ -252,18 +252,32 @@ public:
     QJsonObject descriptor() const;
 };
 
+/// Shared JSON-schema fragment validator for operation parameters. The repair
+/// transaction and the Action List planner judge parameters by this one rule.
+LOOPLIBCORESHARED_EXPORT bool validateJsonSchemaFragment(const QJsonValue& value,
+                                                         const QJsonObject& schema,
+                                                         const QString& path,
+                                                         QStringList* errors);
+
 class LOOPLIBCORESHARED_EXPORT PDFRepairRegistry
 {
 public:
+    /// Production uses instance(); a default-constructed registry is isolated
+    /// from the singleton so tests and tools can register without side effects.
+    PDFRepairRegistry() = default;
     static PDFRepairRegistry& instance();
 
-    void registerOperation(std::unique_ptr<PDFRepairOperation> operation);
+    /// Refuses a null operation, an empty id, and an id that is already
+    /// registered; the first registration wins.
+    PDFOperationResult registerOperation(std::unique_ptr<PDFRepairOperation> operation);
     const PDFRepairOperation* find(const QString& operationId) const;
     QStringList operationIds() const;
     QJsonArray descriptors() const;
+    /// Canonical identity of the registered {id, version} set, sorted by id.
+    /// Bound into every operation-plan digest.
+    QString digest() const;
 
 private:
-    PDFRepairRegistry() = default;
     PDFRepairRegistry(const PDFRepairRegistry&) = delete;
     PDFRepairRegistry& operator=(const PDFRepairRegistry&) = delete;
     std::map<QString, std::unique_ptr<PDFRepairOperation>> m_operations;
@@ -281,6 +295,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairTransactionOptions
     /// this path is refused; an empty value only disables that path check, not
     /// the policy check.
     QString sourcePath;
+    /// When set, analyze() refuses unless the source bytes hash to this
+    /// revision, before any operation runs. An empty value keeps the
+    /// historical behavior.
+    QString expectedSourceSha256;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFRepairTransaction

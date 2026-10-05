@@ -26,6 +26,37 @@ the semantic plan digest (D3). They are bound later as execution inputs to
 destination must not silently change semantic operation identity. Trusted-source and
 in-place overwrite refusal stays fail-closed.
 
+## Registry and plan identity
+
+`pdf::PDFRepairRegistry` is the single registration authority for repair operations.
+`registerOperation` refuses a null operation, an empty id, and an id that is already
+registered (the first registration wins), so a duplicate cannot silently shadow a
+built-in. `PDFRepairRegistry::instance()` remains the production registry; a
+default-constructed registry is isolated for tests and tools.
+
+`PDFRepairRegistry::digest()` is the versioned registry identity: SHA-256 over the
+canonical `{"id", "version"}` set of every registered operation, sorted by id.
+`computeOperationPlanDigest()` carries it as `registry_digest` inside the
+`operation-plan` envelope, so any change to the registered id/version set moves every
+plan digest and invalidates approvals bound to an earlier registry. The envelope
+`schema_version` stays `"1.0"`: the added key is non-breaking because nothing durable
+stores raw envelopes.
+
+`PDFRepairTransaction::add()` validates `parameters` against the operation's
+`parameterSchema()` with the shared `validateJsonSchemaFragment()` — the same validator
+the Action List planner uses — and refuses before any candidate work. A repeated
+`--param` key is refused by `PdfTool repair` for the same reason: last-wins assignment
+hides which value the operator meant.
+
+`PDFRepairTransactionOptions::expectedSourceSha256` binds a transaction to the source
+revision it was planned against; `analyze()` refuses a mismatch with "Repair plan is
+bound to a stale source revision." before any operation runs. An empty value keeps the
+historical behavior.
+
+Migration decision: the legacy `pdftool addbleed` and `rgbtocmyk` commands remain
+registry-metadata consumers that bypass `PDFRepairTransaction`; converging them onto
+the generic `repair` path is L04-05 (#37) scope.
+
 ## Previews
 
 | Artifact | Schema | Contents |

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
 #include "pdfrepairoperation.h"
@@ -30,6 +31,7 @@
 #include <QPainter>
 
 #include <algorithm>
+#include <memory>
 
 #include <QBuffer>
 #include <QCryptographicHash>
@@ -62,6 +64,25 @@ public:
     pdf::PDFOperationResult apply(pdf::PDFDocument*, const pdf::PDFRepairPlan&, pdf::PDFRepairResult*) const override
     {
         return pdf::PDFOperationResult(QStringLiteral("intentional test failure"));
+    }
+};
+
+/// A registration-contract violator: an operation without an id.
+class UnnamedRepair final : public pdf::PDFRepairOperation
+{
+public:
+    QString id() const override { return QString(); }
+    pdf::PDFRepairRisk risk() const override { return pdf::PDFRepairRisk::Low; }
+    pdf::PDFRepairDomains domains() const override { return pdf::PDFRepairDomain::Metadata; }
+
+    pdf::PDFOperationResult analyze(const pdf::PDFDocument&, const QJsonObject&, pdf::PDFRepairPlan*) const override
+    {
+        return pdf::PDFOperationResult(true);
+    }
+
+    pdf::PDFOperationResult apply(pdf::PDFDocument*, const pdf::PDFRepairPlan&, pdf::PDFRepairResult*) const override
+    {
+        return pdf::PDFOperationResult(true);
     }
 };
 
@@ -125,6 +146,10 @@ private slots:
     void declaredStructuralAndSpecializedValidatorsRequireActualProof();
     void declaredValidators_rejectMalformedProfileBeforePublish();
     void declaredValidators_failClosedOnIncompleteInspection();
+    void duplicateRegistration_isRefused();
+    void unknownOperation_isRefusedBeforeCandidate();
+    void ambiguousParameters_areRefusedBeforeAnalyze();
+    void staleRevision_isRefusedBeforeAnalyze();
 };
 
 void RepairOperationTest::standardsConversionRejectsLegacyContract()
@@ -362,7 +387,8 @@ void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
 
     // Stricter than declared is accepted and does not change the declared policy.
     pdf::PDFRepairTransaction stricter(source);
-    QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")), QJsonObject{}));
+    QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")),
+                         QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } }));
     QVERIFY(stricter.setRequestedSavePolicy(pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller wants a rewrite"))));
     QCOMPARE(stricter.savePolicy().mode, pdf::PDFSaveMode::IncrementalAppend);
 
@@ -531,12 +557,14 @@ void RepairOperationTest::sourceBytesSurviveSuccessCancelAndFailure()
     }
 
     // failure: an operation whose precondition is unsupported (rgb-to-cmyk
-    // needs a document with color images) is refused before any mutation. A
-    // failing operation is reported as Unsupported rather than as a failed
-    // analyze(), so the failure leg pins the status as well as the bytes.
+    // cannot proceed without a valid CMYK target profile) is refused before
+    // any mutation. A failing operation is reported as Unsupported rather than
+    // as a failed analyze(), so the failure leg pins the status as well as the
+    // bytes.
     {
         pdf::PDFRepairTransaction transaction(source, options);
-        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")), QJsonObject()));
+        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")),
+                                QJsonObject{ { QStringLiteral("target_icc_base64"), QStringLiteral("AA==") } }));
         QVERIFY(transaction.analyze());
         QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Unsupported);
         QVERIFY(!transaction.apply());
@@ -577,7 +605,8 @@ void RepairOperationTest::unsupportedPrecondition_preventsApply()
     const pdf::PDFDocument source = builder.build();
 
     pdf::PDFRepairTransaction transaction(source);
-    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")), QJsonObject()));
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")),
+                            QJsonObject{ { QStringLiteral("target_icc_base64"), QStringLiteral("AA==") } }));
     QVERIFY(transaction.analyze());
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Unsupported);
     QVERIFY(!transaction.apply());
@@ -1016,6 +1045,111 @@ void RepairOperationTest::declaredValidators_failClosedOnIncompleteInspection()
     QVERIFY(result.status == pdf::PDFRepairStatus::Failed || result.status == pdf::PDFRepairStatus::Incomplete);
     QVERIFY(!result.validations.isEmpty());
     QVERIFY(result.validations.first().status != pdf::PDFRepairStatus::Passed);
+}
+
+void RepairOperationTest::duplicateRegistration_isRefused()
+{
+    pdf::PDFRepairRegistry registry;
+    auto firstOperation = std::make_unique<FailingRepair>();
+    const pdf::PDFRepairOperation* firstPointer = firstOperation.get();
+    QVERIFY(registry.registerOperation(std::move(firstOperation)));
+
+    const pdf::PDFOperationResult duplicate = registry.registerOperation(std::make_unique<FailingRepair>());
+    QVERIFY(!duplicate);
+    QVERIFY(duplicate.getErrorMessage().contains(QStringLiteral("already registered")));
+    QCOMPARE(registry.operationIds().size(), 1);
+    // A refused duplicate must not shadow the first registration.
+    QCOMPARE(registry.find(QStringLiteral("test-failing")), firstPointer);
+
+    // Null and unnamed registrations are refused by the same gate.
+    QVERIFY(!registry.registerOperation(std::unique_ptr<pdf::PDFRepairOperation>()));
+    QVERIFY(!registry.registerOperation(std::make_unique<UnnamedRepair>()));
+    QCOMPARE(registry.operationIds().size(), 1);
+}
+
+void RepairOperationTest::unknownOperation_isRefusedBeforeCandidate()
+{
+    QVERIFY(pdf::PDFRepairRegistry::instance().find(QStringLiteral("no-such-operation")) == nullptr);
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    const pdf::PDFOperationResult refused = transaction.add(nullptr, QJsonObject());
+    QVERIFY(!refused);
+    QVERIFY(!refused.getErrorMessage().isEmpty());
+    QVERIFY(transaction.plans().isEmpty());
+    QVERIFY(transaction.candidate() == nullptr);
+}
+
+void RepairOperationTest::ambiguousParameters_areRefusedBeforeAnalyze()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFRepairOperation* addBleed = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(addBleed);
+
+    pdf::PDFRepairTransaction transaction(source);
+    const pdf::PDFOperationResult unknownParameter =
+        transaction.add(addBleed, QJsonObject{ { QStringLiteral("not_a_param"), 1 } });
+    QVERIFY(!unknownParameter);
+    QVERIFY(unknownParameter.getErrorMessage().contains(QStringLiteral("not_a_param")));
+
+    const pdf::PDFOperationResult wrongType =
+        transaction.add(addBleed, QJsonObject{ { QStringLiteral("bleed_mm"), QStringLiteral("three") } });
+    QVERIFY(!wrongType);
+    QVERIFY(wrongType.getErrorMessage().contains(QStringLiteral("bleed_mm")));
+
+    QVERIFY(transaction.plans().isEmpty());
+    QVERIFY(transaction.candidate() == nullptr);
+
+    // Refused parameters must not consume a transaction entry: the legitimate
+    // parameter set still plans.
+    QVERIFY(transaction.add(addBleed, QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(transaction.analyze());
+    QCOMPARE(transaction.plans().size(), 1);
+}
+
+void RepairOperationTest::staleRevision_isRefusedBeforeAnalyze()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument built = builder.build();
+    const QByteArray bytes = writeSerializedBytes(built);
+    QVERIFY(!bytes.isEmpty());
+
+    // Only a byte-backed document has a source revision to bind against.
+    auto noPassword = [](bool*)
+    { return QString(); };
+    pdf::PDFDocumentReader reader(nullptr, noPassword, false, false);
+    const pdf::PDFDocument source = reader.readFromBuffer(bytes);
+    QCOMPARE(int(reader.getReadingResult()), int(pdf::PDFDocumentReader::Result::OK));
+    const QString sourceSha256 = QString::fromLatin1(source.getSourceDataHash().toHex());
+    QVERIFY(!sourceSha256.isEmpty());
+
+    pdf::PDFRepairTransactionOptions staleOptions;
+    staleOptions.expectedSourceSha256 = QString(64, QLatin1Char('f'));
+    pdf::PDFRepairTransaction stale(source, staleOptions);
+    QVERIFY(stale.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                      QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    const pdf::PDFOperationResult refused = stale.analyze();
+    QVERIFY(!refused);
+    QCOMPARE(refused.getErrorMessage(), QStringLiteral("Repair plan is bound to a stale source revision."));
+    QCOMPARE(stale.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(stale.plans().isEmpty());
+    QVERIFY(stale.candidate() == nullptr);
+
+    // The matching revision is accepted and plans normally.
+    pdf::PDFRepairTransactionOptions boundOptions;
+    boundOptions.expectedSourceSha256 = sourceSha256;
+    pdf::PDFRepairTransaction bound(source, boundOptions);
+    QVERIFY(bound.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                      QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(bound.analyze());
+    QCOMPARE(bound.status(), pdf::PDFRepairStatus::Planned);
+    QCOMPARE(bound.plans().size(), 1);
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

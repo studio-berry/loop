@@ -81,6 +81,7 @@ QString computeOperationPlanDigest(const QList<PDFRepairPlan>& plans,
         { QStringLiteral("schema_version"), QStringLiteral("1.0") },
         { QStringLiteral("source_sha256"), sourceSha256.trimmed().toLower() },
         { QStringLiteral("save_policy"), savePolicy.toJson() },
+        { QStringLiteral("registry_digest"), PDFRepairRegistry::instance().digest() },
         { QStringLiteral("plans"), plansToJson(plans) }
     };
     return digestHex(canonicalJson(envelope));

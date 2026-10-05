@@ -21,13 +21,19 @@
 // SOFTWARE.
 
 #include "pdfrepairoperation.h"
+#include "pdfartifactidentity.h"
 #include "pdfstandardconversion.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
 #include "preflightengine.h"
 
 #include <QMap>
+#include <QCryptographicHash>
+#include <QJsonDocument>
+#include <QJsonValue>
+
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace pdf
@@ -99,7 +105,138 @@ QJsonObject expectedChangesObject(const PDFRepairExpectedChanges& expected)
     };
 }
 
+bool isJsonNumber(const QJsonValue& value)
+{
+    return value.isDouble() && std::isfinite(value.toDouble());
+}
+
+bool matchesType(const QJsonValue& value, const QString& type)
+{
+    if (type == QStringLiteral("object"))
+        return value.isObject();
+    if (type == QStringLiteral("array"))
+        return value.isArray();
+    if (type == QStringLiteral("string"))
+        return value.isString();
+    if (type == QStringLiteral("boolean"))
+        return value.isBool();
+    if (type == QStringLiteral("number"))
+        return isJsonNumber(value);
+    if (type == QStringLiteral("integer"))
+    {
+        return isJsonNumber(value) && std::floor(value.toDouble()) == value.toDouble();
+    }
+    return false;
+}
+
+bool valuesEqual(const QJsonValue& left, const QJsonValue& right)
+{
+    return QJsonDocument(left.toObject()).toJson(QJsonDocument::Compact) ==
+               QJsonDocument(right.toObject()).toJson(QJsonDocument::Compact) ||
+           left == right;
+}
+
+void appendError(QStringList* errors, const QString& error)
+{
+    if (errors)
+    {
+        errors->append(error);
+    }
+}
+
 }   // namespace
+
+bool validateJsonSchemaFragment(const QJsonValue& value,
+                                const QJsonObject& schema,
+                                const QString& path,
+                                QStringList* errors)
+{
+    const QString type = schema.value(QStringLiteral("type")).toString();
+    if (!type.isEmpty() && !matchesType(value, type))
+    {
+        appendError(errors, QStringLiteral("%1 must be a %2.").arg(path, type));
+        return false;
+    }
+
+    const QJsonArray enumValues = schema.value(QStringLiteral("enum")).toArray();
+    if (!enumValues.isEmpty())
+    {
+        bool found = false;
+        for (const QJsonValue& allowed : enumValues)
+        {
+            if (valuesEqual(value, allowed))
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            appendError(errors, QStringLiteral("%1 contains a value outside the allowed set.").arg(path));
+            return false;
+        }
+    }
+
+    if (value.isString() && schema.contains(QStringLiteral("minLength")) &&
+        value.toString().size() < schema.value(QStringLiteral("minLength")).toInt())
+    {
+        appendError(errors, QStringLiteral("%1 is shorter than the minimum length.").arg(path));
+        return false;
+    }
+
+    if (isJsonNumber(value))
+    {
+        const double number = value.toDouble();
+        if (schema.contains(QStringLiteral("minimum")) && number < schema.value(QStringLiteral("minimum")).toDouble())
+        {
+            appendError(errors, QStringLiteral("%1 is below the minimum.").arg(path));
+            return false;
+        }
+        if (schema.contains(QStringLiteral("maximum")) && number > schema.value(QStringLiteral("maximum")).toDouble())
+        {
+            appendError(errors, QStringLiteral("%1 is above the maximum.").arg(path));
+            return false;
+        }
+    }
+
+    if (!value.isObject())
+    {
+        return true;
+    }
+
+    const QJsonObject object = value.toObject();
+    const QJsonObject properties = schema.value(QStringLiteral("properties")).toObject();
+    const QJsonArray required = schema.value(QStringLiteral("required")).toArray();
+    for (const QJsonValue& requiredValue : required)
+    {
+        const QString key = requiredValue.toString();
+        if (!object.contains(key))
+        {
+            appendError(errors, QStringLiteral("%1.%2 is required.").arg(path, key));
+        }
+    }
+
+    if (schema.value(QStringLiteral("additionalProperties")).toBool(true) == false)
+    {
+        for (auto it = object.begin(); it != object.end(); ++it)
+        {
+            if (!properties.contains(it.key()))
+            {
+                appendError(errors, QStringLiteral("%1.%2 is not a supported parameter.").arg(path, it.key()));
+            }
+        }
+    }
+
+    bool valid = true;
+    for (auto it = object.begin(); it != object.end(); ++it)
+    {
+        if (properties.contains(it.key()))
+        {
+            valid = validateJsonSchemaFragment(it.value(), properties.value(it.key()).toObject(), path + QLatin1Char('.') + it.key(), errors) && valid;
+        }
+    }
+    return valid;
+}
 
 QString pdfRepairStatusName(PDFRepairStatus status)
 {
@@ -478,13 +615,23 @@ PDFRepairRegistry& PDFRepairRegistry::instance()
     return registry;
 }
 
-void PDFRepairRegistry::registerOperation(std::unique_ptr<PDFRepairOperation> operation)
+PDFOperationResult PDFRepairRegistry::registerOperation(std::unique_ptr<PDFRepairOperation> operation)
 {
-    if (!operation || operation->id().isEmpty())
+    if (!operation)
     {
-        return;
+        return PDFOperationResult(QStringLiteral("Repair operation must not be null."));
     }
-    m_operations.insert_or_assign(operation->id(), std::move(operation));
+    const QString operationId = operation->id();
+    if (operationId.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("Repair operation id must not be empty."));
+    }
+    if (m_operations.find(operationId) != m_operations.cend())
+    {
+        return PDFOperationResult(QStringLiteral("Repair operation '%1' is already registered.").arg(operationId));
+    }
+    m_operations.emplace(operationId, std::move(operation));
+    return PDFOperationResult(true);
 }
 
 const PDFRepairOperation* PDFRepairRegistry::find(const QString& operationId) const
@@ -513,6 +660,18 @@ QJsonArray PDFRepairRegistry::descriptors() const
     return result;
 }
 
+QString PDFRepairRegistry::digest() const
+{
+    QJsonArray identities;
+    for (const auto& entry : m_operations)
+    {
+        identities.append(QJsonObject{
+            { QStringLiteral("id"), entry.first },
+            { QStringLiteral("version"), entry.second->version() } });
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(identities), QCryptographicHash::Sha256).toHex());
+}
+
 PDFRepairTransaction::PDFRepairTransaction(const PDFDocument& source,
                                            PDFRepairTransactionOptions options) :
     m_source(&source),
@@ -530,6 +689,12 @@ PDFOperationResult PDFRepairTransaction::add(const PDFRepairOperation* operation
     if (m_entries.size() >= m_options.maxOperations)
     {
         return PDFOperationResult(QStringLiteral("Repair transaction operation limit exceeded."));
+    }
+    QStringList parameterErrors;
+    const bool parametersValid = validateJsonSchemaFragment(QJsonValue(parameters), operation->parameterSchema(), QStringLiteral("parameters"), &parameterErrors);
+    if (!parametersValid || !parameterErrors.isEmpty())
+    {
+        return PDFOperationResult(parameterErrors.join(QStringLiteral("; ")));
     }
     m_entries.append({ operation, parameters });
     m_analyzed = false;
@@ -555,6 +720,16 @@ PDFOperationResult PDFRepairTransaction::analyze()
     {
         m_status = PDFRepairStatus::Failed;
         return PDFOperationResult(QStringLiteral("Repair transaction source is null."));
+    }
+
+    if (!m_options.expectedSourceSha256.isEmpty())
+    {
+        const QString actualSourceSha256 = QString::fromLatin1(m_source->getSourceDataHash().toHex()).toLower();
+        if (m_options.expectedSourceSha256.trimmed().toLower() != actualSourceSha256)
+        {
+            m_status = PDFRepairStatus::Failed;
+            return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
+        }
     }
 
     for (const Entry& entry : m_entries)
