@@ -815,6 +815,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
             stepResult.status = PDFActionListStepStatus::Succeeded;
             stepResult.plan = QJsonObject{
                 { QStringLiteral("operation"), operation->id() },
+                { QStringLiteral("save_policy"), operation->savePolicy().toJson() },
                 { QStringLiteral("selection"), selection.toJson() }
             };
             populateAffectedScope(&stepResult, selection, PDFRepairPlan());
