@@ -207,12 +207,14 @@ bool validateJsonSchemaFragment(const QJsonValue& value,
     const QJsonObject object = value.toObject();
     const QJsonObject properties = schema.value(QStringLiteral("properties")).toObject();
     const QJsonArray required = schema.value(QStringLiteral("required")).toArray();
+    bool valid = true;
     for (const QJsonValue& requiredValue : required)
     {
         const QString key = requiredValue.toString();
         if (!object.contains(key))
         {
             appendError(errors, QStringLiteral("%1.%2 is required.").arg(path, key));
+            valid = false;
         }
     }
 
@@ -223,11 +225,11 @@ bool validateJsonSchemaFragment(const QJsonValue& value,
             if (!properties.contains(it.key()))
             {
                 appendError(errors, QStringLiteral("%1.%2 is not a supported parameter.").arg(path, it.key()));
+                valid = false;
             }
         }
     }
 
-    bool valid = true;
     for (auto it = object.begin(); it != object.end(); ++it)
     {
         if (properties.contains(it.key()))
@@ -691,8 +693,7 @@ PDFOperationResult PDFRepairTransaction::add(const PDFRepairOperation* operation
         return PDFOperationResult(QStringLiteral("Repair transaction operation limit exceeded."));
     }
     QStringList parameterErrors;
-    const bool parametersValid = validateJsonSchemaFragment(QJsonValue(parameters), operation->parameterSchema(), QStringLiteral("parameters"), &parameterErrors);
-    if (!parametersValid || !parameterErrors.isEmpty())
+    if (!validateJsonSchemaFragment(QJsonValue(parameters), operation->parameterSchema(), QStringLiteral("parameters"), &parameterErrors))
     {
         return PDFOperationResult(parameterErrors.join(QStringLiteral("; ")));
     }

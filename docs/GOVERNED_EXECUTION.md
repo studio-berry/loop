@@ -44,7 +44,9 @@ stores raw envelopes.
 
 `PDFRepairTransaction::add()` validates `parameters` against the operation's
 `parameterSchema()` with the shared `validateJsonSchemaFragment()` — the same validator
-the Action List planner uses — and refuses before any candidate work. A repeated
+the Action List planner uses — and refuses before any candidate work. The validator
+fails whenever it records a violation, so an unknown key or a missing required
+parameter is refused on the Action List planning path too. A repeated
 `--param` key is refused by `PdfTool repair` for the same reason: last-wins assignment
 hides which value the operator meant.
 

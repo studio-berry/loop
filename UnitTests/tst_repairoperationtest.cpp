@@ -150,6 +150,7 @@ private slots:
     void unknownOperation_isRefusedBeforeCandidate();
     void ambiguousParameters_areRefusedBeforeAnalyze();
     void staleRevision_isRefusedBeforeAnalyze();
+    void validateJsonSchemaFragment_reportsStructuralViolations();
 };
 
 void RepairOperationTest::standardsConversionRejectsLegacyContract()
@@ -1150,6 +1151,35 @@ void RepairOperationTest::staleRevision_isRefusedBeforeAnalyze()
     QVERIFY(bound.analyze());
     QCOMPARE(bound.status(), pdf::PDFRepairStatus::Planned);
     QCOMPARE(bound.plans().size(), 1);
+}
+
+void RepairOperationTest::validateJsonSchemaFragment_reportsStructuralViolations()
+{
+    const QJsonObject schema{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("geometry") } },
+        { QStringLiteral("properties"), QJsonObject{ { QStringLiteral("geometry"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } } } }
+    };
+
+    // A recorded violation always fails the validator, so callers that only
+    // consume the bool (the Action List planner) refuse it too.
+    QStringList errors;
+    QVERIFY(!pdf::validateJsonSchemaFragment(QJsonValue(QJsonObject()), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("geometry is required")));
+
+    errors.clear();
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("geometry"), QJsonObject() }, { QStringLiteral("extra"), 1 } }),
+        schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("extra is not a supported parameter")));
+
+    errors.clear();
+    QVERIFY(pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } }), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.isEmpty());
+
+    QVERIFY(!pdf::validateJsonSchemaFragment(QJsonValue(QJsonObject()), schema, QStringLiteral("params"), nullptr));
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

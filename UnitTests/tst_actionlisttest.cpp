@@ -159,6 +159,7 @@ private slots:
     void standardsContractRequiresMigration();
     void standardsRequirementSurvivesLaterSteps();
     void rejectsUnknownOperationAndWrongParameterType();
+    void rejectsUnknownAndMissingStepParameters();
     void dryRunDoesNotMutateSource();
     void executesRegisteredOperationOnCandidate();
     void cancellationLeavesSourceUntouched();
@@ -281,6 +282,30 @@ void ActionListTest::rejectsUnknownOperationAndWrongParameterType()
     QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("Unknown operation")));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("force must be a boolean")));
+}
+
+void ActionListTest::rejectsUnknownAndMissingStepParameters()
+{
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("ambiguous") },
+                                             { QStringLiteral("name"), QStringLiteral("Ambiguous") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleedmillimeters"), 3.0 } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("convert") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("rgb-to-cmyk") },
+                                                                                { QStringLiteral("params"), QJsonObject() } } } } },
+                                         &actionList));
+    QStringList errors;
+    QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
+    const QString joined = errors.join(QLatin1Char('\n'));
+    QVERIFY(joined.contains(QStringLiteral("bleedmillimeters is not a supported parameter")));
+    QVERIFY(joined.contains(QStringLiteral("target_icc_base64 is required")));
 }
 
 void ActionListTest::dryRunDoesNotMutateSource()
