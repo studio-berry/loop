@@ -82,6 +82,13 @@ QString digestJson(const QJsonObject& object)
 PDFOperationResult validatePreviewPlanDigest(const PDFRepairTransaction& transaction,
                                              const QString& planDigest)
 {
+    if (!transaction.candidate() ||
+        (transaction.status() != PDFRepairStatus::Applied &&
+         transaction.status() != PDFRepairStatus::Passed &&
+         transaction.status() != PDFRepairStatus::Incomplete))
+    {
+        return PDFOperationResult(QStringLiteral("Preview requires a candidate applied from the current operation plan."));
+    }
     if (!isPDFSha256(planDigest))
     {
         return PDFOperationResult(QStringLiteral("Preview plan digest is missing or malformed."));
@@ -96,16 +103,13 @@ PDFOperationResult validatePreviewPlanDigest(const PDFRepairTransaction& transac
     return PDFOperationResult(true);
 }
 
-/// Removes the artifacts a preview call created: the candidate file, the render
-/// PNGs it rendered, and the candidate parent directory when this call created
-/// it and it is now empty. A caller-named path is removed because the artifact
-/// was never approved or published (the residue contract).
 void removePreviewResidue(const QString& candidatePath,
+                          bool candidateWritten,
                           bool candidateParentExisted,
                           const QString& renderDirectory,
                           const QVector<PDFRepairPageVisualDiff>& pages)
 {
-    if (!candidatePath.isEmpty())
+    if (candidateWritten && !candidatePath.isEmpty())
     {
         QFile::remove(candidatePath);
     }
@@ -410,7 +414,15 @@ PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
 
     const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
+    bool candidateWritten = false;
     PDFRepairDiffOptions options;
+    options.previewStageHook = [&candidateWritten](const QString& stage)
+    {
+        if (stage == QStringLiteral("candidate-committed"))
+        {
+            candidateWritten = true;
+        }
+    };
     options.renderVisualDiff = false;
     options.fidelity = PDFRepairPreviewFidelity::Exact;
     options.operationControl = transaction.operationControl();
@@ -418,7 +430,7 @@ PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, options, &report);
     if (previewDidNotComplete(compareResult, report.status))
     {
-        removePreviewResidue(candidatePath, candidateParentExisted, options.renderDirectory, report.pages);
+        removePreviewResidue(candidatePath, candidateWritten, candidateParentExisted, options.renderDirectory, report.pages);
     }
     if (!compareResult)
     {
@@ -454,7 +466,19 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
 
     const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
+    bool candidateWritten = false;
     PDFRepairDiffOptions visualOptions = options;
+    visualOptions.previewStageHook = [&candidateWritten, stageHook = options.previewStageHook](const QString& stage)
+    {
+        if (stage == QStringLiteral("candidate-committed"))
+        {
+            candidateWritten = true;
+        }
+        if (stageHook)
+        {
+            stageHook(stage);
+        }
+    };
     visualOptions.renderVisualDiff = true;
     visualOptions.compareMetadata = false;
     visualOptions.compareResources = false;
@@ -469,7 +493,7 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, visualOptions, &report);
     if (previewDidNotComplete(compareResult, report.status))
     {
-        removePreviewResidue(candidatePath, candidateParentExisted, visualOptions.renderDirectory, report.pages);
+        removePreviewResidue(candidatePath, candidateWritten, candidateParentExisted, visualOptions.renderDirectory, report.pages);
     }
     if (!compareResult)
     {
@@ -501,10 +525,10 @@ PDFApprovalAuthorization resolveApprovalAuthorization(const PDFGovernedExecution
     };
 
     const PDFApprovalRecord& record = approval.approval;
-    if (!approvalAuthorizesPublication(record))
+    if (!record.isValid() || !approvalAuthorizesPublication(record))
     {
         return refuse(QStringLiteral("approval-unauthorized"),
-                      QStringLiteral("The approval does not carry an affirmative non-None decision."));
+                      QStringLiteral("The approval record is invalid or does not carry an affirmative non-None decision."));
     }
     if (record.actorId.trimmed().isEmpty())
     {
@@ -544,8 +568,17 @@ PDFApprovalAuthorization resolveApprovalAuthorization(const PDFGovernedExecution
 
     if (context.history && !record.decisionReference.trimmed().isEmpty())
     {
+        const PDFOperationHistoryVerification verification = context.history->verify();
+        if (!verification.verified)
+        {
+            return refuse(QStringLiteral("approval-history"), verification.errorMessage);
+        }
         QString historyError;
         const QList<PDFOperationHistoryEvent> events = context.history->events(&historyError);
+        if (!historyError.isEmpty())
+        {
+            return refuse(QStringLiteral("approval-history"), historyError);
+        }
         for (const PDFOperationHistoryEvent& event : events)
         {
             if (event.kind == PDFOperationHistoryEventKind::ApprovalRevoked &&
@@ -1054,6 +1087,10 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
     }
     // 3. Authorization (#36): the single current-and-authorized decision point.
     PDFApprovalAuthorizationContext authorization = request.authorization;
+    if (request.history)
+    {
+        authorization.history = request.history;
+    }
     if (!request.profileDigest.trimmed().isEmpty())
     {
         authorization.expectedProfileDigest = request.profileDigest;
@@ -1064,34 +1101,57 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         return refuse(QStringLiteral("refused"), decision.code, decision.reason);
     }
     // 4. Already-terminal replay: one plan produces one published candidate.
-    if (request.history)
+    const auto validateReplay = [&]() -> PDFOperationResult
     {
+        if (!request.history)
+        {
+            return PDFOperationResult(true);
+        }
+        const PDFOperationHistoryVerification verification = request.history->verify();
+        if (!verification.verified)
+        {
+            return refuse(QStringLiteral("refused"), QStringLiteral("history-failed"), verification.errorMessage);
+        }
         QString historyError;
         const QList<PDFOperationHistoryEvent> events = request.history->events(&historyError);
+        if (!historyError.isEmpty())
+        {
+            return refuse(QStringLiteral("refused"), QStringLiteral("history-failed"), historyError);
+        }
         const QString decisionReference = request.approval.approval.decisionReference.trimmed();
         for (const PDFOperationHistoryEvent& event : events)
         {
+            if (!request.executionId.isNull() && event.executionId == request.executionId &&
+                (event.kind == PDFOperationHistoryEventKind::FixApplied || event.kind == PDFOperationHistoryEventKind::Operation) &&
+                event.status != PDFOperationHistoryStatus::Planned && event.status != PDFOperationHistoryStatus::Running)
+            {
+                return refuse(QStringLiteral("refused"), QStringLiteral("already-terminal"),
+                              QStringLiteral("The requested execution is already terminal in the operation history."));
+            }
             if (event.kind != PDFOperationHistoryEventKind::FixApplied ||
                 event.status != PDFOperationHistoryStatus::Accepted)
             {
                 continue;
             }
             bool match = false;
-            if (event.output.has_value() && sha256Matches(event.output->sha256, receipt->candidateSha256))
-            {
-                match = true;
-            }
-            if (!match && !decisionReference.isEmpty() &&
+            if (!decisionReference.isEmpty() &&
                 event.approval.decisionReference.compare(decisionReference, Qt::CaseInsensitive) == 0)
             {
                 match = true;
             }
             if (!match)
             {
-                const QString storedPlanDigest = event.resultSummary.value(QStringLiteral("approval"))
-                                                     .toObject()
-                                                     .value(QStringLiteral("plan_digest"))
-                                                     .toString();
+                QString storedPlanDigest = event.resultSummary.value(QStringLiteral("receipt"))
+                                               .toObject()
+                                               .value(QStringLiteral("plan_digest"))
+                                               .toString();
+                if (storedPlanDigest.isEmpty())
+                {
+                    storedPlanDigest = event.resultSummary.value(QStringLiteral("approval"))
+                                           .toObject()
+                                           .value(QStringLiteral("plan_digest"))
+                                           .toString();
+                }
                 if (!storedPlanDigest.isEmpty() && sha256Matches(storedPlanDigest, receipt->planDigest))
                 {
                     match = true;
@@ -1103,6 +1163,21 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
                               QStringLiteral("This execution identity is already terminal in the operation history."));
             }
         }
+        return PDFOperationResult(true);
+    };
+    if (const PDFOperationResult replay = validateReplay(); !replay)
+    {
+        return replay;
+    }
+    if (request.history &&
+        (!request.outputArtifact.isValid() ||
+         !sha256Matches(request.outputArtifact.sha256, receipt->candidateSha256) ||
+         request.outputArtifact.size != request.candidateBytes.size() ||
+         (request.executionId.isNull() &&
+          (!request.inputArtifact.isValid() || !sha256Matches(request.inputArtifact.sha256, receipt->sourceSha256)))))
+    {
+        return refuse(QStringLiteral("refused"), QStringLiteral("malformed-request"),
+                      QStringLiteral("Governed history requires artifact identities matching the source and candidate bytes."));
     }
     // 5. Cancellation before any staging side effect.
     if (PDFOperationControl::isOperationCancelled(request.operationControl))
@@ -1236,6 +1311,19 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
                       QStringLiteral("The governed mutation was cancelled before publication."));
     }
 
+    if (const PDFOperationResult replay = validateReplay(); !replay)
+    {
+        appendHistoryFailed(receipt->reasonCode);
+        return replay;
+    }
+    authorization.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    const PDFApprovalAuthorization commitAuthorization = resolveApprovalAuthorization(request.approval, authorization);
+    if (!commitAuthorization.allowed)
+    {
+        appendHistoryFailed(commitAuthorization.code);
+        return refuse(QStringLiteral("refused"), commitAuthorization.code, commitAuthorization.reason);
+    }
+
     // 10. Atomic commit into the destination.
     const PDFOperationResult commitResult = PDFSafeFileWriter::writeData(request.destinationPath,
                                                                          request.candidateBytes,
@@ -1281,6 +1369,7 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         }
         accepted.reportArtifactSha256 = signOff.revalidationReportSha256;
         accepted.resultSummary = request.resultSummary ? request.resultSummary(*receipt) : canonicalMutationSummary(*receipt);
+        accepted.resultSummary.insert(QStringLiteral("receipt"), receipt->toJson());
         accepted.approval = signOff.approval;
         if (!request.history->appendEvent(accepted))
         {

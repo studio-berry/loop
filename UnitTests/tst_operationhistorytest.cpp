@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfartifactstore.h"
+#include "pdfgovernedexecution.h"
 #include "pdfoperationhistorystore.h"
 
 #include <QCryptographicHash>
@@ -50,6 +51,7 @@ private slots:
     void importedInputIsReadOnlyAndDigestAddressed();
     void noSavePathProducesAnApprovedOutputRecord();
     void approvalExpiryAndRevocationKindRoundTrip();
+    void unreadableOrCompromisedApprovalHistoryRefusesPublication();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
@@ -1022,6 +1024,63 @@ void OperationHistoryTest::approvalExpiryAndRevocationKindRoundTrip()
              pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
     QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("approvalrevoked")),
              pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
+}
+
+void OperationHistoryTest::unreadableOrCompromisedApprovalHistoryRefusesPublication()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(temporary.filePath(QStringLiteral("history.sqlite3")));
+    const QByteArray candidateBytes("candidate");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = sourceSha256;
+    approval.candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
+    approval.approval.kind = pdf::PDFApprovalKind::Human;
+    approval.approval.actorId = QStringLiteral("operator");
+    approval.approval.decision = QStringLiteral("approve");
+    approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    approval.approval.decisionReference = QStringLiteral("approval:history");
+    pdf::PDFApprovalAuthorizationContext context;
+    context.history = &history;
+    const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-history"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval, planDigest, sourceSha256, candidateBytes,
+                                          outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail, context));
+    QVERIFY(!QFile::exists(outputPath));
+
+    QUuid executionId;
+    const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY(input.success);
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(input.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("governed.history");
+    execution.input = input.artifact;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent revoked;
+    revoked.executionId = executionId;
+    revoked.kind = pdf::PDFOperationHistoryEventKind::ApprovalRevoked;
+    revoked.status = pdf::PDFOperationHistoryStatus::Rejected;
+    revoked.approval.decisionReference = approval.approval.decisionReference;
+    QVERIFY(history.appendEvent(revoked));
+    QVERIFY(history.verify().verified);
+    const QString connectionName = QStringLiteral("approval-history-tampering");
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(history.databasePath());
+        QVERIFY(database.open());
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET event_kind = 'operation'")));
+    }
+    QSqlDatabase::removeDatabase(connectionName);
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-history"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval, planDigest, sourceSha256, candidateBytes,
+                                          outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail, context));
+    QVERIFY(!QFile::exists(outputPath));
 }
 
 QTEST_MAIN(OperationHistoryTest)
