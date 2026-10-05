@@ -274,14 +274,69 @@ certificate is eligible only when all of these identities agree:
 
 The certificate approval is separate from the approval that authorized the candidate.
 Operation history records the accepted certificate as `CertificateIssued`, preserving
-one provenance chain. A failed revalidation records a failed certificate event and
-does not claim publication sign-off.
+one provenance chain. A failed revalidation records a failed certificate event and does
+not claim publication sign-off.
 
 The same gate is used by `PdfTool repair`, `PdfTool action-list run/batch`, PageMaster
 exports, and the Editor Action List worker. Action List results expose the plan and
 source identities, while the Editor pane shows the plan digest and publication status.
 PageMaster manifests carry governed evidence per output. Runs without a preflight
 profile may write only an explicitly `not-certified` result and cannot issue sign-off.
+
+### Revalidation state and reason (#38)
+
+`PDFGovernedExecutionRevalidation` carries an explicit `state` and fail-closed
+`reason_code`/`reason`, serialized into its JSON (`state`, `reason_code`, `reason`):
+
+| State | Meaning |
+| --- | --- |
+| `complete` | Bytes verified and the effective profile verdict is `pass`. The only state eligible for sign-off. |
+| `incomplete` | The inspection could not finish (a non-passing, non-blocking verdict such as `unsupported-scope`). |
+| `error` | A hard byte/reader/profile failure or a definite failing verdict. |
+
+Byte-level failures are named on every early return instead of leaving the operator with
+a bare verdict: `expected-digest-missing` (an empty or malformed expected digest is
+refused outright — an empty value never silently skips byte binding),
+`artifact-unreadable`, `artifact-digest-mismatch`, and `artifact-reopen-failed`.
+`isSignOffEligible()` requires `state == "complete"` in addition to `bytesVerified`, the
+artifact/report/profile digests, and a passing verdict.
+
+Surfaces map the state rather than collapsing every failure to `failed`: `PdfTool
+repair` reports `incomplete`/`error` (plus `revalidation_state`/`revalidation_reason_code`),
+the Action List governed summary carries an explicit `status`/`reason_code`/`state`, and
+PageMaster manifests add `state`/`reason_code` beside the existing governed status.
+
+### Impact-driven scope and finding delta (#38)
+
+`revalidateGovernedArtifact` and `finalizeGovernedPublication` accept an optional
+`PDFGovernedRevalidationScope` (also carried on `PDFGovernedMutationRequest`). The
+default — no plan, no baseline — is a full-profile inspection, so every pre-#38 caller
+keeps its behavior. When a scope is supplied:
+
+- A **targeted** plan (from `planRevalidation` / `planRepairStepPreflight`) is honored
+  only when the declared impact is complete and a baseline inspection is supplied.
+  Undeclared, incomplete, or document-wide impact, and a missing baseline, fall back to
+  a **full** run with the reason recorded (`impact-undeclared`, `impact-incomplete`,
+  `impact-document-wide`, `baseline-unavailable`).
+- The finding delta between the baseline inspection and the published-bytes inspection
+  is computed with `computeFindingDelta`, so a targeted run that omits a check carries
+  its findings forward instead of falsely resolving them.
+- The scope mode (`targeted`/`full`), its reason, the effective plan, the impact, the
+  finding delta, and the baseline report digest are folded into the revalidation report.
+  `reportSha256` digests that whole report, so the sign-off binds the delta: a
+  certificate cannot be issued for a revalidation whose scope or delta was stripped.
+
+### Pre-publication bytes can never close an operation (#38)
+
+Only `finalizeGovernedPublication` against the published (or staged) artifact path can
+produce an eligible revalidation and a valid `loop.governed-sign-off`. Inspecting an
+in-memory candidate or pre-publication bytes — `PDFRepairTransaction::validateCandidate`,
+an Action List step/terminal gate, or a PageMaster in-memory `revalidate` — yields a
+verdict and evidence, never a sign-off. Publication without that finalize stays an
+unsigned, `not-certified` artifact (D4). The Editor Action List worker routes through the
+mutation gateway and finalizes against the exact staged bytes it reopens into the applied
+candidate, so the sign-off is never bound to a second serialization or to bytes the
+operator did not receive.
 
 ## Cross-surface equality (D5)
 

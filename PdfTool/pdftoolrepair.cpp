@@ -670,9 +670,19 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     const pdf::PDFOperationResult mutationResult = pdf::executeGovernedMutation(mutation, &mutationReceipt);
     if (!mutationResult)
     {
+        // P3: a finalize/revalidation failure carries its explicit state, so the
+        // report never collapses it to a bare `failed`.
+        const bool revalidationFailure = mutationReceipt.reasonCode == QStringLiteral("revalidation-failed");
+        const QString failureStatus =
+            revalidationFailure
+                ? (mutationReceipt.revalidation.state == QStringLiteral("incomplete") ? QStringLiteral("incomplete")
+                                                                                      : QStringLiteral("error"))
+                : QStringLiteral("failed");
         reportJson.insert(QStringLiteral("receipt"), mutationReceipt.toJson());
         reportJson.insert(QStringLiteral("revalidation"), mutationReceipt.revalidation.toJson());
-        reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
+        reportJson.insert(QStringLiteral("status"), failureStatus);
+        reportJson.insert(QStringLiteral("revalidation_state"), mutationReceipt.revalidation.state);
+        reportJson.insert(QStringLiteral("revalidation_reason_code"), mutationReceipt.revalidation.reasonCode);
         writeRepairReportIfRequested(options, reportJson);
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,

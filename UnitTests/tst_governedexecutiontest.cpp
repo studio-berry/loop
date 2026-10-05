@@ -96,6 +96,37 @@ QJsonObject loadGoldenObject(const QString& fileName)
     return document.object();
 }
 
+/// Writes a minimal one-page PDF to \p path and returns the exact bytes written.
+QByteArray writePublishedFixture(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    writer.write(path, &document, true);
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    return file.readAll();
+}
+
+/// Sorted stable finding ids carried in a revalidation report.
+QStringList findingIdsFromReport(const QJsonObject& report)
+{
+    QStringList ids;
+    for (const QString& key : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        for (const QJsonValue& value : report.value(key).toArray())
+        {
+            ids.append(value.toObject().value(QStringLiteral("id")).toString());
+        }
+    }
+    ids.sort();
+    return ids;
+}
+
 }   // namespace
 
 class GovernedExecutionTest final : public QObject
@@ -158,6 +189,14 @@ private slots:
     void gatewayCancelAtCommitSeamLeavesDestinationUntouched();
     void gatewayRevalidationFailureLeavesDestinationUntouched();
     void gatewayHappyPathPublishesExactlyOnce();
+
+    // L04-06 (#38) — revalidate exact published bytes
+    void emptyOrMalformedExpectedDigestIsRefused();
+    void tamperedPublishedBytesFailRevalidationAndNeverSignOff();
+    void revalidationReportsIncompleteStateExplicitly();
+    void targetedMatchesFullOnPublishedBytes();
+    void undeclaredImpactFallsBackToFullInspection();
+    void inMemoryCandidateValidationCannotCompleteOperation();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -1326,6 +1365,319 @@ void GovernedExecutionTest::gatewayHappyPathPublishesExactlyOnce()
     QCOMPARE(fileSha256Hex(destination), candidateSha256);
     const QDir destinationDirectory(QFileInfo(destination).absolutePath());
     QVERIFY(destinationDirectory.entryList(QStringList{ QStringLiteral("*.loop-staging-*") }, QDir::Files).isEmpty());
+}
+
+void GovernedExecutionTest::emptyOrMalformedExpectedDigestIsRefused()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+    QVERIFY(!writePublishedFixture(publishedPath).isEmpty());
+
+    const QJsonObject profile = governedGatewayProfile();
+
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    // An empty expected digest is refused outright: an empty value never silently
+    // skips binding the published bytes.
+    QVERIFY(!pdf::revalidateGovernedArtifact(publishedPath, profile, QString(), &revalidation));
+    QCOMPARE(revalidation.state, QStringLiteral("error"));
+    QCOMPARE(revalidation.reasonCode, QStringLiteral("expected-digest-missing"));
+    QVERIFY(!revalidation.bytesVerified);
+    QVERIFY(!revalidation.isSignOffEligible());
+
+    // A malformed digest is refused the same way.
+    QVERIFY(!pdf::revalidateGovernedArtifact(publishedPath, profile, QStringLiteral("not-a-digest"), &revalidation));
+    QCOMPARE(revalidation.reasonCode, QStringLiteral("expected-digest-missing"));
+    QVERIFY(!revalidation.isSignOffEligible());
+}
+
+void GovernedExecutionTest::tamperedPublishedBytesFailRevalidationAndNeverSignOff()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+    const QByteArray publishedBytes = writePublishedFixture(publishedPath);
+    QVERIFY(!publishedBytes.isEmpty());
+    const QString publishedSha256 = sha256Hex(publishedBytes);
+
+    const QJsonObject profile = governedGatewayProfile();
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(QString(64, QLatin1Char('c')),
+                                                                  QString(64, QLatin1Char('b')),
+                                                                  publishedSha256,
+                                                                  QStringLiteral("approval:tamper"));
+
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    pdf::PDFGovernedExecutionSignOff signOff;
+    const pdf::PDFOperationResult firstFinalize = pdf::finalizeGovernedPublication(approval,
+                                                                                   approval.planDigest,
+                                                                                   approval.sourceSha256,
+                                                                                   publishedSha256,
+                                                                                   publishedPath,
+                                                                                   profile,
+                                                                                   QStringLiteral("test-certificate"),
+                                                                                   QStringLiteral("test-revalidation"),
+                                                                                   &revalidation,
+                                                                                   &signOff);
+    QVERIFY2(firstFinalize, qPrintable(firstFinalize.getErrorMessage()));
+    QCOMPARE(revalidation.state, QStringLiteral("complete"));
+    QVERIFY(revalidation.isSignOffEligible());
+    QVERIFY(signOff.isValid());
+
+    // Tamper after publication: append bytes so the published digest no longer
+    // matches the reviewed candidate.
+    const QByteArray tamper = QByteArrayLiteral("% tampered after publication\n");
+    {
+        QFile file(publishedPath);
+        QVERIFY(file.open(QIODevice::Append));
+        QCOMPARE(file.write(tamper), qint64(tamper.size()));
+    }
+    QVERIFY(fileSha256Hex(publishedPath) != publishedSha256);
+
+    // The second finalize re-reads the exact bytes: it refuses with the
+    // digest-mismatch state and produces no sign-off.
+    pdf::PDFGovernedExecutionRevalidation tamperedRevalidation;
+    pdf::PDFGovernedExecutionSignOff tamperedSignOff;
+    const pdf::PDFOperationResult tamperedFinalize = pdf::finalizeGovernedPublication(approval,
+                                                                                      approval.planDigest,
+                                                                                      approval.sourceSha256,
+                                                                                      publishedSha256,
+                                                                                      publishedPath,
+                                                                                      profile,
+                                                                                      QStringLiteral("test-certificate"),
+                                                                                      QStringLiteral("test-revalidation"),
+                                                                                      &tamperedRevalidation,
+                                                                                      &tamperedSignOff);
+    QVERIFY(!tamperedFinalize);
+    QCOMPARE(tamperedRevalidation.state, QStringLiteral("error"));
+    QCOMPARE(tamperedRevalidation.reasonCode, QStringLiteral("artifact-digest-mismatch"));
+    QVERIFY(!tamperedRevalidation.bytesVerified);
+    QVERIFY(!tamperedRevalidation.isSignOffEligible());
+    QVERIFY(!tamperedSignOff.isValid());
+
+    // Restore the exact original bytes: the verdict is re-read, never cached.
+    {
+        QFile file(publishedPath);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(publishedBytes), qint64(publishedBytes.size()));
+    }
+    pdf::PDFGovernedExecutionRevalidation restoredRevalidation;
+    pdf::PDFGovernedExecutionSignOff restoredSignOff;
+    const pdf::PDFOperationResult restoredFinalize = pdf::finalizeGovernedPublication(approval,
+                                                                                      approval.planDigest,
+                                                                                      approval.sourceSha256,
+                                                                                      publishedSha256,
+                                                                                      publishedPath,
+                                                                                      profile,
+                                                                                      QStringLiteral("test-certificate"),
+                                                                                      QStringLiteral("test-revalidation"),
+                                                                                      &restoredRevalidation,
+                                                                                      &restoredSignOff);
+    QVERIFY2(restoredFinalize, qPrintable(restoredFinalize.getErrorMessage()));
+    QCOMPARE(restoredRevalidation.state, QStringLiteral("complete"));
+    QVERIFY(restoredSignOff.isValid());
+}
+
+void GovernedExecutionTest::revalidationReportsIncompleteStateExplicitly()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+    const QByteArray publishedBytes = writePublishedFixture(publishedPath);
+    QVERIFY(!publishedBytes.isEmpty());
+
+    // A check whose restriction scope cannot be honored fails closed to an
+    // incomplete inspection, not a pass.
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Governed incomplete") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("bleed") },
+                                        { QStringLiteral("severity"), QStringLiteral("error") },
+                                        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } } } } } }
+    };
+
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    const pdf::PDFOperationResult result = pdf::revalidateGovernedArtifact(publishedPath, profile, sha256Hex(publishedBytes), &revalidation);
+    QVERIFY(!result);
+    QCOMPARE(revalidation.state, QStringLiteral("incomplete"));
+    QCOMPARE(revalidation.reasonCode, QStringLiteral("unsupported-scope"));
+    QVERIFY(revalidation.bytesVerified);
+    QVERIFY(!revalidation.isSignOffEligible());
+    QCOMPARE(revalidation.toJson().value(QStringLiteral("state")).toString(), QStringLiteral("incomplete"));
+    QVERIFY(!revalidation.toJson().value(QStringLiteral("sign_off_eligible")).toBool());
+}
+
+void GovernedExecutionTest::targetedMatchesFullOnPublishedBytes()
+{
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/image-dpi-low.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+
+    // The corpus fixture is read permissively; re-serialize it once through the
+    // writer so the published bytes are a clean artifact the governed reader
+    // reopens exactly (the low-dpi image evidence survives).
+    auto noPassword = [](bool*)
+    { return QString(); };
+    pdf::PDFDocumentReader fixtureReader(nullptr, noPassword, true, false);
+    pdf::PDFDocument fixtureDocument = fixtureReader.readFromFile(fixturePath);
+    QCOMPARE(fixtureReader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(publishedPath, &fixtureDocument, true));
+    const QString publishedSha256 = fileSha256Hex(publishedPath);
+    QVERIFY(!publishedSha256.isEmpty());
+
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Governed targeted parity") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                            { QStringLiteral("min_dpi"), 300 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } },
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-mode") },
+                                            { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK") } },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+
+    pdf::PreflightProfileData profile;
+    QString profileError;
+    QVERIFY2(pdf::PreflightEngine::parseProfile(profileObject, profile, profileError), qPrintable(profileError));
+
+    // Baseline inspection of the published bytes plus the evidence graph the
+    // targeted run reuses.
+    pdf::PDFDocumentReader reader(nullptr, noPassword, true, false);
+    pdf::PDFDocument document = reader.readFromFile(publishedPath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const pdf::PreflightResult baseline = engine.run(profile);
+    const pdf::PDFEvidenceGraph baselineEvidence = engine.lastEvidenceGraph();
+
+    pdf::PDFOperationImpact impact;
+    impact.declared = true;
+    impact.allPages = true;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan =
+        pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("color-mode") });
+    QVERIFY(!plan.full);
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
+
+    pdf::PDFGovernedRevalidationScope scope;
+    scope.plan = plan;
+    scope.impact = impact;
+    scope.baseline = baseline;
+    scope.baselineEvidence = baselineEvidence;
+    scope.hasBaseline = true;
+
+    pdf::PDFGovernedExecutionRevalidation targeted;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &targeted, scope);
+
+    pdf::PDFGovernedExecutionRevalidation full;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &full);
+
+    // Same published bytes: same verdict state and same finding identities.
+    QCOMPARE(targeted.verdict.state, full.verdict.state);
+    QCOMPARE(findingIdsFromReport(targeted.report), findingIdsFromReport(full.report));
+
+    const QJsonObject targetedScope = targeted.report.value(QStringLiteral("scope")).toObject();
+    QCOMPARE(targetedScope.value(QStringLiteral("mode")).toString(), QStringLiteral("targeted"));
+    QCOMPARE(full.report.value(QStringLiteral("scope")).toObject().value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+
+    // The delta is folded into the report, so reportSha256 covers it.
+    const QJsonObject targetedDelta = targeted.report.value(QStringLiteral("finding_delta")).toObject();
+    QVERIFY(targetedDelta.value(QStringLiteral("compared")).toBool());
+    QVERIFY(!targeted.report.value(QStringLiteral("baseline_report_sha256")).toString().isEmpty());
+    QVERIFY(targeted.reportSha256 != full.reportSha256);
+    // A check that was not re-run is never falsely reported as resolved.
+    QVERIFY(targetedDelta.value(QStringLiteral("resolved")).toArray().isEmpty());
+
+    // The targeted run records which checks it recomputed and reused.
+    const QJsonObject provenance = targeted.report.value(QStringLiteral("revalidation")).toObject();
+    QVERIFY(provenance.value(QStringLiteral("reused_check_ids")).toArray().contains(QStringLiteral("color-mode")));
+    QVERIFY(provenance.value(QStringLiteral("recomputed_check_ids")).toArray().contains(QStringLiteral("image-resolution")));
+}
+
+void GovernedExecutionTest::undeclaredImpactFallsBackToFullInspection()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("published.pdf"));
+    const QByteArray publishedBytes = writePublishedFixture(publishedPath);
+    QVERIFY(!publishedBytes.isEmpty());
+
+    const QJsonObject profile = governedGatewayProfile();
+
+    // A targeted plan whose declared impact is missing must not narrow the run.
+    pdf::PDFRevalidationPlan targeted;
+    targeted.full = false;
+    targeted.checkIds = QStringList{ QStringLiteral("font-integrity") };
+    targeted.reason = QStringLiteral("caller-targeted");
+
+    pdf::PDFGovernedRevalidationScope scope;
+    scope.plan = targeted;
+    scope.impact = pdf::PDFOperationImpact();   // declared == false
+
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    const pdf::PDFOperationResult result = pdf::revalidateGovernedArtifact(publishedPath, profile, sha256Hex(publishedBytes), &revalidation, scope);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(revalidation.state, QStringLiteral("complete"));
+    const QJsonObject scopeJson = revalidation.report.value(QStringLiteral("scope")).toObject();
+    QCOMPARE(scopeJson.value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+    QCOMPARE(scopeJson.value(QStringLiteral("reason")).toString(), QStringLiteral("impact-undeclared"));
+    QVERIFY(revalidation.isSignOffEligible());
+}
+
+void GovernedExecutionTest::inMemoryCandidateValidationCannotCompleteOperation()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(registry.find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+
+    // A clean in-memory candidate passes declared validation...
+    pdf::PreflightResult postflight;
+    const pdf::PDFOperationResult validated = transaction.validateCandidate(QString(), &postflight, governedGatewayProfile());
+    QVERIFY2(validated, qPrintable(validated.getErrorMessage()));
+    QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Passed);
+    QCOMPARE(pdf::reducePreflightVerdict(postflight).state, pdf::PreflightVerdictState::Pass);
+
+    // ...but candidate validation produces no sign-off and no eligible
+    // revalidation. Only finalize against published bytes can close the run.
+    pdf::PDFGovernedExecutionSignOff signOff;
+    QVERIFY(!signOff.isValid());
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    QVERIFY(!revalidation.isSignOffEligible());
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString unpublishedPath = temporary.filePath(QStringLiteral("never-published.pdf"));
+    QVERIFY(!QFile::exists(unpublishedPath));
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(QString(64, QLatin1Char('c')),
+                                                                  QString(64, QLatin1Char('b')),
+                                                                  sha256Hex(QByteArrayLiteral("candidate")),
+                                                                  QStringLiteral("approval:candidate-only"));
+    pdf::PDFGovernedExecutionSignOff finalizeSignOff;
+    const pdf::PDFOperationResult finalizeResult = pdf::finalizeGovernedPublication(approval,
+                                                                                    approval.planDigest,
+                                                                                    approval.sourceSha256,
+                                                                                    approval.candidateSha256,
+                                                                                    unpublishedPath,
+                                                                                    governedGatewayProfile(),
+                                                                                    QStringLiteral("test-certificate"),
+                                                                                    QStringLiteral("test-revalidation"),
+                                                                                    &revalidation,
+                                                                                    &finalizeSignOff);
+    QVERIFY(!finalizeResult);
+    QVERIFY(!finalizeSignOff.isValid());
 }
 
 QTEST_GUILESS_MAIN(GovernedExecutionTest)

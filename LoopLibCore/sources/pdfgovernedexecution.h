@@ -89,12 +89,46 @@ struct LOOPLIBCORESHARED_EXPORT PDFGovernedExecutionApproval
     static PDFGovernedExecutionApproval fromJson(const QJsonObject& object, QString* error = nullptr);
 };
 
+/// Optional scope inputs for one governed revalidation (#38). The default (no
+/// plan, no baseline) is a full-profile inspection of the published bytes, which
+/// is what every pre-#38 caller gets. A targeted plan is honored only when the
+/// declared impact is complete and a baseline inspection is supplied; anything
+/// undeclared, incomplete, or document-wide falls back to a full run
+/// (fail-closed).
+struct LOOPLIBCORESHARED_EXPORT PDFGovernedRevalidationScope
+{
+    /// Explicit revalidation plan (`planRevalidation` / `planRepairStepPreflight`).
+    /// `full == true` (the default) selects a full-profile inspection.
+    PDFRevalidationPlan plan;
+    /// Declared impact the plan was derived from, for provenance and the
+    /// fail-closed targeted decision.
+    PDFOperationImpact impact;
+    /// Pre-publication inspection the published bytes are compared against.
+    PreflightResult baseline;
+    /// Evidence graph captured with the baseline (enables targeted evidence reuse).
+    PDFEvidenceGraph baselineEvidence;
+    /// True when the caller supplied a baseline inspection.
+    bool hasBaseline = false;
+
+    QJsonObject toJson() const;
+};
+
 /// Evidence produced by inspecting the bytes that were actually published.
 /// The report is not eligible for sign-off until the bytes, PDF reader, and
 /// complete preflight verdict all pass.
 struct LOOPLIBCORESHARED_EXPORT PDFGovernedExecutionRevalidation
 {
     int schemaVersion = 1;
+    /// Explicit byte-revalidation state: `complete` (bytes verified and the
+    /// effective profile passed), `incomplete` (the inspection could not finish),
+    /// or `error` (a byte/reader/profile failure or a failing verdict). Sign-off
+    /// is eligible only for `complete`.
+    QString state;
+    /// Stable fail-closed code for a non-`complete` state, e.g.
+    /// `expected-digest-missing`, `artifact-unreadable`,
+    /// `artifact-digest-mismatch`, `artifact-reopen-failed`.
+    QString reasonCode;
+    QString reason;
     bool bytesVerified = false;
     QString artifactSha256;
     QString reportSha256;
@@ -190,11 +224,14 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult validateGovernedApproval(const PDFGo
                                                                      const PDFApprovalAuthorizationContext& context = {});
 
 /// Reopens the published path, verifies its bytes, and runs the supplied
-/// profile against that reopened document.
+/// profile against that reopened document. `scope` optionally narrows the
+/// inspection (impact-driven targeted plan) and supplies the baseline inspection
+/// the published bytes are compared against; the default is a full run.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
                                                                        const QJsonObject& profile,
                                                                        const QString& expectedSha256,
-                                                                       PDFGovernedExecutionRevalidation* revalidation);
+                                                                       PDFGovernedExecutionRevalidation* revalidation,
+                                                                       const PDFGovernedRevalidationScope& scope = {});
 
 /// Validates the complete identity chain required for certificate issuance.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult validateGovernedSignOff(const PDFGovernedExecutionSignOff& signOff,
@@ -219,6 +256,7 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult finalizeGovernedPublication(
     const QString& signOffPolicy,
     PDFGovernedExecutionRevalidation* revalidation,
     PDFGovernedExecutionSignOff* signOff,
+    const PDFGovernedRevalidationScope& scope = {},
     const PDFApprovalAuthorizationContext& context = {});
 
 /// Publishes reviewed candidate bytes only after governed approval validation succeeds.
@@ -283,6 +321,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFGovernedMutationRequest
     QString destinationPath;
     PDFSafeFileWriter::OverwritePolicy overwritePolicy = PDFSafeFileWriter::OverwritePolicy::Fail;
     QJsonObject profile;
+    /// Optional impact-driven revalidation scope + baseline inspection for the
+    /// finalize step. The default is a full-profile revalidation of the staged
+    /// bytes (see `PDFGovernedRevalidationScope`).
+    PDFGovernedRevalidationScope revalidationScope;
     /// Optional effective-profile digest the approval must match. Overrides
     /// `authorization.expectedProfileDigest` when non-empty.
     QString profileDigest;

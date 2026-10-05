@@ -1147,6 +1147,8 @@ void setOutputGovernedPublication(QJsonObject& manifest,
     QJsonObject output = outputs.at(index).toObject();
     QJsonObject governed{
         { QStringLiteral("status"), status },
+        { QStringLiteral("state"), revalidation.state },
+        { QStringLiteral("reason_code"), revalidation.reasonCode },
         { QStringLiteral("approval"), approval.toJson() },
         { QStringLiteral("revalidation"), revalidation.toJson() }
     };

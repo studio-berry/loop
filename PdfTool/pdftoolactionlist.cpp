@@ -241,7 +241,32 @@ bool recordActionListHistory(const QString& outputPath,
 
     const auto recordGovernedSummary = [summary, &governedApproval](const pdf::PDFGovernedMutationReceipt& receipt)
     {
+        // P3: the governed summary carries an explicit status and reason code so
+        // a consumer never has to infer signed-off vs incomplete vs error from
+        // the raw receipt.
+        const QString state = receipt.revalidation.state;
+        QString status = QStringLiteral("error");
+        if (receipt.isPublished())
+        {
+            status = receipt.signOff.isValid() ? QStringLiteral("signed-off") : QStringLiteral("not-certified");
+        }
+        else if (receipt.status == QStringLiteral("refused"))
+        {
+            status = QStringLiteral("refused");
+        }
+        else if (receipt.status == QStringLiteral("cancelled"))
+        {
+            status = QStringLiteral("cancelled");
+        }
+        else if (state == QStringLiteral("incomplete"))
+        {
+            status = QStringLiteral("incomplete");
+        }
+        const QString reasonCode = !receipt.reasonCode.isEmpty() ? receipt.reasonCode : receipt.revalidation.reasonCode;
         summary->insert(QStringLiteral("governed"), QJsonObject{
+                                                        { QStringLiteral("status"), status },
+                                                        { QStringLiteral("reason_code"), reasonCode },
+                                                        { QStringLiteral("state"), state },
                                                         { QStringLiteral("approval"), governedApproval.toJson() },
                                                         { QStringLiteral("revalidation"), receipt.revalidation.toJson() },
                                                         { QStringLiteral("sign_off"), receipt.signOff.toJson() },

@@ -25,6 +25,7 @@
 #include "pdfartifactidentity.h"
 #include "pdfdocumentreader.h"
 #include "pdfoperationhistorystore.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -139,6 +140,81 @@ bool previewDidNotComplete(const PDFOperationResult& result, PDFRepairDiffStatus
     return !result || status == PDFRepairDiffStatus::Incomplete || status == PDFRepairDiffStatus::Failed;
 }
 
+/// Maps a reduced preflight verdict onto the explicit revalidation state.
+/// Only a passing verdict is `complete`; a verdict that could not finish is
+/// `incomplete`; a definite failure or engine error is `error`.
+QString governedRevalidationStateForVerdict(const PreflightVerdict& verdict)
+{
+    switch (verdict.state)
+    {
+        case PreflightVerdictState::Pass:
+            return QStringLiteral("complete");
+        case PreflightVerdictState::Incomplete:
+            return QStringLiteral("incomplete");
+        case PreflightVerdictState::Fail:
+        case PreflightVerdictState::Error:
+            break;
+    }
+    return QStringLiteral("error");
+}
+
+/// A full-profile plan for the parsed profile, carrying every enabled check and
+/// the fail-closed reason the targeted scope was rejected.
+PDFRevalidationPlan fullGovernedRevalidationPlan(const PreflightProfileData& profile, const QString& reason)
+{
+    PDFRevalidationPlan plan;
+    plan.full = true;
+    plan.invalidatedDomains = pdfEvidenceAllDomains();
+    plan.invalidatedEvidenceDomains = pdfEvidenceAllDomains();
+    plan.reason = reason;
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (check.enabled)
+        {
+            plan.checkIds.append(check.id);
+        }
+    }
+    return plan;
+}
+
+/// Resolves a governed profile exactly as `PreflightEngine::run(QJsonObject)`
+/// does — import validation, variable binding, parse, and the effective digest —
+/// so the revalidation's profile identity matches a plain engine run. Returns
+/// false and fills the fail-closed code/message on refusal.
+bool resolveGovernedProfileData(const QJsonObject& profile,
+                                PreflightProfileData* profileData,
+                                QString* errorCode,
+                                QString* errorMessage)
+{
+    const PreflightProfileImportResult imported = importPreflightProfile(profile);
+    if (!imported.ok)
+    {
+        *errorCode = imported.errorCode.isEmpty() ? QStringLiteral("profile-invalid") : imported.errorCode;
+        *errorMessage = imported.errorMessage;
+        return false;
+    }
+    const PreflightVariableBindResult bound = bindPreflightProfileVariables(imported.profile);
+    if (!bound.ok)
+    {
+        *errorCode = bound.errorCode.isEmpty() ? QStringLiteral("profile-invalid") : bound.errorCode;
+        *errorMessage = bound.errorMessage;
+        return false;
+    }
+    if (!PreflightEngine::parseProfile(bound.profile, *profileData, *errorMessage))
+    {
+        *errorCode = QStringLiteral("profile-invalid");
+        return false;
+    }
+    profileData->variableBindings = bound.bindings;
+    profileData->fileDigest = imported.identity.digest;
+    profileData->effectiveDigest = computeProfileDigest(bound.profile);
+    profileData->provisional = imported.identity.provisional;
+    profileData->profileIdentity = imported.identity.toJson();
+    profileData->profileIdentity.insert(QStringLiteral("digest"), profileData->fileDigest);
+    profileData->profileIdentity.insert(QStringLiteral("effective_digest"), profileData->effectiveDigest);
+    return true;
+}
+
 }   // namespace
 
 QString computeOperationPlanDigest(const QList<PDFRepairPlan>& plans,
@@ -250,10 +326,24 @@ PDFGovernedExecutionApproval PDFGovernedExecutionApproval::fromJson(const QJsonO
     return approval;
 }
 
+QJsonObject PDFGovernedRevalidationScope::toJson() const
+{
+    QJsonObject object{
+        { QStringLiteral("plan"), plan.toJson() },
+        { QStringLiteral("impact"), impact.toJson() },
+        { QStringLiteral("has_baseline"), hasBaseline }
+    };
+    if (hasBaseline)
+    {
+        object.insert(QStringLiteral("baseline_report"), baseline.toJson());
+    }
+    return object;
+}
+
 bool PDFGovernedExecutionRevalidation::isSignOffEligible() const
 {
-    return bytesVerified && isPDFSha256(artifactSha256) && isPDFSha256(reportSha256) &&
-           isPDFSha256(effectiveProfileDigest) && verdict.isPass();
+    return state == QStringLiteral("complete") && bytesVerified && isPDFSha256(artifactSha256) &&
+           isPDFSha256(reportSha256) && isPDFSha256(effectiveProfileDigest) && verdict.isPass();
 }
 
 QJsonObject PDFGovernedExecutionRevalidation::toJson() const
@@ -261,6 +351,9 @@ QJsonObject PDFGovernedExecutionRevalidation::toJson() const
     return QJsonObject{
         { QStringLiteral("schema"), QStringLiteral("loop.governed-revalidation") },
         { QStringLiteral("schema_version"), schemaVersion },
+        { QStringLiteral("state"), state },
+        { QStringLiteral("reason_code"), reasonCode },
+        { QStringLiteral("reason"), reason },
         { QStringLiteral("bytes_verified"), bytesVerified },
         { QStringLiteral("artifact_sha256"), artifactSha256 },
         { QStringLiteral("report_sha256"), reportSha256 },
@@ -517,34 +610,55 @@ PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& 
 PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
                                               const QJsonObject& profile,
                                               const QString& expectedSha256,
-                                              PDFGovernedExecutionRevalidation* revalidation)
+                                              PDFGovernedExecutionRevalidation* revalidation,
+                                              const PDFGovernedRevalidationScope& scope)
 {
     if (!revalidation)
     {
         return PDFOperationResult(QStringLiteral("Governed revalidation output is null."));
     }
     *revalidation = PDFGovernedExecutionRevalidation();
+
+    const auto refuse = [revalidation](const QString& code, const QString& message)
+    {
+        revalidation->state = QStringLiteral("error");
+        revalidation->reasonCode = code;
+        revalidation->reason = message;
+        return PDFOperationResult(message);
+    };
+
+    // P1: an empty or malformed expected digest is refused outright. An empty
+    // value must never silently skip binding the published bytes.
+    if (!isPDFSha256(expectedSha256))
+    {
+        return refuse(QStringLiteral("expected-digest-missing"),
+                      QStringLiteral("Governed revalidation requires the exact expected published-artifact digest."));
+    }
     if (profile.isEmpty())
     {
-        return PDFOperationResult(QStringLiteral("Governed revalidation requires a non-empty preflight profile."));
+        return refuse(QStringLiteral("profile-missing"),
+                      QStringLiteral("Governed revalidation requires a non-empty preflight profile."));
     }
 
     QFile publishedFile(publishedPath);
     if (!publishedFile.open(QIODevice::ReadOnly))
     {
-        return PDFOperationResult(QStringLiteral("Could not open the published artifact for revalidation."));
+        return refuse(QStringLiteral("artifact-unreadable"),
+                      QStringLiteral("Could not open the published artifact for revalidation."));
     }
     const QByteArray publishedBytes = publishedFile.readAll();
     if (publishedFile.error() != QFileDevice::NoError)
     {
-        return PDFOperationResult(QStringLiteral("Could not read the published artifact for revalidation."));
+        return refuse(QStringLiteral("artifact-unreadable"),
+                      QStringLiteral("Could not read the published artifact for revalidation."));
     }
 
     revalidation->artifactSha256 = QString::fromLatin1(QCryptographicHash::hash(publishedBytes, QCryptographicHash::Sha256).toHex());
-    if (!expectedSha256.trimmed().isEmpty() && !sha256Matches(revalidation->artifactSha256, expectedSha256))
+    if (!sha256Matches(revalidation->artifactSha256, expectedSha256))
     {
-        return PDFOperationResult(QStringLiteral("Published artifact bytes do not match the reviewed candidate (expected %1, actual %2).")
-                                      .arg(expectedSha256.trimmed().toLower(), revalidation->artifactSha256));
+        return refuse(QStringLiteral("artifact-digest-mismatch"),
+                      QStringLiteral("Published artifact bytes do not match the reviewed candidate (expected %1, actual %2).")
+                          .arg(expectedSha256.trimmed().toLower(), revalidation->artifactSha256));
     }
 
     PDFDocumentReader reader(nullptr, [](bool*)
@@ -552,19 +666,121 @@ PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
     PDFDocument document = reader.readFromFile(publishedPath);
     if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
     {
-        return PDFOperationResult(QStringLiteral("The published artifact could not be reopened for revalidation."));
+        return refuse(QStringLiteral("artifact-reopen-failed"),
+                      QStringLiteral("The published artifact could not be reopened for revalidation."));
+    }
+
+    PreflightProfileData profileData;
+    QString profileErrorCode;
+    QString profileError;
+    if (!resolveGovernedProfileData(profile, &profileData, &profileErrorCode, &profileError))
+    {
+        return refuse(profileErrorCode,
+                      profileError.isEmpty()
+                          ? QStringLiteral("The effective preflight profile could not be resolved for revalidation.")
+                          : profileError);
+    }
+
+    // P2: a targeted plan is honored only when the declared impact is complete
+    // and a baseline inspection is available. An undeclared, incomplete, or
+    // document-wide impact (and a missing baseline) falls back to a full run.
+    PDFRevalidationPlan plan = scope.plan;
+    if (!plan.full && (!scope.impact.declared || !scope.impact.impactComplete || scope.impact.isFullRevalidation()))
+    {
+        const QString reason = !scope.impact.declared
+                                   ? QStringLiteral("impact-undeclared")
+                                   : (!scope.impact.impactComplete ? QStringLiteral("impact-incomplete")
+                                                                   : QStringLiteral("impact-document-wide"));
+        plan = fullGovernedRevalidationPlan(profileData, reason);
+    }
+    const bool targeted = !plan.full && scope.hasBaseline;
+    if (!plan.full && !scope.hasBaseline)
+    {
+        plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-unavailable"));
     }
 
     PDFDocumentSession session(&document);
-    PreflightResult result = PreflightEngine(&session).run(profile);
-    revalidation->report = result.toJson();
-    revalidation->reportSha256 = digestJson(revalidation->report);
+    PreflightEngine engine(&session);
+    PreflightResult result;
+    if (targeted)
+    {
+        if (!scope.baselineEvidence.records.isEmpty())
+        {
+            result = engine.revalidate(profileData, plan, scope.baseline, scope.baselineEvidence);
+        }
+        else
+        {
+            result = engine.revalidate(profileData, scope.baseline, plan);
+        }
+    }
+    else
+    {
+        result = engine.run(profileData, plan);
+    }
+
+    // P2: the finding delta is computed against the baseline inspection and
+    // folded — with the scope mode and reason — into the report the sign-off
+    // binds. `reportSha256` therefore covers the delta; a certificate cannot
+    // omit it.
+    PDFRepairFindingDelta delta;
+    QString baselineReportSha256;
+    if (scope.hasBaseline)
+    {
+        delta = computeFindingDelta(scope.baseline, result);
+        baselineReportSha256 = digestJson(scope.baseline.toJson());
+    }
+
+    QString scopeMode;
+    QString scopeReason = plan.reason;
+    const QJsonObject engineProvenance = !result.revalidation.isEmpty()
+                                             ? result.revalidation
+                                             : result.coverageScope.value(QStringLiteral("revalidation")).toObject();
+    if (!engineProvenance.isEmpty())
+    {
+        scopeMode = engineProvenance.value(QStringLiteral("mode")).toString();
+        const QString engineReason = engineProvenance.value(QStringLiteral("reason")).toString();
+        if (!engineReason.isEmpty())
+        {
+            scopeReason = engineReason;
+        }
+    }
+    if (scopeMode.isEmpty())
+    {
+        // No targeted provenance was produced, so the run was a full inspection
+        // (either requested or a fail-closed fallback).
+        scopeMode = QStringLiteral("full");
+    }
+
+    QJsonObject report = result.toJson();
+    report.insert(QStringLiteral("scope"), QJsonObject{
+                                               { QStringLiteral("mode"), scopeMode },
+                                               { QStringLiteral("reason"), scopeReason },
+                                               { QStringLiteral("plan"), plan.toJson() },
+                                               { QStringLiteral("impact"), scope.impact.toJson() } });
+    report.insert(QStringLiteral("finding_delta"), delta.toJson());
+    report.insert(QStringLiteral("baseline_report_sha256"), baselineReportSha256);
+
     revalidation->effectiveProfileDigest = result.effectiveProfileDigest;
     if (!isPDFSha256(revalidation->effectiveProfileDigest))
     {
         revalidation->effectiveProfileDigest = digestJson(profile);
     }
     revalidation->verdict = reducePreflightVerdict(result);
+    revalidation->state = governedRevalidationStateForVerdict(revalidation->verdict);
+    if (revalidation->state != QStringLiteral("complete"))
+    {
+        revalidation->reasonCode = revalidation->verdict.reasonCode.isEmpty()
+                                       ? QStringLiteral("preflight-%1").arg(revalidation->state)
+                                       : revalidation->verdict.reasonCode;
+        revalidation->reason = revalidation->verdict.reason.isEmpty()
+                                   ? preflightVerdictOperatorSummary(revalidation->verdict)
+                                   : revalidation->verdict.reason;
+    }
+    report.insert(QStringLiteral("state"), revalidation->state);
+    report.insert(QStringLiteral("reason_code"), revalidation->reasonCode);
+    report.insert(QStringLiteral("reason"), revalidation->reason);
+    revalidation->report = report;
+    revalidation->reportSha256 = digestJson(report);
     revalidation->bytesVerified = true;
     if (!revalidation->isSignOffEligible())
     {
@@ -583,6 +799,7 @@ PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApprova
                                                const QString& signOffPolicy,
                                                PDFGovernedExecutionRevalidation* revalidation,
                                                PDFGovernedExecutionSignOff* signOff,
+                                               const PDFGovernedRevalidationScope& scope,
                                                const PDFApprovalAuthorizationContext& context)
 {
     if (!revalidation || !signOff)
@@ -602,7 +819,8 @@ PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApprova
     if (const PDFOperationResult revalidationResult = revalidateGovernedArtifact(publishedPath,
                                                                                  profile,
                                                                                  expectedCandidateSha256,
-                                                                                 revalidation);
+                                                                                 revalidation,
+                                                                                 scope);
         !revalidationResult)
     {
         return revalidationResult;
@@ -949,6 +1167,7 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
                                                                               request.signOffPolicy,
                                                                               &revalidation,
                                                                               &signOff,
+                                                                              request.revalidationScope,
                                                                               authorization);
         if (!finalizeResult)
         {
