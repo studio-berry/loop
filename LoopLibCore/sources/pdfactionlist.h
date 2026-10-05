@@ -34,6 +34,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <optional>
+
 namespace pdf
 {
 
@@ -117,6 +119,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
     QJsonArray diagnostics;
     QJsonObject postflight;
     QJsonObject governed;
+    /// The conservative merge of every step operation's declared save policy,
+    /// serialized as `save_policy`.
+    PDFOperationSavePolicy savePolicy;
     QVector<PDFActionListStepResult> steps;
     QList<PDFStandardConversionSettings> standardValidationRequirements;
     QJsonArray independentValidation;
@@ -125,16 +130,22 @@ struct LOOPLIBCORESHARED_EXPORT PDFActionListExecutionResult
 };
 
 /// Returns the shared, surface-neutral digest for an Action List plan.
-/// Bindings and the effective preflight profile are part of the plan because
-/// either can change the candidate that is eligible for publication.
+/// Bindings, the effective preflight profile, and the merged save policy are
+/// part of the plan because any of them can change the candidate that is
+/// eligible for publication.
 LOOPLIBCORESHARED_EXPORT QString computeActionListPlanDigest(const PDFActionList& actionList,
                                                              const QJsonObject& bindings,
                                                              const QString& sourceSha256,
-                                                             const QJsonObject& effectiveProfile = {});
+                                                             const QJsonObject& effectiveProfile,
+                                                             const PDFOperationSavePolicy& savePolicy);
 
 struct PDFActionListExecutionOptions
 {
     bool dryRun = false;
+    /// The caller's requested save policy. The merged operation-declared
+    /// policy is a floor: a weaker request is refused before any step work,
+    /// a stricter one is accepted.
+    std::optional<PDFOperationSavePolicy> requestedSavePolicy;
     QJsonObject bindings;
     const PDFOperationControl* operationControl = nullptr;
     int maxSteps = 100;
@@ -178,6 +189,12 @@ public:
                                const PDFActionListExecutionOptions& options,
                                PDFDocument* candidate,
                                PDFActionListExecutionResult* result) const;
+
+    /// The conservative merge of every step operation's declared save policy,
+    /// mirroring PDFRepairTransaction::savePolicy(). Steps whose operation is
+    /// not registered are skipped; recipe validation refuses them before any
+    /// plan is used.
+    PDFOperationSavePolicy mergedSavePolicy(const PDFActionList& actionList) const;
 
 private:
     const PDFRepairRegistry* m_registry = nullptr;

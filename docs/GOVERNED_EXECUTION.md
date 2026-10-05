@@ -20,6 +20,10 @@ Canonical JSON bytes are pinned in [`docs/CANONICAL_JSON.md`](CANONICAL_JSON.md)
 Any change to the plan, source identity, or save policy produces a new digest. Approvals
 bind to one digest and become invalid when the plan changes.
 
+`pdf::computeActionListPlanDigest()` binds the same identities for Action List plans: the
+`action-list-plan` envelope carries the merged operation save policy, so a save-policy
+change moves the Action List digest and invalidates approvals bound to it.
+
 Destination path, overwrite/collision policy, and publication target are **not** part of
 the semantic plan digest (D3). They are bound later as execution inputs to
 `publishGovernedArtifact` / `PDFSaveRequest` / `PDFSafeFileWriter`. Changing only the

@@ -456,9 +456,18 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             else if (!options.destructiveDryRun)
             {
                 const PDFToolExitCode outputCheck = validateDestructiveOutput(options, output);
-                if (outputCheck != PDFToolExitCode::Success || QFileInfo(output).absoluteFilePath() == QFileInfo(input).absoluteFilePath())
+                if (outputCheck != PDFToolExitCode::Success)
                 {
                     aggregateCode = PDFToolExitCode::ProcessingFailure;
+                }
+                else if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                                      input,
+                                                                                      output,
+                                                                                      executionResult.savePolicy,
+                                                                                      /*appendInPlace=*/false);
+                         refused != PDFToolExitCode::Success)
+                {
+                    aggregateCode = refused;
                 }
                 else
                 {
@@ -487,7 +496,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                                                      pdf::computeActionListPlanDigest(actionList,
                                                                                       bindings,
                                                                                       QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()),
-                                                                                      governedProfile),
+                                                                                      governedProfile,
+                                                                                      executionResult.savePolicy),
                                                      governedProfile,
                                                      &item,
                                                      &historyError))
@@ -547,11 +557,17 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                              QStringLiteral("action-list run requires --output unless --dry-run is used."));
             return PDFToolExitCode::InvalidInvocation;
         }
-        if (QFileInfo(options.actionListOutputDocument).absoluteFilePath() == QFileInfo(options.actionListFiles.first()).absoluteFilePath())
+        // The operation-declared policy is the floor for the write: a candidate
+        // resolving to the trusted input is refused by the save contract before
+        // the destination is touched.
+        if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                         options.actionListFiles.first(),
+                                                                         options.actionListOutputDocument,
+                                                                         executionResult.savePolicy,
+                                                                         /*appendInPlace=*/false);
+            refused != PDFToolExitCode::Success)
         {
-            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.source-collision"),
-                             QStringLiteral("Action List output must be a new path; the source PDF is never overwritten implicitly."));
-            return PDFToolExitCode::InvalidInvocation;
+            return refused;
         }
         const PDFToolExitCode outputCheck = validateDestructiveOutput(options, options.actionListOutputDocument);
         if (outputCheck != PDFToolExitCode::Success)
@@ -580,7 +596,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                                      pdf::computeActionListPlanDigest(actionList,
                                                                       bindings,
                                                                       QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()),
-                                                                      governedProfile),
+                                                                      governedProfile,
+                                                                      executionResult.savePolicy),
                                      governedProfile,
                                      &data,
                                      &historyError))

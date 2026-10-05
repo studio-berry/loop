@@ -314,6 +314,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     CancelControl cancelControl;
     pdf::PDFRepairTransactionOptions transactionOptions;
     transactionOptions.operationControl = &cancelControl;
+    // The trusted input the caller received: a candidate write resolving to
+    // this path is refused by the save contract.
+    transactionOptions.sourcePath = options.repairFiles.first();
     pdf::PDFRepairTransaction transaction(source, transactionOptions);
     if (const pdf::PDFOperationResult addResult = transaction.add(operation, parameters); !addResult)
     {
@@ -534,6 +537,17 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
     {
         return blocked;
+    }
+    // Repair never appends in place, so the publish destination is held to the
+    // transaction's merged save policy before any publication side effect.
+    if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                     options.repairFiles.first(),
+                                                                     options.repairOutputDocument,
+                                                                     transaction.savePolicy(),
+                                                                     /*appendInPlace=*/false);
+        refused != PDFToolExitCode::Success)
+    {
+        return refused;
     }
     if (pdf::PDFOperationControl::isOperationCancelled(&cancelControl))
     {
