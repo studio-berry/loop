@@ -32,8 +32,13 @@ bounded-operation scope. Menu audits report missing or duplicate mnemonics for
 developers; they do not silently change shortcuts or action labels.
 
 `UnitTestsAccessibility` covers contrast targets, mnemonic diagnostics, control
-names, action naming, and DPI-aware sizing. Visual/screen-reader verification
-remains an application-level follow-up under the GUI/E2E harness issue.
+names, action naming, and DPI-aware sizing. Screen-reader verification for the
+Quick shell now runs as release proof in the installed-package qualification:
+on Windows `scripts/run-installed-quick-a11y-uia.ps1` drives a real UI
+Automation client against the installed tree and requires the native
+accessibility backend active, and `scripts/ci/verify_quick_accessibility_evidence.py`
+fails the package workflow when that lane is missing or replaced by a
+software-only run. See [QUICK_ACCESSIBILITY_CONTRACT.md](QUICK_ACCESSIBILITY_CONTRACT.md).
 
 ## Qt Quick extension for 1.2
 
