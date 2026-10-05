@@ -55,9 +55,12 @@ parameter is refused on the Action List planning path too. A repeated
 hides which value the operator meant.
 
 `PDFRepairTransactionOptions::expectedSourceSha256` binds a transaction to the source
-revision it was planned against; `analyze()` refuses a mismatch with "Repair plan is
-bound to a stale source revision." before any operation runs. An empty value keeps the
-historical behavior.
+revision it was planned against. Bound transactions require `sourcePath` to be
+readable without a password. Both `analyze()` and `apply()` reopen that source,
+verify its byte hash, and compare its parsed contents with the transaction source.
+A changed document retaining its original provenance hash or a changed source file
+is refused before candidate computation. Missing or unreadable source paths fail
+explicitly. An empty expected digest keeps the historical behavior.
 
 Migration decision: the legacy `pdftool addbleed` and `rgbtocmyk` commands remain
 registry-metadata consumers that bypass `PDFRepairTransaction`; converging them onto
