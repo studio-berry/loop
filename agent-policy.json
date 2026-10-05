@@ -229,10 +229,12 @@
         "UnitTests/tst_quickaccessibilitytest.cpp",
         "UnitTests/tst_shellkeyboardtest.cpp",
         "UnitTests/tst_loopstatevisualtest.cpp",
+        "UnitTests/tst_shellworkspacetest.cpp",
+        "UnitTests/testdata/compare-review/**",
         "tools/ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoopLibQuick", "LoopEditor", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsShellWorkspace", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
     },
     "developer_widgets": {
       "paths": [

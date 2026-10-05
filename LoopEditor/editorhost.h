@@ -168,6 +168,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString previewFidelityOriginName READ previewFidelityOriginName NOTIFY presentationChanged)
     Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
     Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -315,6 +316,19 @@ public:
     QString previewFidelitySummary() const;
     bool previewRequiresAuthoritative() const;
 
+    /// Read-only composition of the Core comparison facts for the Compare workspace:
+    /// the before/after artifact identities, the technical finding delta, the attributes
+    /// the comparison preserved, and the risk it left unresolved. Every field is a
+    /// projection of fixPlanIdentity, fixPreview, fixRecheck and fixSignOff (Core's own
+    /// run result), never a second comparison model. `blocked`/`blockedReason` name why a
+    /// stale preview or a plan digest that does not match the plan on screen may not be
+    /// presented as current.
+    QVariantMap compareReview() const;
+
+    /// Moves to the step or finding behind one entry of compareReview()'s
+    /// `materialDeltas`. Navigation only: it plans, approves and executes nothing.
+    Q_INVOKABLE bool navigateCompareDelta(int deltaIndex);
+
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
     /// content, or none is known yet. Separate from the document-wide
@@ -404,9 +418,9 @@ public:
 
     /// The Inspect workspace's corrective intent: selects and binds, then stops.
     void onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent);
-    /// Compare remains a visible but disabled destination until its product
-    /// decision is approved. This check is shared by QML and C++ callers so a
-    /// non-QML caller cannot bypass the shell routing policy.
+    /// Every registered workspace resolves to a real surface; the public
+    /// invokable still rejects an out-of-range value fail-closed, so a
+    /// non-QML caller cannot route past the shell's policy.
     Q_INVOKABLE bool isWorkspaceEnabled(LoopWorkspace workspace) const;
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();

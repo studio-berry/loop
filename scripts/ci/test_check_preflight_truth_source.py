@@ -50,6 +50,7 @@ EXPECTED_GUI_SOURCES = frozenset(
         "LoopEditor/editorhost.cpp",
         "LoopEditor/qml/ActionListPane.qml",
         "LoopEditor/qml/CanvasPane.qml",
+        "LoopEditor/qml/ComparePane.qml",
         "LoopEditor/qml/DocumentPane.qml",
         "LoopEditor/qml/InspectPane.qml",
         "LoopEditor/qml/InspectorPane.qml",
@@ -62,10 +63,10 @@ EXPECTED_GUI_SOURCES = frozenset(
         "LoopEditor/qml/ShellToolBar.qml",
         "LoopEditor/qml/StateBadge.qml",
         "LoopEditor/qml/Workspace.qml",
-        "LoopEditor/qml/WorkspacePlaceholderPane.qml",
         "tools/ProductQuickAccessibilitySmoke/main.cpp",
         "tools/ProductQuickAccessibilitySmoke/qml/ActionListPane.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/CanvasPane.qml",
+        "tools/ProductQuickAccessibilitySmoke/qml/ComparePane.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/DocumentPane.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/InspectPane.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/InspectorPane.qml",
@@ -78,7 +79,6 @@ EXPECTED_GUI_SOURCES = frozenset(
         "tools/ProductQuickAccessibilitySmoke/qml/ShellToolBar.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/StateBadge.qml",
         "tools/ProductQuickAccessibilitySmoke/qml/Workspace.qml",
-        "tools/ProductQuickAccessibilitySmoke/qml/WorkspacePlaceholderPane.qml",
     }
 )
 

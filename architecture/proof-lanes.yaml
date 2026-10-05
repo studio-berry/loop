@@ -533,4 +533,3 @@ migration:
     - UnitTestsProductionGeometry
     - UnitTestsResourceBudget
     - UnitTestsShellInspectorDispatch
-    - UnitTestsShellWorkspace
