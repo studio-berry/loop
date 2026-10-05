@@ -48,6 +48,7 @@ claims:
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
 unresolved:
+  - Review fixes have source and syntax validation only; focused runtime tests require a configured build of the updated PR head
   - core:scripts/ci/check_independent_validation_gate.py
   - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
   - PageMaster and the Editor Action List worker have no operation-history store in scope, so revocation cannot be resolved there until #37 centralizes execution

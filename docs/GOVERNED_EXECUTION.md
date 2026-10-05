@@ -126,13 +126,13 @@ closed on short codes:
 - **expiry** — `PDFApprovalRecord.expiresUtc` (null = no declared expiry) is refused when
   it is at or before `PDFApprovalAuthorizationContext.evaluatedUtc` (`approval-expired`),
   and a declared expiry that cannot be evaluated is refused. `policy.requireExpiry`
-  additionally refuses an approval that declares no expiry.
+  additionally refuses an approval that declares no expiry. Malformed declared expiry values invalidate the parsed approval.
 - **waiver exclusion** — finding waivers and preflight decisions remain excluded.
 - **revocation** — an append-only `ApprovalRevoked` history event whose
   `approval.decisionReference` equals the approval's reference revokes it
   (`approval-revoked`). This mirrors certificate invalidation: one chain, no second
   registry. The resolver reads the chain through `PDFOperationHistoryStore::events()`
-  when a history store is in scope.
+  when a history store is in scope. An unavailable or compromised chain is refused as `approval-history`.
 - **profile binding** — when the caller supplies `expectedProfileDigest`, the approval's
   `effective_profile_digest` must equal it (`profile-binding`), so an approval taken
   against one effective profile cannot authorize a run under another.

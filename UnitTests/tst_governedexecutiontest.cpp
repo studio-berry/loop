@@ -147,6 +147,7 @@ private slots:
     void profileBindingRefusesMismatch();
     void revokedApprovalIsRefusedBeforeWrite();
     void revokedApprovalRefusesLaterAttempt();
+    void malformedApprovalExpiryRefusesPublication();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -1062,6 +1063,31 @@ void GovernedExecutionTest::revokedApprovalRefusesLaterAttempt()
                                           pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite,
                                           context));
     QCOMPARE(QFileInfo(outputPath).size(), bytesAfterPublish);
+}
+
+void GovernedExecutionTest::malformedApprovalExpiryRefusesPublication()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QByteArray candidateBytes("candidate");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const auto approval = operatorApproval(planDigest, sourceSha256, sha256Hex(candidateBytes), QStringLiteral("approval:expiry"));
+    const QList<QJsonValue> invalidExpiries{ QStringLiteral("not-a-date"), 123, true, QJsonObject{} };
+    for (const QJsonValue& expiry : invalidExpiries)
+    {
+        QJsonObject json = approval.toJson();
+        QJsonObject record = json.value(QStringLiteral("approval")).toObject();
+        record.insert(QStringLiteral("expiresUtc"), expiry);
+        json.insert(QStringLiteral("approval"), record);
+        const auto parsed = pdf::PDFGovernedExecutionApproval::fromJson(json);
+        QVERIFY(!parsed.isValid());
+        QVERIFY(!pdf::resolveApprovalAuthorization(parsed, {}).allowed);
+        const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+        QVERIFY(!pdf::publishGovernedArtifact(parsed, planDigest, sourceSha256, candidateBytes,
+                                              outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail));
+        QVERIFY(!QFile::exists(outputPath));
+    }
 }
 
 QTEST_GUILESS_MAIN(GovernedExecutionTest)

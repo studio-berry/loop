@@ -406,10 +406,10 @@ PDFApprovalAuthorization resolveApprovalAuthorization(const PDFGovernedExecution
     };
 
     const PDFApprovalRecord& record = approval.approval;
-    if (!approvalAuthorizesPublication(record))
+    if (!record.isValid() || !approvalAuthorizesPublication(record))
     {
         return refuse(QStringLiteral("approval-unauthorized"),
-                      QStringLiteral("The approval does not carry an affirmative non-None decision."));
+                      QStringLiteral("The approval record is invalid or does not carry an affirmative non-None decision."));
     }
     if (record.actorId.trimmed().isEmpty())
     {
@@ -449,8 +449,17 @@ PDFApprovalAuthorization resolveApprovalAuthorization(const PDFGovernedExecution
 
     if (context.history && !record.decisionReference.trimmed().isEmpty())
     {
+        const PDFOperationHistoryVerification verification = context.history->verify();
+        if (!verification.verified)
+        {
+            return refuse(QStringLiteral("approval-history"), verification.errorMessage);
+        }
         QString historyError;
         const QList<PDFOperationHistoryEvent> events = context.history->events(&historyError);
+        if (!historyError.isEmpty())
+        {
+            return refuse(QStringLiteral("approval-history"), historyError);
+        }
         for (const PDFOperationHistoryEvent& event : events)
         {
             if (event.kind == PDFOperationHistoryEventKind::ApprovalRevoked &&
