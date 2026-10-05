@@ -29,7 +29,6 @@
 
 #include <QMap>
 #include <QCryptographicHash>
-#include <QJsonDocument>
 #include <QJsonValue>
 
 #include <algorithm>
@@ -131,9 +130,9 @@ bool matchesType(const QJsonValue& value, const QString& type)
 
 bool valuesEqual(const QJsonValue& left, const QJsonValue& right)
 {
-    return QJsonDocument(left.toObject()).toJson(QJsonDocument::Compact) ==
-               QJsonDocument(right.toObject()).toJson(QJsonDocument::Compact) ||
-           left == right;
+    // QJsonValue::toObject() yields an empty object for a non-object value, so comparing
+    // serialised objects would call any two scalars equal and make the enum check a no-op.
+    return left.type() == right.type() && left == right;
 }
 
 void appendError(QStringList* errors, const QString& error)

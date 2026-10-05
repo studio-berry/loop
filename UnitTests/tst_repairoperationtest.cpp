@@ -151,6 +151,7 @@ private slots:
     void ambiguousParameters_areRefusedBeforeAnalyze();
     void staleRevision_isRefusedBeforeAnalyze();
     void validateJsonSchemaFragment_reportsStructuralViolations();
+    void validateJsonSchemaFragment_rejectsValuesOutsideTheAllowedSet();
 };
 
 void RepairOperationTest::standardsConversionRejectsLegacyContract()
@@ -1180,6 +1181,44 @@ void RepairOperationTest::validateJsonSchemaFragment_reportsStructuralViolations
     QVERIFY(errors.isEmpty());
 
     QVERIFY(!pdf::validateJsonSchemaFragment(QJsonValue(QJsonObject()), schema, QStringLiteral("params"), nullptr));
+}
+
+void RepairOperationTest::validateJsonSchemaFragment_rejectsValuesOutsideTheAllowedSet()
+{
+    const QJsonObject schema{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("properties"),
+          QJsonObject{
+              { QStringLiteral("mode"),
+                QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") },
+                             { QStringLiteral("enum"),
+                               QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat") } } } },
+              { QStringLiteral("contract"),
+                QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") },
+                             { QStringLiteral("enum"), QJsonArray{ 2 } } } } } }
+    };
+
+    // A correctly-typed value outside the allowed set is refused: comparing two scalars
+    // through their serialised objects would accept any string and any number.
+    QStringList errors;
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("mode"), QStringLiteral("stretch") } }), schema,
+        QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n'))
+                .contains(QStringLiteral("params.mode contains a value outside the allowed set")));
+
+    errors.clear();
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("contract"), 3 } }), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n'))
+                .contains(QStringLiteral("params.contract contains a value outside the allowed set")));
+
+    errors.clear();
+    QVERIFY(pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("mode"), QStringLiteral("mirror") },
+                                { QStringLiteral("contract"), 2 } }),
+        schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)
