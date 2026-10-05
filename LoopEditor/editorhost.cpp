@@ -411,6 +411,7 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
             {
                 m_activeAsyncJobs.remove(snapshot.jobId);
+                finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
                 refreshCanvasTrace(); });
@@ -2869,30 +2870,80 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
                                                 .arg(documentInfo.completeBaseName(),
                                                      point->documentRevisionDigest.left(8)));
 
-    pdf::PDFArtifactStore artifacts(historyDirectory);
-    if (const pdf::PDFOperationResult rollback = history.rollbackTo(request, artifacts, destination); !rollback)
+    // One rollback at a time: a second request while the first is still restoring would
+    // race the same history and publish two revisions from one document state.
+    if (!m_rollbackOutcomes.isEmpty())
     {
-        announceDocumentState(tr("The document was not rolled back: %1").arg(rollback.getErrorMessage()));
+        announceDocumentState(tr("A rollback is already in progress."));
         return false;
     }
 
-    // The restored revision and its rolled-back event are already published, so a retention
-    // failure is reported alongside them rather than hiding the new revision.
-    const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
-    const QString revision = point->documentRevisionDigest.left(12);
-    const QString destinationName = QFileInfo(destination).fileName();
-    if (retention.success)
+    // The restore revalidates the recovered bytes through PreflightEngine, which refuses
+    // to run on this interactive thread (registered at construction), so the work is
+    // scheduled exactly like the Action List run. The worker builds its own stores: Qt SQL
+    // connections are thread-affine, so the GUI-thread history opened above must never be
+    // touched off-thread.
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("rollback.%1").arg(point->documentRevisionDigest.left(8));
+    spec.checkId = QStringLiteral("rollback");
+    spec.progressModel = QStringLiteral("rollback-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    auto outcome = std::make_shared<RollbackJobOutcome>();
+    outcome->destinationPath = destination;
+    outcome->revision = point->documentRevisionDigest.left(12);
+    m_rollbackOutcomes.insert(jobId, outcome);
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        [request, historyPath, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
+        {
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+            pdf::PDFOperationHistoryStore workerHistory(historyPath);
+            QString openError;
+            if (!workerHistory.open(&openError))
+            {
+                throw std::runtime_error(
+                    QStringLiteral("Recorded revisions are unavailable: %1").arg(openError).toStdString());
+            }
+            pdf::PDFArtifactStore artifacts(historyDirectory);
+            const pdf::PDFOperationResult rollback = workerHistory.rollbackTo(request, artifacts, destination);
+            if (!rollback)
+            {
+                outcome->errorMessage = rollback.getErrorMessage();
+                return;
+            }
+            outcome->ok = true;
+            if (context.isCancellationRequested())
+            {
+                // The restored revision is already published; skipping retention keeps it
+                // rather than hiding it behind a cancelled job.
+                return;
+            }
+            const pdf::PDFHistoryRetentionResult retention = workerHistory.enforceRetention({}, artifacts);
+            outcome->retentionSuccess = retention.success;
+            outcome->retentionError = retention.errorMessage;
+        });
+    if (submittedId != jobId)
     {
-        announceDocumentState(tr("Returned to revision %1 as %2.").arg(revision, destinationName));
+        m_rollbackOutcomes.remove(jobId);
+        announceDocumentState(tr("Unable to schedule the rollback."));
+        return false;
     }
-    else
-    {
-        announceDocumentState(tr("Returned to revision %1 as %2, but history retention could not be enforced: %3")
-                                  .arg(revision, destinationName, retention.errorMessage));
-    }
-    openFileUrl(QUrl::fromLocalFile(destination));
-    refreshFixRollbackPoints();
-    return retention.success;
+
+    // The rollback is scheduled, not complete: finishRollbackJob announces the outcome.
+    return true;
 }
 
 void EditorHost::discardActionListPlan()
@@ -3794,6 +3845,35 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
         case pdf::PDFJobStatus::Running:
             break;
     }
+}
+
+void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const std::shared_ptr<RollbackJobOutcome> outcome = m_rollbackOutcomes.take(snapshot.jobId);
+    if (!outcome)
+    {
+        return;
+    }
+
+    if (outcome->ok)
+    {
+        const QString destinationName = QFileInfo(outcome->destinationPath).fileName();
+        if (outcome->retentionSuccess)
+        {
+            announceDocumentState(tr("Returned to revision %1 as %2.").arg(outcome->revision, destinationName));
+        }
+        else
+        {
+            announceDocumentState(tr("Returned to revision %1 as %2, but history retention could not be enforced: %3")
+                                      .arg(outcome->revision, destinationName, outcome->retentionError));
+        }
+        openFileUrl(QUrl::fromLocalFile(outcome->destinationPath));
+        refreshFixRollbackPoints();
+        return;
+    }
+
+    const QString message = outcome->errorMessage.isEmpty() ? snapshot.errorMessage : outcome->errorMessage;
+    announceDocumentState(tr("The document was not rolled back: %1").arg(message));
 }
 
 void EditorHost::refreshCanvasTrace()
