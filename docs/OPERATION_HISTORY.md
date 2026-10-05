@@ -51,15 +51,15 @@ reported by the workflow after preserving the accepted event and output.
 `rollbackTo()` accepts only a non-evicted artifact referenced by an accepted event. It verifies the
 chain (`verify()`) and the target digest before opening the destination `QSaveFile`, so a rollback
 never extends a compromised chain and never touches the current document on a corrupt or missing
-target. The restored revision is a **new** revision: `rollbackTo()` restores the target bytes to the
-destination, then revalidates those bytes through the same #38 governed path every other surface
+target. The restored revision is a **new** revision: `rollbackTo()` restores the target bytes into owned
+staging and revalidates those bytes before replacing the destination through the same #38 governed path every other surface
 uses (`revalidateGovernedArtifact`/finalize) and appends a new `history.rollback` execution and
 `rolled-back` event. The event records the governed receipt (`resultSummary.governed` =
 `{approval, revalidation, sign_off}`), the revalidation report digest, and the effective profile
 digest; the sign-off certificate binds the restored bytes. A rollback requires the effective
 preflight profile and a sign-off actor/policy — without them it is refused
-(`rollback-profile-missing`). A revalidation failure fails closed: the restored destination is
-removed, a failed event is appended, and neither a sign-off nor a receipt is recorded. Intervening
+(`rollback-profile-missing`). A revalidation failure fails closed: the destination is
+preserved, a failed event is appended, and neither a sign-off nor a receipt is recorded. Intervening
 history is never erased or rewritten.
 
 The headless `PdfTool repair` and `action-list run/batch` paths create a per-output `<pdf>.loop-history` sidecar

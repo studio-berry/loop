@@ -36,6 +36,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUuid>
+#include <QTemporaryDir>
 
 #include <utility>
 
@@ -1001,6 +1002,13 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
     current.logicalName = currentQuery.value(3).toString();
     current.storageToken = currentQuery.value(4).toString();
 
+    QTemporaryDir staging;
+    if (!staging.isValid())
+    {
+        return PDFOperationResult(QStringLiteral("Rollback staging directory could not be created."));
+    }
+    const QString stagedPath = QDir(staging.path()).filePath(QStringLiteral("candidate.pdf"));
+
     PDFOperationHistoryExecution execution;
     execution.operationId = QStringLiteral("history.rollback");
     execution.operationVersion = 1;
@@ -1019,7 +1027,7 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
         return eventResult;
     }
 
-    const PDFArtifactRestoreResult restoreResult = artifacts.restoreToFile(target, destinationPath);
+    const PDFArtifactRestoreResult restoreResult = artifacts.restoreToFile(target, stagedPath);
     if (!restoreResult.success)
     {
         PDFOperationHistoryEvent failed;
@@ -1041,6 +1049,10 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
     approval.effectiveProfileDigest = computeProfileDigest(request.profile);
     approval.approval = request.approval;
 
+    PDFApprovalAuthorizationContext authorization;
+    authorization.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    authorization.history = this;
+    authorization.expectedProfileDigest = approval.effectiveProfileDigest;
     PDFGovernedExecutionRevalidation revalidation;
     PDFGovernedExecutionSignOff signOff;
     const PDFOperationResult finalizeResult =
@@ -1048,17 +1060,17 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
                                     planDigest,
                                     current.sha256,
                                     target.sha256,
-                                    destinationPath,
+                                    stagedPath,
                                     request.profile,
                                     request.signOffActor,
                                     request.signOffPolicy,
                                     &revalidation,
-                                    &signOff);
+                                    &signOff,
+                                    {},
+                                    authorization);
     if (!finalizeResult)
     {
-        // Fail closed: nothing unverified survives. Remove the restored destination,
-        // record the failure, and issue neither sign-off nor receipt.
-        QFile::remove(destinationPath);
+        // The staging directory owns the rejected bytes; the destination stays intact.
         PDFOperationHistoryEvent failed;
         failed.executionId = executionId;
         failed.status = PDFOperationHistoryStatus::Failed;
@@ -1069,6 +1081,27 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
         };
         appendEvent(failed);
         return finalizeResult;
+    }
+
+    authorization.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    if (const PDFOperationResult authorized = validateGovernedApproval(approval, planDigest, current.sha256, target.sha256, authorization); !authorized)
+    {
+        PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.status = PDFOperationHistoryStatus::Failed;
+        failed.resultSummary = QJsonObject{ { QStringLiteral("error"), authorized.getErrorMessage() } };
+        appendEvent(failed);
+        return authorized;
+    }
+    const PDFArtifactRestoreResult published = artifacts.restoreToFile(target, destinationPath);
+    if (!published.success)
+    {
+        PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.status = PDFOperationHistoryStatus::Failed;
+        failed.resultSummary = QJsonObject{ { QStringLiteral("error"), published.errorMessage } };
+        appendEvent(failed);
+        return PDFOperationResult(published.errorMessage);
     }
 
     PDFOperationHistoryEvent complete;
@@ -1209,7 +1242,7 @@ PDFOperationResult reconstructGovernedPublicationAudit(const PDFOperationHistory
     const PDFOperationHistoryEvent* accepted = nullptr;
     for (const PDFOperationHistoryEvent& event : events)
     {
-        if (event.status != PDFOperationHistoryStatus::Accepted || !event.output.has_value())
+        if ((event.status != PDFOperationHistoryStatus::Accepted && event.status != PDFOperationHistoryStatus::RolledBack) || !event.output.has_value())
         {
             continue;
         }

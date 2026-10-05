@@ -1432,6 +1432,14 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
                         { return event.status == pdf::PDFOperationHistoryStatus::RolledBack; }));
+    host.openFileUrl(QUrl::fromLocalFile(repairedPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    rollbackFinished = false;
+    QVERIFY(host.requestFixRollback(rollbackId));
+    host.openFileUrl(QUrl::fromLocalFile(sourcePath));
+    QTRY_VERIFY_WITH_TIMEOUT(rollbackFinished, 60000);
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.sessionForTest()->facade().source().path, sourcePath);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,10 @@
 format_version: 1
 kind: evidence
 claims:
+  - id: rollback-destination-preservation-and-report-failure
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - architecture:agent-policy:core
   - id: rollback-revalidation-and-receipt
     evidence:
       - unit:UnitTests/tst_operationhistorytest.cpp

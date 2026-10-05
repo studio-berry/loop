@@ -1434,6 +1434,25 @@ void PdfToolContractTest::rollbackRestoresRecordedRevisionWithGovernedReceipt()
 
     const QString restoredPath = directory.filePath(QStringLiteral("restored.pdf"));
     const QString reportPath = directory.filePath(QStringLiteral("rollback-report.json"));
+    for (const QString& conflictingReport : { publishedPath, restoredPath, profilePath })
+    {
+        const ToolRun conflict = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                              QStringLiteral("--to"), publishedSha,
+                                              QStringLiteral("--output"), restoredPath,
+                                              QStringLiteral("--profile"), profilePath,
+                                              QStringLiteral("--report-file"), conflictingReport });
+        QVERIFY(conflict.exitCode != 0);
+        QVERIFY(!QFile::exists(restoredPath));
+        QFile unchanged(publishedPath);
+        QVERIFY(unchanged.open(QIODevice::ReadOnly));
+        QCOMPARE(unchanged.readAll(), publishedBytes);
+    }
+    const ToolRun inPlace = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                         QStringLiteral("--to"), publishedSha,
+                                         QStringLiteral("--output"), publishedPath,
+                                         QStringLiteral("--profile"), profilePath });
+    QVERIFY(inPlace.exitCode != 0);
+
     const ToolRun rollback = runPdfTool({ QStringLiteral("rollback"), publishedPath,
                                           QStringLiteral("--to"), publishedSha,
                                           QStringLiteral("--output"), restoredPath,
@@ -1454,6 +1473,22 @@ void PdfToolContractTest::rollbackRestoresRecordedRevisionWithGovernedReceipt()
     QFile restored(restoredPath);
     QVERIFY(restored.open(QIODevice::ReadOnly));
     QCOMPARE(restored.readAll(), publishedBytes);
+    restored.close();
+    const QString otherOutput = directory.filePath(QStringLiteral("restored-without-report.pdf"));
+    const QString missingReport = directory.filePath(QStringLiteral("missing/report.json"));
+    const ToolRun failedReport = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                              QStringLiteral("--to"), publishedSha,
+                                              QStringLiteral("--output"), otherOutput,
+                                              QStringLiteral("--profile"), profilePath,
+                                              QStringLiteral("--report-file"), missingReport });
+    QVERIFY(failedReport.exitCode != 0);
+    QVERIFY(QFile::exists(otherOutput));
+    QVERIFY(!QFile::exists(missingReport));
+    const QJsonArray outputs = failedReport.json.value(QStringLiteral("outputs")).toArray();
+    for (const QJsonValue& output : outputs)
+    {
+        QVERIFY(output.toObject().value(QStringLiteral("role")).toString() != QStringLiteral("report"));
+    }
 }
 
 QTEST_MAIN(PdfToolContractTest)

@@ -144,12 +144,12 @@ public:
                                                const PDFArtifactStore& artifacts,
                                                QDateTime nowUtc = QDateTime::currentDateTimeUtc());
 
-    /// Verifies the target before using QSaveFile to replace the current
-    /// document, then revalidates the restored bytes through the #38 path and
+    /// Verifies and revalidates the target in owned staging before using
+    /// QSaveFile to replace the destination, then
     /// appends a new rolled-back event carrying the governed receipt. A rollback
     /// without a profile/sign-off identity, a tampered target, or a chain that
     /// fails `verify()` is refused before any write; a revalidation failure
-    /// removes the restored destination and records a failed event. Existing
+    /// preserves the destination and records a failed event. Existing
     /// events remain.
     PDFOperationResult rollbackTo(const PDFRollbackRequest& request,
                                   const PDFArtifactStore& artifacts,

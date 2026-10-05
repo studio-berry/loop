@@ -3855,7 +3855,15 @@ void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
         return;
     }
 
-    if (outcome->ok)
+    if (snapshot.status == pdf::PDFJobStatus::Stale || snapshot.status == pdf::PDFJobStatus::Cancelled ||
+        !hasDocument() || !m_session->revisionSource() ||
+        snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != m_session->facade().currentRevision().toString())
+    {
+        return;
+    }
+
+    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome->ok)
     {
         const QString destinationName = QFileInfo(outcome->destinationPath).fileName();
         if (outcome->retentionSuccess)

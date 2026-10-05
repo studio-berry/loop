@@ -379,6 +379,20 @@ void OperationHistoryTest::rollbackRevalidatesAndRecordsGovernedReceipt()
     rollback.targetExecutionId = executionId;
     rollback.reason = QStringLiteral("governed rollback");
     approveRollback(rollback);
+    {
+        QFile existing(destination);
+        QVERIFY(existing.open(QIODevice::WriteOnly));
+        QCOMPARE(existing.write(sourceBytes), qint64(sourceBytes.size()));
+    }
+    rollback.approval.decision = QStringLiteral("reject");
+    QVERIFY(!history.rollbackTo(rollback, artifacts, destination));
+    {
+        QFile existing(destination);
+        QVERIFY(existing.open(QIODevice::ReadOnly));
+        QCOMPARE(existing.readAll(), sourceBytes);
+    }
+    rollback.approval.decision = QStringLiteral("approve");
+    rollback.approval.expiresUtc = rollback.approval.decidedUtc.addSecs(3600);
     QVERIFY(history.rollbackTo(rollback, artifacts, destination));
 
     // The rolled-back event carries the same governed receipt every other surface
@@ -406,6 +420,10 @@ void OperationHistoryTest::rollbackRevalidatesAndRecordsGovernedReceipt()
     QFile restored(destination);
     QVERIFY(restored.open(QIODevice::ReadOnly));
     QCOMPARE(restored.readAll(), targetBytes);
+    pdf::PDFGovernedPublicationAudit audit;
+    QVERIFY(pdf::reconstructGovernedPublicationAudit(history, target.artifact.sha256, &audit));
+    QCOMPARE(audit.executionId, rolledBack.executionId);
+    QCOMPARE(audit.operationId, QStringLiteral("history.rollback"));
 }
 
 void OperationHistoryTest::rollbackRefusesWithoutProfileOrOnCompromisedChain()

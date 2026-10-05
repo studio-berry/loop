@@ -388,7 +388,8 @@ regenerates the fixture receipts when `LOOP_GOVERNED_PARITY_OUT` is set; the CI
 ## Rollback receipt (#40)
 
 A rollback is a governed publication like any other. `PDFOperationHistoryStore::rollbackTo`
-restores a recorded revision as a **new** revision and then runs the same finalize path
+revalidates a recorded revision in owned staging before publishing it as a **new** revision
+through the same finalize path
 (`finalizeGovernedPublication`): it revalidates the restored bytes and issues a sign-off
 certificate bound to those bytes. The `rolled-back` event records
 `resultSummary.governed = { approval, revalidation, sign_off }` — the same three
@@ -397,7 +398,7 @@ effective profile digest, so `check_governed_parity.py` accepts a rollback recei
 exactly like a repair or export receipt. A rollback requires the effective preflight
 profile and a sign-off actor/policy; without them it is refused (`rollback-profile-missing`).
 A tampered target, an unregistered current revision, or a chain that fails `verify()` is
-refused before any write. A revalidation failure fails closed: the restored destination
-is removed, a failed event is appended, and no sign-off or receipt is recorded. The
+refused before any write. A revalidation failure fails closed: the destination
+is preserved, a failed event is appended, and no sign-off or receipt is recorded. The
 Editor rollback route supplies the profile it already holds; Action List and PageMaster
 rollback surfaces are deferred (they publish through the same gateway when added).

@@ -98,6 +98,32 @@ PDFToolExitCode PDFToolRollback::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InvalidInvocation;
     }
 
+    const auto pathIdentity = [](const QString& path)
+    {
+        const QFileInfo info(path);
+        const QString canonical = info.canonicalFilePath();
+        const QString parent = info.dir().canonicalPath();
+        const QString absolute = canonical.isEmpty()
+                                     ? QDir::cleanPath(parent.isEmpty() ? info.absoluteFilePath() : QDir(parent).filePath(info.fileName()))
+                                     : canonical;
+#ifdef Q_OS_WIN
+        return absolute.toCaseFolded();
+#else
+        return absolute;
+#endif
+    };
+    const QString inputPath = pathIdentity(options.rollbackFiles.first());
+    const QString outputPath = pathIdentity(options.rollbackOutputDocument);
+    const QString profilePath = pathIdentity(options.rollbackProfilePath);
+    const QString reportPath = options.rollbackReportFile.isEmpty() ? QString() : pathIdentity(options.rollbackReportFile);
+    if (outputPath == inputPath || outputPath == profilePath ||
+        (!reportPath.isEmpty() && (reportPath == inputPath || reportPath == outputPath || reportPath == profilePath)))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.path-conflict"),
+                         PDFToolTranslationContext::tr("Rollback input, output, profile, and report paths must be distinct."));
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     QJsonObject profile;
     QString profileError;
     if (!pdf::PreflightEngine::loadProfile(options.rollbackProfilePath, profile, profileError))
@@ -207,16 +233,24 @@ PDFToolExitCode PDFToolRollback::execute(const PDFToolOptions& options)
                                                   { QStringLiteral("database"), history.databasePath() } } }
     };
 
-    writeRollbackReport(options.rollbackReportFile, reportJson);
+    const bool reportWritten = writeRollbackReport(options.rollbackReportFile, reportJson);
 
     if (options.executionContext)
     {
         options.executionContext->setData(reportJson);
         options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("primary"), options.rollbackOutputDocument, QStringLiteral("written") });
-        if (!options.rollbackReportFile.isEmpty())
+        if (reportWritten && !options.rollbackReportFile.isEmpty())
         {
             options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("report"), options.rollbackReportFile, QStringLiteral("written") });
         }
+    }
+
+    if (!reportWritten)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("rollback.report-write-failed"),
+                         PDFToolTranslationContext::tr("The rollback was published, but its report could not be written."),
+                         QJsonObject{ { QStringLiteral("path"), options.rollbackReportFile } });
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
