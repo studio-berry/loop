@@ -338,6 +338,29 @@ mutation gateway and finalizes against the exact staged bytes it reopens into th
 candidate, so the sign-off is never bound to a second serialization or to bytes the
 operator did not receive.
 
+### Sign-off staleness and provenance reconstruction (#39)
+
+A stored sign-off is a statement about exact bytes, so consuming one re-reads the bytes:
+
+- `verifyGovernedSignOffAgainstArtifact(signOff, publishedPath)` reopens and re-hashes the
+  artifact and refuses (`invalid-document-changed`) when the digest no longer matches
+  `signOff.publishedSha256`. `PDFGovernedExecutionSignOff::fromJson` round-trips a stored
+  sign-off; a malformed one is refused.
+- The evidence-bundle path wires this in: when a `publishedArtifactPath` is supplied the
+  bundle re-hashes the bytes and refuses a stale sign-off. A sign-off with no artifact and
+  no output identity is now refused explicitly instead of synthesizing the output identity
+  from the sign-off alone (the old silent-synthesis path).
+- `reconstructGovernedPublicationAudit` (Core) reconstructs plan, approval, execution,
+  artifacts, validation, and sign-off for one published output from the canonical chain,
+  refusing a chain that fails `verify()` (see `docs/OPERATION_HISTORY.md`).
+
+Producer identity completeness (#39): the gateway's running and failed `FixApplied` events
+now bind `effectiveProfileDigest` (not only the accepted completion), so a reader can
+attribute which profile an attempt ran under; the legacy `PdfTool add-bleed` accepted
+approval now carries `evidenceSha256` and a `decisionReference` bound to the published
+output (a targeted identity fix — add-bleed is not converged onto the gateway; that stays
+#37). No CLI entry point for the reader yet (deferred).
+
 ## Cross-surface equality (D5)
 
 CLI, Quick/Editor, and headless surfaces must agree on canonical plan identity and

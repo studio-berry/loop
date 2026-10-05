@@ -62,6 +62,8 @@ private slots:
     void cancelledPreflightRunIsNotAccepted();
     void schemaMigratedEventAppendedOnRewrite();
     void historyDatabaseUpgradeRecordsSchemaMigratedEvent();
+    void governedPublicationAuditReconstructsAfterReopen();
+    void governedPublicationAuditRefusesOnTamperedChain();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -1022,6 +1024,261 @@ void OperationHistoryTest::approvalExpiryAndRevocationKindRoundTrip()
              pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
     QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("approvalrevoked")),
              pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
+}
+
+/// Appends one governed publication (running + accepted FixApplied) to a fresh
+/// store so a reconstruction reader can be exercised after reopen or tamper.
+bool appendGovernedPublicationFixture(const QString& databasePath,
+                                      pdf::PDFArtifactStore& artifacts,
+                                      QString* publishedSha256,
+                                      QUuid* executionId)
+{
+    const auto input = artifacts.importBytes(QByteArrayLiteral("governed source revision"),
+                                             { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    const auto output = artifacts.importBytes(QByteArrayLiteral("governed published candidate"),
+                                              { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
+    if (!input.success || !output.success)
+    {
+        return false;
+    }
+
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString reportDigest(64, QLatin1Char('f'));
+    const QString profileDigest(64, QLatin1Char('a'));
+    const QString sourceSha256 = input.artifact.sha256;
+    const QString candidateSha256 = output.artifact.sha256;
+    const QDateTime decidedUtc = QDateTime::currentDateTimeUtc();
+
+    const QJsonObject approvalRecord{
+        { QStringLiteral("kind"), QStringLiteral("human") },
+        { QStringLiteral("actorId"), QStringLiteral("operator") },
+        { QStringLiteral("decision"), QStringLiteral("approve") },
+        { QStringLiteral("policyId"), QStringLiteral("review") },
+        { QStringLiteral("rationale"), QStringLiteral("Reviewed the exact plan.") },
+        { QStringLiteral("evidenceSha256"), planDigest },
+        { QStringLiteral("decidedUtc"), decidedUtc.toString(Qt::ISODateWithMs) }
+    };
+    const QJsonObject governedApproval{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-approval") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("approval"), approvalRecord }
+    };
+    const QJsonObject signOffApproval{
+        { QStringLiteral("kind"), QStringLiteral("system") },
+        { QStringLiteral("actorId"), QStringLiteral("PdfTool") },
+        { QStringLiteral("decision"), QStringLiteral("approve") },
+        { QStringLiteral("policyId"), QStringLiteral("repair-postflight") },
+        { QStringLiteral("evidenceSha256"), reportDigest },
+        { QStringLiteral("decisionReference"), QStringLiteral("published-revalidation:%1").arg(candidateSha256) },
+        { QStringLiteral("decidedUtc"), decidedUtc.toString(Qt::ISODateWithMs) }
+    };
+    const QJsonObject signOff{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("published_sha256"), candidateSha256 },
+        { QStringLiteral("revalidation_report_sha256"), reportDigest },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("approval"), signOffApproval }
+    };
+    const QJsonObject revalidation{
+        { QStringLiteral("state"), QStringLiteral("complete") },
+        { QStringLiteral("bytes_verified"), true },
+        { QStringLiteral("artifact_sha256"), candidateSha256 },
+        { QStringLiteral("report_sha256"), reportDigest },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("report"),
+          QJsonObject{ { QStringLiteral("finding_delta"),
+                         QJsonObject{ { QStringLiteral("resolved"), 1 }, { QStringLiteral("introduced"), 0 } } } } }
+    };
+
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QString openError;
+    if (!history.open(&openError) || !history.registerArtifact(input.artifact))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("repair.add-bleed");
+    execution.operationVersion = 1;
+    execution.input = input.artifact;
+    QUuid id;
+    if (!history.beginExecution(execution, &id))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = id;
+    running.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.operatorIdentity = QStringLiteral("operator");
+    running.documentRevisionDigest = sourceSha256;
+    running.effectiveProfileDigest = profileDigest;
+    running.approval.kind = pdf::PDFApprovalKind::Human;
+    running.approval.actorId = QStringLiteral("operator");
+    running.approval.decision = QStringLiteral("approve");
+    running.approval.decidedUtc = decidedUtc;
+    if (!history.appendEvent(running))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = id;
+    accepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.operatorIdentity = QStringLiteral("PdfTool");
+    accepted.documentRevisionDigest = candidateSha256;
+    accepted.effectiveProfileDigest = profileDigest;
+    accepted.output = output.artifact;
+    accepted.reportArtifactSha256 = reportDigest;
+    accepted.approval = pdf::PDFApprovalRecord::fromJson(signOffApproval);
+    accepted.resultSummary = QJsonObject{
+        { QStringLiteral("status"), QStringLiteral("passed") },
+        { QStringLiteral("approval"), governedApproval },
+        { QStringLiteral("revalidation"), revalidation },
+        { QStringLiteral("sign_off"), signOff }
+    };
+    if (!history.appendEvent(accepted) || !history.verify().verified)
+    {
+        return false;
+    }
+
+    if (publishedSha256)
+    {
+        *publishedSha256 = candidateSha256;
+    }
+    if (executionId)
+    {
+        *executionId = id;
+    }
+    return true;
+}
+
+void OperationHistoryTest::governedPublicationAuditReconstructsAfterReopen()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    QString publishedSha256;
+    QUuid executionId;
+    QVERIFY(appendGovernedPublicationFixture(databasePath, artifacts, &publishedSha256, &executionId));
+
+    const QByteArray sourceBytes = QByteArrayLiteral("governed source revision");
+    const QString sourceSha256 = QString::fromLatin1(QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex());
+
+    // Close/reopen: the audit reconstructs the same identities from the durable chain.
+    pdf::PDFOperationHistoryStore reopened(databasePath);
+    QString openError;
+    QVERIFY2(reopened.open(&openError), qPrintable(openError));
+    QVERIFY(reopened.verify().verified);
+
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult result = pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QVERIFY(audit.refusal.isEmpty());
+    QCOMPARE(audit.publishedSha256, publishedSha256);
+    QCOMPARE(audit.planDigest, QString(64, QLatin1Char('c')));
+    QCOMPARE(audit.sourceSha256, sourceSha256);
+    QCOMPARE(audit.candidateSha256, publishedSha256);
+    QCOMPARE(audit.effectiveProfileDigest, QString(64, QLatin1Char('a')));
+    QCOMPARE(audit.operationId, QStringLiteral("repair.add-bleed"));
+    QCOMPARE(audit.executionId, executionId);
+    QCOMPARE(audit.inputArtifact.sha256, sourceSha256);
+    // "Who approved what output": the authorizing approval, not the certificate.
+    QCOMPARE(audit.approval.kind, pdf::PDFApprovalKind::Human);
+    QCOMPARE(audit.approval.actorId, QStringLiteral("operator"));
+    QCOMPARE(audit.operatorIdentity, QStringLiteral("PdfTool"));
+    // Validation link.
+    QCOMPARE(audit.revalidationState, QStringLiteral("complete"));
+    QCOMPARE(audit.revalidationReportSha256, QString(64, QLatin1Char('f')));
+    QCOMPARE(audit.validationDelta.value(QStringLiteral("resolved")).toInt(), 1);
+    // Sign-off link round-trips from the chain.
+    QVERIFY(audit.signOff.has_value());
+    QCOMPARE(audit.signOff->publishedSha256, publishedSha256);
+    QCOMPARE(audit.signOff->planDigest, QString(64, QLatin1Char('c')));
+    QVERIFY(audit.toJson().value(QStringLiteral("reconstructed")).toBool());
+
+    // An output the chain never accepted is refused, not fabricated.
+    pdf::PDFGovernedPublicationAudit missing;
+    QVERIFY(!pdf::reconstructGovernedPublicationAudit(reopened, QString(64, QLatin1Char('9')), &missing));
+    QVERIFY(!missing.reconstructed);
+    QCOMPARE(missing.refusal, QStringLiteral("no-accepted-publication"));
+}
+
+void OperationHistoryTest::governedPublicationAuditRefusesOnTamperedChain()
+{
+    const auto tamper = [](const QString& label, const QString& statement, const QString& refusalPrefix)
+    {
+        QTemporaryDir temporary;
+        if (!temporary.isValid())
+        {
+            return false;
+        }
+        const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+        pdf::PDFArtifactStore artifacts(temporary.path());
+        QString publishedSha256;
+        if (!appendGovernedPublicationFixture(databasePath, artifacts, &publishedSha256, nullptr))
+        {
+            return false;
+        }
+
+        const QString connectionName = QStringLiteral("governed-audit-tamper-%1").arg(label);
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(databasePath);
+        if (!database.open())
+        {
+            return false;
+        }
+        QSqlQuery query(database);
+        const bool executed = query.exec(statement);
+        database.close();
+        database = QSqlDatabase();
+        QSqlDatabase::removeDatabase(connectionName);
+        if (!executed)
+        {
+            return false;
+        }
+
+        pdf::PDFOperationHistoryStore reopened(databasePath);
+        if (!reopened.open())
+        {
+            return false;
+        }
+        if (reopened.verify().verified)
+        {
+            return false;
+        }
+        pdf::PDFGovernedPublicationAudit audit;
+        if (pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit))
+        {
+            return false;
+        }
+        if (audit.reconstructed || !audit.refusal.startsWith(refusalPrefix))
+        {
+            return false;
+        }
+        return true;
+    };
+
+    // An UPDATE of the accepted event's payload breaks the hash chain.
+    QVERIFY(tamper(QStringLiteral("update"),
+                   QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE status = 'accepted'"),
+                   QStringLiteral("chain-")));
+    // A DELETE of a history row is a chain break too.
+    QVERIFY(tamper(QStringLiteral("delete"),
+                   QStringLiteral("DELETE FROM history_events WHERE sequence = 1"),
+                   QStringLiteral("chain-")));
 }
 
 QTEST_MAIN(OperationHistoryTest)

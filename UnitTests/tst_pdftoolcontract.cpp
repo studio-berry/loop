@@ -135,6 +135,7 @@ private slots:
     void repairRefusesToWriteOverItsOwnInput();
     void repairRefusesRepeatedParameterAssignment();
     void repairRefusesStaleApprovalBeforeWrite();
+    void repairPublicationBindsCompleteEventIdentities();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
     void benchmarkWithoutPreflightProfileIsIncomplete();
@@ -1293,6 +1294,90 @@ void PdfToolContractTest::evidenceBundleRejectsNonJsonOutput()
 }
 
 }   // namespace
+
+void PdfToolContractTest::repairPublicationBindsCompleteEventIdentities()
+{
+    // A repair through the one gateway appends a chain a reader can reconstruct:
+    // every event binds the exact plan, approval, profile, revision, and output.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const QString outputPath = directory.filePath(QStringLiteral("published.pdf"));
+    const ToolRun run = runPdfTool({ QStringLiteral("repair"),
+                                     inputPath,
+                                     QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                     QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                     QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                     QStringLiteral("--param"), QStringLiteral("force=true"),
+                                     QStringLiteral("--profile"), profilePath,
+                                     QStringLiteral("--output"), outputPath,
+                                     QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY2(run.exitCode == 0, qPrintable(QString::fromUtf8(run.stderrData)));
+    QVERIFY(QFile::exists(outputPath));
+
+    const QString historyPath =
+        QDir(QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    QVERIFY(history.verify().verified);
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+
+    const pdf::PDFOperationHistoryEvent* running = nullptr;
+    const pdf::PDFOperationHistoryEvent* accepted = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.kind != pdf::PDFOperationHistoryEventKind::FixApplied)
+        {
+            continue;
+        }
+        if (event.status == pdf::PDFOperationHistoryStatus::Running)
+        {
+            running = &event;
+        }
+        else if (event.status == pdf::PDFOperationHistoryStatus::Accepted)
+        {
+            accepted = &event;
+        }
+    }
+    QVERIFY(running != nullptr);
+    QVERIFY(accepted != nullptr);
+    // Identity completeness: no empty plan/approval/profile digests where the
+    // acceptance requires them.
+    QVERIFY(!running->documentRevisionDigest.isEmpty());
+    QVERIFY(!running->effectiveProfileDigest.isEmpty());
+    QVERIFY(running->approval.kind != pdf::PDFApprovalKind::None);
+    QVERIFY(!running->operatorIdentity.isEmpty());
+    QVERIFY(!accepted->effectiveProfileDigest.isEmpty());
+    QVERIFY(!accepted->reportArtifactSha256.isEmpty());
+    QVERIFY(accepted->output.has_value());
+
+    const QJsonObject governedApproval = accepted->resultSummary.value(QStringLiteral("approval")).toObject();
+    QVERIFY(pdf::isPDFSha256(governedApproval.value(QStringLiteral("plan_digest")).toString()));
+    QVERIFY(!accepted->resultSummary.value(QStringLiteral("sign_off")).toObject().isEmpty());
+    QVERIFY(!accepted->resultSummary.value(QStringLiteral("revalidation")).toObject().isEmpty());
+
+    // The reader answers "who approved what output" for the published bytes.
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult reconstructed =
+        pdf::reconstructGovernedPublicationAudit(history, accepted->output->sha256, &audit);
+    QVERIFY2(reconstructed, qPrintable(reconstructed.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QCOMPARE(audit.publishedSha256, accepted->output->sha256);
+    QCOMPARE(audit.planDigest, governedApproval.value(QStringLiteral("plan_digest")).toString());
+    QVERIFY(audit.approval.kind != pdf::PDFApprovalKind::None);
+    QVERIFY(audit.signOff.has_value());
+    QVERIFY(!audit.effectiveProfileDigest.isEmpty());
+    QCOMPARE(audit.revalidationState, QStringLiteral("complete"));
+}
 
 QTEST_MAIN(PdfToolContractTest)
 #include "tst_pdftoolcontract.moc"

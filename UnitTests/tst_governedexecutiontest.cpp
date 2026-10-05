@@ -197,6 +197,10 @@ private slots:
     void targetedMatchesFullOnPublishedBytes();
     void undeclaredImpactFallsBackToFullInspection();
     void inMemoryCandidateValidationCannotCompleteOperation();
+
+    // L04-07 (#39) — provenance convergence and sign-off
+    void governedSignOffRoundTripsAndRejectsStaleArtifact();
+    void gatewayEventsBindCompleteIdentities();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -1678,6 +1682,191 @@ void GovernedExecutionTest::inMemoryCandidateValidationCannotCompleteOperation()
                                                                                     &finalizeSignOff);
     QVERIFY(!finalizeResult);
     QVERIFY(!finalizeSignOff.isValid());
+}
+
+void GovernedExecutionTest::governedSignOffRoundTripsAndRejectsStaleArtifact()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString publishedPath = temporary.filePath(QStringLiteral("signed.pdf"));
+    const QByteArray publishedBytes = writePublishedFixture(publishedPath);
+    QVERIFY(!publishedBytes.isEmpty());
+    const QString publishedSha256 = sha256Hex(publishedBytes);
+
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(QString(64, QLatin1Char('c')),
+                                                                  QString(64, QLatin1Char('b')),
+                                                                  publishedSha256,
+                                                                  QStringLiteral("approval:signoff"));
+    pdf::PDFGovernedExecutionRevalidation revalidation;
+    pdf::PDFGovernedExecutionSignOff signOff;
+    const pdf::PDFOperationResult finalized = pdf::finalizeGovernedPublication(approval,
+                                                                               approval.planDigest,
+                                                                               approval.sourceSha256,
+                                                                               publishedSha256,
+                                                                               publishedPath,
+                                                                               governedGatewayProfile(),
+                                                                               QStringLiteral("test-certificate"),
+                                                                               QStringLiteral("test-revalidation"),
+                                                                               &revalidation,
+                                                                               &signOff);
+    QVERIFY2(finalized, qPrintable(finalized.getErrorMessage()));
+    QVERIFY(signOff.isValid());
+
+    // Unchanged bytes pass the artifact check.
+    QVERIFY2(pdf::verifyGovernedSignOffAgainstArtifact(signOff, publishedPath), "unchanged bytes must verify");
+
+    // A stored sign-off round-trips through JSON.
+    const pdf::PDFGovernedExecutionSignOff roundTripped =
+        pdf::PDFGovernedExecutionSignOff::fromJson(signOff.toJson());
+    QVERIFY(roundTripped.isValid());
+    QCOMPARE(roundTripped.planDigest, signOff.planDigest);
+    QCOMPARE(roundTripped.sourceSha256, signOff.sourceSha256);
+    QCOMPARE(roundTripped.candidateSha256, signOff.candidateSha256);
+    QCOMPARE(roundTripped.publishedSha256, signOff.publishedSha256);
+    QCOMPARE(roundTripped.revalidationReportSha256, signOff.revalidationReportSha256);
+    QCOMPARE(roundTripped.effectiveProfileDigest, signOff.effectiveProfileDigest);
+    QCOMPARE(roundTripped.approval.actorId, signOff.approval.actorId);
+    QVERIFY(pdf::verifyGovernedSignOffAgainstArtifact(roundTripped, publishedPath));
+
+    // The output changes after publication: the stored sign-off is stale.
+    {
+        QFile file(publishedPath);
+        QVERIFY(file.open(QIODevice::Append));
+        const QByteArray tamper = QByteArrayLiteral("% changed after sign-off\n");
+        QCOMPARE(file.write(tamper), qint64(tamper.size()));
+    }
+    QVERIFY(fileSha256Hex(publishedPath) != publishedSha256);
+    const pdf::PDFOperationResult stale = pdf::verifyGovernedSignOffAgainstArtifact(signOff, publishedPath);
+    QVERIFY(!stale);
+    QVERIFY2(stale.getErrorMessage().contains(QStringLiteral("invalid-document-changed")),
+             qPrintable(stale.getErrorMessage()));
+
+    // A malformed stored sign-off is refused, not treated as valid.
+    QString parseError;
+    const pdf::PDFGovernedExecutionSignOff malformed =
+        pdf::PDFGovernedExecutionSignOff::fromJson(QJsonObject{ { QStringLiteral("plan_digest"), QString(64, QLatin1Char('c')) } },
+                                                   &parseError);
+    QVERIFY(!malformed.isValid());
+    QVERIFY(!parseError.isEmpty());
+}
+
+void GovernedExecutionTest::gatewayEventsBindCompleteIdentities()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+
+    const QByteArray sourceBytes = QByteArrayLiteral("governed gateway source revision");
+    const auto input = artifacts.importBytes(sourceBytes, { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY(input.success);
+    QVERIFY(history.registerArtifact(input.artifact));
+
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString candidateSha256 = sha256Hex(candidate);
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256 = sha256Hex(sourceBytes);
+    const QString profileDigest(64, QLatin1Char('a'));
+    const auto output = artifacts.importBytes(candidate, { QStringLiteral("application/pdf"), QStringLiteral("candidate.pdf") });
+    QVERIFY(output.success);
+
+    const QString destination = temporary.filePath(QStringLiteral("published.pdf"));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+    request.approval.effectiveProfileDigest = profileDigest;
+    request.profileDigest = profileDigest;
+    request.history = &history;
+    request.operationId = QStringLiteral("governed.gateway.identity");
+    request.inputArtifact = input.artifact;
+    request.outputArtifact = output.artifact;
+    // Mirror the repair/action-list surfaces: the accepted event's summary
+    // carries the governed approval envelope, the revalidation, and the sign-off.
+    const QJsonObject governedApprovalJson = request.approval.toJson();
+    request.resultSummary = [governedApprovalJson](const pdf::PDFGovernedMutationReceipt& receipt)
+    {
+        return QJsonObject{
+            { QStringLiteral("status"), receipt.status },
+            { QStringLiteral("approval"), governedApprovalJson },
+            { QStringLiteral("revalidation"), receipt.revalidation.toJson() },
+            { QStringLiteral("sign_off"), receipt.signOff.toJson() }
+        };
+    };
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    const pdf::PDFOperationResult published = pdf::executeGovernedMutation(request, &receipt);
+    QVERIFY2(published, qPrintable(published.getErrorMessage()));
+    QVERIFY(receipt.isPublished());
+
+    QString historyError;
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    QVERIFY(history.verify().verified);
+
+    const pdf::PDFOperationHistoryEvent* running = nullptr;
+    const pdf::PDFOperationHistoryEvent* accepted = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.kind != pdf::PDFOperationHistoryEventKind::FixApplied)
+        {
+            continue;
+        }
+        if (event.status == pdf::PDFOperationHistoryStatus::Running)
+        {
+            running = &event;
+        }
+        else if (event.status == pdf::PDFOperationHistoryStatus::Accepted)
+        {
+            accepted = &event;
+        }
+    }
+    QVERIFY(running != nullptr);
+    QVERIFY(accepted != nullptr);
+    // P4: the running event binds revision + effective profile, not only the accepted one.
+    QVERIFY(!running->documentRevisionDigest.isEmpty());
+    QVERIFY(!running->effectiveProfileDigest.isEmpty());
+    QVERIFY(running->approval.kind != pdf::PDFApprovalKind::None);
+    QVERIFY(!running->operatorIdentity.isEmpty());
+
+    // The accepted event binds the plan, the approval, the profile, the output,
+    // and the revalidation report; nothing a reader needs is missing.
+    QVERIFY(accepted->output.has_value());
+    QCOMPARE(accepted->output->sha256, candidateSha256);
+    QVERIFY(!accepted->effectiveProfileDigest.isEmpty());
+    QVERIFY(!accepted->reportArtifactSha256.isEmpty());
+    QCOMPARE(accepted->resultSummary.value(QStringLiteral("approval")).toObject().value(QStringLiteral("plan_digest")).toString(),
+             planDigest);
+    QVERIFY(!accepted->resultSummary.value(QStringLiteral("sign_off")).toObject().isEmpty());
+
+    // A failed attempt binds the same profile identity, so a reader can still
+    // attribute which profile it ran under.
+    const QString failedDestination = temporary.filePath(QStringLiteral("failed.pdf"));
+    pdf::PDFGovernedMutationRequest failedRequest =
+        governedGatewayRequest(QByteArrayLiteral("not a reopenable governed artifact"),
+                               QString(64, QLatin1Char('d')),
+                               sourceSha256,
+                               failedDestination);
+    failedRequest.approval.effectiveProfileDigest = profileDigest;
+    failedRequest.profileDigest = profileDigest;
+    failedRequest.history = &history;
+    failedRequest.operationId = QStringLiteral("governed.gateway.identity");
+    failedRequest.inputArtifact = input.artifact;
+    failedRequest.outputArtifact = input.artifact;
+    pdf::PDFGovernedMutationReceipt failedReceipt;
+    QVERIFY(!pdf::executeGovernedMutation(failedRequest, &failedReceipt));
+    QCOMPARE(failedReceipt.status, QStringLiteral("failed"));
+
+    const QList<pdf::PDFOperationHistoryEvent> afterFailure = history.events(&historyError);
+    const pdf::PDFOperationHistoryEvent* failed = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : afterFailure)
+    {
+        if (event.status == pdf::PDFOperationHistoryStatus::Failed)
+        {
+            failed = &event;
+        }
+    }
+    QVERIFY(failed != nullptr);
+    QVERIFY(!failed->documentRevisionDigest.isEmpty());
+    QVERIFY(!failed->effectiveProfileDigest.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(GovernedExecutionTest)

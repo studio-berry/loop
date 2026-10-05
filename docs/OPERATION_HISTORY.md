@@ -63,3 +63,31 @@ artifact eviction state, then version 3 adds the canonical provenance fields to 
 separate from the PDF and can be copied, inspected, and retained as an operational record. A tamper-evident chain
 is not tamper-proof: anyone with write access to the complete database can rewrite it, so this is not a digital
 signature or a PKI trust assertion.
+
+## Governed-publication reconstruction reader (#39)
+
+`reconstructGovernedPublicationAudit(store, publishedSha256, &audit)` reads one published output's full provenance
+back from the canonical chain. It refuses when `verify()` does not report `verified` (a tampered chain reconstructs
+nothing) and when no accepted event binds the exact output digest. Every link is read, never synthesized:
+
+- plan digest and the authorizing approval (actor, policy, decision, expiry) from the governed approval envelope
+  the accepted event's `result_summary` carries (repair stores it top-level, Action List under `governed`);
+- execution identity (operation id/version, source artifact) from the `executions` table via the new
+  `PDFOperationHistoryStore::execution()` getter;
+- artifact digests (source revision, published candidate, revalidation report) from the event and its result
+  summary;
+- validation state and finding-delta summary from the #38 revalidation block;
+- the `loop.governed-sign-off` certificate, round-tripped with `PDFGovernedExecutionSignOff::fromJson`.
+
+This is the "who approved what output" reader; it has no CLI entry point yet (deferred). `PDFGovernedExecutionSignOff`
+gained `fromJson` so a stored sign-off round-trips instead of being display-only.
+
+## Second-store status and remaining gaps (#39)
+
+`PDFOperationHistoryStore` remains the single authoritative chain (0.4.0 canon). The certificate JSON file and the
+evidence bundle are legitimate exports, not histories. The PageMaster batch manifest still records
+approval/revalidation/sign-off per output and is the only durable PageMaster sign-off record; it is a **reference,
+not authority** — its reconciliation to chain events is owned by #37's gateway route. The
+`check_source_integrity.py` provenance guard is unchanged in this slice; a differently named second store is not yet
+caught by pattern. Editor Action List keeps its governed state transiently (not a store); Editor convergence stays
+#37/#198.
