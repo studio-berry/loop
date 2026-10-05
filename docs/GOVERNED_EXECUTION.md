@@ -107,11 +107,41 @@ only cancellation, an incomplete comparison, or a hard failure removes them.
 - `plan_digest`
 - `source_sha256`
 - `candidate_sha256`
+- `effective_profile_digest` (optional; empty = the caller binds no profile)
 - `PDFApprovalRecord` (`human`, `policy`, or `system`)
 
 `PreflightDecision` records (accept/waive/override) never qualify as operation approval.
 An approval that names a `preflight-decision:` reference is rejected at publish time.
-Stale or revoked approval fails before mutation or publication.
+
+An approval is only a *current authorized* approval when the authorization resolver
+accepts it. `pdf::resolveApprovalAuthorization()` is the one decision point, called by
+every gateway function (`validateGovernedApproval`, `finalizeGovernedPublication`,
+`publishGovernedArtifact`, and `validateGovernedSignOff`) before any write. It fails
+closed on short codes:
+
+- **approver** — the record must carry an affirmative non-`None` decision and a
+  non-empty actor. `PDFApprovalAuthorizationPolicy.authorizedActorIds` and
+  `authorizedKinds` are allowlists: a non-empty list restricts; an empty list declares
+  no restriction.
+- **expiry** — `PDFApprovalRecord.expiresUtc` (null = no declared expiry) is refused when
+  it is at or before `PDFApprovalAuthorizationContext.evaluatedUtc` (`approval-expired`),
+  and a declared expiry that cannot be evaluated is refused. `policy.requireExpiry`
+  additionally refuses an approval that declares no expiry.
+- **waiver exclusion** — finding waivers and preflight decisions remain excluded.
+- **revocation** — an append-only `ApprovalRevoked` history event whose
+  `approval.decisionReference` equals the approval's reference revokes it
+  (`approval-revoked`). This mirrors certificate invalidation: one chain, no second
+  registry. The resolver reads the chain through `PDFOperationHistoryStore::events()`
+  when a history store is in scope.
+- **profile binding** — when the caller supplies `expectedProfileDigest`, the approval's
+  `effective_profile_digest` must equal it (`profile-binding`), so an approval taken
+  against one effective profile cannot authorize a run under another.
+
+`PdfTool repair` and `PdfTool action-list run/batch` resolve revocation against the
+output document's `.loop-history` chain. PageMaster exports and the Editor Action List
+worker have no operation-history store in scope today, so their contexts leave `history`
+null and revocation cannot be resolved there; #37 centralizes execution so the chain
+becomes available on those surfaces too.
 
 ## Publish gate
 

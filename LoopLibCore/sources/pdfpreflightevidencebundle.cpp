@@ -300,7 +300,8 @@ QJsonObject approvalToJson(const PDFApprovalRecord& approval, qint64 sequence, c
         { QStringLiteral("rationale"), redactPathsInString(approval.rationale) },
         { QStringLiteral("evidence_sha256"), approval.evidenceSha256 },
         { QStringLiteral("decision_reference"), approval.decisionReference },
-        { QStringLiteral("decided_utc"), dateTimeString(approval.decidedUtc) }
+        { QStringLiteral("decided_utc"), dateTimeString(approval.decidedUtc) },
+        { QStringLiteral("expires_utc"), dateTimeString(approval.expiresUtc) }
     };
 }
 

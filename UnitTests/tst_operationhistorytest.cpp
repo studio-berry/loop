@@ -49,6 +49,7 @@ private slots:
     void artifactStoreStreamsAndDetectsTampering();
     void importedInputIsReadOnlyAndDigestAddressed();
     void noSavePathProducesAnApprovedOutputRecord();
+    void approvalExpiryAndRevocationKindRoundTrip();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
@@ -360,6 +361,7 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
         pdf::PDFOperationHistoryEventKind::DecisionInvalidated,
         pdf::PDFOperationHistoryEventKind::CertificateIssued,
         pdf::PDFOperationHistoryEventKind::CertificateInvalidated,
+        pdf::PDFOperationHistoryEventKind::ApprovalRevoked,
         pdf::PDFOperationHistoryEventKind::SchemaMigrated
     };
 
@@ -984,6 +986,42 @@ void OperationHistoryTest::noSavePathProducesAnApprovedOutputRecord()
     candidate.isOriginalInput = false;
     QVERIFY(!candidate.approvedOutput);
     QVERIFY(!candidate.toJson().value(QStringLiteral("approvedOutput")).toBool());
+}
+
+void OperationHistoryTest::approvalExpiryAndRevocationKindRoundTrip()
+{
+    // The optional expiry is additive and round-trips through the shared
+    // approval JSON without changing the well-formedness contract.
+    pdf::PDFApprovalRecord approval;
+    approval.kind = pdf::PDFApprovalKind::Human;
+    approval.actorId = QStringLiteral("operator");
+    approval.decision = QStringLiteral("approve");
+    approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    approval.expiresUtc = approval.decidedUtc.addSecs(3600);
+    QVERIFY(approval.isValid());
+    QVERIFY(!approval.isExpiredAt(approval.decidedUtc));
+    QVERIFY(!approval.isExpiredAt(approval.decidedUtc.addSecs(3599)));
+    QVERIFY(approval.isExpiredAt(approval.decidedUtc.addSecs(3600)));
+    QVERIFY(approval.isExpiredAt(approval.decidedUtc.addSecs(7200)));
+
+    const QJsonObject json = approval.toJson();
+    QVERIFY(json.contains(QStringLiteral("expiresUtc")));
+    const pdf::PDFApprovalRecord roundTripped = pdf::PDFApprovalRecord::fromJson(json);
+    QCOMPARE(roundTripped.expiresUtc.toUTC(), approval.expiresUtc.toUTC());
+    QCOMPARE(roundTripped.toJson(), json);
+
+    // An absent expiry round-trips as absent and is never expired.
+    const pdf::PDFApprovalRecord withoutExpiry;
+    QVERIFY(!withoutExpiry.isExpiredAt(QDateTime::currentDateTimeUtc()));
+    QVERIFY(!pdf::PDFApprovalRecord::fromJson(withoutExpiry.toJson()).expiresUtc.isValid());
+
+    // ApprovalRevoked is a canonical provenance kind in both directions.
+    QCOMPARE(pdf::pdfOperationHistoryEventKindToString(pdf::PDFOperationHistoryEventKind::ApprovalRevoked),
+             QStringLiteral("ApprovalRevoked"));
+    QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("ApprovalRevoked")),
+             pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
+    QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("approvalrevoked")),
+             pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
 }
 
 QTEST_MAIN(OperationHistoryTest)

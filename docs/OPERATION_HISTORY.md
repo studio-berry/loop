@@ -10,7 +10,7 @@ is the audit ledger, and rollback points reference those event ids rather than m
 Issue #237 makes this convergence explicit: #32's `PDFOperationHistoryEvent` is the one canonical event type and
 `PDFOperationHistoryStore` is the one SQLite-backed chain. #133 event kinds are represented by
 `PDFOperationHistoryEventKind` values (`DocumentOpened`, `PreflightRun`, `FixApplied`, `DecisionRecorded`,
-`DecisionInvalidated`, `CertificateIssued`, and `CertificateInvalidated`). There is no `PreflightAuditEvent`,
+`DecisionInvalidated`, `CertificateIssued`, `CertificateInvalidated`, and `ApprovalRevoked`). There is no `PreflightAuditEvent`,
 `.loop-audit.jsonl`, or second hash chain in Core.
 
 ## Runtime contract

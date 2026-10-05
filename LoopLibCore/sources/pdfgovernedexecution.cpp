@@ -24,6 +24,7 @@
 
 #include "pdfartifactidentity.h"
 #include "pdfdocumentreader.h"
+#include "pdfoperationhistorystore.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -226,6 +227,7 @@ QJsonObject PDFGovernedExecutionApproval::toJson() const
         { QStringLiteral("plan_digest"), planDigest },
         { QStringLiteral("source_sha256"), sourceSha256 },
         { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest },
         { QStringLiteral("approval"), approval.toJson() }
     };
 }
@@ -236,6 +238,7 @@ PDFGovernedExecutionApproval PDFGovernedExecutionApproval::fromJson(const QJsonO
     approval.planDigest = object.value(QStringLiteral("plan_digest")).toString().toLower();
     approval.sourceSha256 = object.value(QStringLiteral("source_sha256")).toString().toLower();
     approval.candidateSha256 = object.value(QStringLiteral("candidate_sha256")).toString().toLower();
+    approval.effectiveProfileDigest = object.value(QStringLiteral("effective_profile_digest")).toString().toLower();
     approval.approval = PDFApprovalRecord::fromJson(object.value(QStringLiteral("approval")).toObject());
     if (!approval.isValid())
     {
@@ -390,10 +393,92 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
     return PDFOperationResult(true);
 }
 
+PDFApprovalAuthorization resolveApprovalAuthorization(const PDFGovernedExecutionApproval& approval,
+                                                      const PDFApprovalAuthorizationContext& context)
+{
+    const auto refuse = [](const QString& code, const QString& reason)
+    {
+        PDFApprovalAuthorization authorization;
+        authorization.allowed = false;
+        authorization.code = code;
+        authorization.reason = reason;
+        return authorization;
+    };
+
+    const PDFApprovalRecord& record = approval.approval;
+    if (!approvalAuthorizesPublication(record))
+    {
+        return refuse(QStringLiteral("approval-unauthorized"),
+                      QStringLiteral("The approval does not carry an affirmative non-None decision."));
+    }
+    if (record.actorId.trimmed().isEmpty())
+    {
+        return refuse(QStringLiteral("approval-unauthorized"),
+                      QStringLiteral("The approval does not name an approver."));
+    }
+    if (!context.policy.authorizedKinds.isEmpty() && !context.policy.authorizedKinds.contains(record.kind))
+    {
+        return refuse(QStringLiteral("approval-unauthorized"),
+                      QStringLiteral("The approval kind is not authorized by the declared policy."));
+    }
+    if (!context.policy.authorizedActorIds.isEmpty() &&
+        !context.policy.authorizedActorIds.contains(record.actorId.trimmed(), Qt::CaseInsensitive))
+    {
+        return refuse(QStringLiteral("approval-unauthorized"),
+                      QStringLiteral("The approver is not authorized by the declared policy."));
+    }
+
+    if (context.policy.requireExpiry && !record.expiresUtc.isValid())
+    {
+        return refuse(QStringLiteral("approval-expired"),
+                      QStringLiteral("The declared policy requires an expiry and the approval declares none."));
+    }
+    if (record.expiresUtc.isValid())
+    {
+        if (!context.evaluatedUtc.isValid())
+        {
+            return refuse(QStringLiteral("approval-expired"),
+                          QStringLiteral("The approval declares an expiry that cannot be evaluated."));
+        }
+        if (record.isExpiredAt(context.evaluatedUtc))
+        {
+            return refuse(QStringLiteral("approval-expired"),
+                          QStringLiteral("The approval expired at or before the evaluation time."));
+        }
+    }
+
+    if (context.history && !record.decisionReference.trimmed().isEmpty())
+    {
+        QString historyError;
+        const QList<PDFOperationHistoryEvent> events = context.history->events(&historyError);
+        for (const PDFOperationHistoryEvent& event : events)
+        {
+            if (event.kind == PDFOperationHistoryEventKind::ApprovalRevoked &&
+                event.approval.decisionReference.compare(record.decisionReference, Qt::CaseInsensitive) == 0)
+            {
+                return refuse(QStringLiteral("approval-revoked"),
+                              QStringLiteral("A later ApprovalRevoked event revoked this approval."));
+            }
+        }
+    }
+
+    if (!context.expectedProfileDigest.trimmed().isEmpty() &&
+        approval.effectiveProfileDigest.trimmed().compare(context.expectedProfileDigest.trimmed(), Qt::CaseInsensitive) != 0)
+    {
+        return refuse(QStringLiteral("profile-binding"),
+                      QStringLiteral("The approval is bound to a different effective profile."));
+    }
+
+    PDFApprovalAuthorization authorization;
+    authorization.allowed = true;
+    return authorization;
+}
+
 PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& approval,
                                             const QString& expectedPlanDigest,
                                             const QString& expectedSourceSha256,
-                                            const QString& expectedCandidateSha256)
+                                            const QString& expectedCandidateSha256,
+                                            const PDFApprovalAuthorizationContext& context)
 {
     if (!approval.isValid())
     {
@@ -418,6 +503,13 @@ PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& 
     if (!approvalAuthorizesPublication(approval.approval))
     {
         return PDFOperationResult(QStringLiteral("Governed approval requires an affirmative non-None approval decision."));
+    }
+
+    const PDFApprovalAuthorization authorization = resolveApprovalAuthorization(approval, context);
+    if (!authorization.allowed)
+    {
+        return PDFOperationResult(QStringLiteral("Governed approval is not authorized (%1): %2")
+                                      .arg(authorization.code, authorization.reason));
     }
     return PDFOperationResult(true);
 }
@@ -490,7 +582,8 @@ PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApprova
                                                const QString& signOffActor,
                                                const QString& signOffPolicy,
                                                PDFGovernedExecutionRevalidation* revalidation,
-                                               PDFGovernedExecutionSignOff* signOff)
+                                               PDFGovernedExecutionSignOff* signOff,
+                                               const PDFApprovalAuthorizationContext& context)
 {
     if (!revalidation || !signOff)
     {
@@ -499,7 +592,8 @@ PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApprova
     if (const PDFOperationResult approvalResult = validateGovernedApproval(approval,
                                                                            expectedPlanDigest,
                                                                            expectedSourceSha256,
-                                                                           expectedCandidateSha256);
+                                                                           expectedCandidateSha256,
+                                                                           context);
         !approvalResult)
     {
         return approvalResult;
@@ -537,7 +631,8 @@ PDFOperationResult finalizeGovernedPublication(const PDFGovernedExecutionApprova
                                    *revalidation,
                                    expectedPlanDigest,
                                    expectedSourceSha256,
-                                   expectedCandidateSha256);
+                                   expectedCandidateSha256,
+                                   context);
 }
 
 PDFOperationResult validateGovernedSignOff(const PDFGovernedExecutionSignOff& signOff,
@@ -545,7 +640,8 @@ PDFOperationResult validateGovernedSignOff(const PDFGovernedExecutionSignOff& si
                                            const PDFGovernedExecutionRevalidation& revalidation,
                                            const QString& expectedPlanDigest,
                                            const QString& expectedSourceSha256,
-                                           const QString& expectedCandidateSha256)
+                                           const QString& expectedCandidateSha256,
+                                           const PDFApprovalAuthorizationContext& context)
 {
     if (!signOff.isValid())
     {
@@ -554,7 +650,8 @@ PDFOperationResult validateGovernedSignOff(const PDFGovernedExecutionSignOff& si
     if (const PDFOperationResult approvalResult = validateGovernedApproval(approval,
                                                                            expectedPlanDigest,
                                                                            expectedSourceSha256,
-                                                                           expectedCandidateSha256);
+                                                                           expectedCandidateSha256,
+                                                                           context);
         !approvalResult)
     {
         return approvalResult;
@@ -580,13 +677,15 @@ PDFOperationResult publishGovernedArtifact(const PDFGovernedExecutionApproval& a
                                            const QString& expectedSourceSha256,
                                            const QByteArray& candidateBytes,
                                            const QString& outputPath,
-                                           PDFSafeFileWriter::OverwritePolicy overwritePolicy)
+                                           PDFSafeFileWriter::OverwritePolicy overwritePolicy,
+                                           const PDFApprovalAuthorizationContext& context)
 {
     const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
     const PDFOperationResult validation = validateGovernedApproval(approval,
                                                                    expectedPlanDigest,
                                                                    expectedSourceSha256,
-                                                                   candidateSha256);
+                                                                   candidateSha256,
+                                                                   context);
     if (!validation)
     {
         return validation;

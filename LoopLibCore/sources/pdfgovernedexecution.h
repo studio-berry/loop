@@ -37,6 +37,8 @@
 namespace pdf
 {
 
+class PDFOperationHistoryStore;
+
 struct LOOPLIBCORESHARED_EXPORT PDFTechnicalPreview
 {
     int schemaVersion = 1;
@@ -74,6 +76,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFGovernedExecutionApproval
     QString planDigest;
     QString sourceSha256;
     QString candidateSha256;
+    /// Optional binding of the approval to the effective preflight profile the
+    /// caller will revalidate with. Empty means the caller does not bind a profile.
+    QString effectiveProfileDigest;
     PDFApprovalRecord approval;
 
     bool isValid() const;
@@ -115,6 +120,44 @@ struct LOOPLIBCORESHARED_EXPORT PDFGovernedExecutionSignOff
     QJsonObject toJson() const;
 };
 
+/// Declared approver rights for one authorization decision. Empty allowlists mean
+/// the caller declares no restriction on that axis; `requireExpiry` forces a
+/// declared validity window.
+struct LOOPLIBCORESHARED_EXPORT PDFApprovalAuthorizationPolicy
+{
+    QStringList authorizedActorIds;   // empty = any non-empty actor
+    QList<PDFApprovalKind> authorizedKinds;   // empty = any non-None kind
+    bool requireExpiry = false;
+};
+
+/// Inputs the gateway needs to decide whether an approval is current and
+/// authorized. Every field is fail-closed: an unset field narrows, never widens.
+struct LOOPLIBCORESHARED_EXPORT PDFApprovalAuthorizationContext
+{
+    PDFApprovalAuthorizationPolicy policy;   // allowlists; empty lists = no restriction declared
+    QDateTime evaluatedUtc;   // invalid = expiry cannot be evaluated
+    const PDFOperationHistoryStore* history = nullptr;   // null = revocation cannot be resolved
+    QString expectedProfileDigest;   // empty = profile not bound by this caller
+};
+
+struct LOOPLIBCORESHARED_EXPORT PDFApprovalAuthorization
+{
+    bool allowed = false;
+    QString code;
+    QString reason;
+};
+
+/// Resolves one affirmative, current, authorized approval. Refuses (allowed=false)
+/// on a non-affirmative decision, an unauthorized kind or actor, an expired or
+/// undeclared-required expiry, a revoked decision reference, or a profile-digest
+/// mismatch. `code` is a short fail-closed reason such as `approval-expired`.
+///
+/// The governed approval (not the bare record) is the subject because the profile
+/// binding lives on the envelope: `approval.effectiveProfileDigest`.
+LOOPLIBCORESHARED_EXPORT PDFApprovalAuthorization resolveApprovalAuthorization(
+    const PDFGovernedExecutionApproval& approval,
+    const PDFApprovalAuthorizationContext& context);
+
 /// Returns a deterministic SHA-256 digest for the analyzed operation plan.
 LOOPLIBCORESHARED_EXPORT QString computeOperationPlanDigest(const QList<PDFRepairPlan>& plans,
                                                             const QString& sourceSha256,
@@ -140,7 +183,8 @@ LOOPLIBCORESHARED_EXPORT bool preflightDecisionQualifiesAsOperationApproval(cons
 LOOPLIBCORESHARED_EXPORT PDFOperationResult validateGovernedApproval(const PDFGovernedExecutionApproval& approval,
                                                                      const QString& expectedPlanDigest,
                                                                      const QString& expectedSourceSha256,
-                                                                     const QString& expectedCandidateSha256);
+                                                                     const QString& expectedCandidateSha256,
+                                                                     const PDFApprovalAuthorizationContext& context = {});
 
 /// Reopens the published path, verifies its bytes, and runs the supplied
 /// profile against that reopened document.
@@ -155,7 +199,8 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult validateGovernedSignOff(const PDFGov
                                                                     const PDFGovernedExecutionRevalidation& revalidation,
                                                                     const QString& expectedPlanDigest,
                                                                     const QString& expectedSourceSha256,
-                                                                    const QString& expectedCandidateSha256);
+                                                                    const QString& expectedCandidateSha256,
+                                                                    const PDFApprovalAuthorizationContext& context = {});
 
 /// Completes the common post-publication gate used by every surface. The
 /// supplied approval authorizes the reviewed candidate; the returned sign-off
@@ -170,7 +215,8 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult finalizeGovernedPublication(
     const QString& signOffActor,
     const QString& signOffPolicy,
     PDFGovernedExecutionRevalidation* revalidation,
-    PDFGovernedExecutionSignOff* signOff);
+    PDFGovernedExecutionSignOff* signOff,
+    const PDFApprovalAuthorizationContext& context = {});
 
 /// Publishes reviewed candidate bytes only after governed approval validation succeeds.
 LOOPLIBCORESHARED_EXPORT PDFOperationResult publishGovernedArtifact(const PDFGovernedExecutionApproval& approval,
@@ -178,7 +224,8 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult publishGovernedArtifact(const PDFGov
                                                                     const QString& expectedSourceSha256,
                                                                     const QByteArray& candidateBytes,
                                                                     const QString& outputPath,
-                                                                    PDFSafeFileWriter::OverwritePolicy overwritePolicy);
+                                                                    PDFSafeFileWriter::OverwritePolicy overwritePolicy,
+                                                                    const PDFApprovalAuthorizationContext& context = {});
 
 }   // namespace pdf
 

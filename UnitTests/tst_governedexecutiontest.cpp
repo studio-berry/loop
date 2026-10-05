@@ -21,10 +21,12 @@
 // SOFTWARE.
 
 #include "pdfartifactidentity.h"
+#include "pdfartifactstore.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfrepairoperation.h"
 #include "pdfsafefilewriter.h"
 #include "pdfsavepolicy.h"
@@ -32,6 +34,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QTemporaryDir>
@@ -137,6 +140,13 @@ private slots:
     void previewLeavesSourceBytesUntouched();
     void cancelledPreviewLeavesNoArtifacts();
     void previewRefusesPlanDigestMismatch();
+
+    // L04-04 / #36 — exact-plan approval binding and revocation
+    void approvalExpiryWindowIsEnforced();
+    void approverRightsAreAllowlisted();
+    void profileBindingRefusesMismatch();
+    void revokedApprovalIsRefusedBeforeWrite();
+    void revokedApprovalRefusesLaterAttempt();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -826,5 +836,233 @@ void GovernedExecutionTest::previewRefusesPlanDigestMismatch()
     QVERIFY(QFile::exists(candidatePath));
 }
 
-QTEST_APPLESS_MAIN(GovernedExecutionTest)
+namespace
+{
+
+pdf::PDFGovernedExecutionApproval operatorApproval(const QString& planDigest,
+                                                   const QString& sourceSha256,
+                                                   const QString& candidateSha256,
+                                                   const QString& decisionReference)
+{
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = sourceSha256;
+    approval.candidateSha256 = candidateSha256;
+    approval.approval.kind = pdf::PDFApprovalKind::Human;
+    approval.approval.actorId = QStringLiteral("operator");
+    approval.approval.decision = QStringLiteral("approve");
+    approval.approval.rationale = QStringLiteral("Reviewed the exact plan.");
+    approval.approval.decisionReference = decisionReference;
+    approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    return approval;
+}
+
+}   // namespace
+
+void GovernedExecutionTest::approvalExpiryWindowIsEnforced()
+{
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const QString candidateSha256 = sha256Hex(QByteArrayLiteral("governed candidate bytes"));
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(planDigest, sourceSha256, candidateSha256, QStringLiteral("approval:expiry"));
+
+    pdf::PDFApprovalAuthorizationContext context;
+    context.evaluatedUtc = now;
+
+    // No declared expiry and no policy requirement: allowed.
+    QVERIFY(pdf::resolveApprovalAuthorization(approval, context).allowed);
+
+    // A window that closed before evaluation is refused.
+    approval.approval.expiresUtc = now.addSecs(-1);
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-expired"));
+
+    // The boundary is inclusive: an expiry exactly at the evaluation time is expired.
+    approval.approval.expiresUtc = now;
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-expired"));
+
+    // A still-open window passes.
+    approval.approval.expiresUtc = now.addSecs(60);
+    QVERIFY(pdf::resolveApprovalAuthorization(approval, context).allowed);
+
+    // requireExpiry refuses an approval that declares no expiry.
+    approval.approval.expiresUtc = QDateTime();
+    context.policy.requireExpiry = true;
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-expired"));
+}
+
+void GovernedExecutionTest::approverRightsAreAllowlisted()
+{
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const QString candidateSha256 = sha256Hex(QByteArrayLiteral("governed candidate bytes"));
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(planDigest, sourceSha256, candidateSha256, QStringLiteral("approval:rights"));
+
+    pdf::PDFApprovalAuthorizationContext context;
+    context.policy.authorizedActorIds = QStringList{ QStringLiteral("operator") };
+    QVERIFY(pdf::resolveApprovalAuthorization(approval, context).allowed);
+
+    // A non-listed actor is refused even with an affirmative decision.
+    approval.approval.actorId = QStringLiteral("Editor");
+    const pdf::PDFApprovalAuthorization denied = pdf::resolveApprovalAuthorization(approval, context);
+    QVERIFY(!denied.allowed);
+    QCOMPARE(denied.code, QStringLiteral("approval-unauthorized"));
+
+    // An approval with no actor can never be authorized.
+    context.policy.authorizedActorIds.clear();
+    approval.approval.actorId.clear();
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-unauthorized"));
+
+    // A kind outside the declared allowlist is refused.
+    approval.approval.actorId = QStringLiteral("operator");
+    approval.approval.kind = pdf::PDFApprovalKind::Human;
+    context.policy.authorizedKinds = QList<pdf::PDFApprovalKind>{ pdf::PDFApprovalKind::Policy };
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-unauthorized"));
+}
+
+void GovernedExecutionTest::profileBindingRefusesMismatch()
+{
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const QString candidateSha256 = sha256Hex(QByteArrayLiteral("governed candidate bytes"));
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(planDigest, sourceSha256, candidateSha256, QStringLiteral("approval:profile"));
+    approval.effectiveProfileDigest = QString(64, QLatin1Char('a'));
+
+    pdf::PDFApprovalAuthorizationContext context;
+    context.expectedProfileDigest = QString(64, QLatin1Char('a'));
+    QVERIFY(pdf::resolveApprovalAuthorization(approval, context).allowed);
+
+    // A different effective profile invalidates the approval.
+    context.expectedProfileDigest = QString(64, QLatin1Char('d'));
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("profile-binding"));
+
+    // The caller binds a profile but the approval declares none.
+    approval.effectiveProfileDigest.clear();
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("profile-binding"));
+
+    // An empty expectation means the caller does not bind a profile.
+    context.expectedProfileDigest.clear();
+    QVERIFY(pdf::resolveApprovalAuthorization(approval, context).allowed);
+}
+
+namespace
+{
+
+/// Opens a history store with one running execution so an ApprovalRevoked event
+/// can be appended for a revocation test.
+bool openHistoryForRevocation(const QString& directory,
+                              pdf::PDFArtifactStore* artifacts,
+                              pdf::PDFOperationHistoryStore* history,
+                              QUuid* executionId)
+{
+    Q_UNUSED(directory);
+    const auto input = artifacts->importBytes(QByteArrayLiteral("source"),
+                                              { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    if (!input.success)
+    {
+        return false;
+    }
+    if (!history->open() || !history->registerArtifact(input.artifact))
+    {
+        return false;
+    }
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("governed.revocation");
+    execution.input = input.artifact;
+    return bool(history->beginExecution(execution, executionId));
+}
+
+void appendRevocation(pdf::PDFOperationHistoryStore& history, const QUuid& executionId, const QString& reference)
+{
+    pdf::PDFOperationHistoryEvent revoked;
+    revoked.executionId = executionId;
+    revoked.kind = pdf::PDFOperationHistoryEventKind::ApprovalRevoked;
+    revoked.status = pdf::PDFOperationHistoryStatus::Rejected;
+    revoked.operatorIdentity = QStringLiteral("operator");
+    revoked.approval.decisionReference = reference;
+    history.appendEvent(revoked);
+}
+
+}   // namespace
+
+void GovernedExecutionTest::revokedApprovalIsRefusedBeforeWrite()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QUuid executionId;
+    QVERIFY(openHistoryForRevocation(temporary.path(), &artifacts, &history, &executionId));
+
+    const QByteArray candidateBytes("governed candidate bytes");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const QString candidateSha256 = sha256Hex(candidateBytes);
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(planDigest, sourceSha256, candidateSha256, QStringLiteral("approval:race"));
+
+    pdf::PDFApprovalAuthorizationContext context;
+    context.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    context.history = &history;
+
+    // The approval passes validation while it is still current.
+    QVERIFY(pdf::validateGovernedApproval(approval, planDigest, sourceSha256, candidateSha256, context));
+
+    // A later ApprovalRevoked event naming the same reference revokes it.
+    appendRevocation(history, executionId, QStringLiteral("approval:race"));
+
+    const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval,
+                                          planDigest,
+                                          sourceSha256,
+                                          candidateBytes,
+                                          outputPath,
+                                          pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite,
+                                          context));
+    QVERIFY(!QFile::exists(outputPath));
+}
+
+void GovernedExecutionTest::revokedApprovalRefusesLaterAttempt()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QUuid executionId;
+    QVERIFY(openHistoryForRevocation(temporary.path(), &artifacts, &history, &executionId));
+
+    const QByteArray candidateBytes("governed candidate bytes");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const QString candidateSha256 = sha256Hex(candidateBytes);
+    pdf::PDFGovernedExecutionApproval approval = operatorApproval(planDigest, sourceSha256, candidateSha256, QStringLiteral("approval:ordering"));
+
+    pdf::PDFApprovalAuthorizationContext context;
+    context.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    context.history = &history;
+
+    const QString outputPath = temporary.filePath(QStringLiteral("published.pdf"));
+    QVERIFY(pdf::publishGovernedArtifact(approval,
+                                         planDigest,
+                                         sourceSha256,
+                                         candidateBytes,
+                                         outputPath,
+                                         pdf::PDFSafeFileWriter::OverwritePolicy::Fail,
+                                         context));
+    QVERIFY(QFile::exists(outputPath));
+    const qint64 bytesAfterPublish = QFileInfo(outputPath).size();
+
+    appendRevocation(history, executionId, QStringLiteral("approval:ordering"));
+
+    // A later attempt through the same gateway is refused and does not rewrite.
+    QVERIFY(!pdf::publishGovernedArtifact(approval,
+                                          planDigest,
+                                          sourceSha256,
+                                          candidateBytes,
+                                          outputPath,
+                                          pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite,
+                                          context));
+    QCOMPARE(QFileInfo(outputPath).size(), bytesAfterPublish);
+}
+
+QTEST_GUILESS_MAIN(GovernedExecutionTest)
 #include "tst_governedexecutiontest.moc"
