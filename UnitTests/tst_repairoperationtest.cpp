@@ -31,6 +31,7 @@
 #include <QPainter>
 
 #include <algorithm>
+#include <cstdlib>
 #include <memory>
 
 #include <QBuffer>
@@ -38,10 +39,12 @@
 #include <QTemporaryDir>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonDocument>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <QJsonValue>
 #include <QtTest>
@@ -115,6 +118,67 @@ pdf::PDFDocument buildPreflightCleanDocument()
     return builder.build();
 }
 
+bool readsAsValidPdf(const QString& path)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false);
+    reader.readFromFile(path);
+    return reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK;
+}
+
+/// Issue #35 crash/cancel harness. Arms the preview stage seam to a hard
+/// process exit without unwinding (PageMaster convention): exit 91 is the
+/// in-window kill, 92 a bad invocation, and 93 a seam that was armed but never
+/// fired. The parent asserts 91 exactly and proves 93 is reachable, so the
+/// scenario cannot pass vacuously.
+int runPreviewCrashHarness(const QStringList& arguments)
+{
+    if (arguments.size() != 5)
+    {
+        return 92;
+    }
+    const QString stage = arguments.at(2);
+    const QString candidatePath = arguments.at(3);
+    const QString renderDirectory = arguments.at(4);
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    if (!transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }) ||
+        !transaction.analyze() || !transaction.apply())
+    {
+        return 92;
+    }
+
+    QDir().mkpath(renderDirectory);
+    pdf::PDFRepairDiffOptions options;
+    options.renderVisualDiff = stage == QStringLiteral("visual-page");
+    options.renderDirectory = renderDirectory;
+    options.previewStageHook = [stage](const QString& fired)
+    {
+        if (fired != stage)
+        {
+            return;
+        }
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+        ::_exit(91);
+#else
+        std::quick_exit(91);
+#endif
+    };
+
+    pdf::PDFRepairDiffReport report;
+    const pdf::PDFOperationResult compared = transaction.compareCandidate(candidatePath, options, &report);
+    Q_UNUSED(compared);
+    // Reaching here means the seam never fired for this stage: report that
+    // loudly instead of exiting like a successful kill.
+    return 93;
+}
+
 }   // namespace
 
 class RepairOperationTest : public QObject
@@ -154,6 +218,7 @@ private slots:
     void staleRevision_isRefusedBeforeAnalyze();
     void validateJsonSchemaFragment_reportsStructuralViolations();
     void validateJsonSchemaFragment_rejectsValuesOutsideTheAllowedSet();
+    void previewCrashLeavesNoPartialArtifactAndNoApproval();
 };
 
 void RepairOperationTest::standardsConversionRejectsLegacyContract()
@@ -1285,7 +1350,78 @@ void RepairOperationTest::validateJsonSchemaFragment_rejectsValuesOutsideTheAllo
     QVERIFY(errors.isEmpty());
 }
 
-QTEST_GUILESS_MAIN(RepairOperationTest)
+void RepairOperationTest::previewCrashLeavesNoPartialArtifactAndNoApproval()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString killCandidate = directory.filePath(QStringLiteral("kill/candidate.pdf"));
+    const QString killRenders = directory.filePath(QStringLiteral("kill/renders"));
+    const QString unfireableCandidate = directory.filePath(QStringLiteral("unfireable/candidate.pdf"));
+    const QString unfireableRenders = directory.filePath(QStringLiteral("unfireable/renders"));
+
+    // 93 leg: the seam is armed for a stage that never fires, proving the 91
+    // legs measure an actual seam trip rather than a vacuous pass.
+    {
+        QProcess unfireable;
+        unfireable.start(QCoreApplication::applicationFilePath(),
+                         { QStringLiteral("--preview-crash-harness"), QStringLiteral("never-fired"),
+                           unfireableCandidate, unfireableRenders });
+        QVERIFY2(unfireable.waitForFinished(30000), qPrintable(unfireable.errorString()));
+        QCOMPARE(unfireable.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(unfireable.exitCode(), 93);
+    }
+
+    for (const QString& stage : { QStringLiteral("candidate-committed"), QStringLiteral("visual-page") })
+    {
+        QProcess killed;
+        killed.start(QCoreApplication::applicationFilePath(),
+                     { QStringLiteral("--preview-crash-harness"), stage, killCandidate, killRenders });
+        QVERIFY2(killed.waitForFinished(30000), qPrintable(killed.errorString()));
+        QCOMPARE(killed.exitStatus(), QProcess::NormalExit);
+        // 91 is the in-window kill; 92/93 mean the seam was armed and never
+        // fired, so the scenario measured nothing and must not read as a pass.
+        QCOMPARE(killed.exitCode(), 91);
+
+        // The atomic candidate write never leaves a partial file at the final
+        // path: after the crash it is a complete, reopenable PDF, never a
+        // truncated one.
+        QVERIFY(QFile::exists(killCandidate));
+        QVERIFY2(readsAsValidPdf(killCandidate), qPrintable(stage));
+
+        // A QSaveFile staging temp is never left at a final-path name; report
+        // any residue pattern as a diagnostic only.
+        const QFileInfo candidateInfo(killCandidate);
+        for (const QString& entry : QDir(candidateInfo.absolutePath()).entryList(QDir::Files | QDir::Hidden))
+        {
+            if (entry != candidateInfo.fileName())
+            {
+                qInfo().noquote() << "preview crash residue:" << entry;
+            }
+            QVERIFY(!entry.startsWith(candidateInfo.fileName() + QLatin1Char('.')));
+        }
+    }
+
+    // A preview has no publication authority: the crash never wrote an approval
+    // record anywhere under the work tree.
+    QDirIterator entries(directory.path(), QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+    while (entries.hasNext())
+    {
+        QVERIFY(!entries.next().contains(QStringLiteral("approval")));
+    }
+}
+
+int main(int argc, char** argv)
+{
+    QCoreApplication application(argc, argv);
+    const QStringList arguments = application.arguments();
+    if (arguments.value(1) == QStringLiteral("--preview-crash-harness"))
+    {
+        return runPreviewCrashHarness(arguments);
+    }
+
+    RepairOperationTest test;
+    return QTest::qExec(&test, argc, argv);
+}
 
 #if __has_include("tst_repairoperationtest.moc")
 #include "tst_repairoperationtest.moc"

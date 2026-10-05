@@ -256,6 +256,7 @@ private slots:
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
+    void confirmActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
 };
@@ -1376,11 +1377,43 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     }
     const QString rollbackId = points.first().toMap().value(QStringLiteral("rollbackId")).toString();
 
-    // An unknown revision is refused before anything is written.
+    // An unknown revision is refused before anything is written, and the refusal writes no
+    // revision. (A rollback without a validated profile is refused the same way; Core's
+    // rollbackRefusesWithoutProfileOrOnCompromisedChain pins that fail-closed path.)
     QVERIFY(!host.requestFixRollback(QStringLiteral("revision-that-was-never-recorded")));
+    QVERIFY2(QDir(directory.path()).entryList(QStringList{ QStringLiteral("*-rollback-*.pdf") }, QDir::Files).isEmpty(),
+             "a refused rollback must not write a revision");
 
+    // The bundled loop-default profile is the one profile both surfaces can be given, so pin
+    // it deterministically: the request supplies the effective profile the restored revision
+    // is revalidated under.
+    const QString bundledProfileId = QStringLiteral(":/profiles/loop-default.json");
+    if (host.selectedPreflightProfileId() != bundledProfileId)
+    {
+        QVERIFY2(host.selectPreflightProfile(bundledProfileId),
+                 qPrintable(QStringLiteral("the bundled loop-default profile must be selectable; selected '%1'")
+                                .arg(host.selectedPreflightProfileId())));
+    }
+    QCOMPARE(host.selectedPreflightProfileId(), bundledProfileId);
+
+    // Core records the rollback as a new event; the scheduled job's completion is the signal
+    // to read it. Reading the history while the worker holds its SQLite connection would
+    // contend for the database, so wait on the scheduler, not on a probe of the store.
+    pdf::PDFJobScheduler& scheduler = host.sessionForTest()->scheduler();
+    bool rollbackFinished = false;
+    QObject::connect(&scheduler, &pdf::PDFJobScheduler::jobFinished, &host,
+                     [&rollbackFinished](const pdf::PDFJobSnapshot& snapshot)
+                     {
+                         if (snapshot.operationId.startsWith(QStringLiteral("rollback.")))
+                         {
+                             rollbackFinished = true;
+                         }
+                     });
+
+    // The request now SCHEDULES the governed restore: it returns true immediately while the
+    // revalidation (which refuses to run on this interactive thread) runs on a worker.
     QVERIFY(host.requestFixRollback(rollbackId));
-    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(rollbackFinished, 60000);
 
     // The rolled-back revision is a new sibling file; the open document is never overwritten.
     const QStringList siblings =
@@ -1399,6 +1432,14 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
                         { return event.status == pdf::PDFOperationHistoryStatus::RolledBack; }));
+    host.openFileUrl(QUrl::fromLocalFile(repairedPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    rollbackFinished = false;
+    QVERIFY(host.requestFixRollback(rollbackId));
+    host.openFileUrl(QUrl::fromLocalFile(sourcePath));
+    QTRY_VERIFY_WITH_TIMEOUT(rollbackFinished, 60000);
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.sessionForTest()->facade().source().path, sourcePath);
 }
 
 // ---------------------------------------------------------------------------
@@ -1679,6 +1720,74 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!overprintHost.previewRequiresAuthoritative());
     QVERIFY(!overprintHost.ensureAuthoritativePreview());
+}
+
+void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("unreviewed.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("unreviewed-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("unreviewed-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    // "Approve and run" must not execute an unreviewed plan: without the armed review
+    // the call is refused and nothing is published.
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.confirmActionListPlan());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("planned"));
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // The gate is the review, not the plan: the same call is admitted once armed.
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.fixExecutionArmed());
+    QVERIFY(host.confirmActionListPlan());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

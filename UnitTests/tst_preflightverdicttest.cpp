@@ -99,6 +99,7 @@ private slots:
     void certificate_bindsRestrictionDigest();
     void evidenceBundle_bindsIdentitiesAndVerifiesOffline();
     void evidenceBundle_bindsGovernedSignOff();
+    void evidenceBundle_rejectsStaleSignOff();
     void evidenceBundle_detectsTamperedMembers();
     void evidenceBundle_carriesNoRawPaths();
 };
@@ -617,6 +618,71 @@ void PreflightVerdictTest::evidenceBundle_bindsGovernedSignOff()
                         QStringLiteral("member.size-mismatch"),
                         pdf::preflightEvidenceBundleSignOffMember()),
              qPrintable(bundleFindings(tampered)));
+}
+
+void PreflightVerdictTest::evidenceBundle_rejectsStaleSignOff()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString documentPath = temporary.filePath(QStringLiteral("artwork.pdf"));
+
+    BundleFixture fixture;
+    QString error;
+    QVERIFY2(buildBundleFixture(documentPath, fixture, error), qPrintable(error));
+
+    // A real published artifact whose bytes the sign-off binds.
+    const QString artifactPath = temporary.filePath(QStringLiteral("published.pdf"));
+    const QByteArray artifactBytes = QByteArrayLiteral("governed published artifact bytes");
+    {
+        QFile artifact(artifactPath);
+        QVERIFY(artifact.open(QIODevice::WriteOnly));
+        QCOMPARE(artifact.write(artifactBytes), qint64(artifactBytes.size()));
+    }
+    const QString publishedDigest = sha256Hex(artifactBytes);
+
+    pdf::PDFApprovalRecord approval;
+    approval.kind = pdf::PDFApprovalKind::Human;
+    approval.actorId = QStringLiteral("operator");
+    approval.decision = QStringLiteral("publish");
+    approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+    const QJsonObject signOff{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), QString(64, QLatin1Char('e')) },
+        { QStringLiteral("source_sha256"), sha256Hex(fixture.document) },
+        { QStringLiteral("candidate_sha256"), QString(64, QLatin1Char('c')) },
+        { QStringLiteral("published_sha256"), publishedDigest },
+        { QStringLiteral("revalidation_report_sha256"), QString(64, QLatin1Char('f')) },
+        { QStringLiteral("effective_profile_digest"), fixture.certificate.effectiveProfileDigest },
+        { QStringLiteral("approval"), approval.toJson() }
+    };
+
+    pdf::PreflightEvidenceBundleRequest request = fixture.request;
+    request.signOff = signOff;
+    request.publishedArtifactPath = artifactPath;
+    request.output = pdf::PreflightEvidenceBundleOutput{ publishedDigest, artifactBytes.size() };
+
+    pdf::PreflightEvidenceBundle bundle;
+    QVERIFY2(pdf::buildPreflightEvidenceBundle(request, bundle, error), qPrintable(error));
+
+    // Changing the artifact after sign-off makes the stored sign-off stale: the
+    // bundle re-reads the bytes and refuses instead of exporting it.
+    {
+        QFile changed(artifactPath);
+        QVERIFY(changed.open(QIODevice::Append));
+        QVERIFY(changed.write("changed after sign-off") > 0);
+    }
+    pdf::PreflightEvidenceBundle refused;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(request, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("invalid-document-changed")), qPrintable(error));
+
+    // A sign-off with neither the artifact nor an output identity is refused,
+    // never synthesized from the sign-off alone.
+    pdf::PreflightEvidenceBundleRequest noArtifact = fixture.request;
+    noArtifact.signOff = signOff;
+    QVERIFY(!pdf::buildPreflightEvidenceBundle(noArtifact, refused, error));
+    QVERIFY2(error.contains(QStringLiteral("without the published artifact")), qPrintable(error));
 }
 
 void PreflightVerdictTest::evidenceBundle_detectsTamperedMembers()

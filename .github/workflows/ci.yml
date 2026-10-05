@@ -96,6 +96,17 @@ jobs:
         run: |
           python3 -m unittest scripts.agent.test_architecture_contracts -q
           python3 scripts/agent/check-architecture.py
+      - name: Verify governed publication parity over the cross-surface fixture
+        run: |
+          python3 -m unittest scripts.ci.test_check_governed_parity -q
+          python3 scripts/ci/check_governed_parity.py \
+            UnitTests/testdata/governed-parity/repair-receipt.json \
+            UnitTests/testdata/governed-parity/action-list-receipt.json \
+            UnitTests/testdata/governed-parity/editor-receipt.json \
+            UnitTests/testdata/governed-parity/pagemaster-receipt.json
+          python3 scripts/ci/check_governed_parity.py --compare-identity \
+            UnitTests/testdata/governed-parity/action-list-receipt.json \
+            UnitTests/testdata/governed-parity/editor-receipt.json
       - name: Verify correction-operation catalog (#588)
         run: |
           python3 scripts/ci/test_correction_operation_catalog.py

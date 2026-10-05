@@ -300,7 +300,8 @@ QJsonObject approvalToJson(const PDFApprovalRecord& approval, qint64 sequence, c
         { QStringLiteral("rationale"), redactPathsInString(approval.rationale) },
         { QStringLiteral("evidence_sha256"), approval.evidenceSha256 },
         { QStringLiteral("decision_reference"), approval.decisionReference },
-        { QStringLiteral("decided_utc"), dateTimeString(approval.decidedUtc) }
+        { QStringLiteral("decided_utc"), dateTimeString(approval.decidedUtc) },
+        { QStringLiteral("expires_utc"), dateTimeString(approval.expiresUtc) }
     };
 }
 
@@ -698,6 +699,20 @@ bool buildPreflightEvidenceBundle(const PreflightEvidenceBundleRequest& request,
             errorMessage = QStringLiteral("The sign-off record binds a different source revision.");
             return false;
         }
+        // A stored sign-off is a statement about exact bytes. When the published
+        // artifact is supplied, re-read and re-hash it: a stale sign-off (the
+        // output changed after publication) is refused, not exported.
+        if (!request.publishedArtifactPath.trimmed().isEmpty())
+        {
+            const PDFGovernedExecutionSignOff parsedSignOff = PDFGovernedExecutionSignOff::fromJson(supplied);
+            const PDFOperationResult artifactCheck = verifyGovernedSignOffAgainstArtifact(parsedSignOff,
+                                                                                          request.publishedArtifactPath);
+            if (!artifactCheck)
+            {
+                errorMessage = artifactCheck.getErrorMessage();
+                return false;
+            }
+        }
 
         signOffObject = sanitizeObject(supplied, true);
         signOffObject.insert(QStringLiteral("approval"),
@@ -714,8 +729,18 @@ bool buildPreflightEvidenceBundle(const PreflightEvidenceBundleRequest& request,
     }
     else if (!signOffObject.isEmpty() && isSha256(signOffObject.value(QStringLiteral("published_sha256")).toString()))
     {
+        // Never synthesize the output identity from the sign-off alone: a
+        // sign-off with no artifact supplied is refused, so the bundle cannot
+        // claim an output whose bytes were never seen. When the artifact path is
+        // supplied the bytes were re-hashed above, so the identity is verified.
+        if (request.publishedArtifactPath.trimmed().isEmpty())
+        {
+            errorMessage = QStringLiteral("A governed sign-off cannot be exported without the published artifact it binds; supply the artifact bytes or its identity.");
+            return false;
+        }
         outputObject = PreflightEvidenceBundleOutput{
-            signOffObject.value(QStringLiteral("published_sha256")).toString(), -1
+            signOffObject.value(QStringLiteral("published_sha256")).toString(),
+            QFileInfo(request.publishedArtifactPath).size()
         }
                            .toJson();
     }

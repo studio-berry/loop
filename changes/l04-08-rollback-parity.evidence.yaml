@@ -1,0 +1,68 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: rollback-destination-preservation-and-report-failure
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - architecture:agent-policy:core
+  - id: rollback-revalidation-and-receipt
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - architecture:agent-policy:core
+  - id: rollback-verify-before-append-and-fail-closed
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - security:scripts/ci/check_source_integrity.py
+      - architecture:agent-policy:core
+  - id: pdftool-rollback-command
+    evidence:
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:pdftool
+  - id: editor-rollback-profile
+    evidence:
+      - unit:agent-policy:quick
+  - id: cross-surface-parity-fixture
+    evidence:
+      - unit:UnitTestsProductOperatorLoop
+      - unit:UnitTests/tst_productoperatorloop.cpp
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: governed-execution-lanes
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: pagemaster-lane
+    evidence:
+      - unit:agent-policy:pagemaster
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: build-policy-lane
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: packaging-lane
+    evidence:
+      - security:codeql
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - scripts/ci/check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
+  - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
+  - The cross-surface fixture is not registered as a fixtures.yaml class because that requires a quality-budgets metric id (a protected file); it is bound through the governed-execution lane paths, the UnitTestsProductOperatorLoop lane entry, and the source_integrity CI step that runs check_governed_parity.py over UnitTests/testdata/governed-parity
+  - Action List and PageMaster rollback surfaces are deferred; the deferral is recorded in docs/GOVERNED_EXECUTION.md
+  - PageMaster publishes a derived source-identity digest and its own resolved-profile digest by design; the cross-surface test asserts the shared fixture digest through its manifest document identity and the checker's per-surface validity
+  - architecture/proof-lanes.yaml and architecture/invariants.yaml are edited for the P5 binding; quality-budgets.yaml is untouched

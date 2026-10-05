@@ -94,6 +94,8 @@ set(_loop_pdftool_sources
     pdftoolrepair.h
     pdftoolactionlist.cpp
     pdftoolactionlist.h
+    pdftoolrollback.cpp
+    pdftoolrollback.h
     pdftoolworker.cpp
     pdftoolworker.h
     pdfworkerclient.cpp

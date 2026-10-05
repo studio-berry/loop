@@ -31,6 +31,7 @@
 #include "pdfimageoptimizer.h"
 #include "pdfjobscheduler.h"
 #include "pdfobjectselector.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfpreflightverdict.h"
 #include "pdfrepairdiff.h"
 
@@ -582,6 +583,42 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     QCOMPARE(signOff.value(QStringLiteral("published_sha256")).toString(), cliOutputHash);
     QCOMPARE(adapterOutcome->executionResult.governed.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("plan_digest")).toString(),
              adapterOutcome->executionResult.planDigest);
+
+    // The published output's own chain binds the same identities, so the reader
+    // can reconstruct who approved this exact output from the canonical chain.
+    const QString historyPath =
+        QDir(QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    QVERIFY(history.verify().verified);
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const pdf::PDFOperationHistoryEvent* accepted = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.kind == pdf::PDFOperationHistoryEventKind::FixApplied &&
+            event.status == pdf::PDFOperationHistoryStatus::Accepted)
+        {
+            accepted = &event;
+        }
+    }
+    QVERIFY(accepted != nullptr);
+    QVERIFY(accepted->output.has_value());
+    QCOMPARE(accepted->output->sha256, cliOutputHash);
+    QVERIFY(!accepted->effectiveProfileDigest.isEmpty());
+    QVERIFY(!accepted->reportArtifactSha256.isEmpty());
+    QVERIFY(accepted->resultSummary.value(QStringLiteral("governed")).toObject().value(QStringLiteral("sign_off")).toObject().contains(QStringLiteral("published_sha256")));
+
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult reconstructed =
+        pdf::reconstructGovernedPublicationAudit(history, cliOutputHash, &audit);
+    QVERIFY2(reconstructed, qPrintable(reconstructed.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QCOMPARE(audit.publishedSha256, cliOutputHash);
+    QVERIFY(audit.signOff.has_value());
+    QCOMPARE(audit.signOff->publishedSha256, cliOutputHash);
 }
 
 void ActionListTest::surfacesPerStepValidationErrors()

@@ -135,10 +135,15 @@ private slots:
     void repairRefusesToWriteOverItsOwnInput();
     void actionListBatchReportsRefusedOutputAsFailed();
     void repairRefusesRepeatedParameterAssignment();
+    void repairRefusesStaleApprovalBeforeWrite();
+    void repairPublicationBindsCompleteEventIdentities();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
     void benchmarkWithoutPreflightProfileIsIncomplete();
     void benchmarkWithPreflightProfileIsComplete();
+    void rollbackRejectsNonJsonOutput();
+    void rollbackAdvertisesJsonOnlyGovernedSurface();
+    void rollbackRestoresRecordedRevisionWithGovernedReceipt();
 };
 
 namespace
@@ -971,6 +976,63 @@ void PdfToolContractTest::repairRefusesToWriteOverItsOwnInput()
     QCOMPARE(fileDigest(inputPath), inputDigest);
 }
 
+void PdfToolContractTest::repairRefusesStaleApprovalBeforeWrite()
+{
+    // The gateway is the one decision point: an approval file whose plan digest does
+    // not name the analyzed plan is refused before any destination write.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const QString approvalPath = directory.filePath(QStringLiteral("approval.json"));
+    {
+        QFile approval(approvalPath);
+        QVERIFY(approval.open(QIODevice::WriteOnly));
+        const QJsonObject approvalObject{
+            { QStringLiteral("schema"), QStringLiteral("loop.governed-approval") },
+            { QStringLiteral("schema_version"), 1 },
+            { QStringLiteral("plan_digest"), QString(64, QLatin1Char('d')) },
+            { QStringLiteral("source_sha256"), QString::fromLatin1(inputDigest.toHex()) },
+            { QStringLiteral("candidate_sha256"), QString(64, QLatin1Char('e')) },
+            { QStringLiteral("approval"), QJsonObject{
+                                              { QStringLiteral("kind"), QStringLiteral("human") },
+                                              { QStringLiteral("actorId"), QStringLiteral("operator") },
+                                              { QStringLiteral("decision"), QStringLiteral("approve") },
+                                              { QStringLiteral("decidedUtc"), QStringLiteral("2026-01-01T00:00:00Z") } } }
+        };
+        QVERIFY(approval.write(QJsonDocument(approvalObject).toJson()) > 0);
+        approval.close();
+    }
+
+    const QString outputPath = directory.filePath(QStringLiteral("stale-output.pdf"));
+    const ToolRun refused = runPdfTool({ QStringLiteral("repair"),
+                                         inputPath,
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                         QStringLiteral("--param"), QStringLiteral("force=true"),
+                                         QStringLiteral("--profile"), profilePath,
+                                         QStringLiteral("--approval-file"), approvalPath,
+                                         QStringLiteral("--output"), outputPath,
+                                         QStringLiteral("--console-format"), QStringLiteral("json") });
+
+    verifyEnvelope(refused, 2, QStringLiteral("repair"));
+    const QJsonObject diagnostic = findDiagnostic(refused, QStringLiteral("repair.approval-invalid"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(refused.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("reason_code")).toString(),
+             QStringLiteral("approval-stale"));
+    QVERIFY(refused.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QVERIFY(!QFile::exists(outputPath));
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+}
+
 void PdfToolContractTest::actionListBatchReportsRefusedOutputAsFailed()
 {
     QTemporaryDir directory;
@@ -1278,6 +1340,199 @@ void PdfToolContractTest::evidenceBundleRejectsNonJsonOutput()
 }
 
 }   // namespace
+
+void PdfToolContractTest::repairPublicationBindsCompleteEventIdentities()
+{
+    // A repair through the one gateway appends a chain a reader can reconstruct:
+    // every event binds the exact plan, approval, profile, revision, and output.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const QString outputPath = directory.filePath(QStringLiteral("published.pdf"));
+    const ToolRun run = runPdfTool({ QStringLiteral("repair"),
+                                     inputPath,
+                                     QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                     QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                     QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                     QStringLiteral("--param"), QStringLiteral("force=true"),
+                                     QStringLiteral("--profile"), profilePath,
+                                     QStringLiteral("--output"), outputPath,
+                                     QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY2(run.exitCode == 0, qPrintable(QString::fromUtf8(run.stderrData)));
+    QVERIFY(QFile::exists(outputPath));
+
+    const QString historyPath =
+        QDir(QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    QVERIFY(history.verify().verified);
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+
+    const pdf::PDFOperationHistoryEvent* running = nullptr;
+    const pdf::PDFOperationHistoryEvent* accepted = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.kind != pdf::PDFOperationHistoryEventKind::FixApplied)
+        {
+            continue;
+        }
+        if (event.status == pdf::PDFOperationHistoryStatus::Running)
+        {
+            running = &event;
+        }
+        else if (event.status == pdf::PDFOperationHistoryStatus::Accepted)
+        {
+            accepted = &event;
+        }
+    }
+    QVERIFY(running != nullptr);
+    QVERIFY(accepted != nullptr);
+    // Identity completeness: no empty plan/approval/profile digests where the
+    // acceptance requires them.
+    QVERIFY(!running->documentRevisionDigest.isEmpty());
+    QVERIFY(!running->effectiveProfileDigest.isEmpty());
+    QVERIFY(running->approval.kind != pdf::PDFApprovalKind::None);
+    QVERIFY(!running->operatorIdentity.isEmpty());
+    QVERIFY(!accepted->effectiveProfileDigest.isEmpty());
+    QVERIFY(!accepted->reportArtifactSha256.isEmpty());
+    QVERIFY(accepted->output.has_value());
+
+    const QJsonObject governedApproval = accepted->resultSummary.value(QStringLiteral("approval")).toObject();
+    QVERIFY(pdf::isPDFSha256(governedApproval.value(QStringLiteral("plan_digest")).toString()));
+    QVERIFY(!accepted->resultSummary.value(QStringLiteral("sign_off")).toObject().isEmpty());
+    QVERIFY(!accepted->resultSummary.value(QStringLiteral("revalidation")).toObject().isEmpty());
+
+    // The reader answers "who approved what output" for the published bytes.
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult reconstructed =
+        pdf::reconstructGovernedPublicationAudit(history, accepted->output->sha256, &audit);
+    QVERIFY2(reconstructed, qPrintable(reconstructed.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QCOMPARE(audit.publishedSha256, accepted->output->sha256);
+    QCOMPARE(audit.planDigest, governedApproval.value(QStringLiteral("plan_digest")).toString());
+    QVERIFY(audit.approval.kind != pdf::PDFApprovalKind::None);
+    QVERIFY(audit.signOff.has_value());
+    QVERIFY(!audit.effectiveProfileDigest.isEmpty());
+    QCOMPARE(audit.revalidationState, QStringLiteral("complete"));
+}
+
+void PdfToolContractTest::rollbackRejectsNonJsonOutput()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("rollback"), QStringLiteral("--console-format"), QStringLiteral("text") });
+    QCOMPARE(run.exitCode, 2);
+    QVERIFY(run.json.isEmpty());
+    QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
+}
+
+void PdfToolContractTest::rollbackAdvertisesJsonOnlyGovernedSurface()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("rollback") });
+    verifyEnvelope(run, 0, QStringLiteral("capabilities"));
+    const QJsonArray commands = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray();
+    QCOMPARE(commands.size(), 1);
+    const QJsonObject command = commands.first().toObject();
+    QCOMPARE(command.value(QStringLiteral("id")).toString(), QStringLiteral("rollback"));
+    QCOMPARE(command.value(QStringLiteral("output_formats")).toArray(), QJsonArray{ QStringLiteral("json") });
+    QVERIFY(command.value(QStringLiteral("capabilities")).toArray().contains(QStringLiteral("history.rollback")));
+}
+
+void PdfToolContractTest::rollbackRestoresRecordedRevisionWithGovernedReceipt()
+{
+    // The CLI rollback surface reaches the same governed publication as every other
+    // surface: it restores a recorded revision as a new, revalidated revision.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const QString publishedPath = directory.filePath(QStringLiteral("published.pdf"));
+    const ToolRun repair = runPdfTool({ QStringLiteral("repair"), inputPath,
+                                        QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                        QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                        QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                        QStringLiteral("--param"), QStringLiteral("force=true"),
+                                        QStringLiteral("--profile"), profilePath,
+                                        QStringLiteral("--output"), publishedPath,
+                                        QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY2(repair.exitCode == 0, qPrintable(QString::fromUtf8(repair.stderrData)));
+
+    QFile published(publishedPath);
+    QVERIFY(published.open(QIODevice::ReadOnly));
+    const QByteArray publishedBytes = published.readAll();
+    published.close();
+    const QString publishedSha = QString::fromLatin1(QCryptographicHash::hash(publishedBytes, QCryptographicHash::Sha256).toHex());
+
+    const QString restoredPath = directory.filePath(QStringLiteral("restored.pdf"));
+    const QString reportPath = directory.filePath(QStringLiteral("rollback-report.json"));
+    for (const QString& conflictingReport : { publishedPath, restoredPath, profilePath })
+    {
+        const ToolRun conflict = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                              QStringLiteral("--to"), publishedSha,
+                                              QStringLiteral("--output"), restoredPath,
+                                              QStringLiteral("--profile"), profilePath,
+                                              QStringLiteral("--report-file"), conflictingReport });
+        QVERIFY(conflict.exitCode != 0);
+        QVERIFY(!QFile::exists(restoredPath));
+        QFile unchanged(publishedPath);
+        QVERIFY(unchanged.open(QIODevice::ReadOnly));
+        QCOMPARE(unchanged.readAll(), publishedBytes);
+    }
+    const ToolRun inPlace = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                         QStringLiteral("--to"), publishedSha,
+                                         QStringLiteral("--output"), publishedPath,
+                                         QStringLiteral("--profile"), profilePath });
+    QVERIFY(inPlace.exitCode != 0);
+
+    const ToolRun rollback = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                          QStringLiteral("--to"), publishedSha,
+                                          QStringLiteral("--output"), restoredPath,
+                                          QStringLiteral("--profile"), profilePath,
+                                          QStringLiteral("--report-file"), reportPath,
+                                          QStringLiteral("--reason"), QStringLiteral("contract rollback"),
+                                          QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY2(rollback.exitCode == 0, qPrintable(QString::fromUtf8(rollback.stderrData)));
+    verifyEnvelope(rollback, 0, QStringLiteral("rollback"));
+    const QJsonObject data = rollback.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.value(QStringLiteral("status")).toString(), QStringLiteral("rolled-back"));
+    const QJsonObject signOff = data.value(QStringLiteral("sign_off")).toObject();
+    QVERIFY(!signOff.isEmpty());
+    QCOMPARE(signOff.value(QStringLiteral("published_sha256")).toString(), publishedSha);
+    QVERIFY(!data.value(QStringLiteral("revalidation")).toObject().isEmpty());
+    QVERIFY(QFile::exists(reportPath));
+
+    QFile restored(restoredPath);
+    QVERIFY(restored.open(QIODevice::ReadOnly));
+    QCOMPARE(restored.readAll(), publishedBytes);
+    restored.close();
+    const QString otherOutput = directory.filePath(QStringLiteral("restored-without-report.pdf"));
+    const QString missingReport = directory.filePath(QStringLiteral("missing/report.json"));
+    const ToolRun failedReport = runPdfTool({ QStringLiteral("rollback"), publishedPath,
+                                              QStringLiteral("--to"), publishedSha,
+                                              QStringLiteral("--output"), otherOutput,
+                                              QStringLiteral("--profile"), profilePath,
+                                              QStringLiteral("--report-file"), missingReport });
+    QVERIFY(failedReport.exitCode != 0);
+    QVERIFY(QFile::exists(otherOutput));
+    QVERIFY(!QFile::exists(missingReport));
+    const QJsonArray outputs = failedReport.json.value(QStringLiteral("outputs")).toArray();
+    for (const QJsonValue& output : outputs)
+    {
+        QVERIFY(output.toObject().value(QStringLiteral("role")).toString() != QStringLiteral("report"));
+    }
+}
 
 QTEST_MAIN(PdfToolContractTest)
 #include "tst_pdftoolcontract.moc"

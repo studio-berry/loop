@@ -568,6 +568,21 @@ void addChange(PDFRepairDiffReport* report,
     report->structuralChanges.append(std::move(change));
 }
 
+/// Removes a candidate parent directory this call created via mkpath, but only
+/// when it is now empty; a caller-named directory is never removed.
+void removeCreatedCandidateDirectory(const QString& parentPath, bool parentExisted)
+{
+    if (parentExisted || !QFileInfo::exists(parentPath))
+    {
+        return;
+    }
+    QDir directory(parentPath);
+    if (directory.isEmpty())
+    {
+        QDir().rmdir(parentPath);
+    }
+}
+
 }   // namespace
 
 QString pdfRepairDiffStatusName(PDFRepairDiffStatus status)
@@ -598,6 +613,18 @@ QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass)
             return QStringLiteral("informational");
     }
     return QStringLiteral("informational");
+}
+
+QString pdfRepairPreviewFidelityName(PDFRepairPreviewFidelity fidelity)
+{
+    switch (fidelity)
+    {
+        case PDFRepairPreviewFidelity::Exact:
+            return QStringLiteral("exact");
+        case PDFRepairPreviewFidelity::Simulated:
+            return QStringLiteral("simulated");
+    }
+    return QStringLiteral("exact");
 }
 
 QJsonObject PDFRepairDiffReport::toJson() const
@@ -650,6 +677,7 @@ QJsonObject PDFRepairDiffReport::toJson() const
         { QStringLiteral("schema"), QStringLiteral("loop.repair-diff") },
         { QStringLiteral("version"), schemaVersion },
         { QStringLiteral("status"), pdfRepairDiffStatusName(status) },
+        { QStringLiteral("fidelity_mode"), pdfRepairPreviewFidelityName(fidelity) },
         { QStringLiteral("source"), QJsonObject{ { QStringLiteral("sha256"), sourceFingerprint } } },
         { QStringLiteral("candidate"), QJsonObject{ { QStringLiteral("sha256"), candidateFingerprint } } },
         { QStringLiteral("summary"), QJsonObject{
@@ -677,6 +705,7 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
     }
 
     *report = PDFRepairDiffReport();
+    report->fidelity = options.fidelity;
     report->sourceFingerprint = QString::fromLatin1(before.getSourceDataHash().toHex());
     report->candidateFingerprint = QString::fromLatin1(after.getSourceDataHash().toHex());
 
@@ -828,6 +857,10 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
                 pageDiff.warnings.append(QStringLiteral("expanded-region-not-rendered"));
             }
             report->pages.append(std::move(pageDiff));
+            if (options.previewStageHook)
+            {
+                options.previewStageHook(QStringLiteral("visual-page"));
+            }
         }
         if (pageLimit < commonPageCount)
         {
@@ -836,6 +869,11 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
         }
     }
 
+    if (PDFOperationControl::isOperationCancelled(options.operationControl) &&
+        !report->incompleteReasons.contains(QStringLiteral("cancelled")))
+    {
+        report->incompleteReasons.append(QStringLiteral("cancelled"));
+    }
     if (!report->incompleteReasons.isEmpty())
     {
         report->status = PDFRepairDiffStatus::Incomplete;
@@ -853,11 +891,18 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
     const std::function<PDFOperationResult(PDFDocument*)>& applyRepair,
     const QString& candidatePath,
     PDFDocument* reopenedCandidate,
-    QByteArray* serializedCandidateBytes)
+    QByteArray* serializedCandidateBytes,
+    const PDFOperationControl* operationControl,
+    const std::function<void(const QString& stage)>& stageHook)
 {
     if (!reopenedCandidate || candidatePath.isEmpty())
     {
         return PDFOperationResult(QStringLiteral("Repair candidate destination is invalid."));
+    }
+
+    if (PDFOperationControl::isOperationCancelled(operationControl))
+    {
+        return PDFOperationResult(QStringLiteral("Repair candidate serialization was cancelled."));
     }
 
     PDFDocument candidate = source;
@@ -867,20 +912,50 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
         return repairResult;
     }
 
-    QDir().mkpath(QFileInfo(candidatePath).absolutePath());
-    PDFDocumentWriter writer(nullptr);
+    const QString candidateParentPath = QFileInfo(candidatePath).absolutePath();
+    const bool candidateParentExisted = QFileInfo::exists(candidateParentPath);
+    QDir().mkpath(candidateParentPath);
+    PDFDocumentWriter writer(nullptr, operationControl);
     const PDFOperationResult writeResult = writer.write(candidatePath, &candidate, true);
     if (!writeResult)
     {
+        // The atomic writer removed its own staging temp on failure, so only a
+        // directory this call created can be left behind.
+        removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
         return writeResult;
     }
 
-    PDFDocumentReader reader(nullptr, [](bool*)
-                             { return QString(); }, false, false);
+    if (stageHook)
+    {
+        stageHook(QStringLiteral("candidate-committed"));
+    }
+
+    if (PDFOperationControl::isOperationCancelled(operationControl))
+    {
+        // The candidate bytes were committed, but a cancelled serialization
+        // must not leave the artifact it created.
+        QFile::remove(candidatePath);
+        removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
+        return PDFOperationResult(QStringLiteral("Repair candidate serialization was cancelled."));
+    }
+
+    PDFDocumentReader reader(nullptr, [](bool* passwordObtained)
+                             {
+                                 *passwordObtained = false;
+                                 return QString(); }, false, false);
+    reader.setOperationControl(operationControl);
     *reopenedCandidate = reader.readFromFile(candidatePath);
     if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
     {
+        QFile::remove(candidatePath);
+        removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
         return PDFOperationResult(QStringLiteral("Serialized repair candidate could not be reopened: %1").arg(reader.getErrorMessage()));
+    }
+    if (PDFOperationControl::isOperationCancelled(operationControl))
+    {
+        QFile::remove(candidatePath);
+        removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
+        return PDFOperationResult(QStringLiteral("Repair candidate serialization was cancelled."));
     }
     if (serializedCandidateBytes)
     {
