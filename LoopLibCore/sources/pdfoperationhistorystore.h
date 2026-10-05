@@ -24,12 +24,14 @@
 #define PDFOPERATIONHISTORYSTORE_H
 
 #include "pdfoperationhistory.h"
+#include "pdfgovernedexecution.h"
 #include "pdfutils.h"
 #include "pdfschemaversion.h"
 
 #include <QString>
 
 #include <memory>
+#include <optional>
 
 namespace pdf
 {
@@ -44,6 +46,49 @@ struct LOOPLIBCORESHARED_EXPORT PDFArtifactRegistrationOptions
 struct LOOPLIBCORESHARED_EXPORT PDFOperationHistoryStoreOptions
 {
     int busyTimeoutMs = 5000;
+};
+
+/// Reconstructed provenance for one governed publication, read back from the
+/// canonical operation-history chain. Every link (plan, approval, execution,
+/// artifacts, validation, sign-off) is read from the chain; nothing is
+/// synthesized. `reconstructed` is false and `refusal` names the fail-closed
+/// reason when the chain does not verify or no accepted publication binds the
+/// requested output.
+struct LOOPLIBCORESHARED_EXPORT PDFGovernedPublicationAudit
+{
+    bool reconstructed = false;
+    /// Fail-closed reason (`chain-compromised`, `no-accepted-publication`, ...)
+    /// when `reconstructed` is false.
+    QString refusal;
+    QString publishedSha256;
+    /// Digest of the dry-run plan the approval authorized.
+    QString planDigest;
+    /// The approval that authorized this publication (actor/policy/decision/expiry).
+    PDFApprovalRecord approval;
+    /// Execution identity and source artifact.
+    QUuid executionId;
+    QString operationId;
+    int operationVersion = 1;
+    PDFArtifactIdentity inputArtifact;
+    /// Artifact digests: source revision, reviewed/published candidate, and the
+    /// revalidation report the sign-off binds.
+    QString sourceSha256;
+    QString candidateSha256;
+    QString reportArtifactSha256;
+    /// Validation link: the #38 revalidation state, its fail-closed reason code,
+    /// the report digest, and the finding-delta summary.
+    QString revalidationState;
+    QString revalidationReasonCode;
+    QString revalidationReportSha256;
+    QString effectiveProfileDigest;
+    QJsonObject validationDelta;
+    /// Sign-off certificate, when the accepted event stored one.
+    std::optional<PDFGovernedExecutionSignOff> signOff;
+    /// Operator identity recorded on the accepted event.
+    QString operatorIdentity;
+    QDateTime publishedUtc;
+
+    QJsonObject toJson() const;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFOperationHistoryStore
@@ -86,6 +131,11 @@ public:
                                                  const QString& documentRevisionDigest = QString());
 
     QList<PDFOperationHistoryEvent> events(QString* errorMessage = nullptr) const;
+    /// Reads one execution's identity (operation, version, source artifact,
+    /// parameters) back from the `executions` table. Absent when the id is
+    /// unknown, so a reader can distinguish "no execution" from an empty one.
+    std::optional<PDFOperationHistoryExecution> execution(const QUuid& executionId,
+                                                          QString* errorMessage = nullptr) const;
     PDFOperationHistoryVerification verify() const;
 
     QList<PDFRollbackPoint> rollbackPoints(QString* errorMessage = nullptr) const;
@@ -121,6 +171,18 @@ private:
                                        qint64 databaseSize,
                                        QString* error);
 };
+
+/// Reconstructs the governed provenance of one published output from the
+/// canonical chain. Refuses (returns false and leaves `reconstructed` false)
+/// when the chain fails `verify()` or when no accepted publication binds the
+/// exact `publishedSha256`. The reader answers "who approved what output": the
+/// plan digest, the authorizing approval, the execution, every artifact digest,
+/// the #38 validation state + delta summary, and the sign-off certificate are
+/// all read from chain events, never synthesized.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult reconstructGovernedPublicationAudit(
+    const PDFOperationHistoryStore& store,
+    const QString& publishedSha256,
+    PDFGovernedPublicationAudit* audit);
 
 }   // namespace pdf
 

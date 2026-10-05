@@ -203,6 +203,10 @@ PDFToolExitCode PDFToolExportEvidenceBundle::execute(const PDFToolOptions& optio
             QString::fromLatin1(QCryptographicHash::hash(artifactBytes, QCryptographicHash::Sha256).toHex()),
             artifactBytes.size()
         };
+        // The bundle re-reads and re-hashes the same path so a sign-off is
+        // checked against the exact published bytes, not only the digest the
+        // caller computed.
+        request.publishedArtifactPath = options.evidenceBundleArtifactPath;
     }
 
     if (!readHistory(options.document, request.history, request.rollbackPoints, error))

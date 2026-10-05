@@ -155,7 +155,20 @@ struct LOOPLIBCORESHARED_EXPORT PDFGovernedExecutionSignOff
 
     bool isValid() const;
     QJsonObject toJson() const;
+    /// Reconstructs a sign-off from its persisted JSON. Returns an invalid
+    /// record (and sets `error`) when a required digest or approval is missing,
+    /// so a stored sign-off round-trips and a malformed one is refused.
+    static PDFGovernedExecutionSignOff fromJson(const QJsonObject& object, QString* error = nullptr);
 };
+
+/// Re-reads and re-hashes the bytes at `publishedPath` and refuses when they no
+/// longer match the sign-off's `publishedSha256`. A sign-off is a statement
+/// about exact bytes, so a stored sign-off whose output changed is stale even
+/// when nothing else about the chain changed. Refusal code is
+/// `invalid-document-changed`.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult verifyGovernedSignOffAgainstArtifact(
+    const PDFGovernedExecutionSignOff& signOff,
+    const QString& publishedPath);
 
 /// Declared approver rights for one authorization decision. Empty allowlists mean
 /// the caller declares no restriction on that axis; `requireExpiry` forces a

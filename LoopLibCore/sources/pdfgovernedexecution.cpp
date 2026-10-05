@@ -386,6 +386,50 @@ QJsonObject PDFGovernedExecutionSignOff::toJson() const
     };
 }
 
+PDFGovernedExecutionSignOff PDFGovernedExecutionSignOff::fromJson(const QJsonObject& object, QString* error)
+{
+    PDFGovernedExecutionSignOff signOff;
+    signOff.schemaVersion = object.value(QStringLiteral("schema_version")).toInt(1);
+    signOff.planDigest = object.value(QStringLiteral("plan_digest")).toString().toLower();
+    signOff.sourceSha256 = object.value(QStringLiteral("source_sha256")).toString().toLower();
+    signOff.candidateSha256 = object.value(QStringLiteral("candidate_sha256")).toString().toLower();
+    signOff.publishedSha256 = object.value(QStringLiteral("published_sha256")).toString().toLower();
+    signOff.revalidationReportSha256 = object.value(QStringLiteral("revalidation_report_sha256")).toString().toLower();
+    signOff.effectiveProfileDigest = object.value(QStringLiteral("effective_profile_digest")).toString().toLower();
+    signOff.approval = PDFApprovalRecord::fromJson(object.value(QStringLiteral("approval")).toObject());
+    if (!signOff.isValid() && error)
+    {
+        *error = QStringLiteral("Governed sign-off is missing a plan/source/candidate/published/report/profile digest or a valid approval record.");
+    }
+    return signOff;
+}
+
+PDFOperationResult verifyGovernedSignOffAgainstArtifact(const PDFGovernedExecutionSignOff& signOff,
+                                                        const QString& publishedPath)
+{
+    if (!signOff.isValid())
+    {
+        return PDFOperationResult(QStringLiteral("The governed sign-off is incomplete or invalid."));
+    }
+    QFile publishedFile(publishedPath);
+    if (!publishedFile.open(QIODevice::ReadOnly))
+    {
+        return PDFOperationResult(QStringLiteral("artifact-unreadable: could not open the signed-off artifact for verification."));
+    }
+    const QByteArray bytes = publishedFile.readAll();
+    if (publishedFile.error() != QFileDevice::NoError)
+    {
+        return PDFOperationResult(QStringLiteral("artifact-unreadable: could not read the signed-off artifact for verification."));
+    }
+    const QString actual = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    if (!sha256Matches(actual, signOff.publishedSha256))
+    {
+        return PDFOperationResult(QStringLiteral("invalid-document-changed: the artifact no longer matches the bytes the sign-off published (expected %1, actual %2).")
+                                      .arg(signOff.publishedSha256.trimmed().toLower(), actual));
+    }
+    return PDFOperationResult(true);
+}
+
 bool preflightDecisionQualifiesAsOperationApproval(const PreflightDecision& decision)
 {
     Q_UNUSED(decision);
@@ -1098,6 +1142,17 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         }
     }
 
+    // P4: every event this gateway appends binds the effective profile the
+    // approval was authorized against, not only the accepted completion. A
+    // running/failed event that drops it leaves an identity hole a reader
+    // cannot reconstruct "which profile this attempt ran under".
+    const QString effectiveProfileDigest =
+        isPDFSha256(request.profileDigest)
+            ? request.profileDigest.trimmed().toLower()
+            : (isPDFSha256(request.approval.effectiveProfileDigest)
+                   ? request.approval.effectiveProfileDigest.trimmed().toLower()
+                   : QString());
+
     // 7. Chain append: begin the execution and record it as running before the commit.
     bool historyStarted = false;
     QUuid executionId = request.executionId;
@@ -1123,6 +1178,7 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         running.status = PDFOperationHistoryStatus::Running;
         running.operatorIdentity = request.approval.approval.actorId;
         running.documentRevisionDigest = receipt->sourceSha256;
+        running.effectiveProfileDigest = effectiveProfileDigest;
         running.approval = request.approval.approval;
         if (!request.history->appendEvent(running))
         {
@@ -1132,7 +1188,7 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         historyStarted = true;
         receipt->executionId = executionId;
     }
-    const auto appendHistoryFailed = [&request, receipt, &executionId, historyStarted](const QString& reason)
+    const auto appendHistoryFailed = [&request, receipt, &executionId, historyStarted, effectiveProfileDigest](const QString& reason)
     {
         if (!request.history || !historyStarted)
         {
@@ -1144,6 +1200,7 @@ PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& req
         failed.status = PDFOperationHistoryStatus::Failed;
         failed.operatorIdentity = request.approval.approval.actorId;
         failed.documentRevisionDigest = receipt->candidateSha256;
+        failed.effectiveProfileDigest = effectiveProfileDigest;
         failed.resultSummary = QJsonObject{ { QStringLiteral("status"), receipt->status },
                                             { QStringLiteral("reason_code"), reason } };
         failed.approval = request.approval.approval;

@@ -683,6 +683,49 @@ QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorM
     return result;
 }
 
+std::optional<PDFOperationHistoryExecution> PDFOperationHistoryStore::execution(const QUuid& executionId,
+                                                                                QString* errorMessage) const
+{
+    if (!isOpen())
+    {
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Operation history store is not open.");
+        return std::nullopt;
+    }
+    QSqlQuery query(m_impl->database);
+    query.prepare(QStringLiteral("SELECT e.execution_id, e.parent_execution_id, e.operation_id, e.operation_version, e.source_sha256, e.source_revision, e.parameters_json, e.started_utc, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM executions e LEFT JOIN artifacts a ON a.sha256 = e.source_sha256 WHERE e.execution_id = ?"));
+    query.addBindValue(executionId.toString(QUuid::WithoutBraces));
+    if (!query.exec())
+    {
+        if (errorMessage)
+            *errorMessage = queryError(query);
+        return std::nullopt;
+    }
+    if (!query.next())
+    {
+        return std::nullopt;
+    }
+
+    PDFOperationHistoryExecution execution;
+    execution.executionId = QUuid(query.value(0).toString());
+    const QString parent = query.value(1).toString();
+    if (!parent.isEmpty())
+    {
+        execution.parentExecutionId = QUuid(parent);
+    }
+    execution.operationId = query.value(2).toString();
+    execution.operationVersion = query.value(3).toInt();
+    execution.input.sha256 = query.value(4).toString();
+    execution.input.size = query.value(8).toLongLong();
+    execution.input.mediaType = query.value(9).toString();
+    execution.input.logicalName = query.value(10).toString();
+    execution.input.storageToken = query.value(11).toString();
+    execution.sourceDocumentRevision = query.value(5).toULongLong();
+    execution.parameters = parseObject(query.value(6).toString());
+    execution.startedUtc = dateTimeFromString(query.value(7).toString());
+    return execution;
+}
+
 PDFOperationHistoryVerification PDFOperationHistoryStore::verify() const
 {
     PDFOperationHistoryVerification verification;
@@ -984,6 +1027,219 @@ PDFOperationResult PDFOperationHistoryStore::resolveRollbackTarget(const PDFRoll
     targetArtifact->logicalName = query.value(3).toString();
     targetArtifact->storageToken = query.value(4).toString();
     return targetArtifact->isValid() ? PDFOperationResult(true) : PDFOperationResult(QStringLiteral("Rollback target artifact metadata is invalid."));
+}
+
+QJsonObject PDFGovernedPublicationAudit::toJson() const
+{
+    QJsonObject object{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-publication-audit") },
+        { QStringLiteral("reconstructed"), reconstructed },
+        { QStringLiteral("refusal"), refusal },
+        { QStringLiteral("published_sha256"), publishedSha256 },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("approval"), approval.toJson() },
+        { QStringLiteral("operation_id"), operationId },
+        { QStringLiteral("operation_version"), operationVersion },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("report_artifact_sha256"), reportArtifactSha256 },
+        { QStringLiteral("revalidation_state"), revalidationState },
+        { QStringLiteral("revalidation_reason_code"), revalidationReasonCode },
+        { QStringLiteral("revalidation_report_sha256"), revalidationReportSha256 },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest },
+        { QStringLiteral("validation_delta"), validationDelta },
+        { QStringLiteral("operator_identity"), operatorIdentity }
+    };
+    if (!executionId.isNull())
+    {
+        object.insert(QStringLiteral("execution_id"), executionId.toString(QUuid::WithoutBraces));
+    }
+    if (inputArtifact.isValid())
+    {
+        object.insert(QStringLiteral("input"), inputArtifact.toJson());
+    }
+    if (signOff.has_value())
+    {
+        object.insert(QStringLiteral("sign_off"), signOff->toJson());
+    }
+    if (publishedUtc.isValid())
+    {
+        object.insert(QStringLiteral("published_utc"), dateTimeString(publishedUtc));
+    }
+    return object;
+}
+
+PDFOperationResult reconstructGovernedPublicationAudit(const PDFOperationHistoryStore& store,
+                                                       const QString& publishedSha256,
+                                                       PDFGovernedPublicationAudit* audit)
+{
+    if (!audit)
+    {
+        return PDFOperationResult(QStringLiteral("Governed publication audit output is null."));
+    }
+    *audit = PDFGovernedPublicationAudit();
+
+    const QString published = publishedSha256.trimmed().toLower();
+    if (!isPDFSha256(published))
+    {
+        return PDFOperationResult(QStringLiteral("A governed publication audit requires the exact published-artifact digest."));
+    }
+    audit->publishedSha256 = published;
+
+    // The chain must verify before any link is read. A compromised chain
+    // reconstructs nothing, so the reader refuses instead of returning
+    // half-attributable provenance.
+    const PDFOperationHistoryVerification verification = store.verify();
+    if (!verification.verified)
+    {
+        audit->refusal = QStringLiteral("chain-%1").arg(verification.integrity);
+        return PDFOperationResult(verification.errorMessage.isEmpty()
+                                      ? QStringLiteral("The operation-history chain does not verify.")
+                                      : verification.errorMessage);
+    }
+
+    QString error;
+    const QList<PDFOperationHistoryEvent> events = store.events(&error);
+    if (!error.isEmpty())
+    {
+        audit->refusal = QStringLiteral("chain-unavailable");
+        return PDFOperationResult(error);
+    }
+
+    // Repair stores the governed envelope at the top level of resultSummary;
+    // Action List nests it under `governed`. Read either shape.
+    const auto block = [](const QJsonObject& summary, const QString& key)
+    {
+        const QJsonObject direct = summary.value(key).toObject();
+        if (!direct.isEmpty())
+        {
+            return direct;
+        }
+        return summary.value(QStringLiteral("governed")).toObject().value(key).toObject();
+    };
+
+    // The accepted publication is the one whose durable output is exactly the
+    // requested bytes. The latest such event wins.
+    const PDFOperationHistoryEvent* accepted = nullptr;
+    for (const PDFOperationHistoryEvent& event : events)
+    {
+        if (event.status != PDFOperationHistoryStatus::Accepted || !event.output.has_value())
+        {
+            continue;
+        }
+        if (event.output->sha256.compare(published, Qt::CaseInsensitive) == 0)
+        {
+            accepted = &event;
+        }
+    }
+    if (!accepted)
+    {
+        audit->refusal = QStringLiteral("no-accepted-publication");
+        return PDFOperationResult(QStringLiteral("No accepted publication in the chain binds the requested output."));
+    }
+
+    audit->reconstructed = true;
+    audit->operatorIdentity = accepted->operatorIdentity;
+    audit->publishedUtc = accepted->createdUtc;
+    audit->candidateSha256 = accepted->output->sha256.toLower();
+    audit->effectiveProfileDigest = accepted->effectiveProfileDigest.toLower();
+    audit->reportArtifactSha256 = accepted->reportArtifactSha256.toLower();
+
+    if (const std::optional<PDFOperationHistoryExecution> execution = store.execution(accepted->executionId))
+    {
+        audit->executionId = execution->executionId;
+        audit->operationId = execution->operationId;
+        audit->operationVersion = execution->operationVersion;
+        audit->inputArtifact = execution->input;
+    }
+
+    const QJsonObject governedApprovalJson = block(accepted->resultSummary, QStringLiteral("approval"));
+    const PDFGovernedExecutionApproval governedApproval = PDFGovernedExecutionApproval::fromJson(governedApprovalJson);
+    if (governedApproval.isValid())
+    {
+        audit->planDigest = governedApproval.planDigest.toLower();
+        audit->sourceSha256 = governedApproval.sourceSha256.toLower();
+        audit->candidateSha256 = governedApproval.candidateSha256.toLower();
+        audit->approval = governedApproval.approval;
+    }
+    if (audit->sourceSha256.isEmpty() && audit->inputArtifact.isValid())
+    {
+        audit->sourceSha256 = audit->inputArtifact.sha256.toLower();
+    }
+
+    // Fall back to the running event's approval (the authorizing record) when no
+    // governed envelope was stored, then to the accepted event's own approval.
+    if (audit->approval.kind == PDFApprovalKind::None)
+    {
+        for (const PDFOperationHistoryEvent& event : events)
+        {
+            if (event.executionId == accepted->executionId &&
+                event.status == PDFOperationHistoryStatus::Running &&
+                event.approval.kind != PDFApprovalKind::None)
+            {
+                audit->approval = event.approval;
+                break;
+            }
+        }
+    }
+    if (audit->approval.kind == PDFApprovalKind::None)
+    {
+        audit->approval = accepted->approval;
+    }
+
+    // Validation link: the #38 revalidation state, its fail-closed reason code,
+    // the report digest, and the finding-delta summary.
+    const QJsonObject revalidationJson = block(accepted->resultSummary, QStringLiteral("revalidation"));
+    if (!revalidationJson.isEmpty())
+    {
+        audit->revalidationState = revalidationJson.value(QStringLiteral("state")).toString();
+        audit->revalidationReasonCode = revalidationJson.value(QStringLiteral("reason_code")).toString();
+        audit->revalidationReportSha256 = revalidationJson.value(QStringLiteral("report_sha256")).toString().toLower();
+        const QString profileDigest = revalidationJson.value(QStringLiteral("effective_profile_digest")).toString().toLower();
+        if (audit->effectiveProfileDigest.isEmpty() && isPDFSha256(profileDigest))
+        {
+            audit->effectiveProfileDigest = profileDigest;
+        }
+        audit->validationDelta = revalidationJson.value(QStringLiteral("report"))
+                                     .toObject()
+                                     .value(QStringLiteral("finding_delta"))
+                                     .toObject();
+    }
+    if (audit->revalidationReportSha256.isEmpty() && isPDFSha256(audit->reportArtifactSha256))
+    {
+        audit->revalidationReportSha256 = audit->reportArtifactSha256;
+    }
+
+    // Sign-off link. A stored sign-off round-trips; a malformed one fails closed.
+    const QJsonObject signOffJson = block(accepted->resultSummary, QStringLiteral("sign_off"));
+    if (!signOffJson.isEmpty())
+    {
+        QString signOffError;
+        const PDFGovernedExecutionSignOff parsed = PDFGovernedExecutionSignOff::fromJson(signOffJson, &signOffError);
+        if (!parsed.isValid())
+        {
+            audit->reconstructed = false;
+            audit->refusal = QStringLiteral("invalid-sign-off");
+            return PDFOperationResult(signOffError.isEmpty()
+                                          ? QStringLiteral("The accepted event stored an invalid governed sign-off.")
+                                          : signOffError);
+        }
+        audit->signOff = parsed;
+        if (audit->effectiveProfileDigest.isEmpty())
+        {
+            audit->effectiveProfileDigest = parsed.effectiveProfileDigest.toLower();
+        }
+        if (audit->planDigest.isEmpty())
+        {
+            audit->planDigest = parsed.planDigest.toLower();
+        }
+        if (audit->sourceSha256.isEmpty())
+        {
+            audit->sourceSha256 = parsed.sourceSha256.toLower();
+        }
+    }
+
+    return PDFOperationResult(true);
 }
 
 }   // namespace pdf
