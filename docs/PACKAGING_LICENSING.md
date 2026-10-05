@@ -120,9 +120,14 @@ and notices for every shipped module.
 The Quick adoption gate also requires clean-machine Windows and Linux package
 smoke tests with the preferred RHI backend and `QT_QUICK_BACKEND=software`.
 `QT_QPA_PLATFORM=offscreen` alone is not sufficient evidence of Quick scene
-graph rendering. Until those artifacts and tests are attached to the release
-record, packaging must not claim Qt Quick support or silently add Quick
-runtime files.
+graph rendering. The accessibility and Widgets-free qualification therefore runs
+against the **installed** tree after `cmake --install`, with the native and
+software runs recorded separately and the native lane required:
+`scripts/ci/verify_quick_accessibility_evidence.py` fails the package workflow
+when the native lane is missing, failed, captured outside an installed tree, or
+replaced by a software-only record. Until those artifacts and tests are attached
+to the release record, packaging must not claim Qt Quick support or silently add
+Quick runtime files.
 
 Session 07 makes the package-boundary evidence format explicit for the two
 in-scope artifacts: Linux x86_64 AppImage and Windows x64 MSI. Each workflow

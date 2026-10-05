@@ -43,7 +43,7 @@ workspace rail (7 IDs) | workspace stack | Document: pages rail | PDF canvas | c
 status: document state · production state · preflight state · page/zoom
 ```
 
-Manifest-driven menus group the 107 catalog actions by shell menu and
+Manifest-driven menus group the 108 catalog actions by shell menu and
 workspace `target`, with `ADVANCED` actions gated behind the release-profile
 developer diagnostics flag. Compare is enabled: it presents the before/after
 artifact identities, technical finding delta, preserved attributes and

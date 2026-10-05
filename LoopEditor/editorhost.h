@@ -96,6 +96,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool cancelled READ cancelled NOTIFY presentationChanged)
     Q_PROPERTY(bool unsupported READ unsupported NOTIFY presentationChanged)
     Q_PROPERTY(int commandEpoch READ commandEpoch NOTIFY commandEpochChanged)
+    /// The active tool id (issue #103). One of the vocabulary names in
+    /// docs/INTERACTION_CONTRACT.md; the toolbar binds to it as a single-select.
+    Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(QObject* preflight READ preflight CONSTANT)
     Q_PROPERTY(QObject* actionList READ actionList CONSTANT)
     Q_PROPERTY(QObject* inspector READ inspector CONSTANT)
@@ -159,6 +162,12 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString fixRollbackSummary READ fixRollbackSummary NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap previewIdentity READ previewIdentity NOTIFY presentationChanged)
     Q_PROPERTY(QString previewStaleReason READ previewStaleReason NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityStateName READ previewFidelityStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap previewFidelityVisual READ previewFidelityVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor previewFidelityColor READ previewFidelityColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityOriginName READ previewFidelityOriginName NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
+    Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
 
 public:
@@ -191,6 +200,8 @@ public:
     bool incomplete() const;
     bool cancelled() const;
     bool unsupported() const;
+    /// The operator's active tool as a vocabulary name (issue #103).
+    QString activeTool() const;
     int commandEpoch() const noexcept { return m_commandEpoch; }
 
     QObject* preflight();
@@ -289,6 +300,22 @@ public:
     QVariantMap previewIdentity() const;
     QString previewStaleReason() const;
 
+    /// Render fidelity and origin of the interactive preview (#28), the same fact on the
+    /// ordinary canvas and in the Production Preview. `previewFidelityStateName` is one of
+    /// `unavailable`, `stale`, `exact`, `approximate` or `authoritative`, derived by
+    /// `pdfquick::tokens::classifyPreviewFidelityState()` from the preview state and the
+    /// current page's render diagnostics; `previewFidelityOriginName` names the render path
+    /// (`none`, `fast-canvas`, `output-preview`). `previewRequiresAuthoritative` is true for
+    /// the overprint-sensitive fast render (`approximate`), whose pixels are not proof of
+    /// print-safe output. The interactive preview never certifies publication safety: only
+    /// `authoritative` names the output-preview origin, and no state reaches a pass.
+    QString previewFidelityStateName() const;
+    QVariantMap previewFidelityVisual() const;
+    QColor previewFidelityColor() const;
+    QString previewFidelityOriginName() const;
+    QString previewFidelitySummary() const;
+    bool previewRequiresAuthoritative() const;
+
     /// Read-only composition of the Core comparison facts for the Compare workspace:
     /// the before/after artifact identities, the technical finding delta, the attributes
     /// the comparison preserved, and the risk it left unresolved. Every field is a
@@ -373,6 +400,13 @@ public:
     /// authoritative overprint-accurate one. Re-renders only that page;
     /// the document stays open.
     Q_INVOKABLE void toggleCurrentPageFidelity();
+
+    /// The explicit switch the preview surfaces call before a page is presented as proof:
+    /// when the current page is the overprint-sensitive fast render, it moves that page to
+    /// the authoritative output-preview render and returns true. A page that is already
+    /// authoritative, is exact, or has no document returns false and is left alone.
+    Q_INVOKABLE bool ensureAuthoritativePreview();
+
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
@@ -390,6 +424,12 @@ public:
     Q_INVOKABLE bool isWorkspaceEnabled(LoopWorkspace workspace) const;
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();
+
+    /// Selects the active tool by vocabulary name (issue #103). Parses once at
+    /// this boundary and returns false for a name outside the vocabulary,
+    /// leaving the active tool unchanged. The interaction controller cancels an
+    /// in-flight drag with ToolChanged (#141 AC3).
+    Q_INVOKABLE bool setActiveTool(const QString& toolId);
 
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
@@ -426,6 +466,7 @@ public:
 signals:
     void presentationChanged();
     void commandEpochChanged();
+    void activeToolChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
     void preflightProfilesChanged();
     void preflightProfileDraftChanged();
@@ -444,6 +485,7 @@ private:
     void registerShellHandlers();
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
+    bool requestMoveSelection(const QVariantMap& parameters);
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();

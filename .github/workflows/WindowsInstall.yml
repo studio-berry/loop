@@ -339,11 +339,12 @@ jobs:
       - name: Run product Quick accessibility qualification harness (native)
         shell: pwsh
         run: |
+          # Qualify the INSTALLED tree (the tree a user runs and the tree the Widgets-free profile is verified against), not the developer build tree: the harness runs from a staging copy of .\loop\build\install so LoopLibCore/LoopLibQuick and the deployed Qt closure resolve from the installed layout. -Platform windows exercises the real native scene graph (d3d11), not the offscreen fallback. Native is a distinct claim from software and its failure is fatal.
           $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-native.txt")
-          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -Backend native 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
-          if ($LASTEXITCODE -ne 0) { throw "Native product Quick accessibility qualification harness failed." }
+          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -InstallTree ".\loop\build\install" -Backend native -Platform windows -SourceSha $env:LOOP_SOURCE_SHA -EvidenceJson (Join-Path $evidenceDir "quick-a11y-native.json") 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
+          if ($LASTEXITCODE -ne 0) { throw "Native installed-tree accessibility qualification failed." }
 
       - name: Run product Quick accessibility qualification harness (software)
         shell: pwsh
@@ -351,8 +352,24 @@ jobs:
           $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-software.txt")
-          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -Backend software 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-software.txt") -Append
-          if ($LASTEXITCODE -ne 0) { throw "Software product Quick accessibility qualification harness failed." }
+          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -InstallTree ".\loop\build\install" -Backend software -Platform windows -SourceSha $env:LOOP_SOURCE_SHA -EvidenceJson (Join-Path $evidenceDir "quick-a11y-software.json") 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-software.txt") -Append
+          if ($LASTEXITCODE -ne 0) { throw "Software installed-tree accessibility qualification failed." }
+
+      - name: Qualify installed-tree native accessibility backend (Windows UI Automation)
+        shell: pwsh
+        run: |
+          # The in-process harness cannot prove the OS accessibility bridge is active (QAccessible::isActive stays false until a real accessibility client attaches). This drives the UI Automation client against the installed tree and is fatal on failure; its record carries the native-accessibility claim that a software-only smoke can never produce.
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          # run-installed-quick-a11y-uia.ps1 throws on any mismatch; with the runner's $ErrorActionPreference = 'Stop' that aborts this step. Do not test $LASTEXITCODE here: the script runs no native child, so a successful run leaves it unset.
+          & ".\loop\scripts\run-installed-quick-a11y-uia.ps1" -BuildDir ".\loop\build" -InstallTree ".\loop\build\install" -OutputDirectory (Join-Path $evidenceDir "native-uia") -SourceSha $env:LOOP_SOURCE_SHA -EvidenceJson (Join-Path $evidenceDir "quick-a11y-native-uia.json") 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native-uia.txt")
+
+      - name: Verify installed-tree accessibility qualification evidence
+        shell: pwsh
+        run: |
+          # Fail closed: the records are not interchangeable. A missing, skipped or failed native lane (including the native accessibility backend), or a software-only record offered as a native claim, fails here even though each run already exited zero.
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          python ".\loop\scripts\ci\verify_quick_accessibility_evidence.py" --native (Join-Path $evidenceDir "quick-a11y-native.json") --software (Join-Path $evidenceDir "quick-a11y-software.json") --native-accessibility (Join-Path $evidenceDir "quick-a11y-native-uia.json") --require-native-accessibility --source-sha $env:LOOP_SOURCE_SHA --install-tree ".\loop\build\install"
+          if ($LASTEXITCODE -ne 0) { throw "Installed-tree accessibility qualification evidence failed verification." }
 
       - name: Validate staged install tree
         shell: pwsh

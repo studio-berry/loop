@@ -364,6 +364,7 @@ private slots:
     void inexactSurfacesStandInDuringZoom();
     void sessionRendererSerializesAndRendersARealPage();
     void sessionRendererEscalatesToAuthoritativeOverprintMatchingGoldenBaseline();
+    void fastCanvasOverprintRenderIsNotTheAuthoritativeGolden();
 };
 
 void PageSurfaceTest::initTestCase()
@@ -964,6 +965,60 @@ void PageSurfaceTest::sessionRendererEscalatesToAuthoritativeOverprintMatchingGo
     QVERIFY2(!baseline.isNull(), "Missing committed baseline overprint-cmyk-mode1-on.png");
     QVERIFY2(imagesMatchWithinTolerance(result.pixels->image, baseline),
              "Authoritative canvas escalation does not match the committed overprint-cmyk-mode1-on.png baseline");
+}
+
+void PageSurfaceTest::fastCanvasOverprintRenderIsNotTheAuthoritativeGolden()
+{
+    // #28 failure case, against the same committed baseline the escalation slot above
+    // trusts: the fast canvas path is the overprint approximation, so its pixels are NOT
+    // the authoritative output-preview render and cannot be cited as proof of print-safe
+    // output. Same page, same key fields; the only difference is the authoritative marker.
+    const QString fixturePath = overprintFixturesDirectory() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentContext context(&document);
+    pdfinteraction::PDFSessionPageSurfaceRenderer renderer(context);
+
+    const QImage baseline(overprintRendersDirectory() + QStringLiteral("/overprint-cmyk-mode1-on.png"));
+    QVERIFY2(!baseline.isNull(), "Missing committed baseline overprint-cmyk-mode1-on.png");
+
+    auto token = std::make_shared<pdf::PDFJobCancellationToken>();
+    pdf::PDFJobContext jobContext(token, pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
+
+    const auto renderWith = [&](const QString& colorOutputIdentity)
+    {
+        pdfinteraction::PageSurfaceRequest request;
+        request.key = pdfinteraction::makePageSurfaceKey(context.getRevision(),
+                                                         0,
+                                                         pdf::PageRotation::None,
+                                                         pdf::PDFRenderer::getDefaultFeatures(),
+                                                         colorOutputIdentity,
+                                                         1.0,
+                                                         QSize(128, 128),
+                                                         1.0);
+        request.token = pdfinteraction::RevisionFencedToken{ 1, context.getRevision() };
+        return renderer.render(request, jobContext);
+    };
+
+    const pdfinteraction::PageSurfaceResult fast = renderWith(QStringLiteral("srgb"));
+    QCOMPARE(fast.state, pdfinteraction::SurfaceTerminalState::Complete);
+    QVERIFY(fast.pixels);
+    // The fast path discloses its approximation rather than claiming exact overprint fidelity.
+    QVERIFY2(!fast.diagnostics.isExact(),
+             "The fast canvas path reported an exact overprint render for an overprint fixture");
+
+    const pdfinteraction::PageSurfaceResult authoritative =
+        renderWith(pdfinteraction::withAuthoritativeOverprintMarker(QStringLiteral("srgb")));
+    QCOMPARE(authoritative.state, pdfinteraction::SurfaceTerminalState::Complete);
+    QVERIFY(authoritative.pixels);
+
+    QVERIFY2(imagesMatchWithinTolerance(authoritative.pixels->image, baseline),
+             "Authoritative render does not match the committed overprint-cmyk-mode1-on.png baseline");
+    QVERIFY2(!imagesMatchWithinTolerance(fast.pixels->image, baseline),
+             "The fast canvas render matched the authoritative golden; the approximation is not being disclosed");
 }
 
 QTEST_GUILESS_MAIN(PageSurfaceTest)

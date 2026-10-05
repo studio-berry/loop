@@ -191,6 +191,7 @@ private Q_SLOTS:
     void keyEventCarriesNoTypedText();
     void focusLossCancelsTheDrag();
     void unboundItemIgnoresInput();
+    void toolSelectionRoundTrips();
 
     void admittedTilesReachTheSceneGraph();
     void revisionReplacementLeavesNoStaleTile();
@@ -613,6 +614,23 @@ void QuickCanvasTest::unboundItemIgnoresInput()
     QCOMPARE(item.currentPage(), -1);
     QCOMPARE(item.blockCount(), 0);
     QVERIFY(item.activeTool().isEmpty());
+}
+
+void QuickCanvasTest::toolSelectionRoundTrips()
+{
+    bindItem();
+
+    // The canvas republishes the controller's tool as a vocabulary name; the
+    // default is Select (issue #103).
+    QCOMPARE(m_item->activeTool(), QStringLiteral("select"));
+
+    QVERIFY(m_item->setActiveTool(QStringLiteral("hand")));
+    QCOMPARE(m_item->activeTool(), QStringLiteral("hand"));
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Hand);
+
+    // A name outside the vocabulary is refused and leaves the tool in place.
+    QVERIFY(!m_item->setActiveTool(QStringLiteral("bogus")));
+    QCOMPARE(m_item->activeTool(), QStringLiteral("hand"));
 }
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,7 @@
 #include <QScreen>
 #include <QWheelEvent>
 
+#include <optional>
 #include <utility>
 
 namespace pdfquick
@@ -189,20 +190,33 @@ int LoopCanvasItem::blockCount() const
 
 QString LoopCanvasItem::activeTool() const
 {
-    return m_interaction ? m_interaction->activeTool() : QString();
+    return m_interaction ? QString::fromLatin1(pdfinteraction::getInteractionToolName(m_interaction->activeTool()))
+                         : QString();
 }
 
-void LoopCanvasItem::setActiveTool(const QString& toolId)
+bool LoopCanvasItem::setActiveTool(const QString& toolId)
 {
-    if (!m_interaction || m_interaction->activeTool() == toolId)
+    if (!m_interaction)
     {
-        return;
+        return false;
+    }
+
+    const std::optional<pdfinteraction::InteractionTool> tool = pdfinteraction::interactionToolFromName(toolId);
+    if (!tool)
+    {
+        return false;
+    }
+
+    if (m_interaction->activeTool() == *tool)
+    {
+        return true;
     }
 
     // Changing the tool cancels an active drag inside the controller (#141 AC3).
     // That is the controller's rule, not a courtesy this item performs first.
-    m_interaction->setActiveTool(toolId);
+    m_interaction->setActiveTool(*tool);
     Q_EMIT activeToolChanged();
+    return true;
 }
 
 void LoopCanvasItem::setTraceOverlayVisible(bool visible)

@@ -58,6 +58,37 @@
         "Requires resolvable page boxes; skipped pages are reported as warnings, not silent success."
       ]
     },
+    "translate-page-box": {
+      "supports": "Documents whose media, crop, bleed, trim or art box must move on one page, such as a drag-committed box edit from the Editor canvas.",
+      "produces": "One rewritten page box translated by a page-space dx/dy in unrotated PDF user space; page content is not moved.",
+      "target_scopes": ["page"],
+      "parameter_defaults": {},
+      "save_policy_artifact_effect": "Operates on a candidate; committing writes a new artifact and leaves the source revision chain untouched until publish.",
+      "reversibility": {
+        "rollback_in_session": true,
+        "retention": "Operation-history rollback can discard an uncommitted candidate; after atomic publish the prior artifact remains addressable only through file history outside Loop."
+      },
+      "evidence_impact": {
+        "findings": ["bleed", "trim", "page-size"],
+        "records": ["page-boxes"]
+      },
+      "revalidation": {
+        "class": "full",
+        "description": "Declares complete impact on one page but no evidence domain tracks page geometry, so planRevalidation selects a full profile rerun."
+      },
+      "surface_parity": {
+        "cli": true,
+        "pagemaster": true,
+        "editor": true,
+        "action_list": true,
+        "gaps": "Editor reaches this operation through the actionMoveSelection drag-commit command, which routes into the Fix workspace plan, approval and execute flow."
+      },
+      "limitations": [
+        "Moves one box on one page; it does not move content or other boxes.",
+        "Refuses a move that leaves a box outside the media box, the trim box outside the bleed box, or the media box away from an inner box.",
+        "Only page boxes are draggable; findings, guides and text are not covered."
+      ]
+    },
     "downsample-images": {
       "supports": "Documents with embedded images whose effective DPI exceeds the requested target.",
       "produces": "Rewritten image XObjects (JPEG or preserved encoding) that meet target_dpi/quality while optionally keeping the original when already smaller.",

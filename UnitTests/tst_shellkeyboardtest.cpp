@@ -1,4 +1,5 @@
 #include "editorhost.h"
+#include "interactioncontroller.h"
 #include "preflightcontroller.h"
 
 #include "pdfdocumentbuilder.h"
@@ -18,6 +19,7 @@ private Q_SLOTS:
     void selectFindingRequiresDocument();
     void preferReducedMotionReadsEnvironment();
     void findingKeyboardNavigationMovesSelection();
+    void activeToolIsExposedAndValidated();
 };
 
 void ShellKeyboardTest::hostExposesAccessibilityHelpers()
@@ -89,6 +91,39 @@ void ShellKeyboardTest::findingKeyboardNavigationMovesSelection()
     QCOMPARE(preflight->findingsModel()->selectedFindingId(), second.stableId());
     QVERIFY(host.selectPreviousFinding());
     QCOMPARE(preflight->findingsModel()->selectedFindingId(), first.stableId());
+}
+
+void ShellKeyboardTest::activeToolIsExposedAndValidated()
+{
+    EditorHost host;
+
+    QSignalSpy toolSpy(&host, &EditorHost::activeToolChanged);
+
+    // Select is the default tool (issue #103).
+    QCOMPARE(host.activeTool(), QStringLiteral("select"));
+
+    // The host parses the vocabulary name and routes the parsed tool to the
+    // session's interaction controller, which owns the pointer semantics.
+    QVERIFY(host.setActiveTool(QStringLiteral("hand")));
+    QCOMPARE(host.activeTool(), QStringLiteral("hand"));
+    QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Hand);
+    QCOMPARE(toolSpy.size(), 1);
+
+    // A name outside the vocabulary is refused and leaves the active tool
+    // unchanged.
+    QVERIFY(!host.setActiveTool(QStringLiteral("measure")));
+    QCOMPARE(host.activeTool(), QStringLiteral("hand"));
+    QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Hand);
+    QCOMPARE(toolSpy.size(), 1);
+
+    // Re-selecting the active tool is not a change and must not signal.
+    QVERIFY(host.setActiveTool(QStringLiteral("hand")));
+    QCOMPARE(toolSpy.size(), 1);
+
+    QVERIFY(host.setActiveTool(QStringLiteral("select")));
+    QCOMPARE(host.activeTool(), QStringLiteral("select"));
+    QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Select);
+    QCOMPARE(toolSpy.size(), 2);
 }
 
 QTEST_MAIN(ShellKeyboardTest)
