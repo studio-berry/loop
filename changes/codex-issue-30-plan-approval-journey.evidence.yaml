@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: plan-approval-journey-acceptance
+    evidence:
+      - unit:agent-policy:quick
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:interaction
+      - unit:agent-policy:preflight
+unresolved: []

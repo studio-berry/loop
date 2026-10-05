@@ -645,6 +645,11 @@ bool buildPreflightInspectionReceipt(const PreflightResult& result,
                          : fidelityRank == 2        ? QStringLiteral("sampled")
                          : fidelityRank == 1        ? QStringLiteral("catalog")
                                                     : QStringLiteral("unsupported");
+    if (candidate.evidenceRefs.isEmpty())
+    {
+        incompleteCoverage = true;
+        candidate.limitations.append(QStringLiteral("No evidence was recorded for this inspection."));
+    }
     if (!evidence.isComplete())
     {
         incompleteCoverage = true;

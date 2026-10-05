@@ -473,6 +473,66 @@
         "document"
       ],
       "version": 2
+    },
+    "translate-page-box": {
+      "class_name": "PDFTranslatePageBoxRepair",
+      "evidence_impact": {
+        "findings": [
+          "bleed",
+          "trim",
+          "page-size"
+        ],
+        "records": [
+          "page-boxes"
+        ]
+      },
+      "id": "translate-page-box",
+      "impact": {
+        "all_pages": false,
+        "document_wide": false,
+        "domains": [],
+        "full_rewrite": false,
+        "impact_complete": true,
+        "requires_independent_oracle": false
+      },
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp",
+      "is_preflight_fixup": false,
+      "limitations": [
+        "Moves one box on one page; it does not move content or other boxes.",
+        "Refuses a move that leaves a box outside the media box, the trim box outside the bleed box, or the media box away from an inner box.",
+        "Only page boxes are draggable; findings, guides and text are not covered."
+      ],
+      "parameter_defaults": {},
+      "produces": "One rewritten page box translated by a page-space dx/dy in unrotated PDF user space; page content is not moved.",
+      "requires_postflight": true,
+      "revalidation": {
+        "class": "full",
+        "description": "Declares complete impact on one page but no evidence domain tracks page geometry, so planRevalidation selects a full profile rerun."
+      },
+      "revalidation_class": "full",
+      "reversibility": {
+        "retention": "Operation-history rollback can discard an uncommitted candidate; after atomic publish the prior artifact remains addressable only through file history outside Loop.",
+        "rollback_in_session": true
+      },
+      "save_policy": {
+        "artifact_effect": "Operates on a candidate; committing writes a new artifact and leaves the source revision chain untouched until publish.",
+        "invalidates_signatures": true,
+        "mode": "save-as-new-artifact",
+        "reversible_in_session": true
+      },
+      "save_policy_artifact_effect": "Operates on a candidate; committing writes a new artifact and leaves the source revision chain untouched until publish.",
+      "supports": "Documents whose media, crop, bleed, trim or art box must move on one page, such as a drag-committed box edit from the Editor canvas.",
+      "surface_parity": {
+        "action_list": true,
+        "cli": true,
+        "editor": true,
+        "gaps": "Editor reaches this operation through the actionMoveSelection drag-commit command, which routes into the Fix workspace plan, approval and execute flow.",
+        "pagemaster": true
+      },
+      "target_scopes": [
+        "page"
+      ],
+      "version": 1
     }
   },
   "registry": [
@@ -482,7 +542,8 @@
     "production.place-grommets",
     "production.validate-wide-format",
     "rgb-to-cmyk",
-    "standards-convert"
+    "standards-convert",
+    "translate-page-box"
   ],
   "save_modes": {
     "full-rewrite": "When committed, replaces the file body. Prior image streams and object numbering are discarded; signatures on the source are invalidated and the change is not reversible in-session.",

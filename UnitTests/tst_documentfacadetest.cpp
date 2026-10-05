@@ -404,7 +404,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // library that lost its resource would present an empty command set as a
     // working one, so this also pins the resource wiring.
     QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
-    QCOMPARE(catalog.descriptors().size(), 107);
+    QCOMPARE(catalog.descriptors().size(), 108);
 
     const pdfinteraction::CommandDescriptor* open =
         catalog.descriptor(pdfinteraction::DocumentFacade::OpenCommandId);
@@ -436,7 +436,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    QCOMPARE(implemented, 25);
+    QCOMPARE(implemented, 26);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
@@ -841,14 +841,16 @@ void DocumentFacadeTest::cancelledSaveRetryRejectsPriorSuccess()
     QVERIFY(harness.facade->cancelPendingOperation());
     const auto cause = harness.facade->operation().result;
     QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(harness.facade->retry(), pdfinteraction::InvalidCommandInvocation);
+    QCOMPARE(harness.submitter.deferredJobCount(), 1);
+    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
+    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
     const auto retried = harness.facade->retry();
     QVERIFY(retried != pdfinteraction::InvalidCommandInvocation);
     const auto request = harness.facade->operation();
     QCOMPARE(request.generation, oldRequest.generation);
     QCOMPARE(request.revision, oldRequest.revision);
     QVERIFY(!harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Cancelled));
-    QVERIFY(harness.submitter.runDeferred(oldRequest.jobId));
-    QTRY_COMPARE(harness.facade->rejectedCompletionCount(), 1);
     QCOMPARE(harness.facade->outputState(), pdfinteraction::DocumentOutputState::Pending);
     QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
     QCOMPARE(harness.facade->source().path, QStringLiteral("/corpus/report.pdf"));
