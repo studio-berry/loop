@@ -28,15 +28,16 @@
 #include "documentloader.h"
 #include "jobrelay.h"
 #include "jobsubmitter.h"
+#include "pdfpreflightverdict.h"
 
 #include <QFlags>
 #include <QObject>
 #include <QPointer>
 #include <QString>
 
-#include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace pdfinteraction
 {
@@ -87,6 +88,76 @@ enum class ShellDocumentStatus
 
 const char* getDocumentStateName(DocumentState state);
 const char* getShellDocumentStatusName(ShellDocumentStatus status);
+
+/// Presentation identity for one lifecycle request, using catalog and Core identities.
+struct DocumentOperation
+{
+    CommandInvocationId invocation = InvalidCommandInvocation;
+    CommandId command;
+    DocumentSource target;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+    QString jobId;
+    bool pending = false;
+    CommandResult result;
+    CommandResult retryCause;
+};
+
+enum class DocumentInspectionState
+{
+    NotChecked,
+    Running,
+    Completed,
+    Cancelled,
+    Failed,
+    Stale
+};
+
+struct DocumentInspectionToken
+{
+    quint64 request = 0;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+
+    bool operator==(const DocumentInspectionToken&) const = default;
+};
+
+struct DocumentPlanIntent
+{
+    QString operationId;
+    QString findingId;
+    QString receiptIdentity;
+    pdf::PDFRevisionIdentity revision;
+};
+
+struct DocumentInspection
+{
+    DocumentInspectionState state = DocumentInspectionState::NotChecked;
+    int progress = 0;
+    std::optional<pdf::PreflightInspectionReceipt> receipt;
+    QStringList findingIds;
+    QString selectedFindingId;
+    std::optional<DocumentPlanIntent> planIntent;
+    QString failureCode;
+    QString failureMessage;
+};
+
+/// A value snapshot for both interactive and unattended hosts. A plan intent
+/// requests Core planning; it grants no mutation or publication authority.
+struct DocumentOperatorState
+{
+    DocumentState document = DocumentState::Empty;
+    DocumentFacets facets;
+    DocumentOutputState output = DocumentOutputState::None;
+    DocumentSource source;
+    QString documentKey;
+    pdf::PDFRevisionIdentity revision;
+    quint64 generation = 0;
+    DocumentInspection inspection;
+    QString failureCode;
+
+    bool canActOnInspection() const;
+};
 
 /// One presentation-facing document lifecycle.
 ///
@@ -141,12 +212,29 @@ public:
     const IDocumentRevisionSource& revisionSource() const noexcept { return m_revisionSource; }
     pdf::PDFRevisionIdentity currentRevision() const;
 
+    DocumentOperatorState operatorState() const;
+    std::optional<DocumentInspectionToken> beginInspection(const QString& inputDigest,
+                                                           const pdf::PreflightProfileData& profile,
+                                                           QString& error);
+    bool updateInspectionProgress(const DocumentInspectionToken& token, int progress, QString& error);
+    bool completeInspection(const DocumentInspectionToken& token,
+                            const pdf::PreflightResult& result,
+                            const pdf::PDFEvidenceGraph& evidence,
+                            QString& error);
+    /// Closes result admission; the submitting host owns cancellation of its job.
+    bool cancelInspection(const DocumentInspectionToken& token, QString& error);
+    bool failInspection(const DocumentInspectionToken& token, const QString& code,
+                        const QString& message, QString& error);
+    bool selectFinding(const QString& findingId, QString& error);
+    bool requestPlan(const QString& operationId, QString& error);
+    void clearPlanIntent();
+
     /// Advances on every document replacement and on every close. A completion
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
 
-    /// How many terminal job results were dropped because their generation was
-    /// no longer current. A correct run of the lifecycle never admits one.
+    /// Terminal job results dropped because their request or document generation
+    /// was no longer current. A correct run of the lifecycle never admits one.
     int rejectedCompletionCount() const noexcept { return m_rejectedCompletions; }
 
     /// Marks the current document modified. Kept explicit rather than inferred:
@@ -164,12 +252,20 @@ public:
     CommandInvocationId save();
     CommandInvocationId saveAs(const QString& path);
 
+    DocumentOperation operation() const { return m_operation; }
+
+    /// Retries a failed or cancelled current request with a new invocation/job.
+    /// The prior terminal result remains available as the retry's cause.
+    CommandInvocationId retry();
+
     /// Requests cancellation of the lifecycle operation in flight.
     bool cancelPendingOperation();
 
 signals:
+    void operatorStateChanged();
     void stateChanged(pdfinteraction::DocumentState state);
     void facetsChanged(pdfinteraction::DocumentFacets facets);
+    void operationChanged();
 
     /// Emitted after the new identity is established and the old one dropped.
     void documentReplaced(quint64 generation);
@@ -180,7 +276,8 @@ private:
     bool registerHandlers();
 
     void beginOpen(CommandInvocationId invocation, const DocumentSource& source);
-    void beginSave(CommandInvocationId invocation, const DocumentSource& target);
+    void beginSave(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target);
+    void beginOperation(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target);
     void performClose(CommandInvocationId invocation);
 
     void admitLoadResult(CommandInvocationId invocation, quint64 generation, DocumentLoadResult result);
@@ -190,9 +287,6 @@ private:
                           DocumentWriteResult result);
 
     void requestCancellation(CommandInvocationId invocation);
-    void resolveCancellation(CommandInvocationId invocation,
-                             QString jobId,
-                             std::shared_ptr<std::atomic_bool> workStarted);
 
     void detachDocument();
     void supersedePending(CommandTerminalState state, QString typedError);
@@ -201,6 +295,8 @@ private:
     void setOutputState(DocumentOutputState outputState);
     void updateAvailability();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
+    bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
+    void invalidateInspection();
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a
@@ -220,6 +316,11 @@ private:
     DocumentOutputState m_outputState = DocumentOutputState::None;
     DocumentSource m_source;
     QString m_typedError;
+    DocumentInspection m_inspection;
+    DocumentInspectionToken m_inspectionToken;
+    pdf::PreflightProfileData m_inspectionProfile;
+    QString m_inspectionInputDigest;
+    quint64 m_inspectionRequest = 0;
 
     quint64 m_generation = 0;
     int m_rejectedCompletions = 0;
@@ -231,14 +332,10 @@ private:
 
     CommandInvocationId m_pendingInvocation = InvalidCommandInvocation;
     QString m_pendingJobId;
+    DocumentOperation m_operation;
+    CommandResult m_retryCause;
 
     bool m_handlersRegistered = false;
-
-    /// Set by the worker as it starts. A job cancelled while still queued never
-    /// runs its work, so nothing would report a terminal state for it; this is
-    /// how the facade tells that case apart from work that is already running
-    /// and will report for itself.
-    std::shared_ptr<std::atomic_bool> m_pendingWorkStarted;
 };
 
 }   // namespace pdfinteraction

@@ -105,7 +105,7 @@ CLI, Quick/Editor, and headless surfaces must agree on canonical plan identity a
 governed output identity under pinned writer inputs. Exact PDF writer byte identity is
 intentionally **not** guaranteed when the writer stamps clock- or random-derived
 fields; fail-closed and parity proofs use governed digests or structural comparison
-instead (disposition of [#656](https://github.com/studio-berry/loop/issues/656)).
+instead (disposition of legacy #656).
 
 `scripts/ci/check_governed_parity.py` validates these records without opening a PDF.
 Use `--compare-identity` when several reports are expected to describe the same

@@ -241,6 +241,8 @@ private slots:
     void sessionTeardownDrainsWorkersBeforeAdapters();
     void preflightRunsOffInteractiveThread();
     void preflightStateVisualIsNotCheckedBeforeARun();
+    void preflightFencesCompletionsThatLostTheirRequestIdentity();
+    void actionListFencesCompletionsThatLostTheirRequestIdentity();
     void exportedPreflightReportMatchesPdfToolForTheSameInputs();
     void restrictedPreflightReportMatchesPdfTool();
     void importValidProfileAddsDigest();
@@ -251,6 +253,7 @@ private slots:
     // Workspace surfaces (#586).
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
+    void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void fixRollbackReturnsToARecordedRevision();
 };
 
@@ -1071,6 +1074,80 @@ void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
     QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
 }
 
+void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
+{
+    const QString commandId = QStringLiteral("actionMoveSelection");
+    const auto moveParameters = [](const QString& kind, double dx, double dy)
+    {
+        return QVariantMap{ { QStringLiteral("targetKind"), kind },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), dx },
+                            { QStringLiteral("dy"), dy } };
+    };
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("move.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("issue-104-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("issue-104-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Move a page box") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("move") },
+                                             { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                            { QStringLiteral("page_index"), 0 },
+                                                            { QStringLiteral("dx"), 1 },
+                                                            { QStringLiteral("dy"), 1 } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    QVERIFY(!host.isCommandEnabled(commandId));
+    QCOMPARE(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)), quint64(0));
+
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.isCommandEnabled(commandId));
+
+    // Only a page box is a document edit, and a zero move is not one.
+    host.setWorkspace(EditorHost::Document);
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("Finding"), 4.0, 5.0)) != 0);
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 0.0, 0.0)) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Document);
+
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Fix);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+    QCOMPARE(host.actionListBindings().size(), 4);
+    for (const QVariant& binding : host.actionListBindings())
+    {
+        const QVariantMap entry = binding.toMap();
+        if (entry.value(QStringLiteral("name")).toString() == QStringLiteral("dx"))
+        {
+            QCOMPARE(entry.value(QStringLiteral("value")).toDouble(), 4.0);
+        }
+    }
+}
+
 void EditorHostTest::fixRollbackReturnsToARecordedRevision()
 {
     QTemporaryDir directory;
@@ -1159,6 +1236,219 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
                         { return event.status == pdf::PDFOperationHistoryStatus::RolledBack; }));
+}
+
+// ---------------------------------------------------------------------------
+// #17: scheduled results are fenced by request identity
+// ---------------------------------------------------------------------------
+//
+// The fence lives in EditorHost::finishPreflightJob and finishActionListJob, which run
+// on the scheduler's jobFinished signal. Each test first lets one run complete for real,
+// captures that completion, and then hands the shell the same snapshot for a live request
+// with one identity field corrupted. The capture is a plain lambda connection because
+// PDFJobSnapshot is not a registered metatype.
+
+void EditorHostTest::preflightFencesCompletionsThatLostTheirRequestIdentity()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("preflight-fence.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    auto* controller = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+    QVERIFY2(controller, "the preflight property must expose the controller that holds the request identity");
+    pdf::PDFJobScheduler& scheduler = host.sessionForTest()->scheduler();
+
+    pdf::PDFJobSnapshot realCompletion;
+    QString watchedJobId;
+    QObject::connect(&scheduler, &pdf::PDFJobScheduler::jobFinished, &host,
+                     [&realCompletion, &watchedJobId](const pdf::PDFJobSnapshot& snapshot)
+                     {
+                         if (!watchedJobId.isEmpty() && snapshot.jobId == watchedJobId)
+                         {
+                             realCompletion = snapshot;
+                         }
+                     });
+
+    // The live run must be admitted. Its completion is also the exact snapshot the fault
+    // cases below corrupt, so the only difference between a published verdict and a
+    // fenced one is the identity field each case breaks.
+    QVERIFY(host.runPreflight());
+    watchedJobId = controller->jobId();
+    QVERIFY(!watchedJobId.isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY(host.preflightStateName() != QStringLiteral("error"));
+    QVERIFY(host.hasPreflightReport());
+    QVERIFY(!realCompletion.jobId.isEmpty());
+    QCOMPARE(realCompletion.jobId, watchedJobId);
+    QCOMPARE(realCompletion.status, pdf::PDFJobStatus::Succeeded);
+
+    for (int fault = 0; fault < 4; ++fault)
+    {
+        QVERIFY(host.runPreflight());
+        watchedJobId = controller->jobId();
+        QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Running);
+        QVERIFY(!watchedJobId.isEmpty());
+
+        pdf::PDFJobSnapshot corrupted = realCompletion;
+        corrupted.jobId = watchedJobId;
+        corrupted.documentKey = controller->documentKey();
+        corrupted.documentRevision = controller->documentRevision();
+        switch (fault)
+        {
+            case 0:
+                // A completion for a revision the document has already left.
+                corrupted.documentRevision = controller->documentRevision() + QStringLiteral("-superseded");
+                break;
+            case 1:
+                // A completion for another document that shares this shell.
+                corrupted.documentKey = controller->documentKey() + QStringLiteral("-other-document");
+                break;
+            case 2:
+                // A completion for a different operation on the same revision.
+                corrupted.operationId = QStringLiteral("preflight.a-profile-that-was-never-selected");
+                break;
+            default:
+                // A completion that is not the scheduled preflight at all.
+                corrupted.kind = pdf::PDFJobKind::Other;
+                break;
+        }
+
+        scheduler.jobFinished(corrupted);
+
+        // The fenced completion publishes nothing; the earlier verdict stays on screen,
+        // marked stale, rather than being replaced by the unowned result.
+        QCOMPARE(controller->state(), pdfinteraction::PreflightController::State::Stale);
+        QVERIFY(controller->hasResult());
+        QVERIFY(host.preflightStateName() != QStringLiteral("pass"));
+        QVERIFY(!controller->operatorSummary().trimmed().isEmpty());
+    }
+
+    // The fence rejects mismatched completions only: a later live run still completes.
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY(host.preflightStateName() != QStringLiteral("error"));
+    QVERIFY(host.hasPreflightReport());
+}
+
+void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("fence-job.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("fence-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("gh-586-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    auto* controller = qobject_cast<pdfinteraction::ActionListController*>(host.actionList());
+    QVERIFY2(controller, "the actionList property must expose the controller that holds the request identity");
+    pdf::PDFJobScheduler& scheduler = host.sessionForTest()->scheduler();
+
+    pdf::PDFJobSnapshot realCompletion;
+    QString watchedJobId;
+    QObject::connect(&scheduler, &pdf::PDFJobScheduler::jobFinished, &host,
+                     [&realCompletion, &watchedJobId](const pdf::PDFJobSnapshot& snapshot)
+                     {
+                         if (!watchedJobId.isEmpty() && snapshot.jobId == watchedJobId)
+                         {
+                             realCompletion = snapshot;
+                         }
+                     });
+
+    // The real plan completion is admitted, and it is the snapshot the faults corrupt.
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 60000);
+    QVERIFY(host.planActionList());
+    watchedJobId = controller->jobId();
+    QVERIFY(!watchedJobId.isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(!realCompletion.jobId.isEmpty());
+    QCOMPARE(realCompletion.jobId, watchedJobId);
+    QCOMPARE(realCompletion.status, pdf::PDFJobStatus::Succeeded);
+    QVERIFY(!host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+
+    for (int fault = 0; fault < 2; ++fault)
+    {
+        // A stale result clears the validated binding, so every fault needs a fresh
+        // validate and plan: the run under test has to be a live request.
+        QVERIFY(host.validateActionListRecipe());
+        QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 60000);
+        QVERIFY(host.planActionList());
+        watchedJobId = controller->jobId();
+        QCOMPARE(controller->state(), pdfinteraction::ActionListController::State::Planning);
+
+        pdf::PDFJobSnapshot corrupted = realCompletion;
+        corrupted.jobId = watchedJobId;
+        corrupted.documentKey = controller->documentKey();
+        corrupted.documentRevision = controller->documentRevision();
+        if (fault == 0)
+        {
+            // A completion that is not the scheduled Action List work at all.
+            corrupted.kind = pdf::PDFJobKind::Preflight;
+        }
+        else
+        {
+            // A completion for a different recipe on the same revision.
+            corrupted.checkId = QStringLiteral("a-recipe-that-was-never-selected");
+        }
+
+        scheduler.jobFinished(corrupted);
+
+        // The controller discards the plan. The shell still names the discarded digest so
+        // the surface can show what went stale, so the fence is the lifecycle state.
+        QCOMPARE(controller->state(), pdfinteraction::ActionListController::State::Idle);
+        QVERIFY(controller->planDigest().isEmpty());
+        QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+        QVERIFY(!host.fixExecutionArmed());
+        QVERIFY(!controller->operatorSummary().trimmed().isEmpty());
+    }
+
+    // The fence rejects mismatched completions only: a later live plan still completes.
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 60000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(!host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

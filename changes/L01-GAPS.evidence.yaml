@@ -1,0 +1,27 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: reset-inventory-refresh-and-review
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: editor-host-result-fencing-fault-injection
+    evidence:
+      - unit:agent-policy:quick
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: legacy-link-rewrite-carries-governed-execution-lanes
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: worker-isolation-qualification-evidence
+    evidence:
+      - unit:UnitTestsPdfWorkerIsolation
+      - packaging:linux-build
+      - packaging:windows-build
+unresolved:
+  - This worktree has no configured build directory, so the ctest lanes above were not executed locally. They are proven by the hosted linux-build and windows-build runs dispatched for this change on the branch that carries it, and the run ids are recorded in the change handoff and in docs/PDF_WORKER_ISOLATION_AUDIT.md.
+  - The dump-collection channel inspection covers this Windows host's machine policy and captured artifacts only. Hosted-runner and installed-product dump policy stays with the #21 dossier.

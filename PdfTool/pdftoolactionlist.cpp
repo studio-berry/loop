@@ -464,9 +464,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                 {
                     QByteArray candidateData;
                     pdf::PDFDocument reopened;
-                    const pdf::PDFOperationResult serializeResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-                        candidate, [](pdf::PDFDocument*)
-                        { return pdf::PDFOperationResult(true); }, output, &reopened, &candidateData);
+                    const pdf::PDFOperationResult serializeResult = pdf::PDFStandardConversion::writeCandidate(candidate, output, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
+                    item.insert(QStringLiteral("independent_validation"), executionResult.independentValidation);
                     if (!serializeResult)
                     {
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
@@ -559,13 +558,13 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             return outputCheck;
         QByteArray candidateData;
         pdf::PDFDocument reopened;
-        if (const pdf::PDFOperationResult serializeResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(candidate, [](pdf::PDFDocument*)
-                                                                                                               { return pdf::PDFOperationResult(true); }, options.actionListOutputDocument, &reopened, &candidateData);
+        if (const pdf::PDFOperationResult serializeResult = pdf::PDFStandardConversion::writeCandidate(candidate, options.actionListOutputDocument, executionResult.standardValidationRequirements, &reopened, &candidateData, &executionResult.independentValidation);
             !serializeResult)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-serialize-failed"), serializeResult.getErrorMessage());
             return PDFToolExitCode::ProcessingFailure;
         }
+        data.insert(QStringLiteral("independent_validation"), executionResult.independentValidation);
         if (!readBytesFile(options.actionListOutputDocument, &candidateData, &error))
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("action-list.output-read-failed"), error);

@@ -1,0 +1,8 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: quick-finding-navigation-replacement
+    evidence:
+      - unit:agent-policy:quick
+unresolved:
+  - Native build and focused Qt tests require a configured build for this checkout.

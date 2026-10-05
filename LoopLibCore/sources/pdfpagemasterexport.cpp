@@ -739,6 +739,7 @@ QJsonObject standardConversionSettingsToJson(const PDFStandardConversionSettings
                                    ? QByteArray()
                                    : QCryptographicHash::hash(settings.outputIntentIccData, QCryptographicHash::Sha256);
     return QJsonObject{
+        { QStringLiteral("artifact_validation_contract"), 2 },
         { QStringLiteral("target"), pdfStandardTargetToString(settings.target) },
         { QStringLiteral("outputIntentIccSha256"), QString::fromLatin1(iccHash.toHex()) },
         { QStringLiteral("outputIntentIccSize"), settings.outputIntentIccData.size() },
@@ -1174,9 +1175,24 @@ int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
     return -1;
 }
 
+bool hasStandardsConversion(const PDFPageMasterExportJob& job)
+{
+    if (job.hasStandardConversionSettings)
+        return true;
+    if (!job.hasActionList)
+        return false;
+    for (const auto& step : job.actionList.steps)
+    {
+        const auto* operation = PDFRepairRegistry::instance().find(step.operationId);
+        if (operation && operation->id() == QLatin1String("standards-convert"))
+            return true;
+    }
+    return false;
+}
+
 bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObject& manifest, const QString& fileName)
 {
-    if (!job.resume)
+    if (!job.resume || hasStandardsConversion(job))
     {
         return false;
     }
@@ -1410,6 +1426,17 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             continue;
         }
 
+        if (job.resume && hasStandardsConversion(job))
+        {
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.remove(QStringLiteral("independent_validation"));
+            output.remove(QStringLiteral("governed"));
+            output.remove(QStringLiteral("action_list_result"));
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+        }
+
         PDFOperationResult currentResult = manipulator.assemble(job.assembledDocuments[index]);
         if (!currentResult)
         {
@@ -1475,6 +1502,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
         }
 
+        QList<PDFStandardConversionSettings> standardRequirements;
         if (job.hasActionList)
         {
             // Action Lists can contain heterogeneous operations. Until the
@@ -1511,6 +1539,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 result.manifest = manifest;
                 return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
             }
+            standardRequirements.append(actionListResult.standardValidationRequirements);
             assembledDocument = std::move(candidate);
             if (!persistManifestForJob(manifestPath, manifest))
             {
@@ -1677,10 +1706,11 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                                                       QJsonObject{
                                                           { QStringLiteral("target"), pdfStandardTargetToString(job.standardConversionSettings.target) } }));
             }
+            standardRequirements.append(job.standardConversionSettings);
             PDFStandardConversionReport conversionReport;
-            const PDFOperationResult conversionResult = PDFStandardConversion::apply(&assembledDocument,
-                                                                                     job.standardConversionSettings,
-                                                                                     &conversionReport);
+            const PDFOperationResult conversionResult = PDFStandardConversion::prepare(&assembledDocument,
+                                                                                       job.standardConversionSettings,
+                                                                                       &conversionReport);
             QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
             QJsonObject output = outputs.at(int(index)).toObject();
             output.insert(QStringLiteral("standardConversion"), conversionReport.toJson());
@@ -1810,12 +1840,29 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
+        QJsonArray independentEvidence;
+        const auto independentResult = PDFStandardConversion::validateArtifacts(candidateData, standardRequirements,
+                                                                                &independentEvidence, &actionListOperationControl);
+        QJsonArray validatedOutputs = manifest.value(QStringLiteral("outputs")).toArray();
+        QJsonObject validatedOutput = validatedOutputs.at(int(index)).toObject();
+        validatedOutput.insert(QStringLiteral("independent_validation"), independentEvidence);
+        validatedOutputs.replace(int(index), validatedOutput);
+        manifest.insert(QStringLiteral("outputs"), validatedOutputs);
+        if (!independentResult)
+        {
+            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, independentResult.getErrorMessage());
+            persistManifestForJob(manifestPath, manifest);
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportError(independentResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
         // Stage the exact bytes through the atomic writer, then hand control to the
         // optional commit seam while the output's final path is still untouched. The
         // staging write is mirrored from PDFSafeFileWriter::writeData() so a short write
         // is still reported as failure rather than as a truncated output.
-        const auto stageOutput = [&job, &fileName, &candidateData](QIODevice* device) -> bool
+        const auto stageOutput = [&job, &fileName, &candidateData, &actionListOperationControl](QIODevice* device) -> bool
         {
             const qint64 written = device->write(candidateData);
             if (written != candidateData.size())
@@ -1827,7 +1874,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             {
                 job.beforeOutputCommit(fileName);
             }
-            return true;
+            return !PDFOperationControl::isOperationCancelled(&actionListOperationControl);
         };
         const PDFOperationResult writeResult = PDFSafeFileWriter::writeDevice(
             fileName,
@@ -1844,6 +1891,18 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
+
+        QFile publishedArtifact(fileName);
+        if (!publishedArtifact.open(QIODevice::ReadOnly) || publishedArtifact.readAll() != candidateData)
+        {
+            const QString message = QStringLiteral("Published artifact identity does not match independent validation.");
+            setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+            persistManifestForJob(manifestPath, manifest);
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+        }
+        publishedArtifact.close();
 
         PDFGovernedExecutionApproval governedApproval;
         PDFGovernedExecutionRevalidation governedRevalidation;

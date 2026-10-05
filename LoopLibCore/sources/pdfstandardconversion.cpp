@@ -21,9 +21,11 @@
 // SOFTWARE.
 
 #include "pdfstandardconversion.h"
+#include "pdfsafefilewriter.h"
 
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
 #include "pdfstreamfilters.h"
 #include "pdfrgbtocmykfixup.h"
 #include "pdftransparencyflattener.h"
@@ -39,6 +41,10 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QTemporaryDir>
+#include <QBuffer>
+#include <QDir>
+#include <QRegularExpression>
+#include <QXmlStreamReader>
 
 #include <lcms2.h>
 
@@ -98,18 +104,18 @@ QByteArray xmpForTarget(PDFStandardTarget target)
     const QByteArray marker = targetMarker(target);
     if (target == PDFStandardTarget::PDFA2b)
     {
-        return QByteArrayLiteral("<?xpacket begin=\"\xEF\xBB\xBF\"?>\n"
+        return QByteArrayLiteral("<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
                                  "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF "
                                  "xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
-                                 "<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" "
+                                 "<rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" "
                                  "pdfaid:part=\"2\" pdfaid:conformance=\"B\"/></rdf:RDF></x:xmpmeta>\n"
                                  "<?xpacket end=\"w\"?>\n");
     }
 
-    return QByteArrayLiteral("<?xpacket begin=\"\xEF\xBB\xBF\"?>\n"
+    return QByteArrayLiteral("<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
                              "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF "
                              "xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
-                             "<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" "
+                             "<rdf:Description rdf:about=\"\" xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" "
                              "pdfxid:GTS_PDFXVersion=\"") +
            marker + QByteArrayLiteral("\"/></rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>\n");
 }
@@ -252,110 +258,6 @@ void collectPreflightBlockers(const PDFStandardConversionSettings& settings,
     }
 }
 
-PDFOperationResult runIndependentValidator(const PDFDocument& document,
-                                           const PDFStandardConversionSettings& settings,
-                                           PDFStandardConversionReport* report)
-{
-    QElapsedTimer timer;
-    timer.start();
-    QJsonObject validator{
-        { QStringLiteral("program"), settings.independentValidatorProgram },
-        { QStringLiteral("configured_arguments"), QJsonArray::fromStringList(settings.independentValidatorArguments) },
-        { QStringLiteral("result"), QStringLiteral("incomplete") }
-    };
-    const auto finish = [&validator, report, &timer](const QString& result, const QString& reason = QString())
-    {
-        validator.insert(QStringLiteral("result"), result);
-        validator.insert(QStringLiteral("duration_ms"), timer.elapsed());
-        if (!reason.isEmpty())
-        {
-            validator.insert(QStringLiteral("reason_code"), reason);
-        }
-        report->validator = validator;
-    };
-
-    if (settings.independentValidatorProgram.isEmpty())
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-not-configured"));
-        return PDFTranslationContext::tr("An independent validator is required; no output was committed.");
-    }
-    if (!std::any_of(settings.independentValidatorArguments.cbegin(), settings.independentValidatorArguments.cend(),
-                     [](const QString& argument)
-                     { return argument.contains(QStringLiteral("{input}")); }))
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-input-placeholder-missing"));
-        return PDFTranslationContext::tr("Independent validator arguments must contain the {input} placeholder.");
-    }
-
-    QTemporaryDir temporaryDirectory;
-    if (!temporaryDirectory.isValid())
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-temp-directory-failed"));
-        return PDFTranslationContext::tr("Could not create a temporary directory for independent validation.");
-    }
-    const QString inputPath = temporaryDirectory.filePath(QStringLiteral("candidate.pdf"));
-    PDFDocumentWriter writer(nullptr);
-    const PDFOperationResult writeResult = writer.write(inputPath, &document, false);
-    if (!writeResult)
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-candidate-write-failed"));
-        return writeResult;
-    }
-
-    const QFileInfo candidateInfo(inputPath);
-    const QString candidateDigest = PDFRunIdentity::digestFile(inputPath);
-    if (candidateDigest.isEmpty())
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-candidate-read-failed"));
-        return PDFTranslationContext::tr("The independent validator candidate could not be read.");
-    }
-    validator.insert(QStringLiteral("input_bytes"), candidateInfo.size());
-    validator.insert(QStringLiteral("input_sha256"), candidateDigest);
-
-    QStringList arguments;
-    for (const QString& argument : settings.independentValidatorArguments)
-    {
-        QString value = argument;
-        value.replace(QStringLiteral("{input}"), inputPath);
-        arguments.append(value);
-    }
-    QProcess process;
-    PDFSysUtils::configureScriptOrProgramProcess(process, settings.independentValidatorProgram, arguments);
-    process.start();
-    if (!process.waitForStarted(5000))
-    {
-        validator.insert(QStringLiteral("error"), process.errorString());
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-start-failed"));
-        return PDFTranslationContext::tr("The independent validator could not be started: %1").arg(process.errorString());
-    }
-    const bool finished = process.waitForFinished(settings.independentValidatorTimeoutMs);
-    validator.insert(QStringLiteral("arguments"), QJsonArray::fromStringList(arguments));
-    validator.insert(QStringLiteral("exit_code"), process.exitCode());
-    validator.insert(QStringLiteral("exit_status"), process.exitStatus() == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crashed"));
-    validator.insert(QStringLiteral("timed_out"), !finished);
-    validator.insert(QStringLiteral("stdout"), QString::fromUtf8(process.readAllStandardOutput()).left(4096));
-    validator.insert(QStringLiteral("stderr"), QString::fromUtf8(process.readAllStandardError()).left(4096));
-    if (!finished)
-    {
-        process.kill();
-        process.waitForFinished(1000);
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-timeout"));
-        return PDFTranslationContext::tr("The independent validator timed out.");
-    }
-    if (process.exitStatus() != QProcess::NormalExit)
-    {
-        finish(QStringLiteral("incomplete"), QStringLiteral("validator-crashed"));
-        return PDFTranslationContext::tr("The independent validator crashed before returning a result.");
-    }
-    if (process.exitCode() != 0)
-    {
-        finish(QStringLiteral("rejected"), QStringLiteral("validator-rejected"));
-        return PDFTranslationContext::tr("The independent validator rejected the candidate.");
-    }
-    finish(QStringLiteral("passed"));
-    report->independentValidationPassed = true;
-    return true;
-}
 
 }   // namespace
 
@@ -446,16 +348,13 @@ PDFOperationResult PDFStandardConversion::preview(const PDFDocument* document,
                                                   const PDFStandardConversionSettings& settings,
                                                   PDFStandardConversionReport* report)
 {
+    if (report)
+        *report = PDFStandardConversionReport();
     if (!document || !report)
     {
         return PDFTranslationContext::tr("Standard conversion document or report is null.");
     }
     report->target = pdfStandardTargetToString(settings.target);
-    report->changes.clear();
-    report->blockers.clear();
-    report->warnings.clear();
-    report->preflightBefore = QJsonObject();
-    report->transparencyFlatten = QJsonObject();
 
     const PDFOperationResult profileResult = validateIcc(settings);
     if (!profileResult)
@@ -509,9 +408,9 @@ PDFOperationResult PDFStandardConversion::preview(const PDFDocument* document,
                                       : PDFOperationResult(QStringLiteral("Standard conversion has unsupported blockers."));
 }
 
-PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
-                                                const PDFStandardConversionSettings& settings,
-                                                PDFStandardConversionReport* report)
+PDFOperationResult PDFStandardConversion::prepare(PDFDocument* document,
+                                                  const PDFStandardConversionSettings& settings,
+                                                  PDFStandardConversionReport* report)
 {
     PDFStandardConversionReport localReport;
     report = report ? report : &localReport;
@@ -525,6 +424,15 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
         return true;
     }
 
+    if (settings.target != PDFStandardTarget::PDFA2b)
+    {
+        report->warnings.append(QStringLiteral("PDF/X conversion is unqualified: no supported independent PDF/X oracle."));
+        return PDFOperationResult(QStringLiteral("No qualified PDF/X oracle; no output was committed."));
+    }
+    if (settings.independentValidatorProgram.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("An independent validator is required; no output was committed."));
+    }
     PDFDocument candidate = *document;
     // Transparency flattening emits DeviceRGB page rasters. Run it before
     // normalization so the generated image XObjects are converted by the same
@@ -579,42 +487,328 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
     }
     candidate = builder.build();
 
-    const PDFOperationResult validatorResult = runIndependentValidator(candidate, settings, report);
-    if (!validatorResult)
-    {
-        return validatorResult;
-    }
-
-    if (isPDFX(settings.target))
-    {
-        PDFDocumentSession session(&candidate);
-        PreflightEngine engine(&session);
-        const PreflightResult postflight = engine.run(pdfxProfile(settings.target));
-        report->postflightAfter = postflight.toJson();
-        const PreflightVerdict verdict = reducePreflightVerdict(postflight);
-        report->postflightPassed = verdict.isPass();
-        if (!report->postflightPassed)
-        {
-            if (verdict.state == PreflightVerdictState::Incomplete)
-            {
-                return PDFTranslationContext::tr("Loop PDF/X postflight could not finish inspecting; the candidate was not committed.");
-            }
-            if (verdict.state == PreflightVerdictState::Error)
-            {
-                return PDFTranslationContext::tr("Loop PDF/X postflight error; the candidate was not committed.");
-            }
-            return PDFTranslationContext::tr("Loop PDF/X postflight failed; the candidate was not committed.");
-        }
-    }
-    else
-    {
-        report->postflightPassed = true;
-        report->warnings.append(QStringLiteral("PDF/A conformance is asserted only by the configured independent validator."));
-    }
+    report->warnings.append(QStringLiteral("Prepared only. Independent validation is required on the final serialized bytes."));
 
     *document = qMove(candidate);
     report->conversionAttempted = true;
     return true;
+}
+
+PDFStandardConversionSettings standardConversionSettings(const QJsonObject& parameters)
+{
+    PDFStandardConversionSettings settings;
+    pdfStandardTargetFromString(parameters.value(QStringLiteral("target")).toString(), &settings.target);
+    settings.outputIntentIccData = QByteArray::fromBase64(parameters.value(QStringLiteral("target_icc_base64")).toString().toLatin1());
+    settings.outputIntentIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loop-output-intent")).toUtf8();
+    settings.outputIntentName = parameters.value(QStringLiteral("target_profile_name")).toString();
+    settings.normalizeColor = parameters.contains(QStringLiteral("normalize_color"))
+                                  ? parameters.value(QStringLiteral("normalize_color")).toBool()
+                                  : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
+    settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
+    settings.transparencyFlatten = parameters.contains(QStringLiteral("flatten_transparency"))
+                                       ? (parameters.value(QStringLiteral("flatten_transparency")).toBool()
+                                              ? PDFTransparencyFlattenPolicy::Always
+                                              : PDFTransparencyFlattenPolicy::Never)
+                                       : PDFTransparencyFlattenPolicy::Automatic;
+    settings.independentValidatorProgram = parameters.value(QStringLiteral("validator_program")).toString();
+    const QJsonValue validatorArguments = parameters.value(QStringLiteral("validator_arguments"));
+    if (validatorArguments.isArray())
+    {
+        for (const QJsonValue& value : validatorArguments.toArray())
+            settings.independentValidatorArguments.append(value.toString());
+    }
+    else
+    {
+        settings.independentValidatorArguments = QProcess::splitCommand(validatorArguments.toString());
+    }
+    settings.independentValidatorTimeoutMs = qBound(1000, parameters.value(QStringLiteral("validator_timeout_ms")).toInt(120000), 3600000);
+    settings.dryRunOnly = parameters.value(QStringLiteral("dry_run_only")).toBool(false);
+    return settings;
+}
+
+QJsonObject PDFArtifactValidationResult::toJson() const
+{
+    QJsonObject result = evidence;
+    result.insert(QStringLiteral("schema_version"), 2);
+    result.insert(QStringLiteral("target"), target);
+    result.insert(QStringLiteral("artifact_sha256"), artifactSha256);
+    result.insert(QStringLiteral("artifact_bytes"), artifactBytes);
+    result.insert(QStringLiteral("program"), validatorProgram);
+    result.insert(QStringLiteral("version"), validatorVersion);
+    result.insert(QStringLiteral("scope"), QStringLiteral("exact-final-artifact-bytes"));
+    result.insert(QStringLiteral("limitations"), QJsonArray{ QStringLiteral("PDF/A-2b only; preparation and PDF/X inspection do not certify conformance.") });
+    result.insert(QStringLiteral("report_sha256"), reportSha256);
+    result.insert(QStringLiteral("reason_code"), reason);
+    result.insert(QStringLiteral("status"), status == PDFArtifactValidationStatus::Passed ? QStringLiteral("passed") : status == PDFArtifactValidationStatus::Rejected ? QStringLiteral("rejected")
+                                                                                                                                                                       : QStringLiteral("incomplete"));
+    return result;
+}
+
+PDFArtifactValidationResult PDFStandardConversion::validateArtifact(const QByteArray& bytes,
+                                                                    const PDFStandardConversionSettings& settings,
+                                                                    const PDFOperationControl* control)
+{
+    PDFArtifactValidationResult result;
+    result.target = pdfStandardTargetToString(settings.target);
+    result.validatorProgram = settings.independentValidatorProgram;
+    result.artifactBytes = bytes.size();
+    result.artifactSha256 = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    result.reason = QStringLiteral("validator-unavailable");
+    if (PDFOperationControl::isOperationCancelled(control))
+    {
+        result.reason = QStringLiteral("validator-cancelled");
+        return result;
+    }
+    if (settings.target != PDFStandardTarget::PDFA2b)
+    {
+        result.reason = QStringLiteral("unsupported-pdfx-oracle");
+        return result;
+    }
+    const QString programName = QFileInfo(settings.independentValidatorProgram).completeBaseName().toLower();
+    if (programName != QLatin1String("verapdf") || bytes.isEmpty() || settings.independentValidatorTimeoutMs <= 0)
+    {
+        return result;
+    }
+    // Arguments are fixed by the adapter: callers cannot switch the target or disable validation.
+    const QStringList configured = settings.independentValidatorArguments;
+    if (!configured.isEmpty() && configured != QStringList{ QStringLiteral("{input}") } &&
+        configured != QStringList{ QStringLiteral("--format"), QStringLiteral("xml"), QStringLiteral("--flavour"), QStringLiteral("2b"), QStringLiteral("{input}") })
+    {
+        result.reason = QStringLiteral("validator-arguments-unsupported");
+        return result;
+    }
+    const auto invoke = [&](const QStringList& arguments, QByteArray* output, QByteArray* errors, int* exitCode) -> bool
+    {
+        QProcess process;
+        PDFSysUtils::configureScriptOrProgramProcess(process, settings.independentValidatorProgram, arguments);
+        process.start();
+        QElapsedTimer timer;
+        timer.start();
+        constexpr qsizetype maxReportBytes = 16 * 1024 * 1024;
+        while (true)
+        {
+            process.waitForFinished(50);
+            output->append(process.readAllStandardOutput());
+            errors->append(process.readAllStandardError());
+            if (PDFOperationControl::isOperationCancelled(control) || timer.elapsed() > settings.independentValidatorTimeoutMs ||
+                output->size() > maxReportBytes || errors->size() > maxReportBytes)
+            {
+                result.reason = PDFOperationControl::isOperationCancelled(control) ? QStringLiteral("validator-cancelled") : timer.elapsed() > settings.independentValidatorTimeoutMs ? QStringLiteral("validator-timeout")
+                                                                                                                                                                                      : QStringLiteral("validator-report-too-large");
+                process.kill();
+                process.waitForFinished(1000);
+                return false;
+            }
+            if (process.state() == QProcess::NotRunning)
+            {
+                break;
+            }
+        }
+        if (process.error() == QProcess::FailedToStart || process.exitStatus() != QProcess::NormalExit)
+        {
+            result.reason = QStringLiteral("validator-invocation-failed");
+            return false;
+        }
+        *exitCode = process.exitCode();
+        return true;
+    };
+    QByteArray versionOutput, versionErrors;
+    int exitCode = -1;
+    if (!invoke({ QStringLiteral("--version") }, &versionOutput, &versionErrors, &exitCode))
+    {
+        return result;
+    }
+    const QRegularExpression versionPattern(QStringLiteral("veraPDF(?: CLI)? (?:version )?1\\.(?:24|26|28|30)\\.\\d+"), QRegularExpression::CaseInsensitiveOption);
+    const auto versionMatch = versionPattern.match(QString::fromUtf8(versionOutput + versionErrors));
+    if (exitCode != 0 || !versionMatch.hasMatch())
+    {
+        result.reason = QStringLiteral("validator-version-unsupported");
+        return result;
+    }
+    result.validatorVersion = versionMatch.captured();
+    QTemporaryDir directory;
+    const QString inputPath = directory.filePath(QStringLiteral("candidate.pdf"));
+    QFile input(inputPath);
+    if (!directory.isValid() || !input.open(QIODevice::WriteOnly) || input.write(bytes) != bytes.size())
+    {
+        result.reason = QStringLiteral("validator-input-write-failed");
+        return result;
+    }
+    input.close();
+    const QStringList arguments{ QStringLiteral("--format"), QStringLiteral("xml"), QStringLiteral("--flavour"), QStringLiteral("2b"), inputPath };
+    QByteArray output, errors;
+    if (!invoke(arguments, &output, &errors, &exitCode))
+    {
+        return result;
+    }
+    result.reportSha256 = QString::fromLatin1(QCryptographicHash::hash(output, QCryptographicHash::Sha256).toHex());
+    result.evidence = QJsonObject{ { QStringLiteral("program"), settings.independentValidatorProgram },
+                                   { QStringLiteral("arguments"), QJsonArray::fromStringList(arguments) },
+                                   { QStringLiteral("exit_code"), exitCode },
+                                   { QStringLiteral("stdout"), QString::fromUtf8(output) },
+                                   { QStringLiteral("stderr"), QString::fromUtf8(errors) } };
+    if (!input.open(QIODevice::ReadOnly) || input.readAll() != bytes)
+    {
+        result.status = PDFArtifactValidationStatus::Rejected;
+        result.reason = QStringLiteral("validator-input-mutated");
+        return result;
+    }
+    QXmlStreamReader xml(output);
+    int jobs = 0, reports = 0, items = 0, details = 0, summaries = 0, totals = 0;
+    bool completeCounts = false, completeSummary = false, completeTotals = false;
+    QString profile, compliant, itemName;
+    bool exception = false;
+    QStringList stack;
+    while (!xml.atEnd())
+    {
+        xml.readNext();
+        if (xml.isStartElement())
+        {
+            stack.append(xml.name().toString());
+            const QString path = stack.join(QLatin1Char('/'));
+            if (path == QLatin1String("report/jobs/job"))
+                ++jobs;
+            if (path == QLatin1String("report/jobs/job/item"))
+                ++items;
+            if (path == QLatin1String("report/jobs/job/item/name"))
+            {
+                itemName = xml.readElementText();
+                stack.removeLast();
+            }
+            if (path == QLatin1String("report/jobs/job/validationReport"))
+            {
+                ++reports;
+                const auto endStatus = xml.attributes().value(QLatin1String("jobEndStatus"));
+                if (!endStatus.isEmpty() && endStatus != QLatin1String("normal"))
+                    exception = true;
+                profile = xml.attributes().value(QLatin1String("profileName")).toString();
+                compliant = xml.attributes().value(QLatin1String("isCompliant")).toString();
+            }
+            if (path == QLatin1String("report/jobs/job/validationReport/details"))
+            {
+                ++details;
+                const auto attributes = xml.attributes();
+                const auto count = [&](const char* name, bool positive)
+                {
+                    const QString value = attributes.value(QLatin1String(name)).toString();
+                    bool valid = false;
+                    const qulonglong number = value.toULongLong(&valid);
+                    return valid && QRegularExpression(QStringLiteral("^[0-9]+$")).match(value).hasMatch() &&
+                           (positive ? number > 0 : number == 0);
+                };
+                completeCounts = count("passedRules", true) && count("passedChecks", true) &&
+                                 count("failedRules", false) && count("failedChecks", false);
+            }
+            if (path == QLatin1String("report/batchSummary"))
+            {
+                ++summaries;
+                const auto attributes = xml.attributes();
+                completeSummary = attributes.value(QLatin1String("totalJobs")) == QLatin1String("1") &&
+                                  attributes.value(QLatin1String("failedToParse")) == QLatin1String("0") &&
+                                  attributes.value(QLatin1String("encrypted")) == QLatin1String("0") &&
+                                  attributes.value(QLatin1String("outOfMemory")) == QLatin1String("0") &&
+                                  attributes.value(QLatin1String("veraExceptions")) == QLatin1String("0");
+            }
+            if (path == QLatin1String("report/batchSummary/validationReports"))
+            {
+                ++totals;
+                const auto attributes = xml.attributes();
+                const QString total = xml.readElementText();
+                completeTotals = attributes.value(QLatin1String("compliant")) == QLatin1String("1") &&
+                                 attributes.value(QLatin1String("nonCompliant")) == QLatin1String("0") &&
+                                 attributes.value(QLatin1String("failedJobs")) == QLatin1String("0") &&
+                                 total == QLatin1String("1");
+                stack.removeLast();
+            }
+            if (xml.name().toString().endsWith(QLatin1String("Exception")))
+                exception = true;
+        }
+        else if (xml.isEndElement())
+            stack.removeLast();
+    }
+    if (xml.hasError() || exception || jobs != 1 || reports != 1 || items != 1 || !QFileInfo(itemName).isAbsolute() ||
+        QFileInfo(itemName).canonicalFilePath() != QFileInfo(inputPath).canonicalFilePath() ||
+        profile.compare(QLatin1String("PDF/A-2B validation profile"), Qt::CaseInsensitive) != 0)
+    {
+        result.reason = QStringLiteral("validator-report-invalid");
+        return result;
+    }
+    if (compliant == QLatin1String("false"))
+    {
+        result.status = PDFArtifactValidationStatus::Rejected;
+        result.reason = QStringLiteral("validator-rejected");
+    }
+    else if (compliant == QLatin1String("true") && details == 1 && summaries == 1 && totals == 1 &&
+             completeCounts && completeSummary && completeTotals && exitCode == 0)
+    {
+        result.status = PDFArtifactValidationStatus::Passed;
+        result.reason.clear();
+    }
+    else
+        result.reason = QStringLiteral("validator-report-incomplete");
+    return result;
+}
+
+PDFOperationResult PDFStandardConversion::validateArtifacts(const QByteArray& bytes,
+                                                            const QList<PDFStandardConversionSettings>& requirements,
+                                                            QJsonArray* evidence,
+                                                            const PDFOperationControl* control)
+{
+    if (evidence)
+        *evidence = {};
+    if (PDFOperationControl::isOperationCancelled(control))
+        return PDFOperationResult(QStringLiteral("Artifact validation was cancelled."));
+    for (const auto& settings : requirements)
+    {
+        const auto result = validateArtifact(bytes, settings, control);
+        if (evidence)
+            evidence->append(result.toJson());
+        if (result.status != PDFArtifactValidationStatus::Passed)
+            return PDFOperationResult(QStringLiteral("Independent validation did not pass: %1").arg(result.reason));
+    }
+    return PDFOperationResult(true);
+}
+
+PDFOperationResult PDFStandardConversion::writeCandidate(const PDFDocument& document,
+                                                         const QString& path,
+                                                         const QList<PDFStandardConversionSettings>& requirements,
+                                                         PDFDocument* reopened,
+                                                         QByteArray* bytes,
+                                                         QJsonArray* evidence,
+                                                         const PDFOperationControl* control)
+{
+    if (evidence)
+        *evidence = {};
+    QByteArray candidateBytes;
+    QBuffer buffer(&candidateBytes);
+    buffer.open(QIODevice::WriteOnly);
+    PDFDocumentWriter writer(nullptr, control);
+    const auto serialized = writer.write(&buffer, &document);
+    if (!serialized)
+        return serialized;
+    const auto validated = validateArtifacts(candidateBytes, requirements, evidence, control);
+    if (!validated)
+        return validated;
+    PDFDocumentReader reader(nullptr, [](bool*)
+                             { return QString(); }, false, false);
+    const PDFDocument candidate = reader.readFromBuffer(candidateBytes);
+    if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
+        return PDFOperationResult(QStringLiteral("Serialized candidate could not be reopened."));
+    if (PDFOperationControl::isOperationCancelled(control))
+        return PDFOperationResult(QStringLiteral("Artifact publication was cancelled."));
+    if (path.isEmpty() || !QDir().mkpath(QFileInfo(path).absolutePath()))
+        return PDFOperationResult(QStringLiteral("Candidate destination directory is unavailable."));
+    const auto written = PDFSafeFileWriter::writeData(path, candidateBytes, PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!written)
+        return written;
+    QFile published(path);
+    if (!published.open(QIODevice::ReadOnly) || published.readAll() != candidateBytes)
+        return PDFOperationResult(QStringLiteral("Published artifact identity does not match validation."));
+    if (reopened)
+        *reopened = candidate;
+    if (bytes)
+        *bytes = candidateBytes;
+    return PDFOperationResult(true);
 }
 
 }   // namespace pdf

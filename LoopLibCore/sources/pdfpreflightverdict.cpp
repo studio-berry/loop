@@ -662,6 +662,15 @@ bool buildPreflightInspectionReceipt(const PreflightResult& result,
     {
         candidate.limitations.append(coverageClaim);
     }
+    if (std::any_of(candidate.checks.cbegin(), candidate.checks.cend(), [](const PreflightReceiptCheck& check)
+                    { return check.id == QLatin1String("ink-coverage") || check.id == QLatin1String("color-inventory"); }))
+    {
+        candidate.limitations.append(QStringLiteral("Internal renderer fidelity is not independent print proof; Ghostscript qualification covers only the recorded fixtures and settings."));
+    }
+    if (result.pdfx.has_value())
+    {
+        candidate.limitations.append(QStringLiteral("PDF/X inspection is unqualified for standards compliance: no independent PDF/X oracle is available."));
+    }
     candidate.limitations.removeDuplicates();
     if (candidate.verdict.isPass() && incompleteCoverage)
     {

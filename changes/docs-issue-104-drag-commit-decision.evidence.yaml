@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: drag-commit-decision-record
+    evidence:
+      - architecture:agent-policy:documentation
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - the implementation slice this ADR recommends was not built or tested; it would touch protected LoopLibCore/sources/**, which is out of scope for a decision request
+  - interaction, core, quick, and pdftool test lanes were not run; build-local does not exist and .local-vcpkg was removed, so configure and dependency restore are both approval-required under agent-policy.json

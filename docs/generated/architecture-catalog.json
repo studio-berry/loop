@@ -334,6 +334,10 @@
     {
       "id": "standards-convert",
       "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
+    },
+    {
+      "id": "translate-page-box",
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
     }
   ],
   "schema_kinds": [

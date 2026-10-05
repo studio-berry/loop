@@ -101,14 +101,14 @@ RevisionFencedToken InteractionController::token() const
     return token;
 }
 
-void InteractionController::setActiveTool(const QString& toolId)
+void InteractionController::setActiveTool(InteractionTool tool)
 {
-    if (m_activeTool == toolId)
+    if (m_activeTool == tool)
     {
         return;
     }
 
-    m_activeTool = toolId;
+    m_activeTool = tool;
     cancelActive(InteractionCancelReason::ToolChanged);
     publishOverlay();
 }
@@ -236,7 +236,10 @@ void InteractionController::handlePointerPress(const PointerIntent& intent)
 
     m_state.setPointerPosition(intent.positionPx, pageIndex, pageIndex >= 0 ? std::optional<QPointF>(pagePoint) : std::nullopt);
 
-    if (intent.button == m_panButton)
+    // Hand turns the left button into a viewport grip, so a left press pans and
+    // never selects or starts a transform. The configured pan button keeps
+    // panning in every tool, which is why Select still pans on middle-drag.
+    if (intent.button == m_panButton || (intent.button == Qt::LeftButton && m_activeTool == InteractionTool::Hand))
     {
         m_panAnchorPx = intent.positionPx;
         m_state.begin(InteractionKind::Pan, token());
@@ -329,7 +332,12 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
 
 void InteractionController::handlePointerRelease(const PointerIntent& intent)
 {
-    if (m_state.isActive(InteractionKind::Pan) && intent.button == m_panButton)
+    // A Hand pan was begun by the left button, so that is the button that ends
+    // it; the configured pan button ends an explicit pan in every tool.
+    const bool panButtonReleased = intent.button == m_panButton ||
+                                   (intent.button == Qt::LeftButton && m_activeTool == InteractionTool::Hand);
+
+    if (m_state.isActive(InteractionKind::Pan) && panButtonReleased)
     {
         m_state.cancel(InteractionCancelReason::Explicit);
         return;

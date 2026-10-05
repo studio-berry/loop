@@ -201,10 +201,14 @@ private Q_SLOTS:
     void hoverRepeatDoesNotRebuildFrame();
     void clickSelectsWithoutDragging();
     void dragPreservesGrabOffset();
+    void completedDragCarriesTheFenceItCompletedAgainst();
     void dragBelowThresholdIsAClick();
     void escapeCancelsDragWithoutCommit();
     void focusLossCancelsDrag();
     void toolChangeCancelsDrag();
+    void toolVocabularyNamesRoundTrip();
+    void handToolPansLeftDragAndSuppressesSelection();
+    void selectToolRetainsSelectionAndDrag();
     void selectionChangeCancelsDrag();
     void revisionChangeRefusesDragCompletion();
     void pointerMoveDoesNotMutateTheDocument();
@@ -374,6 +378,31 @@ void InteractionControllerTest::dragPreservesGrabOffset()
     QVERIFY(!m_controller->state().drag().has_value());
 }
 
+void InteractionControllerTest::completedDragCarriesTheFenceItCompletedAgainst()
+{
+    const QPointF pressPagePoint(38.0, 38.0);
+    const QPoint pressPx = viewportPointFor(*m_viewport, pressPagePoint);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, pressPx, 2, Qt::LeftButton));
+
+    std::optional<pdfinteraction::DragSession> completed;
+    connect(m_controller.get(),
+            &pdfinteraction::InteractionController::dragCompleted,
+            this,
+            [&completed](pdfinteraction::DragSession session)
+            { completed = std::move(session); });
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, 3, Qt::LeftButton, Qt::LeftButton));
+    const QPoint movePx = viewportPointFor(*m_viewport, QPointF(58.0, 38.0));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, 4, Qt::NoButton, Qt::LeftButton));
+    const pdfinteraction::RevisionFencedToken fence = m_controller->token();
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, movePx, 5, Qt::LeftButton));
+
+    QVERIFY(completed.has_value());
+    QVERIFY(completed->fence.isValid());
+    QCOMPARE(completed->fence, fence);
+}
+
 void InteractionControllerTest::dragBelowThresholdIsAClick()
 {
     const QPoint point = viewportPointFor(*m_viewport, QPointF(30.0, 30.0));
@@ -445,11 +474,83 @@ void InteractionControllerTest::toolChangeCancelsDrag()
 
     QSignalSpy cancelSpy(m_controller.get(), &pdfinteraction::InteractionController::interactionCancelled);
 
-    m_controller->setActiveTool(QStringLiteral("measure"));
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Hand);
 
     QCOMPARE(cancelSpy.size(), 1);
     QCOMPARE(cancelSpy.constFirst().constFirst().value<pdfinteraction::InteractionCancelReason>(), pdfinteraction::InteractionCancelReason::ToolChanged);
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Hand);
     QVERIFY(!m_controller->state().drag().has_value());
+
+    // Setting the tool that is already active is not a change and must not
+    // cancel anything a second time.
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Hand);
+    QCOMPARE(cancelSpy.size(), 1);
+}
+
+void InteractionControllerTest::toolVocabularyNamesRoundTrip()
+{
+    using pdfinteraction::InteractionTool;
+
+    QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Select)), QStringLiteral("select"));
+    QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Hand)), QStringLiteral("hand"));
+
+    QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("select")).value_or(InteractionTool::Hand), InteractionTool::Select);
+    QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("hand")).value_or(InteractionTool::Select), InteractionTool::Hand);
+
+    // A name outside the vocabulary is refused, never coerced into a default.
+    QVERIFY(!pdfinteraction::interactionToolFromName(QStringLiteral("measure")).has_value());
+    QVERIFY(!pdfinteraction::interactionToolFromName(QString()).has_value());
+}
+
+void InteractionControllerTest::handToolPansLeftDragAndSuppressesSelection()
+{
+    m_viewport->setZoom(4.0);
+    m_viewport->setOffset((m_viewport->minimumOffset() + m_viewport->maximumOffset()) / 2);
+
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Hand);
+
+    QSignalSpy selectionSpy(m_controller.get(), &pdfinteraction::InteractionController::selectionChanged);
+    QSignalSpy dragSpy(m_controller.get(), &pdfinteraction::InteractionController::dragCompleted);
+    QSignalSpy viewportSpy(m_controller.get(), &pdfinteraction::InteractionController::viewportChanged);
+
+    const QPoint press(200, 300);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, press, 1, Qt::LeftButton, Qt::LeftButton));
+
+    // The left button is a grip in Hand, so the press begins a pan rather than
+    // selecting the target under it.
+    QVERIFY(m_controller->state().isActive(pdfinteraction::InteractionKind::Pan));
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, press + QPoint(20, 20), 2, Qt::NoButton, Qt::LeftButton));
+    QCOMPARE(viewportSpy.size(), 1);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, press + QPoint(20, 20), 3, Qt::LeftButton));
+
+    // A viewport grip never selects, never starts a transform and never
+    // completes one.
+    QCOMPARE(selectionSpy.size(), 0);
+    QVERIFY(!m_controller->state().selected().isValid());
+    QVERIFY(!m_controller->state().drag().has_value());
+    QCOMPARE(dragSpy.size(), 0);
+    QVERIFY(!m_controller->state().isActive(pdfinteraction::InteractionKind::Pan));
+}
+
+void InteractionControllerTest::selectToolRetainsSelectionAndDrag()
+{
+    // Select is the default tool and keeps the pre-vocabulary behavior exactly:
+    // a click selects, and a second press on the selection starts a drag.
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Select);
+
+    const QPoint point = viewportPointFor(*m_viewport, QPointF(30.0, 30.0));
+
+    QSignalSpy selectionSpy(m_controller.get(), &pdfinteraction::InteractionController::selectionChanged);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, point, 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, point, 2, Qt::LeftButton));
+
+    QCOMPARE(selectionSpy.size(), 1);
+    QCOMPARE(m_controller->state().selected().id, QStringLiteral("finding-a"));
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, point, 3, Qt::LeftButton, Qt::LeftButton));
+    QVERIFY(m_controller->state().drag().has_value());
 }
 
 void InteractionControllerTest::selectionChangeCancelsDrag()
