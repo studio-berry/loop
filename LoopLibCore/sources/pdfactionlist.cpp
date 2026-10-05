@@ -561,6 +561,7 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("postflight"), postflight },
         { QStringLiteral("governed"), governed },
+        { QStringLiteral("save_policy"), savePolicy.toJson() },
         { QStringLiteral("independent_validation"), independentValidation },
         { QStringLiteral("steps"), stepJson }
     };
@@ -569,12 +570,14 @@ QJsonObject PDFActionListExecutionResult::toJson() const
 QString computeActionListPlanDigest(const PDFActionList& actionList,
                                     const QJsonObject& bindings,
                                     const QString& sourceSha256,
-                                    const QJsonObject& effectiveProfile)
+                                    const QJsonObject& effectiveProfile,
+                                    const PDFOperationSavePolicy& savePolicy)
 {
     const QJsonObject envelope{
         { QStringLiteral("schema_kind"), QStringLiteral("action-list-plan") },
         { QStringLiteral("schema_version"), QStringLiteral("1.0") },
         { QStringLiteral("source_sha256"), sourceSha256.trimmed().toLower() },
+        { QStringLiteral("save_policy"), savePolicy.toJson() },
         { QStringLiteral("action_list"), actionList.toJson() },
         { QStringLiteral("bindings"), bindings },
         { QStringLiteral("effective_profile"), effectiveProfile }
@@ -595,6 +598,19 @@ bool PDFActionListExecutor::isSupportedSchema(const QString& schema)
 PDFActionListExecutor::PDFActionListExecutor(const PDFRepairRegistry& registry) :
     m_registry(&registry)
 {
+}
+
+PDFOperationSavePolicy PDFActionListExecutor::mergedSavePolicy(const PDFActionList& actionList) const
+{
+    PDFOperationSavePolicy result = PDFOperationSavePolicy::incrementalAppend(QStringLiteral("empty action list"));
+    for (const PDFActionListStep& step : actionList.steps)
+    {
+        if (const PDFRepairOperation* operation = m_registry->find(step.operationId))
+        {
+            result = mergePDFSavePolicies(result, operation->savePolicy());
+        }
+    }
+    return result;
 }
 
 PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionList,
@@ -704,6 +720,20 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
     result->actionListId = actionList.id;
     result->actionListSchema = actionList.schema;
     result->recipeHash = recipeHash(actionList);
+    // The merged policy is the floor for this plan and every write derived
+    // from it: it is reported on the result and bound into the plan digest.
+    result->savePolicy = mergedSavePolicy(actionList);
+    if (options.requestedSavePolicy.has_value() &&
+        savePolicyIsWeaker(*options.requestedSavePolicy, result->savePolicy))
+    {
+        result->status = QStringLiteral("failed");
+        const QString message = savePolicyWeakenedMessage(*options.requestedSavePolicy, result->savePolicy);
+        result->diagnostics.append(QJsonObject{
+            { QStringLiteral("code"), QStringLiteral("action-list.save-policy-refused") },
+            { QStringLiteral("severity"), QStringLiteral("error") },
+            { QStringLiteral("message"), message } });
+        return PDFOperationResult(message);
+    }
     result->sourceSha256 = sourceSha256ForActionList(source);
     if (result->sourceSha256.isEmpty())
     {
@@ -731,7 +761,8 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
     result->planDigest = computeActionListPlanDigest(actionList,
                                                      options.bindings,
                                                      result->sourceSha256,
-                                                     effectiveProfile);
+                                                     effectiveProfile,
+                                                     result->savePolicy);
     QElapsedTimer totalTimer;
     totalTimer.start();
 
@@ -784,6 +815,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
             stepResult.status = PDFActionListStepStatus::Succeeded;
             stepResult.plan = QJsonObject{
                 { QStringLiteral("operation"), operation->id() },
+                { QStringLiteral("save_policy"), operation->savePolicy().toJson() },
                 { QStringLiteral("selection"), selection.toJson() }
             };
             populateAffectedScope(&stepResult, selection, PDFRepairPlan());
@@ -797,6 +829,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
         repairPlan.operationVersion = operation->version();
         repairPlan.parameters = stepResult.resolvedParameters;
         repairPlan.risk = operation->risk();
+        repairPlan.savePolicy = operation->savePolicy();
         repairPlan.domains = operation->domains();
         const PDFOperationResult analyzeResult = operation->analyze(source, stepResult.resolvedParameters, &repairPlan);
         if (!analyzeResult)
@@ -913,6 +946,9 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         }
 
         PDFRepairPlan currentPlan;
+        // analyze() fills the semantic plan; the declared save policy is
+        // attached here exactly like PDFRepairTransaction::analyze() does.
+        currentPlan.savePolicy = operation->savePolicy();
         const PDFOperationResult analyzeResult = operation->analyze(working, stepResult.resolvedParameters, &currentPlan);
         PDFRepairResult repairResult;
         repairResult.operationId = operation->id();

@@ -157,9 +157,28 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
             {
                 QTemporaryDir publicationDirectory;
                 const QString publicationPath = publicationDirectory.filePath(QStringLiteral("editor-candidate.pdf"));
-                if (!publicationDirectory.isValid() || !pdf::PDFStandardConversion::writeCandidate(
-                                                           candidate, publicationPath, outcome->executionResult.standardValidationRequirements,
-                                                           &candidate, nullptr, &outcome->executionResult.independentValidation, context.operationControl()))
+                // The trusted source path is not known at this layer and the
+                // publication target is a fresh temporary artifact, so this
+                // validation cannot refuse today; it keeps the publication
+                // boundary on the same save contract as the CLI write paths.
+                pdf::PDFSaveRequest publicationRequest;
+                publicationRequest.outputPath = publicationPath;
+                publicationRequest.required = outcome->executionResult.savePolicy;
+                publicationRequest.requested = outcome->executionResult.savePolicy;
+                publicationRequest.appendInPlace = false;
+                const pdf::PDFOperationResult saveRequest = pdf::validateSaveRequest(publicationRequest);
+                if (!saveRequest)
+                {
+                    outcome->ok = false;
+                    outcome->executionResult.status = QStringLiteral("failed");
+                    outcome->executionResult.diagnostics.append(QJsonObject{
+                        { QStringLiteral("code"), QStringLiteral("save-policy.refused") },
+                        { QStringLiteral("severity"), QStringLiteral("error") },
+                        { QStringLiteral("message"), saveRequest.getErrorMessage() } });
+                }
+                else if (!publicationDirectory.isValid() || !pdf::PDFStandardConversion::writeCandidate(
+                                                                candidate, publicationPath, outcome->executionResult.standardValidationRequirements,
+                                                                &candidate, nullptr, &outcome->executionResult.independentValidation, context.operationControl()))
                 {
                     outcome->ok = false;
                     outcome->executionResult.status = QStringLiteral("failed");

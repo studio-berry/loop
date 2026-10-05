@@ -98,6 +98,7 @@
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_jbig2decodertest.cpp",
         "UnitTests/tst_lifecycletest.cpp",
+        "UnitTests/tst_operationimpacttest.cpp",
         "UnitTests/tst_overprinttest.cpp",
         "UnitTests/tst_overprintrendertest.cpp",
         "UnitTests/tst_pageboxcorpustest.cpp",
@@ -115,6 +116,7 @@
       "targets": ["LoopLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsActionList",
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBlockingThreadGuard",
         "UnitTestsBleedFixup",
@@ -203,12 +205,13 @@
         "UnitTests/tst_interactiontracecontracttest.cpp",
         "UnitTests/tst_overlayframetest.cpp",
         "UnitTests/tst_hittestsourcetest.cpp",
+        "UnitTests/tst_actionlisttest.cpp",
         "docs/interaction-boundary-policy.json",
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoopLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
+      "tests": ["UnitTestsActionList", "UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
     },
     "quick": {
       "paths": [
