@@ -1552,7 +1552,7 @@ void GovernedExecutionTest::targetedMatchesFullOnPublishedBytes()
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
-    const pdf::PreflightResult baseline = engine.run(profile);
+    const pdf::PreflightResult baseline = engine.run(profileObject);
     const pdf::PDFEvidenceGraph baselineEvidence = engine.lastEvidenceGraph();
 
     pdf::PDFOperationImpact impact;
@@ -1598,6 +1598,46 @@ void GovernedExecutionTest::targetedMatchesFullOnPublishedBytes()
     const QJsonObject provenance = targeted.report.value(QStringLiteral("revalidation")).toObject();
     QVERIFY(provenance.value(QStringLiteral("reused_check_ids")).toArray().contains(QStringLiteral("color-mode")));
     QVERIFY(provenance.value(QStringLiteral("recomputed_check_ids")).toArray().contains(QStringLiteral("image-resolution")));
+
+    // A plan cannot independently narrow the checks required by its impact.
+    scope.plan.checkIds = QStringList{ QStringLiteral("color-mode") };
+    scope.plan.reusedCheckIds = QStringList{ QStringLiteral("image-resolution") };
+    pdf::PDFGovernedExecutionRevalidation inconsistent;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &inconsistent, scope);
+    QCOMPARE(findingIdsFromReport(inconsistent.report), findingIdsFromReport(full.report));
+    QVERIFY(inconsistent.report.value(QStringLiteral("revalidation")).toObject().value(QStringLiteral("recomputed_check_ids")).toArray().contains(QStringLiteral("image-resolution")));
+
+    // The evidence overload must not reuse results from a weaker profile with
+    // the same display name.
+    QJsonObject weakProfile = profileObject;
+    QJsonArray weakChecks = weakProfile.value(QStringLiteral("checks")).toArray();
+    QJsonObject weakColor = weakChecks.at(1).toObject();
+    weakColor.insert(QStringLiteral("allowed"), QJsonArray{ QStringLiteral("RGB"), QStringLiteral("CMYK"), QStringLiteral("Gray") });
+    weakChecks.replace(1, weakColor);
+    weakProfile.insert(QStringLiteral("checks"), weakChecks);
+    scope.plan = plan;
+    scope.baseline = engine.run(weakProfile);
+    scope.baselineEvidence = engine.lastEvidenceGraph();
+    pdf::PDFGovernedExecutionRevalidation mismatched;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &mismatched, scope);
+    QCOMPARE(findingIdsFromReport(mismatched.report), findingIdsFromReport(full.report));
+    QCOMPARE(mismatched.report.value(QStringLiteral("scope")).toObject().value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+    QCOMPARE(mismatched.report.value(QStringLiteral("scope")).toObject().value(QStringLiteral("reason")).toString(), QStringLiteral("baseline-profile-mismatch"));
+
+    scope.baseline.effectiveProfileDigest.clear();
+    pdf::PDFGovernedExecutionRevalidation unbound;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &unbound, scope);
+    QCOMPARE(unbound.report.value(QStringLiteral("scope")).toObject().value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+
+    scope.baseline = baseline;
+    scope.baselineEvidence = baselineEvidence;
+    scope.baselineEvidence.complete = false;
+    pdf::PDFGovernedExecutionRevalidation fallback;
+    pdf::revalidateGovernedArtifact(publishedPath, profileObject, publishedSha256, &fallback, scope);
+    const QJsonObject fallbackScope = fallback.report.value(QStringLiteral("scope")).toObject();
+    QCOMPARE(fallbackScope.value(QStringLiteral("mode")).toString(), QStringLiteral("full"));
+    QVERIFY(fallbackScope.value(QStringLiteral("plan")).toObject().value(QStringLiteral("full")).toBool());
+    QCOMPARE(fallbackScope.value(QStringLiteral("reason")).toString(), QStringLiteral("prior-evidence-incomplete"));
 }
 
 void GovernedExecutionTest::undeclaredImpactFallsBackToFullInspection()

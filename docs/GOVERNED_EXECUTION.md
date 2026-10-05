@@ -317,7 +317,11 @@ keeps its behavior. When a scope is supplied:
   only when the declared impact is complete and a baseline inspection is supplied.
   Undeclared, incomplete, or document-wide impact, and a missing baseline, fall back to
   a **full** run with the reason recorded (`impact-undeclared`, `impact-incomplete`,
-  `impact-document-wide`, `baseline-unavailable`).
+  `impact-document-wide`, `baseline-unavailable`). Check and evidence selection is
+  derived from the declared impact and the enabled profile checks, so a supplied plan
+  cannot independently omit an affected check. A reused baseline must be complete,
+  cover the enabled checks, and bind the same effective profile digest; missing or
+  mismatched profile identity selects a full run (`baseline-profile-mismatch`).
 - The finding delta between the baseline inspection and the published-bytes inspection
   is computed with `computeFindingDelta`, so a targeted run that omits a check carries
   its findings forward instead of falsely resolving them.

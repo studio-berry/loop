@@ -34,6 +34,8 @@
 #include <QFileInfo>
 #include <QJsonArray>
 
+#include <algorithm>
+
 namespace pdf
 {
 
@@ -693,11 +695,48 @@ PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
                                                                    : QStringLiteral("impact-document-wide"));
         plan = fullGovernedRevalidationPlan(profileData, reason);
     }
-    const bool targeted = !plan.full && scope.hasBaseline;
-    if (!plan.full && !scope.hasBaseline)
+    if (!plan.full)
     {
-        plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-unavailable"));
+        QStringList enabledCheckIds;
+        for (const PreflightCheckConfig& check : profileData.checks)
+        {
+            if (check.enabled)
+            {
+                enabledCheckIds.append(check.id);
+            }
+        }
+        // Check and evidence selection come from the declared impact, not an
+        // independently supplied plan that could skip an affected check.
+        plan = planRevalidation(scope.impact, enabledCheckIds, profileData.pdfx.has_value());
+        if (!scope.hasBaseline)
+        {
+            plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-unavailable"));
+        }
+        else if (!scope.baseline.inspectionComplete)
+        {
+            plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-incomplete"));
+        }
+        else if (!isPDFSha256(scope.baseline.effectiveProfileDigest) ||
+                 !sha256Matches(scope.baseline.effectiveProfileDigest, profileData.effectiveDigest))
+        {
+            plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-profile-mismatch"));
+        }
+        else
+        {
+            for (const QString& checkId : enabledCheckIds)
+            {
+                const auto status = std::find_if(scope.baseline.checkStatuses.cbegin(), scope.baseline.checkStatuses.cend(),
+                                                 [&checkId](const PreflightCheckStatus& value)
+                                                 { return value.id == checkId; });
+                if (status == scope.baseline.checkStatuses.cend())
+                {
+                    plan = fullGovernedRevalidationPlan(profileData, QStringLiteral("baseline-unavailable"));
+                    break;
+                }
+            }
+        }
     }
+    const bool targeted = !plan.full;
 
     PDFDocumentSession session(&document);
     PreflightEngine engine(&session);
@@ -751,6 +790,10 @@ PDFOperationResult revalidateGovernedArtifact(const QString& publishedPath,
         scopeMode = QStringLiteral("full");
     }
 
+    if (scopeMode == QStringLiteral("full") && !plan.full)
+    {
+        plan = fullGovernedRevalidationPlan(profileData, scopeReason);
+    }
     QJsonObject report = result.toJson();
     report.insert(QStringLiteral("scope"), QJsonObject{
                                                { QStringLiteral("mode"), scopeMode },
