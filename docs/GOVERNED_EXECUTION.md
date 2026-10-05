@@ -177,10 +177,12 @@ Order of operations:
 3. **authorization** — `resolveApprovalAuthorization()` is the single decision point
    (`approval-unauthorized`, `approval-expired`, `approval-revoked`,
    `profile-binding`).
-4. **already-terminal replay** — with a history store in scope, an `Accepted`
-   `FixApplied` event whose published artifact SHA, approval decision reference, or
-   plan digest matches the request refuses with `already-terminal`. One plan produces
-   one published candidate.
+4. **already-terminal replay** � with a verified history store in scope, an `Accepted`
+   `FixApplied` event whose approval decision reference or plan digest matches the
+   request refuses with `already-terminal`. A supplied execution id is also refused
+   when its mutation history is terminal. Distinct plans may produce identical bytes.
+   Every accepted summary records the gateway receipt to preserve the plan identity.
+   History artifact identities must match the source and candidate before staging.
 5. **cancel check** — a cancelled control refuses with status `cancelled`.
 6. **stage** — the reviewed bytes are written to an isolated staging path beside the
    destination (or the caller's staged path is verified against them). The destination
@@ -191,7 +193,9 @@ Order of operations:
    and signed off (`finalizeGovernedPublication`). A failure removes the staging file
    and leaves the destination untouched (`revalidation-failed`).
 9. **`beforeCommit` seam + cancel check** — the test/qualification seam runs while the
-   destination is still untouched; a cancel here is `cancelled`.
+   destination is still untouched; a cancel here is `cancelled`. History integrity, replay, and
+   authorization are checked again at the current UTC time before the commit, so a
+   late revocation or expiry refuses publication.
 10. **atomic commit** — the reviewed bytes are committed through `PDFSafeFileWriter`
     under the requested overwrite policy (`destination-conflict` when `Fail` meets an
     existing file, otherwise `commit-failed`).
