@@ -96,8 +96,8 @@ same three inputs, so the binding does not change its behavior.
 A preview writes only to caller-named paths: the candidate path and, when requested, the
 render directory. On cancel or failure it removes what *that call* created — the candidate
 file it wrote, the render PNGs it rendered, and a parent directory it created via `mkpath`
-when it is now empty. A caller-named path is removed because the artifact was never
-approved or published. A completed preview leaves its candidate and renders for review;
+when it is now empty. Candidate removal requires a confirmed write by that preview;
+refused destinations and cancellation before serialization preserve existing files. A completed preview leaves its candidate and renders for review;
 only cancellation, an incomplete comparison, or a hard failure removes them.
 
 ## Approval

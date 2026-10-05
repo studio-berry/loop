@@ -914,7 +914,7 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     request.required = savePolicy();
     request.requested = effective;
     request.requestedExplicitly = m_hasRequestedSavePolicy;
-    request.appendInPlace = effective.mode == PDFSaveMode::IncrementalAppend;
+    request.appendInPlace = false;
     const PDFOperationResult saveRequestRefusal = validateSaveRequest(request);
     if (!saveRequestRefusal)
     {
@@ -929,9 +929,14 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     }
     if (!requirements.isEmpty())
     {
-        return PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
-                                                     reopenedCandidate, candidateSha256,
-                                                     &m_artifactValidation, m_options.operationControl);
+        const PDFOperationResult serialized = PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
+                                                                                    reopenedCandidate, candidateSha256,
+                                                                                    &m_artifactValidation, m_options.operationControl);
+        if (serialized && stageHook)
+        {
+            stageHook(QStringLiteral("candidate-committed"));
+        }
+        return serialized;
     }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
@@ -1051,11 +1056,23 @@ PDFOperationResult PDFRepairTransaction::compareCandidate(const QString& candida
         options.operationControl = m_options.operationControl;
     }
 
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        if (report)
+        {
+            *report = PDFRepairDiffReport();
+            report->fidelity = options.fidelity;
+            report->status = PDFRepairDiffStatus::Incomplete;
+            report->incompleteReasons.append(QStringLiteral("cancelled"));
+        }
+        m_status = PDFRepairStatus::Incomplete;
+        return PDFOperationResult(true);
+    }
     PDFDocument reopenedCandidate;
     const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate, nullptr, options.previewStageHook);
     if (!serializeResult)
     {
-        if (report && PDFOperationControl::isOperationCancelled(m_options.operationControl))
+        if (report && PDFOperationControl::isOperationCancelled(options.operationControl))
         {
             // A cancelled serialization is an incomplete preview, not a hard
             // failure: it carries the same Incomplete/"cancelled" status the

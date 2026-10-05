@@ -869,6 +869,11 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
         }
     }
 
+    if (PDFOperationControl::isOperationCancelled(options.operationControl) &&
+        !report->incompleteReasons.contains(QStringLiteral("cancelled")))
+    {
+        report->incompleteReasons.append(QStringLiteral("cancelled"));
+    }
     if (!report->incompleteReasons.isEmpty())
     {
         report->status = PDFRepairDiffStatus::Incomplete;
@@ -910,7 +915,7 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
     const QString candidateParentPath = QFileInfo(candidatePath).absolutePath();
     const bool candidateParentExisted = QFileInfo::exists(candidateParentPath);
     QDir().mkpath(candidateParentPath);
-    PDFDocumentWriter writer(nullptr);
+    PDFDocumentWriter writer(nullptr, operationControl);
     const PDFOperationResult writeResult = writer.write(candidatePath, &candidate, true);
     if (!writeResult)
     {
@@ -934,14 +939,23 @@ PDFOperationResult PDFRepairDiffEngine::buildSerializedCandidate(
         return PDFOperationResult(QStringLiteral("Repair candidate serialization was cancelled."));
     }
 
-    PDFDocumentReader reader(nullptr, [](bool*)
-                             { return QString(); }, false, false);
+    PDFDocumentReader reader(nullptr, [](bool* passwordObtained)
+                             {
+                                 *passwordObtained = false;
+                                 return QString(); }, false, false);
+    reader.setOperationControl(operationControl);
     *reopenedCandidate = reader.readFromFile(candidatePath);
     if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
     {
         QFile::remove(candidatePath);
         removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
         return PDFOperationResult(QStringLiteral("Serialized repair candidate could not be reopened: %1").arg(reader.getErrorMessage()));
+    }
+    if (PDFOperationControl::isOperationCancelled(operationControl))
+    {
+        QFile::remove(candidatePath);
+        removeCreatedCandidateDirectory(candidateParentPath, candidateParentExisted);
+        return PDFOperationResult(QStringLiteral("Repair candidate serialization was cancelled."));
     }
     if (serializedCandidateBytes)
     {
