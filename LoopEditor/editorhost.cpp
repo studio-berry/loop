@@ -1064,6 +1064,82 @@ QString EditorHost::previewStaleReason() const
     return QString();
 }
 
+QString EditorHost::previewFidelityStateName() const
+{
+    return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
+                                                          !previewStaleReason().isEmpty(),
+                                                          pageFidelityIsAuthoritative(),
+                                                          pageFidelityIsExact());
+}
+
+QVariantMap EditorHost::previewFidelityVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreviewFidelityStateVisual(previewFidelityStateName());
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    result.insert(QStringLiteral("accessibleName"), visual.accessibleName);
+    return result;
+}
+
+QColor EditorHost::previewFidelityColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreviewFidelityStateVisual(previewFidelityStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::previewFidelityOriginName() const
+{
+    return pdfquick::tokens::previewFidelityOriginName(previewFidelityStateName());
+}
+
+bool EditorHost::previewRequiresAuthoritative() const
+{
+    return previewFidelityStateName() == QLatin1String("approximate");
+}
+
+QString EditorHost::previewFidelitySummary() const
+{
+    const QString state = previewFidelityStateName();
+
+    if (state == QLatin1String("unavailable"))
+    {
+        return tr("No document is open, so there is no preview to describe.");
+    }
+    if (state == QLatin1String("stale"))
+    {
+        return tr("Not current evidence: %1").arg(previewStaleReason());
+    }
+    if (state == QLatin1String("authoritative") && !pageFidelityIsExact())
+    {
+        return tr("Fidelity authoritative but still approximate, origin output-preview: this page is "
+                  "rendered with the overprint-accurate compositor, yet its diagnostics report an "
+                  "approximation (%1). Do not read it as an exact render.")
+            .arg(pageFidelityReason());
+    }
+    if (state == QLatin1String("authoritative"))
+    {
+        return tr("Fidelity authoritative, origin output-preview: this page is rendered with the "
+                  "overprint-accurate compositor. Read it with the plates and separations; it does "
+                  "not by itself certify publication safety.");
+    }
+    if (state == QLatin1String("approximate"))
+    {
+        return tr("Fidelity approximate, origin fast-canvas: overprint is not simulated (%1). These "
+                  "canvas pixels cannot stand as proof of print-safe output; switch this page to the "
+                  "authoritative overprint render before any print claim.")
+            .arg(pageFidelityReason());
+    }
+    return tr("Fidelity exact, origin fast-canvas: this page reports no overprint-sensitive content. "
+              "The interactive preview still does not certify print-safe output.");
+}
+
 QString EditorHost::productionStateName() const
 {
     if (!hasDocument())
@@ -1336,6 +1412,18 @@ void EditorHost::toggleCurrentPageFidelity()
     const bool wasAuthoritative = m_session->surfaces()->isPageAuthoritativeOverprint(pageIndex);
     m_session->surfaces()->setPageAuthoritativeOverprint(pageIndex, !wasAuthoritative);
     bumpPresentation();
+}
+
+bool EditorHost::ensureAuthoritativePreview()
+{
+    if (!hasDocument() || !previewRequiresAuthoritative())
+    {
+        return false;
+    }
+
+    m_session->surfaces()->setPageAuthoritativeOverprint(currentPage(), true);
+    bumpPresentation();
+    return true;
 }
 
 void EditorHost::selectFinding(const QString& findingId)

@@ -90,10 +90,22 @@ Pane {
                     wrapMode: Text.WordWrap
                     text: !root.host
                         ? ""
-                        : (root.host.pageFidelityIsExact
-                            ? qsTr("This page is rendered with exact overprint fidelity.")
-                            : qsTr("This page is approximate: %1").arg(root.host.pageFidelityReason))
-                    Accessible.name: qsTr("Page render fidelity")
+                        : qsTr("Fidelity %1, origin %2.")
+                            .arg(root.host.previewFidelityStateName)
+                            .arg(root.host.previewFidelityOriginName)
+                    Accessible.name: qsTr("Page render fidelity and origin")
+                }
+
+                // The same fidelity-and-origin fact the ordinary canvas banner shows, on the
+                // surface where a production/print claim is read. An approximate overprint
+                // render states that its pixels are not proof of print-safe output.
+                StateBadge {
+                    objectName: "productionPreviewFidelityBadge"
+                    Layout.fillWidth: true
+                    visual: root.host ? root.host.previewFidelityVisual : null
+                    stateColor: root.host ? root.host.previewFidelityColor : "transparent"
+                    labelText: root.host ? root.host.previewFidelitySummary : ""
+                    badgePrefix: "productionPreviewFidelityBadge"
                 }
 
                 Label {
@@ -107,12 +119,26 @@ Pane {
                 RowLayout {
                     Layout.fillWidth: true
 
+                    // The explicit switch to the authoritative render the acceptance requires
+                    // before a print claim. Enabled only while the page is still the
+                    // overprint-sensitive fast render.
+                    Button {
+                        objectName: "productionPreviewProveButton"
+                        text: qsTr("Proof this page (authoritative render)")
+                        enabled: root.host && root.host.previewRequiresAuthoritative
+                        onClicked: if (root.host) root.host.ensureAuthoritativePreview()
+                        Accessible.name: qsTr("Switch this page to the authoritative overprint render")
+                        Accessible.description: qsTr("Moves the current page to the output-preview render before any print claim. The document stays open.")
+                    }
+
                     Button {
                         objectName: "productionPreviewFidelityToggle"
-                        text: qsTr("Use exact overprint render")
+                        text: root.host && root.host.pageFidelityIsAuthoritative
+                              ? qsTr("Return to the fast preview")
+                              : qsTr("Use exact overprint render")
                         enabled: root.host && root.host.hasDocument
                         onClicked: if (root.host) root.host.toggleCurrentPageFidelity()
-                        Accessible.name: qsTr("Switch this page to the exact overprint render")
+                        Accessible.name: qsTr("Change this page's render fidelity")
                         Accessible.description: qsTr("Re-renders the current page only; the document stays open.")
                     }
                 }

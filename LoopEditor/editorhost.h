@@ -162,6 +162,12 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString fixRollbackSummary READ fixRollbackSummary NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap previewIdentity READ previewIdentity NOTIFY presentationChanged)
     Q_PROPERTY(QString previewStaleReason READ previewStaleReason NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityStateName READ previewFidelityStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap previewFidelityVisual READ previewFidelityVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor previewFidelityColor READ previewFidelityColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityOriginName READ previewFidelityOriginName NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
+    Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -293,6 +299,22 @@ public:
     QVariantMap previewIdentity() const;
     QString previewStaleReason() const;
 
+    /// Render fidelity and origin of the interactive preview (#28), the same fact on the
+    /// ordinary canvas and in the Production Preview. `previewFidelityStateName` is one of
+    /// `unavailable`, `stale`, `exact`, `approximate` or `authoritative`, derived by
+    /// `pdfquick::tokens::classifyPreviewFidelityState()` from the preview state and the
+    /// current page's render diagnostics; `previewFidelityOriginName` names the render path
+    /// (`none`, `fast-canvas`, `output-preview`). `previewRequiresAuthoritative` is true for
+    /// the overprint-sensitive fast render (`approximate`), whose pixels are not proof of
+    /// print-safe output. The interactive preview never certifies publication safety: only
+    /// `authoritative` names the output-preview origin, and no state reaches a pass.
+    QString previewFidelityStateName() const;
+    QVariantMap previewFidelityVisual() const;
+    QColor previewFidelityColor() const;
+    QString previewFidelityOriginName() const;
+    QString previewFidelitySummary() const;
+    bool previewRequiresAuthoritative() const;
+
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
     /// content, or none is known yet. Separate from the document-wide
@@ -364,6 +386,13 @@ public:
     /// authoritative overprint-accurate one. Re-renders only that page;
     /// the document stays open.
     Q_INVOKABLE void toggleCurrentPageFidelity();
+
+    /// The explicit switch the preview surfaces call before a page is presented as proof:
+    /// when the current page is the overprint-sensitive fast render, it moves that page to
+    /// the authoritative output-preview render and returns true. A page that is already
+    /// authoritative, is exact, or has no document returns false and is left alone.
+    Q_INVOKABLE bool ensureAuthoritativePreview();
+
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
