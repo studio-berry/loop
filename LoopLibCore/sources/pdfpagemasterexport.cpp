@@ -1915,6 +1915,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             governedApproval.planDigest = planDigest;
             governedApproval.sourceSha256 = sourceRevisionDigest;
             governedApproval.candidateSha256 = candidateSha256;
+            governedApproval.effectiveProfileDigest = effectiveProfileDigest;
             governedApproval.approval.kind = PDFApprovalKind::Policy;
             governedApproval.approval.actorId = QStringLiteral("PageMaster");
             governedApproval.approval.decision = QStringLiteral("approve");
@@ -1923,6 +1924,13 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             governedApproval.approval.evidenceSha256 = planDigest;
             governedApproval.approval.decisionReference = QStringLiteral("pagemaster-plan:%1").arg(planDigest);
             governedApproval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+
+            // PageMaster has no operation-history store in scope, so revocation
+            // cannot be resolved here; #37 centralizes execution where the chain
+            // becomes available. The profile in scope is the resolved profile.
+            PDFApprovalAuthorizationContext authorizationContext;
+            authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+            authorizationContext.expectedProfileDigest = effectiveProfileDigest;
 
             const PDFOperationResult governedResult = finalizeGovernedPublication(governedApproval,
                                                                                   planDigest,
@@ -1933,7 +1941,8 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                                                                                   QStringLiteral("PageMaster"),
                                                                                   QStringLiteral("pagemaster-postflight"),
                                                                                   &governedRevalidation,
-                                                                                  &governedSignOff);
+                                                                                  &governedSignOff,
+                                                                                  authorizationContext);
             governedSignedOff = bool(governedResult);
             setOutputGovernedPublication(manifest,
                                          int(index),

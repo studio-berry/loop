@@ -25,6 +25,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -204,10 +205,14 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                     {
                         candidateData = publicationFile.readAll();
                         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+                        const QString expectedProfileDigest = effectivePreflightProfile.isEmpty()
+                                                                  ? QString()
+                                                                  : pdf::computeProfileDigest(effectivePreflightProfile);
                         pdf::PDFGovernedExecutionApproval approval;
                         approval.planDigest = outcome->executionResult.planDigest;
                         approval.sourceSha256 = outcome->executionResult.sourceSha256;
                         approval.candidateSha256 = candidateSha256;
+                        approval.effectiveProfileDigest = expectedProfileDigest;
                         approval.approval.kind = pdf::PDFApprovalKind::Human;
                         approval.approval.actorId = QStringLiteral("Editor");
                         approval.approval.decision = QStringLiteral("approve");
@@ -216,6 +221,12 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                         approval.approval.evidenceSha256 = approval.planDigest;
                         approval.approval.decisionReference = QStringLiteral("editor-confirmation:%1").arg(approval.planDigest);
                         approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+                        // The Editor worker has no operation-history store in scope,
+                        // so revocation cannot be resolved here; #37 centralizes
+                        // execution where the chain becomes available.
+                        pdf::PDFApprovalAuthorizationContext authorizationContext;
+                        authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+                        authorizationContext.expectedProfileDigest = expectedProfileDigest;
                         pdf::PDFGovernedExecutionRevalidation revalidation;
                         pdf::PDFGovernedExecutionSignOff signOff;
                         const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(approval,
@@ -227,7 +238,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                                                                                         QStringLiteral("Editor"),
                                                                                                         QStringLiteral("desktop-postflight"),
                                                                                                         &revalidation,
-                                                                                                        &signOff);
+                                                                                                        &signOff,
+                                                                                                        authorizationContext);
                         outcome->executionResult.governed = QJsonObject{
                             { QStringLiteral("approval"), approval.toJson() },
                             { QStringLiteral("revalidation"), revalidation.toJson() },

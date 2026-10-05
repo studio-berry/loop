@@ -29,6 +29,7 @@
 #include "pdfgovernedexecution.h"
 #include "pdfoperationhistorystore.h"
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 #include "pdfpreflightverdict.h"
 #include "pdfpreflightcertificate.h"
 #include "pdfsafefilewriter.h"
@@ -555,6 +556,12 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     }
 
     const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+    // Bind the approval to the effective profile in scope for this run. The
+    // revalidation recomputes the same digest from the same profile object.
+    const QString expectedProfileDigest = governedProfile.isEmpty() ? QString() : pdf::computeProfileDigest(governedProfile);
+    pdf::PDFApprovalAuthorizationContext authorizationContext;
+    authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    authorizationContext.expectedProfileDigest = expectedProfileDigest;
     pdf::PDFGovernedExecutionApproval governedApproval;
     if (!options.repairApprovalFile.isEmpty())
     {
@@ -576,7 +583,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         if (const pdf::PDFOperationResult approvalValidation = pdf::validateGovernedApproval(governedApproval,
                                                                                              planDigest,
                                                                                              sourceSha256,
-                                                                                             candidateSha256);
+                                                                                             candidateSha256,
+                                                                                             authorizationContext);
             !approvalValidation)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.approval-invalid"),
@@ -589,6 +597,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         governedApproval.planDigest = planDigest;
         governedApproval.sourceSha256 = sourceSha256;
         governedApproval.candidateSha256 = candidateSha256;
+        governedApproval.effectiveProfileDigest = expectedProfileDigest;
         governedApproval.approval.kind = pdf::PDFApprovalKind::Policy;
         governedApproval.approval.actorId = QStringLiteral("PdfTool");
         governedApproval.approval.decision = QStringLiteral("approve");
@@ -620,6 +629,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                          historyError.isEmpty() ? QStringLiteral("Could not register the repair history artifacts.") : historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
+    // The output chain resolves revocation of the approval that authorized it.
+    authorizationContext.history = &operationHistory;
     // A certificate lives in the certified document's own chain - the same chain
     // verify-certificate reads - so the retained certificate is read from the input
     // document's history and its invalidation is recorded there. The repair's own
@@ -682,7 +693,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                                                                              sourceSha256,
                                                                              candidateData,
                                                                              options.repairOutputDocument,
-                                                                             pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+                                                                             pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite,
+                                                                             authorizationContext);
     if (!writeResult)
     {
         appendRepairHistoryFailed(operationHistory,
@@ -784,7 +796,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                                                                                         QStringLiteral("PdfTool"),
                                                                                         QStringLiteral("repair-postflight"),
                                                                                         &revalidation,
-                                                                                        &signOff);
+                                                                                        &signOff,
+                                                                                        authorizationContext);
         !governedResult)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));

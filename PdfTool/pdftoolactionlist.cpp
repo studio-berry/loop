@@ -29,6 +29,7 @@
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightverdict.h"
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 #include "pdfsafefilewriter.h"
 #include "pdfobjectselector.h"
 
@@ -247,10 +248,17 @@ bool recordActionListHistory(const QString& outputPath,
         return false;
     }
 
+    const QString expectedProfileDigest = preflightProfile.isEmpty() ? QString() : pdf::computeProfileDigest(preflightProfile);
+    pdf::PDFApprovalAuthorizationContext authorizationContext;
+    authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+    authorizationContext.expectedProfileDigest = expectedProfileDigest;
+    authorizationContext.history = &history;
+
     pdf::PDFGovernedExecutionApproval governedApproval;
     governedApproval.planDigest = planDigest;
     governedApproval.sourceSha256 = sourceSha256;
     governedApproval.candidateSha256 = candidateSha256;
+    governedApproval.effectiveProfileDigest = expectedProfileDigest;
     governedApproval.approval = running.approval;
     pdf::PDFGovernedExecutionRevalidation revalidation;
     pdf::PDFGovernedExecutionSignOff signOff;
@@ -263,7 +271,8 @@ bool recordActionListHistory(const QString& outputPath,
                                                                                     QStringLiteral("PdfTool"),
                                                                                     QStringLiteral("action-list-postflight"),
                                                                                     &revalidation,
-                                                                                    &signOff);
+                                                                                    &signOff,
+                                                                                    authorizationContext);
     QJsonObject governedSummary{
         { QStringLiteral("approval"), governedApproval.toJson() },
         { QStringLiteral("revalidation"), revalidation.toJson() },
