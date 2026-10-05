@@ -38,3 +38,4 @@ unresolved:
   - scripts/ci/check_independent_validation_gate.py
   - sealed-eval stub lane check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
   - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
+  - PR 212 review fixes require focused Action List and PdfTool runtime tests; the available local build belongs to the later L04 stack, not this PR head.

@@ -79,6 +79,13 @@ QString digestJson(const QJsonObject& object)
 PDFOperationResult validatePreviewPlanDigest(const PDFRepairTransaction& transaction,
                                              const QString& planDigest)
 {
+    if (!transaction.candidate() ||
+        (transaction.status() != PDFRepairStatus::Applied &&
+         transaction.status() != PDFRepairStatus::Passed &&
+         transaction.status() != PDFRepairStatus::Incomplete))
+    {
+        return PDFOperationResult(QStringLiteral("Preview requires a candidate applied from the current operation plan."));
+    }
     if (!isPDFSha256(planDigest))
     {
         return PDFOperationResult(QStringLiteral("Preview plan digest is missing or malformed."));
@@ -93,16 +100,13 @@ PDFOperationResult validatePreviewPlanDigest(const PDFRepairTransaction& transac
     return PDFOperationResult(true);
 }
 
-/// Removes the artifacts a preview call created: the candidate file, the render
-/// PNGs it rendered, and the candidate parent directory when this call created
-/// it and it is now empty. A caller-named path is removed because the artifact
-/// was never approved or published (the residue contract).
 void removePreviewResidue(const QString& candidatePath,
+                          bool candidateWritten,
                           bool candidateParentExisted,
                           const QString& renderDirectory,
                           const QVector<PDFRepairPageVisualDiff>& pages)
 {
-    if (!candidatePath.isEmpty())
+    if (candidateWritten && !candidatePath.isEmpty())
     {
         QFile::remove(candidatePath);
     }
@@ -315,7 +319,15 @@ PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
 
     const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
+    bool candidateWritten = false;
     PDFRepairDiffOptions options;
+    options.previewStageHook = [&candidateWritten](const QString& stage)
+    {
+        if (stage == QStringLiteral("candidate-committed"))
+        {
+            candidateWritten = true;
+        }
+    };
     options.renderVisualDiff = false;
     options.fidelity = PDFRepairPreviewFidelity::Exact;
     options.operationControl = transaction.operationControl();
@@ -323,7 +335,7 @@ PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, options, &report);
     if (previewDidNotComplete(compareResult, report.status))
     {
-        removePreviewResidue(candidatePath, candidateParentExisted, options.renderDirectory, report.pages);
+        removePreviewResidue(candidatePath, candidateWritten, candidateParentExisted, options.renderDirectory, report.pages);
     }
     if (!compareResult)
     {
@@ -359,7 +371,19 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
 
     const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
+    bool candidateWritten = false;
     PDFRepairDiffOptions visualOptions = options;
+    visualOptions.previewStageHook = [&candidateWritten, stageHook = options.previewStageHook](const QString& stage)
+    {
+        if (stage == QStringLiteral("candidate-committed"))
+        {
+            candidateWritten = true;
+        }
+        if (stageHook)
+        {
+            stageHook(stage);
+        }
+    };
     visualOptions.renderVisualDiff = true;
     visualOptions.compareMetadata = false;
     visualOptions.compareResources = false;
@@ -374,7 +398,7 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, visualOptions, &report);
     if (previewDidNotComplete(compareResult, report.status))
     {
-        removePreviewResidue(candidatePath, candidateParentExisted, visualOptions.renderDirectory, report.pages);
+        removePreviewResidue(candidatePath, candidateWritten, candidateParentExisted, visualOptions.renderDirectory, report.pages);
     }
     if (!compareResult)
     {
