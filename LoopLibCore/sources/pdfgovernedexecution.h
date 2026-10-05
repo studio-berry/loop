@@ -23,6 +23,7 @@
 #ifndef PDFGOVERNEDEXECUTION_H
 #define PDFGOVERNEDEXECUTION_H
 
+#include "pdfoperationcontrol.h"
 #include "pdfoperationhistory.h"
 #include "pdfpreflightverdict.h"
 #include "pdfrepairdiff.h"
@@ -33,6 +34,8 @@
 #include <QByteArray>
 #include <QJsonObject>
 #include <QString>
+
+#include <functional>
 
 namespace pdf
 {
@@ -226,6 +229,105 @@ LOOPLIBCORESHARED_EXPORT PDFOperationResult publishGovernedArtifact(const PDFGov
                                                                     const QString& outputPath,
                                                                     PDFSafeFileWriter::OverwritePolicy overwritePolicy,
                                                                     const PDFApprovalAuthorizationContext& context = {});
+
+/// Terminal outcome of one governed mutation attempt. The receipt is the evidence
+/// that a refusal/failure/cancel stopped before the destination was touched, and
+/// the sole record of a publication. Schema `loop.governed-mutation-receipt`.
+struct LOOPLIBCORESHARED_EXPORT PDFGovernedMutationReceipt
+{
+    int schemaVersion = 1;
+    /// One of `published`, `refused`, `failed`, `cancelled`.
+    QString status;
+    /// Stable terminal code (`approval-stale`, `already-terminal`, `cancelled`, ...).
+    /// Empty only for `published`.
+    QString reasonCode;
+    QString planDigest;
+    QString sourceSha256;
+    QString candidateSha256;
+    QString destinationPath;
+    /// SHA-256 of the bytes now at the destination. Empty when the destination was
+    /// not touched (nonpublication). Set for a post-commit failure because the
+    /// reviewed bytes are present.
+    QString publishedSha256;
+    /// True once the destination holds the reviewed candidate bytes. False means the
+    /// destination was never written by this attempt.
+    bool destinationTouched = false;
+    /// Operation-history execution that recorded this attempt, when a store was in scope.
+    QUuid executionId;
+    /// Populated only when the staged bytes passed revalidation and sign-off.
+    PDFGovernedExecutionRevalidation revalidation;
+    PDFGovernedExecutionSignOff signOff;
+
+    bool isPublished() const { return status == QStringLiteral("published"); }
+    QJsonObject toJson() const;
+};
+
+/// One requested governed mutation. The destination and overwrite policy are
+/// execution inputs and are never part of the plan digest (D3).
+struct LOOPLIBCORESHARED_EXPORT PDFGovernedMutationRequest
+{
+    /// Approval bound to the exact plan, source, and reviewed candidate.
+    PDFGovernedExecutionApproval approval;
+    /// Authorization decision inputs (#36): policy, evaluated time, and optional
+    /// history for revocation resolution.
+    PDFApprovalAuthorizationContext authorization;
+    QString planDigest;
+    QString sourceSha256;
+    /// Exact reviewed candidate bytes.
+    QByteArray candidateBytes;
+    /// Optional caller-owned staged file that already holds exactly `candidateBytes`.
+    /// When set, the gateway finalizes against it instead of writing its own staging
+    /// file, and does not remove it. The bytes are still verified against
+    /// `candidateBytes` before finalize.
+    QString stagedCandidatePath;
+    QString destinationPath;
+    PDFSafeFileWriter::OverwritePolicy overwritePolicy = PDFSafeFileWriter::OverwritePolicy::Fail;
+    QJsonObject profile;
+    /// Optional effective-profile digest the approval must match. Overrides
+    /// `authorization.expectedProfileDigest` when non-empty.
+    QString profileDigest;
+    QString signOffActor;
+    QString signOffPolicy;
+    /// When false the gateway commits without revalidation/sign-off. The receipt is
+    /// still `published` but carries empty revalidation and sign-off (an unsigned
+    /// publication, e.g. a PageMaster export with no preflight profile).
+    bool requireRevalidation = true;
+    /// When true a revalidation failure whose bytes were verified does not block the
+    /// commit (PageMaster `forcePreflight`: publish the bytes even though the profile
+    /// failed). The receipt records `revalidation-forced` as its reason code.
+    bool publishOnRevalidationFailure = false;
+    /// Cancellation control. Checked before staging and again at the `beforeCommit` seam.
+    const PDFOperationControl* operationControl = nullptr;
+    /// Test/qualification seam invoked after revalidation and before the commit,
+    /// mirroring `PDFPageMasterExportJob::beforeOutputCommit`. May request cancellation.
+    std::function<void()> beforeCommit;
+
+    /// Operation-history store to scan for an already-terminal execution and to
+    /// append the canonical chain events to. Null leaves both to the caller.
+    PDFOperationHistoryStore* history = nullptr;
+    /// Existing execution to append to. When null and `history` is set, the gateway
+    /// begins one from `operationId` / `inputArtifact` / `parameters`.
+    QUuid executionId;
+    QString operationId;
+    int operationVersion = 1;
+    PDFArtifactIdentity inputArtifact;
+    QJsonObject parameters;
+    /// Artifact identity of the published bytes, referenced by the accepted event.
+    PDFArtifactIdentity outputArtifact;
+    /// Builds the accepted event's result summary from the final receipt. When unset
+    /// the gateway records a canonical `{status, reason_code}` summary.
+    std::function<QJsonObject(const PDFGovernedMutationReceipt&)> resultSummary;
+};
+
+/// The one cancellation-safe entry point for an approved corrective mutation:
+/// validate approval + authorization, refuse an already-terminal replay, check
+/// cancellation, stage the candidate, finalize (revalidate + sign-off) against the
+/// staged bytes, run the `beforeCommit` seam and cancel check, commit atomically,
+/// read back, and return a receipt. Any refusal/failure/cancel before the commit
+/// leaves no destination artifact; a failure after the commit is terminal `failed`
+/// with the artifact present and the reason recorded.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& request,
+                                                                    PDFGovernedMutationReceipt* receipt);
 
 }   // namespace pdf
 

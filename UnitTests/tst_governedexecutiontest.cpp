@@ -32,6 +32,7 @@
 #include "pdfsavepolicy.h"
 
 #include <QCryptographicHash>
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -147,6 +148,16 @@ private slots:
     void profileBindingRefusesMismatch();
     void revokedApprovalIsRefusedBeforeWrite();
     void revokedApprovalRefusesLaterAttempt();
+
+    // L04-05 (#37) — one cancellation-safe governed mutation gateway
+    void gatewayRefusesMalformedRequestBeforeWrite();
+    void gatewayRefusesStaleApprovalBeforeWrite();
+    void gatewayRefusesUnauthorizedApprovalBeforeWrite();
+    void gatewayRefusesAlreadyTerminalReplay();
+    void gatewayDestinationConflictLeavesExistingFileUntouched();
+    void gatewayCancelAtCommitSeamLeavesDestinationUntouched();
+    void gatewayRevalidationFailureLeavesDestinationUntouched();
+    void gatewayHappyPathPublishesExactlyOnce();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -1062,6 +1073,259 @@ void GovernedExecutionTest::revokedApprovalRefusesLaterAttempt()
                                           pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite,
                                           context));
     QCOMPARE(QFileInfo(outputPath).size(), bytesAfterPublish);
+}
+
+namespace
+{
+
+/// Serializes a minimal, valid PDF candidate the governed profile below accepts.
+QByteArray governedGatewayCandidate()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument document = builder.build();
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    pdf::PDFDocumentWriter writer(nullptr);
+    writer.write(&buffer, &document);
+    buffer.close();
+    return bytes;
+}
+
+QJsonObject governedGatewayProfile()
+{
+    return QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Governed gateway smoke") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") }, { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+}
+
+pdf::PDFGovernedMutationRequest governedGatewayRequest(const QByteArray& candidate,
+                                                       const QString& planDigest,
+                                                       const QString& sourceSha256,
+                                                       const QString& destination)
+{
+    pdf::PDFGovernedMutationRequest request;
+    request.approval = operatorApproval(planDigest, sourceSha256, sha256Hex(candidate), QStringLiteral("approval:gateway"));
+    request.planDigest = planDigest;
+    request.sourceSha256 = sourceSha256;
+    request.candidateBytes = candidate;
+    request.destinationPath = destination;
+    request.overwritePolicy = pdf::PDFSafeFileWriter::OverwritePolicy::Fail;
+    request.profile = governedGatewayProfile();
+    request.signOffActor = QStringLiteral("gateway-test");
+    request.signOffPolicy = QStringLiteral("gateway-postflight");
+    return request;
+}
+
+}   // namespace
+
+void GovernedExecutionTest::gatewayRefusesMalformedRequestBeforeWrite()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("malformed.pdf"));
+
+    // No plan digest and no approval: the request is malformed.
+    pdf::PDFGovernedMutationRequest request;
+    request.candidateBytes = governedGatewayCandidate();
+    request.destinationPath = destination;
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("refused"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("malformed-request"));
+    QVERIFY(!receipt.destinationTouched);
+    QVERIFY(receipt.publishedSha256.isEmpty());
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayRefusesStaleApprovalBeforeWrite()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("stale.pdf"));
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+    // The approval names a different plan than the one requested.
+    request.approval.planDigest = QString(64, QLatin1Char('d'));
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("refused"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("approval-stale"));
+    QVERIFY(!receipt.destinationTouched);
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayRefusesUnauthorizedApprovalBeforeWrite()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("unauthorized.pdf"));
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+    request.authorization.policy.authorizedActorIds = QStringList{ QStringLiteral("some-other-operator") };
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("refused"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("approval-unauthorized"));
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayRefusesAlreadyTerminalReplay()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    const auto input = artifacts.importBytes(QByteArrayLiteral("source"),
+                                             { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY(input.success);
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(input.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("governed.gateway.replay");
+    execution.input = input.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const auto output = artifacts.importBytes(candidate,
+                                              { QStringLiteral("application/pdf"), QStringLiteral("candidate.pdf") });
+    QVERIFY(output.success);
+
+    // A terminal Accepted event already records this plan's published candidate.
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = executionId;
+    accepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.operatorIdentity = QStringLiteral("operator");
+    accepted.output = output.artifact;
+    accepted.resultSummary = QJsonObject{ { QStringLiteral("approval"), QJsonObject{ { QStringLiteral("plan_digest"), planDigest } } } };
+    QVERIFY(history.appendEvent(accepted));
+
+    const QString destination = temporary.filePath(QStringLiteral("replay.pdf"));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+    request.history = &history;
+    request.operationId = QStringLiteral("governed.gateway.replay");
+    request.inputArtifact = input.artifact;
+    request.outputArtifact = output.artifact;
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("refused"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("already-terminal"));
+    QVERIFY(!receipt.destinationTouched);
+    QVERIFY(receipt.publishedSha256.isEmpty());
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayDestinationConflictLeavesExistingFileUntouched()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("conflict.pdf"));
+    QFile existing(destination);
+    QVERIFY(existing.open(QIODevice::WriteOnly));
+    const QByteArray priorBytes = QByteArrayLiteral("prior artifact bytes");
+    QCOMPARE(existing.write(priorBytes), priorBytes.size());
+    existing.close();
+    const QString priorSha = sha256Hex(priorBytes);
+
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("failed"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("destination-conflict"));
+    QVERIFY(!receipt.destinationTouched);
+    QCOMPARE(fileSha256Hex(destination), priorSha);
+}
+
+void GovernedExecutionTest::gatewayCancelAtCommitSeamLeavesDestinationUntouched()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("cancelled.pdf"));
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+
+    TrippedCancelControl cancel;
+    request.operationControl = &cancel;
+    request.beforeCommit = [&cancel]()
+    { cancel.trip(); };
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("cancelled"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("cancelled"));
+    QVERIFY(!receipt.destinationTouched);
+    QVERIFY(receipt.publishedSha256.isEmpty());
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayRevalidationFailureLeavesDestinationUntouched()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("revalidation.pdf"));
+    // Bytes that stage and hash, but cannot be reopened as a PDF: the staged-bytes
+    // finalize fails and the destination is never committed.
+    const QByteArray candidate = QByteArrayLiteral("not a reopenable governed artifact");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    QVERIFY(!pdf::executeGovernedMutation(request, &receipt));
+    QCOMPARE(receipt.status, QStringLiteral("failed"));
+    QCOMPARE(receipt.reasonCode, QStringLiteral("revalidation-failed"));
+    QVERIFY(!receipt.destinationTouched);
+    QVERIFY(!QFile::exists(destination));
+}
+
+void GovernedExecutionTest::gatewayHappyPathPublishesExactlyOnce()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString destination = temporary.filePath(QStringLiteral("published.pdf"));
+    const QByteArray candidate = governedGatewayCandidate();
+    const QString candidateSha256 = sha256Hex(candidate);
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedMutationRequest request = governedGatewayRequest(candidate, planDigest, sourceSha256, destination);
+
+    pdf::PDFGovernedMutationReceipt receipt;
+    const pdf::PDFOperationResult result = pdf::executeGovernedMutation(request, &receipt);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(receipt.status, QStringLiteral("published"));
+    QVERIFY(receipt.isPublished());
+    QVERIFY(receipt.reasonCode.isEmpty());
+    QVERIFY(receipt.destinationTouched);
+    QCOMPARE(receipt.publishedSha256, candidateSha256);
+    QVERIFY(receipt.revalidation.isSignOffEligible());
+    QVERIFY(receipt.signOff.isValid());
+    QCOMPARE(receipt.signOff.publishedSha256, candidateSha256);
+    // Exactly one artifact lands at the destination, and no staging residue survives.
+    QVERIFY(QFile::exists(destination));
+    QCOMPARE(fileSha256Hex(destination), candidateSha256);
+    const QDir destinationDirectory(QFileInfo(destination).absolutePath());
+    QVERIFY(destinationDirectory.entryList(QStringList{ QStringLiteral("*.loop-staging-*") }, QDir::Files).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(GovernedExecutionTest)

@@ -1,0 +1,51 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: mutation-gateway
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: per-surface-parity
+    evidence:
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:UnitTests/tst_pagemasterexporttest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:quick
+  - id: governed-execution-lanes
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: pdftool-lane
+    evidence:
+      - unit:agent-policy:pdftool
+  - id: pagemaster-lane
+    evidence:
+      - unit:agent-policy:pagemaster
+  - id: interaction-lane
+    evidence:
+      - unit:agent-policy:interaction
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+unresolved:
+  - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
+  - core:scripts/ci/check_independent_validation_gate.py
+  - scripts/ci/check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
+  - PageMaster exports and the Editor Action List worker have no operation-history store in scope; they publish through the gateway but the chain append and revocation resolution are left to #39
+  - canonical-json-digest-stability harness remains pending (enforcement declared)

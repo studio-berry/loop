@@ -694,4 +694,340 @@ PDFOperationResult publishGovernedArtifact(const PDFGovernedExecutionApproval& a
     return PDFSafeFileWriter::writeData(outputPath, candidateBytes, overwritePolicy);
 }
 
+QJsonObject PDFGovernedMutationReceipt::toJson() const
+{
+    QJsonObject object{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-mutation-receipt") },
+        { QStringLiteral("schema_version"), schemaVersion },
+        { QStringLiteral("status"), status },
+        { QStringLiteral("reason_code"), reasonCode },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("destination_path"), destinationPath },
+        { QStringLiteral("published_sha256"), publishedSha256 },
+        { QStringLiteral("destination_touched"), destinationTouched }
+    };
+    if (!executionId.isNull())
+    {
+        object.insert(QStringLiteral("execution_id"), executionId.toString(QUuid::WithoutBraces));
+    }
+    if (isPublished() || !publishedSha256.isEmpty())
+    {
+        object.insert(QStringLiteral("revalidation"), revalidation.toJson());
+        object.insert(QStringLiteral("sign_off"), signOff.toJson());
+    }
+    return object;
+}
+
+namespace
+{
+
+/// A staging file the gateway created for this attempt. It is removed on every
+/// exit, including an early refusal, so a failed attempt leaves no residue beside
+/// the destination. A caller-supplied staged path is never removed.
+struct StagingFileGuard
+{
+    QString path;
+    bool owned = false;
+
+    ~StagingFileGuard()
+    {
+        if (owned && !path.isEmpty())
+        {
+            QFile::remove(path);
+        }
+    }
+};
+
+QJsonObject canonicalMutationSummary(const PDFGovernedMutationReceipt& receipt)
+{
+    return QJsonObject{
+        { QStringLiteral("status"), receipt.status },
+        { QStringLiteral("reason_code"), receipt.reasonCode }
+    };
+}
+
+}   // namespace
+
+PDFOperationResult executeGovernedMutation(const PDFGovernedMutationRequest& request,
+                                           PDFGovernedMutationReceipt* receipt)
+{
+    if (!receipt)
+    {
+        return PDFOperationResult(QStringLiteral("Governed mutation receipt output is null."));
+    }
+    *receipt = PDFGovernedMutationReceipt();
+    receipt->planDigest = request.planDigest.trimmed().toLower();
+    receipt->sourceSha256 = request.sourceSha256.trimmed().toLower();
+    receipt->candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(request.candidateBytes, QCryptographicHash::Sha256).toHex());
+    receipt->destinationPath = request.destinationPath;
+
+    const auto refuse = [receipt](const QString& status, const QString& code, const QString& message)
+    {
+        receipt->status = status;
+        receipt->reasonCode = code;
+        return PDFOperationResult(message);
+    };
+
+    // 1. Malformed request: nothing is inspected, nothing is written.
+    if (!isPDFSha256(receipt->planDigest) || !isPDFSha256(receipt->sourceSha256) ||
+        request.destinationPath.trimmed().isEmpty() || request.candidateBytes.isEmpty() ||
+        !request.approval.isValid())
+    {
+        return refuse(QStringLiteral("refused"), QStringLiteral("malformed-request"),
+                      QStringLiteral("The governed mutation request is incomplete or malformed."));
+    }
+    // 2. The approval must name the exact plan, source, and reviewed candidate.
+    if (!sha256Matches(request.approval.planDigest, receipt->planDigest) ||
+        !sha256Matches(request.approval.sourceSha256, receipt->sourceSha256) ||
+        !sha256Matches(request.approval.candidateSha256, receipt->candidateSha256))
+    {
+        return refuse(QStringLiteral("refused"), QStringLiteral("approval-stale"),
+                      QStringLiteral("The governed approval does not name the requested plan, source, and candidate bytes."));
+    }
+    if (request.approval.approval.decisionReference.startsWith(QStringLiteral("preflight-decision:"), Qt::CaseInsensitive))
+    {
+        return refuse(QStringLiteral("refused"), QStringLiteral("approval-invalid"),
+                      QStringLiteral("Preflight finding decisions are not operation approval."));
+    }
+    // 3. Authorization (#36): the single current-and-authorized decision point.
+    PDFApprovalAuthorizationContext authorization = request.authorization;
+    if (!request.profileDigest.trimmed().isEmpty())
+    {
+        authorization.expectedProfileDigest = request.profileDigest;
+    }
+    const PDFApprovalAuthorization decision = resolveApprovalAuthorization(request.approval, authorization);
+    if (!decision.allowed)
+    {
+        return refuse(QStringLiteral("refused"), decision.code, decision.reason);
+    }
+    // 4. Already-terminal replay: one plan produces one published candidate.
+    if (request.history)
+    {
+        QString historyError;
+        const QList<PDFOperationHistoryEvent> events = request.history->events(&historyError);
+        const QString decisionReference = request.approval.approval.decisionReference.trimmed();
+        for (const PDFOperationHistoryEvent& event : events)
+        {
+            if (event.kind != PDFOperationHistoryEventKind::FixApplied ||
+                event.status != PDFOperationHistoryStatus::Accepted)
+            {
+                continue;
+            }
+            bool match = false;
+            if (event.output.has_value() && sha256Matches(event.output->sha256, receipt->candidateSha256))
+            {
+                match = true;
+            }
+            if (!match && !decisionReference.isEmpty() &&
+                event.approval.decisionReference.compare(decisionReference, Qt::CaseInsensitive) == 0)
+            {
+                match = true;
+            }
+            if (!match)
+            {
+                const QString storedPlanDigest = event.resultSummary.value(QStringLiteral("approval"))
+                                                     .toObject()
+                                                     .value(QStringLiteral("plan_digest"))
+                                                     .toString();
+                if (!storedPlanDigest.isEmpty() && sha256Matches(storedPlanDigest, receipt->planDigest))
+                {
+                    match = true;
+                }
+            }
+            if (match)
+            {
+                return refuse(QStringLiteral("refused"), QStringLiteral("already-terminal"),
+                              QStringLiteral("This execution identity is already terminal in the operation history."));
+            }
+        }
+    }
+    // 5. Cancellation before any staging side effect.
+    if (PDFOperationControl::isOperationCancelled(request.operationControl))
+    {
+        return refuse(QStringLiteral("cancelled"), QStringLiteral("cancelled"),
+                      QStringLiteral("The governed mutation was cancelled before publication."));
+    }
+
+    // 6. Stage the reviewed bytes beside the destination so finalize can reopen
+    //    them without the destination ever holding un-finalized bytes.
+    StagingFileGuard staging;
+    staging.path = request.stagedCandidatePath.trimmed();
+    staging.owned = staging.path.isEmpty();
+    if (staging.owned)
+    {
+        const QFileInfo destinationInfo(request.destinationPath);
+        staging.path = QDir(destinationInfo.absolutePath())
+                           .filePath(destinationInfo.fileName() + QStringLiteral(".loop-staging-") +
+                                     QUuid::createUuid().toString(QUuid::WithoutBraces));
+        const PDFOperationResult staged = PDFSafeFileWriter::writeData(staging.path,
+                                                                       request.candidateBytes,
+                                                                       PDFSafeFileWriter::OverwritePolicy::Fail);
+        if (!staged)
+        {
+            return refuse(QStringLiteral("failed"), QStringLiteral("staging-failed"), staged.getErrorMessage());
+        }
+    }
+    else
+    {
+        QFile stagedFile(staging.path);
+        if (!stagedFile.open(QIODevice::ReadOnly) ||
+            QString::fromLatin1(QCryptographicHash::hash(stagedFile.readAll(), QCryptographicHash::Sha256).toHex()) != receipt->candidateSha256)
+        {
+            return refuse(QStringLiteral("failed"), QStringLiteral("staging-mismatch"),
+                          QStringLiteral("The staged candidate does not match the reviewed candidate bytes."));
+        }
+    }
+
+    // 7. Chain append: begin the execution and record it as running before the commit.
+    bool historyStarted = false;
+    QUuid executionId = request.executionId;
+    if (request.history)
+    {
+        if (executionId.isNull())
+        {
+            PDFOperationHistoryExecution execution;
+            execution.operationId = request.operationId;
+            execution.operationVersion = request.operationVersion;
+            execution.input = request.inputArtifact;
+            execution.parameters = request.parameters;
+            execution.startedUtc = QDateTime::currentDateTimeUtc();
+            if (!request.history->beginExecution(execution, &executionId))
+            {
+                return refuse(QStringLiteral("failed"), QStringLiteral("history-failed"),
+                              QStringLiteral("Could not begin the governed execution history."));
+            }
+        }
+        PDFOperationHistoryEvent running;
+        running.executionId = executionId;
+        running.kind = PDFOperationHistoryEventKind::FixApplied;
+        running.status = PDFOperationHistoryStatus::Running;
+        running.operatorIdentity = request.approval.approval.actorId;
+        running.documentRevisionDigest = receipt->sourceSha256;
+        running.approval = request.approval.approval;
+        if (!request.history->appendEvent(running))
+        {
+            return refuse(QStringLiteral("failed"), QStringLiteral("history-failed"),
+                          QStringLiteral("Could not append the governed execution start event."));
+        }
+        historyStarted = true;
+        receipt->executionId = executionId;
+    }
+    const auto appendHistoryFailed = [&request, receipt, &executionId, historyStarted](const QString& reason)
+    {
+        if (!request.history || !historyStarted)
+        {
+            return;
+        }
+        PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.kind = PDFOperationHistoryEventKind::FixApplied;
+        failed.status = PDFOperationHistoryStatus::Failed;
+        failed.operatorIdentity = request.approval.approval.actorId;
+        failed.documentRevisionDigest = receipt->candidateSha256;
+        failed.resultSummary = QJsonObject{ { QStringLiteral("status"), receipt->status },
+                                            { QStringLiteral("reason_code"), reason } };
+        failed.approval = request.approval.approval;
+        request.history->appendEvent(failed);
+    };
+
+    // 8. Finalize against the staged bytes: reopen, revalidate, sign off. A failure
+    //    here removes the staging file and leaves the destination untouched.
+    PDFGovernedExecutionRevalidation revalidation;
+    PDFGovernedExecutionSignOff signOff;
+    bool revalidationFailed = false;
+    if (request.requireRevalidation)
+    {
+        const PDFOperationResult finalizeResult = finalizeGovernedPublication(request.approval,
+                                                                              receipt->planDigest,
+                                                                              receipt->sourceSha256,
+                                                                              receipt->candidateSha256,
+                                                                              staging.path,
+                                                                              request.profile,
+                                                                              request.signOffActor,
+                                                                              request.signOffPolicy,
+                                                                              &revalidation,
+                                                                              &signOff,
+                                                                              authorization);
+        if (!finalizeResult)
+        {
+            receipt->revalidation = revalidation;
+            if (!request.publishOnRevalidationFailure || !revalidation.bytesVerified)
+            {
+                appendHistoryFailed(QStringLiteral("revalidation-failed"));
+                return refuse(QStringLiteral("failed"), QStringLiteral("revalidation-failed"), finalizeResult.getErrorMessage());
+            }
+            revalidationFailed = true;
+        }
+    }
+
+    // 9. The commit seam and the last cancellation check: still nothing at the destination.
+    if (request.beforeCommit)
+    {
+        request.beforeCommit();
+    }
+    if (PDFOperationControl::isOperationCancelled(request.operationControl))
+    {
+        appendHistoryFailed(QStringLiteral("cancelled"));
+        return refuse(QStringLiteral("cancelled"), QStringLiteral("cancelled"),
+                      QStringLiteral("The governed mutation was cancelled before publication."));
+    }
+
+    // 10. Atomic commit into the destination.
+    const PDFOperationResult commitResult = PDFSafeFileWriter::writeData(request.destinationPath,
+                                                                         request.candidateBytes,
+                                                                         request.overwritePolicy);
+    if (!commitResult)
+    {
+        const bool conflict = request.overwritePolicy == PDFSafeFileWriter::OverwritePolicy::Fail &&
+                              QFileInfo::exists(request.destinationPath);
+        const QString code = conflict ? QStringLiteral("destination-conflict") : QStringLiteral("commit-failed");
+        appendHistoryFailed(code);
+        return refuse(QStringLiteral("failed"), code, commitResult.getErrorMessage());
+    }
+    receipt->destinationTouched = true;
+    receipt->publishedSha256 = receipt->candidateSha256;
+
+    // 11. Read back and verify the destination holds exactly the reviewed bytes.
+    QFile publishedFile(request.destinationPath);
+    if (!publishedFile.open(QIODevice::ReadOnly) ||
+        QString::fromLatin1(QCryptographicHash::hash(publishedFile.readAll(), QCryptographicHash::Sha256).toHex()) != receipt->candidateSha256)
+    {
+        appendHistoryFailed(QStringLiteral("read-back-failed"));
+        return refuse(QStringLiteral("failed"), QStringLiteral("read-back-failed"),
+                      QStringLiteral("The committed artifact does not match the reviewed candidate."));
+    }
+
+    // 12. Published: durable chain completion.
+    receipt->revalidation = revalidation;
+    receipt->signOff = signOff;
+    receipt->status = QStringLiteral("published");
+    receipt->reasonCode = revalidationFailed ? QStringLiteral("revalidation-forced") : QString();
+    if (request.history && historyStarted)
+    {
+        PDFOperationHistoryEvent accepted;
+        accepted.executionId = executionId;
+        accepted.kind = PDFOperationHistoryEventKind::FixApplied;
+        accepted.status = PDFOperationHistoryStatus::Accepted;
+        accepted.operatorIdentity = signOff.approval.actorId;
+        accepted.documentRevisionDigest = receipt->candidateSha256;
+        accepted.effectiveProfileDigest = signOff.effectiveProfileDigest;
+        if (!request.outputArtifact.sha256.trimmed().isEmpty())
+        {
+            accepted.output = request.outputArtifact;
+        }
+        accepted.reportArtifactSha256 = signOff.revalidationReportSha256;
+        accepted.resultSummary = request.resultSummary ? request.resultSummary(*receipt) : canonicalMutationSummary(*receipt);
+        accepted.approval = signOff.approval;
+        if (!request.history->appendEvent(accepted))
+        {
+            receipt->status = QStringLiteral("failed");
+            receipt->reasonCode = QStringLiteral("history-failed");
+            return PDFOperationResult(QStringLiteral("The governed artifact was published, but its accepted history event could not be persisted."));
+        }
+    }
+    return PDFOperationResult(true);
+}
+
 }   // namespace pdf
