@@ -22,6 +22,7 @@
 
 #include <QtTest>
 
+#include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
@@ -254,6 +255,7 @@ private slots:
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
+    void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
     void fixRollbackReturnsToARecordedRevision();
 };
 
@@ -1146,6 +1148,166 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
             QCOMPARE(entry.value(QStringLiteral("value")).toDouble(), 4.0);
         }
     }
+}
+
+void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("job.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("plan-approval-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("plan-approval-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    // What the operator is shown is what an approval binds: one plan digest on both the
+    // identity surface and the preview, against one document revision.
+    const QVariantMap displayed = host.fixPlanIdentity();
+    const QString displayedDigest = displayed.value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!displayedDigest.isEmpty());
+    QCOMPARE(displayed.value(QStringLiteral("planIsCurrent")).toBool(), true);
+    QVERIFY(!displayed.value(QStringLiteral("plannedRevision")).toString().isEmpty());
+    const QVariantMap preview = host.fixPreview();
+    QCOMPARE(preview.value(QStringLiteral("planDigest")).toString(), displayedDigest);
+    QCOMPARE(preview.value(QStringLiteral("planIsCurrent")).toBool(), true);
+
+    // Unapproved: a plan nobody has approved cannot start a run, and nothing is published.
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("preview-ready"));
+    QVERIFY(!host.fixRecheck().value(QStringLiteral("available")).toBool());
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // Denied: the operator's own refusal is honoured, and it also starts nothing.
+    QVERIFY(host.rejectActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("rejected"));
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.fixRecheck().value(QStringLiteral("available")).toBool());
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // Stale: reopening the document moves the revision, so the plan belongs to an earlier one.
+    // The surface names the revision its evidence belongs to instead of looking clear, the plan
+    // reports itself as no longer current, and no run may start against it.
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("stale"));
+    QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("planIsCurrent")).toBool(), false);
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.approveActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.fixRecheck().value(QStringLiteral("available")).toBool());
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // The operator now plans against the revision that is open and approves it: the approval is
+    // armed and bound to the digest this plan actually has.
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    const QString approvedDigest = host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!approvedDigest.isEmpty());
+    QVERIFY(host.approveActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("approved"));
+    QVERIFY(host.fixExecutionArmed());
+    QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("reviewedPlanDigest")).toString(), approvedDigest);
+
+    // An approval belongs to the plan it was given for: planning again against the same revision
+    // clears the review, so the run is refused until the operator approves the plan that is
+    // displayed now, and nothing is published in between. Mutation-probed: deleting the
+    // clearFixReview() call that runs when a plan is accepted makes this step fail, so the refusal
+    // is enforced by that line rather than by an accident of state. Two further clauses are
+    // defensive against a state this journey offers no path to, and removing either leaves this
+    // fixture green: the reviewed-digest equality inside fixLifecycleStateName() and the
+    // fixPlanIsCurrent() clause in approveActionListPlan(), both already decided by the state
+    // checks that run before them.
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+    QVERIFY(host.approveActionListPlan());
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("approved"));
+    QVERIFY(host.fixExecutionArmed());
+
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("succeeded"));
+
+    // Completion presents the revalidated result and the artifact Core signed, distinct
+    // from the as-received input and bound to the plan the operator approved. The run
+    // presents the published bytes; materializing them as a file is the export slice, so
+    // this asserts the presentation rather than a filesystem write.
+    const QVariantMap recheck = host.fixRecheck();
+    QVERIFY(recheck.value(QStringLiteral("available")).toBool());
+    const QString verdictState = recheck.value(QStringLiteral("verdictState")).toString();
+    QVERIFY2(verdictState == QStringLiteral("pass") || verdictState == QStringLiteral("incomplete") ||
+                 verdictState == QStringLiteral("fail"),
+             qPrintable(verdictState));
+    QVERIFY2(verdictState != QStringLiteral("fail"), qPrintable(verdictState));
+    const QVariantMap signOff = host.fixSignOff();
+    QCOMPARE(signOff.value(QStringLiteral("planDigest")).toString(), approvedDigest);
+    const QString publishedSha256 = signOff.value(QStringLiteral("publishedSha256")).toString();
+    QCOMPARE(publishedSha256.size(), 64);
+    for (const QChar character : publishedSha256)
+    {
+        QVERIFY2(character.isDigit() || (character >= QLatin1Char('a') && character <= QLatin1Char('f')),
+                 qPrintable(publishedSha256));
+    }
+    QVERIFY(publishedSha256 != QString::fromLatin1(sourceDigest));
+    QVERIFY2(host.fixLifecycleSummary().contains(QStringLiteral("published")),
+             qPrintable(host.fixLifecycleSummary()));
+
+    // The as-received input is never the publication target.
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
 }
 
 void EditorHostTest::fixRollbackReturnsToARecordedRevision()
