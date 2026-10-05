@@ -38,3 +38,4 @@ unresolved:
   - sealed-eval stub lane check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
   - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
   - canonical-json-digest-stability harness remains pending (enforcement declared)
+  - PR 208 revision fix passes source and contract checks plus MSVC syntax checks; focused runtime tests remain unrun because the available build belongs to the later L04 stack.

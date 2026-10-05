@@ -55,9 +55,12 @@ parameter is refused on the Action List planning path too. A repeated
 hides which value the operator meant.
 
 `PDFRepairTransactionOptions::expectedSourceSha256` binds a transaction to the source
-revision it was planned against; `analyze()` refuses a mismatch with "Repair plan is
-bound to a stale source revision." before any operation runs. An empty value keeps the
-historical behavior.
+revision it was planned against. Bound transactions require `sourcePath` to be
+readable without a password. Both `analyze()` and `apply()` reopen that source,
+verify its byte hash, and compare its parsed contents with the transaction source.
+A changed document retaining its original provenance hash or a changed source file
+is refused before candidate computation. Missing or unreadable source paths fail
+explicitly. An empty expected digest keeps the historical behavior.
 
 Migration decision: the legacy `pdftool addbleed` and `rgbtocmyk` commands remain
 registry-metadata consumers that bypass `PDFRepairTransaction`; converging them onto
@@ -96,8 +99,8 @@ same three inputs, so the binding does not change its behavior.
 A preview writes only to caller-named paths: the candidate path and, when requested, the
 render directory. On cancel or failure it removes what *that call* created — the candidate
 file it wrote, the render PNGs it rendered, and a parent directory it created via `mkpath`
-when it is now empty. A caller-named path is removed because the artifact was never
-approved or published. A completed preview leaves its candidate and renders for review;
+when it is now empty. Candidate removal requires a confirmed write by that preview;
+refused destinations and cancellation before serialization preserve existing files. A completed preview leaves its candidate and renders for review;
 only cancellation, an incomplete comparison, or a hard failure removes them.
 
 ## Approval
@@ -126,13 +129,13 @@ closed on short codes:
 - **expiry** — `PDFApprovalRecord.expiresUtc` (null = no declared expiry) is refused when
   it is at or before `PDFApprovalAuthorizationContext.evaluatedUtc` (`approval-expired`),
   and a declared expiry that cannot be evaluated is refused. `policy.requireExpiry`
-  additionally refuses an approval that declares no expiry.
+  additionally refuses an approval that declares no expiry. Malformed declared expiry values invalidate the parsed approval.
 - **waiver exclusion** — finding waivers and preflight decisions remain excluded.
 - **revocation** — an append-only `ApprovalRevoked` history event whose
   `approval.decisionReference` equals the approval's reference revokes it
   (`approval-revoked`). This mirrors certificate invalidation: one chain, no second
   registry. The resolver reads the chain through `PDFOperationHistoryStore::events()`
-  when a history store is in scope.
+  when a history store is in scope. An unavailable or compromised chain is refused as `approval-history`.
 - **profile binding** — when the caller supplies `expectedProfileDigest`, the approval's
   `effective_profile_digest` must equal it (`profile-binding`), so an approval taken
   against one effective profile cannot authorize a run under another.

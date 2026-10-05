@@ -444,6 +444,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                          refused != PDFToolExitCode::Success)
                 {
                     aggregateCode = refused;
+                    item.insert(QStringLiteral("status"), QStringLiteral("failed"));
+                    item.insert(QStringLiteral("error"), QStringLiteral("Batch output violates the operation save policy."));
                 }
                 else
                 {

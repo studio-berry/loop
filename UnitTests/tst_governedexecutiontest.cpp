@@ -148,6 +148,10 @@ private slots:
     void profileBindingRefusesMismatch();
     void revokedApprovalIsRefusedBeforeWrite();
     void revokedApprovalRefusesLaterAttempt();
+    void malformedApprovalExpiryRefusesPublication();
+    void failedPreviewPreservesCallerFiles();
+    void cancelledFinalPageLeavesNoArtifacts();
+    void previewRefusesInvalidatedPlan();
 
     // L04-05 (#37) — one cancellation-safe governed mutation gateway
     void gatewayRefusesMalformedRequestBeforeWrite();
@@ -1461,6 +1465,144 @@ void GovernedExecutionTest::gatewayRefusesMissingHistoryArtifactsBeforeWrite()
     QVERIFY(!receipt.destinationTouched);
     QVERIFY(!QFile::exists(request.destinationPath));
     QVERIFY(history.events().isEmpty());
+}
+
+void GovernedExecutionTest::malformedApprovalExpiryRefusesPublication()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QByteArray candidateBytes("candidate");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    const auto approval = operatorApproval(planDigest, sourceSha256, sha256Hex(candidateBytes), QStringLiteral("approval:expiry"));
+    const QList<QJsonValue> invalidExpiries{ QStringLiteral("not-a-date"), 123, true, QJsonObject{} };
+    for (const QJsonValue& expiry : invalidExpiries)
+    {
+        QJsonObject json = approval.toJson();
+        QJsonObject record = json.value(QStringLiteral("approval")).toObject();
+        record.insert(QStringLiteral("expiresUtc"), expiry);
+        json.insert(QStringLiteral("approval"), record);
+        const auto parsed = pdf::PDFGovernedExecutionApproval::fromJson(json);
+        QVERIFY(!parsed.isValid());
+        QVERIFY(!pdf::resolveApprovalAuthorization(parsed, {}).allowed);
+        const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+        QVERIFY(!pdf::publishGovernedArtifact(parsed, planDigest, sourceSha256, candidateBytes,
+                                              outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail));
+        QVERIFY(!QFile::exists(outputPath));
+    }
+}
+
+void GovernedExecutionTest::failedPreviewPreservesCallerFiles()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString sourcePath = temporary.filePath(QStringLiteral("source.pdf"));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(sourcePath, &source, true));
+    const QString sourceDigest = fileSha256Hex(sourcePath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    TrippedCancelControl control;
+    pdf::PDFRepairTransactionOptions transactionOptions;
+    transactionOptions.sourcePath = sourcePath;
+    transactionOptions.operationControl = &control;
+    pdf::PDFRepairTransaction transaction(source, transactionOptions);
+    const pdf::PDFRepairOperation* bleed = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(transaction.add(bleed, QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+    pdf::PDFTechnicalPreview technical;
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, sourcePath, planDigest, &technical));
+    QCOMPARE(fileSha256Hex(sourcePath), sourceDigest);
+    pdf::PDFVisualPreview visual;
+    QVERIFY(!pdf::buildVisualPreview(transaction, sourcePath, planDigest, {}, &visual));
+    QCOMPARE(fileSha256Hex(sourcePath), sourceDigest);
+
+    pdf::PDFRepairTransaction incremental(source, transactionOptions);
+    QVERIFY(incremental.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")),
+                            QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } }));
+    QVERIFY(incremental.analyze());
+    QVERIFY(incremental.apply());
+    const QString incrementalDigest = pdf::computeOperationPlanDigest(incremental.plans(), incremental.sourceSha256(), incremental.savePolicy());
+    QVERIFY(!pdf::buildTechnicalPreview(incremental, sourcePath, incrementalDigest, &technical));
+    QCOMPARE(fileSha256Hex(sourcePath), sourceDigest);
+
+    const QString existingPath = temporary.filePath(QStringLiteral("existing.pdf"));
+    QVERIFY(QFile::copy(sourcePath, existingPath));
+    control.trip();
+    QVERIFY(pdf::buildTechnicalPreview(transaction, existingPath, planDigest, &technical));
+    QCOMPARE(technical.status, pdf::PDFRepairDiffStatus::Incomplete);
+    QCOMPARE(fileSha256Hex(existingPath), sourceDigest);
+    QVERIFY(pdf::buildVisualPreview(transaction, existingPath, planDigest, {}, &visual));
+    QCOMPARE(visual.status, pdf::PDFRepairDiffStatus::Incomplete);
+    QCOMPARE(fileSha256Hex(existingPath), sourceDigest);
+}
+
+void GovernedExecutionTest::cancelledFinalPageLeavesNoArtifacts()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+    const QString renders = temporary.filePath(QStringLiteral("renders"));
+    QVERIFY(QDir().mkpath(renders));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    TrippedCancelControl control;
+    pdf::PDFRepairTransactionOptions transactionOptions;
+    transactionOptions.operationControl = &control;
+    pdf::PDFRepairTransaction transaction(source, transactionOptions);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+    pdf::PDFRepairDiffOptions options;
+    options.renderDirectory = renders;
+    options.previewStageHook = [&control](const QString& stage)
+    {
+        if (stage == QStringLiteral("visual-page"))
+            control.trip();
+    };
+    pdf::PDFVisualPreview preview;
+    QVERIFY(pdf::buildVisualPreview(transaction, candidatePath, planDigest, options, &preview));
+    QCOMPARE(preview.status, pdf::PDFRepairDiffStatus::Incomplete);
+    QVERIFY(preview.incompleteReasons.contains(QStringLiteral("cancelled")));
+    QVERIFY(!QFile::exists(candidatePath));
+    QVERIFY(QDir(renders).entryList(QDir::Files).isEmpty());
+}
+
+void GovernedExecutionTest::previewRefusesInvalidatedPlan()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFRepairTransaction transaction(source);
+    const pdf::PDFRepairOperation* bleed = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(transaction.add(bleed, QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString oldDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+    QVERIFY(transaction.add(bleed, QJsonObject{ { QStringLiteral("bleed_mm"), 6.0 } }));
+    pdf::PDFTechnicalPreview technical;
+    pdf::PDFVisualPreview visual;
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, candidatePath, oldDigest, &technical));
+    QVERIFY(!pdf::buildVisualPreview(transaction, candidatePath, oldDigest, {}, &visual));
+    QVERIFY(!QFile::exists(candidatePath));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString currentDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+    QVERIFY(currentDigest != oldDigest);
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, candidatePath, oldDigest, &technical));
+    QVERIFY(pdf::buildTechnicalPreview(transaction, candidatePath, currentDigest, &technical));
+    QVERIFY(QFile::exists(candidatePath));
 }
 
 QTEST_GUILESS_MAIN(GovernedExecutionTest)
