@@ -881,11 +881,16 @@ public:
 
 const bool registerBuiltInRepairOperations = []
 {
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFAddBleedRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFDownsampleImagesRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFRgbToCmykRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFStandardConversionRepair>());
-    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFTranslatePageBoxRepair>());
+    const PDFOperationResult addBleedRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFAddBleedRepair>());
+    Q_ASSERT(bool(addBleedRegistered));
+    const PDFOperationResult downsampleImagesRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFDownsampleImagesRepair>());
+    Q_ASSERT(bool(downsampleImagesRegistered));
+    const PDFOperationResult rgbToCmykRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFRgbToCmykRepair>());
+    Q_ASSERT(bool(rgbToCmykRegistered));
+    const PDFOperationResult standardConversionRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFStandardConversionRepair>());
+    Q_ASSERT(bool(standardConversionRegistered));
+    const PDFOperationResult translatePageBoxRegistered = PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFTranslatePageBoxRepair>());
+    Q_ASSERT(bool(translatePageBoxRegistered));
     return true;
 }();
 

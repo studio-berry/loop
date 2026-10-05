@@ -132,6 +132,7 @@ private slots:
     void redactRefusesToWriteOverItsOwnInput();
     void addBleedRefusesToWriteOverItsOwnInput();
     void rgbToCmykRefusesToWriteOverItsOwnInput();
+    void repairRefusesRepeatedParameterAssignment();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
     void benchmarkWithoutPreflightProfileIsIncomplete();
@@ -913,6 +914,40 @@ void PdfToolContractTest::rgbToCmykRefusesToWriteOverItsOwnInput()
     QCOMPARE(legitimate.exitCode, 0);
     QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
     QVERIFY(QFile(candidatePath).exists());
+}
+
+void PdfToolContractTest::repairRefusesRepeatedParameterAssignment()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const ToolRun refused = runPdfTool({ QStringLiteral("repair"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json"),
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=4"),
+                                         QStringLiteral("--dry-run"),
+                                         inputPath });
+    verifyEnvelope(refused, 2, QStringLiteral("repair"));
+    const QJsonObject diagnostic = findDiagnostic(refused, QStringLiteral("cli.invalid-arguments"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(refused.stdoutData)));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("assigned more than once")));
+
+    // The refusal has to be about the repeated key, not about the invocation:
+    // the same command with distinct parameter keys still plans.
+    const ToolRun planned = runPdfTool({ QStringLiteral("repair"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json"),
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("force=true"),
+                                         QStringLiteral("--dry-run"),
+                                         inputPath });
+    QCOMPARE(planned.exitCode, 0);
+    QVERIFY(findDiagnostic(planned, QStringLiteral("cli.invalid-arguments")).isEmpty());
 }
 
 void PdfToolContractTest::evidenceBundleExportVerifyPair()
