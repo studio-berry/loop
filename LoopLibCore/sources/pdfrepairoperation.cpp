@@ -22,6 +22,7 @@
 
 #include "pdfrepairoperation.h"
 #include "pdfartifactidentity.h"
+#include "pdfdocumentreader.h"
 #include "pdfstandardconversion.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
@@ -102,6 +103,43 @@ QJsonObject expectedChangesObject(const PDFRepairExpectedChanges& expected)
         { QStringLiteral("annotations"), expected.annotations },
         { QStringLiteral("signatures"), expected.signatures }
     };
+}
+
+PDFOperationResult validateBoundSource(const PDFDocument& source, const PDFRepairTransactionOptions& options)
+{
+    if (options.expectedSourceSha256.isEmpty())
+    {
+        return PDFOperationResult(true);
+    }
+    const QString expected = options.expectedSourceSha256.trimmed().toLower();
+    if (!isPDFSha256(expected))
+    {
+        return PDFOperationResult(QStringLiteral("Expected source revision must be a SHA-256 digest."));
+    }
+    if (QString::fromLatin1(source.getSourceDataHash().toHex()) != expected)
+    {
+        return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
+    }
+    if (options.sourcePath.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("A source path is required to verify a bound repair revision."));
+    }
+    PDFDocumentReader reader(nullptr, [](bool* passwordObtained)
+                             {
+                                 *passwordObtained = false;
+                                 return QString(); }, false, false);
+    reader.setOperationControl(options.operationControl);
+    const PDFDocument persistedSource = reader.readFromFile(options.sourcePath);
+    if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
+    {
+        return PDFOperationResult(QStringLiteral("Cannot verify bound repair source: %1").arg(reader.getErrorMessage()));
+    }
+    if (QString::fromLatin1(persistedSource.getSourceDataHash().toHex()) != expected ||
+        source != persistedSource)
+    {
+        return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
+    }
+    return PDFOperationResult(true);
 }
 
 bool isJsonNumber(const QJsonValue& value)
@@ -722,14 +760,12 @@ PDFOperationResult PDFRepairTransaction::analyze()
         return PDFOperationResult(QStringLiteral("Repair transaction source is null."));
     }
 
-    if (!m_options.expectedSourceSha256.isEmpty())
+    if (const PDFOperationResult revision = validateBoundSource(*m_source, m_options); !revision)
     {
-        const QString actualSourceSha256 = QString::fromLatin1(m_source->getSourceDataHash().toHex()).toLower();
-        if (m_options.expectedSourceSha256.trimmed().toLower() != actualSourceSha256)
-        {
-            m_status = PDFRepairStatus::Failed;
-            return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
-        }
+        m_status = PDFRepairStatus::Failed;
+        m_candidate = PDFDocument();
+        m_hasCandidate = false;
+        return revision;
     }
 
     for (const Entry& entry : m_entries)
@@ -791,6 +827,14 @@ PDFOperationResult PDFRepairTransaction::apply()
         {
             return PDFOperationResult(QStringLiteral("Repair transaction is not fully planned."));
         }
+    }
+
+    if (const PDFOperationResult revision = validateBoundSource(*m_source, m_options); !revision)
+    {
+        m_status = PDFRepairStatus::Failed;
+        m_candidate = PDFDocument();
+        m_hasCandidate = false;
+        return revision;
     }
 
     if (PDFOperationControl::isOperationCancelled(m_options.operationControl))
@@ -914,7 +958,7 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     request.required = savePolicy();
     request.requested = effective;
     request.requestedExplicitly = m_hasRequestedSavePolicy;
-    request.appendInPlace = effective.mode == PDFSaveMode::IncrementalAppend;
+    request.appendInPlace = false;
     const PDFOperationResult saveRequestRefusal = validateSaveRequest(request);
     if (!saveRequestRefusal)
     {
@@ -929,9 +973,14 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     }
     if (!requirements.isEmpty())
     {
-        return PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
-                                                     reopenedCandidate, candidateSha256,
-                                                     &m_artifactValidation, m_options.operationControl);
+        const PDFOperationResult serialized = PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
+                                                                                    reopenedCandidate, candidateSha256,
+                                                                                    &m_artifactValidation, m_options.operationControl);
+        if (serialized && stageHook)
+        {
+            stageHook(QStringLiteral("candidate-committed"));
+        }
+        return serialized;
     }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
@@ -1051,11 +1100,23 @@ PDFOperationResult PDFRepairTransaction::compareCandidate(const QString& candida
         options.operationControl = m_options.operationControl;
     }
 
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        if (report)
+        {
+            *report = PDFRepairDiffReport();
+            report->fidelity = options.fidelity;
+            report->status = PDFRepairDiffStatus::Incomplete;
+            report->incompleteReasons.append(QStringLiteral("cancelled"));
+        }
+        m_status = PDFRepairStatus::Incomplete;
+        return PDFOperationResult(true);
+    }
     PDFDocument reopenedCandidate;
     const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate, nullptr, options.previewStageHook);
     if (!serializeResult)
     {
-        if (report && PDFOperationControl::isOperationCancelled(m_options.operationControl))
+        if (report && PDFOperationControl::isOperationCancelled(options.operationControl))
         {
             // A cancelled serialization is an incomplete preview, not a hard
             // failure: it carries the same Incomplete/"cancelled" status the

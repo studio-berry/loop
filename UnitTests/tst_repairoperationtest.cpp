@@ -35,6 +35,8 @@
 #include <memory>
 
 #include <QBuffer>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -1208,15 +1210,77 @@ void RepairOperationTest::staleRevision_isRefusedBeforeAnalyze()
     QVERIFY(stale.plans().isEmpty());
     QVERIFY(stale.candidate() == nullptr);
 
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = directory.filePath(QStringLiteral("source.pdf"));
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    QCOMPARE(sourceFile.write(bytes), qint64(bytes.size()));
+    sourceFile.close();
+
     // The matching revision is accepted and plans normally.
     pdf::PDFRepairTransactionOptions boundOptions;
     boundOptions.expectedSourceSha256 = sourceSha256;
+    boundOptions.sourcePath = sourcePath;
     pdf::PDFRepairTransaction bound(source, boundOptions);
     QVERIFY(bound.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
                       QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
     QVERIFY(bound.analyze());
     QCOMPARE(bound.status(), pdf::PDFRepairStatus::Planned);
     QCOMPARE(bound.plans().size(), 1);
+
+    pdf::PDFRepairTransaction accepted(source, boundOptions);
+    QVERIFY(accepted.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(accepted.apply());
+    QVERIFY(accepted.candidate() != nullptr);
+
+    pdf::PDFRepairTransactionOptions missingPathOptions = boundOptions;
+    missingPathOptions.sourcePath.clear();
+    pdf::PDFRepairTransaction missingPath(source, missingPathOptions);
+    QVERIFY(!missingPath.analyze());
+    QVERIFY(missingPath.candidate() == nullptr);
+
+    pdf::PDFRepairTransactionOptions unreadableOptions = boundOptions;
+    unreadableOptions.sourcePath = directory.filePath(QStringLiteral("missing.pdf"));
+    pdf::PDFRepairTransaction unreadable(source, unreadableOptions);
+    QVERIFY(!unreadable.analyze());
+    QVERIFY(unreadable.candidate() == nullptr);
+
+    // Image optimization also constructs changed storage with the original hash.
+    pdf::PDFDocumentBuilder modifiedBuilder;
+    modifiedBuilder.setDocument(&source);
+    modifiedBuilder.setDocumentTitle(QStringLiteral("Changed after planning"));
+    const pdf::PDFDocument builtModified = modifiedBuilder.build();
+    pdf::PDFDocument changed(pdf::PDFObjectStorage(builtModified.getStorage()),
+                             source.getInfo()->version, source.getSourceDataHash());
+    QCOMPARE(changed.getSourceDataHash(), source.getSourceDataHash());
+    QVERIFY(changed != source);
+    pdf::PDFRepairTransaction modified(changed, boundOptions);
+    QVERIFY(modified.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(!modified.analyze());
+    QCOMPARE(modified.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(modified.plans().isEmpty());
+    QVERIFY(modified.candidate() == nullptr);
+
+    pdf::PDFDocument mutableSource = source;
+    pdf::PDFRepairTransaction changedAfterPlanning(mutableSource, boundOptions);
+    QVERIFY(changedAfterPlanning.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                                     QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(changedAfterPlanning.analyze());
+    mutableSource = changed;
+    QVERIFY(!changedAfterPlanning.apply());
+    QCOMPARE(changedAfterPlanning.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(changedAfterPlanning.candidate() == nullptr);
+
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    const QByteArray changedBytes = writeSerializedBytes(changed);
+    QVERIFY(!changedBytes.isEmpty());
+    QCOMPARE(sourceFile.write(changedBytes), qint64(changedBytes.size()));
+    sourceFile.close();
+    QVERIFY(!bound.apply());
+    QVERIFY(bound.candidate() == nullptr);
 }
 
 void RepairOperationTest::validateJsonSchemaFragment_reportsStructuralViolations()

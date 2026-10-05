@@ -1210,6 +1210,27 @@ void ActionListTest::stepPlansCarryDeclaredSavePolicy()
     {
         verifyStepPlanCarriesDeclaredSavePolicy(stepResult);
     }
+
+    pdf::PDFActionList emptySelectionList = actionList;
+    emptySelectionList.schema = QStringLiteral("loop-action-list/2");
+    emptySelectionList.steps = { actionList.steps[1] };
+    emptySelectionList.steps.front().select = QJsonObject{
+        { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+        { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } }
+    };
+    pdf::PDFActionListExecutionResult emptyPlan;
+    QVERIFY(pdf::PDFActionListExecutor().plan(emptySelectionList, source, options, &emptyPlan));
+    QCOMPARE(emptyPlan.steps.size(), 1);
+    QVERIFY(emptyPlan.steps.front().selectionScope.value(QStringLiteral("empty")).toBool());
+    verifyStepPlanCarriesDeclaredSavePolicy(emptyPlan.steps.front());
+
+    pdf::PDFActionListExecutionResult emptyExecution;
+    pdf::PDFDocument unchangedCandidate;
+    QVERIFY(pdf::PDFActionListExecutor().execute(emptySelectionList, source, options, &unchangedCandidate, &emptyExecution));
+    QCOMPARE(emptyExecution.steps.size(), 1);
+    QCOMPARE(emptyExecution.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
+    verifyStepPlanCarriesDeclaredSavePolicy(emptyExecution.steps.front());
+    QVERIFY(unchangedCandidate == source);
 }
 
 void ActionListTest::executeRefusesWeakenedRequestedSavePolicy()

@@ -40,3 +40,4 @@ unresolved:
   - core:scripts/ci/check_independent_validation_gate.py
   - scripts/ci/check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
   - canonical-json-digest-stability harness remains pending (enforcement declared)
+  - PR 213 review fixes require focused runtime suites; the available local build belongs to a later L04 stack head, not this PR checkout.
