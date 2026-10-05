@@ -224,9 +224,14 @@ inline bool runPdfTool(const QString& pdfToolPath,
 
     const QProcessEnvironment systemEnvironment = QProcessEnvironment::systemEnvironment();
     QProcessEnvironment environment;
+    // The isolated worker resolves its crash-handler database path under the
+    // user profile, so a curated environment without those locations makes every
+    // worker-backed run read as an unavailable worker.
     for (const QString& name : { QStringLiteral("PATH"), QStringLiteral("SystemRoot"),
                                  QStringLiteral("TEMP"), QStringLiteral("TMP"),
-                                 QStringLiteral("USERPROFILE"), QStringLiteral("LANG"),
+                                 QStringLiteral("USERPROFILE"), QStringLiteral("HOME"),
+                                 QStringLiteral("LOCALAPPDATA"), QStringLiteral("APPDATA"),
+                                 QStringLiteral("LANG"),
                                  QStringLiteral("LC_ALL"), QStringLiteral("LC_CTYPE") })
     {
         if (systemEnvironment.contains(name))

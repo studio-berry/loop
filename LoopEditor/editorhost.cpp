@@ -77,6 +77,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <cmath>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -85,6 +86,8 @@ namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
+const QString MoveSelectionCommandId = QStringLiteral("actionMoveSelection");
+const QString TranslatePageBoxOperationId = QStringLiteral("translate-page-box");
 
 QString actionListBindingsHash(const QJsonObject& bindings)
 {
@@ -485,6 +488,39 @@ bool EditorHost::cancelled() const
 bool EditorHost::unsupported() const
 {
     return m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Unsupported);
+}
+
+QString EditorHost::activeTool() const
+{
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    return QString::fromLatin1(pdfinteraction::getInteractionToolName(
+        interaction ? interaction->activeTool() : pdfinteraction::InteractionTool::Select));
+}
+
+bool EditorHost::setActiveTool(const QString& toolId)
+{
+    const std::optional<pdfinteraction::InteractionTool> tool = pdfinteraction::interactionToolFromName(toolId);
+    if (!tool)
+    {
+        return false;
+    }
+
+    // The controller is the single source of truth for the tool; it cancels an in-flight
+    // drag with ToolChanged (#141 AC3) and the host only forwards the operator's choice.
+    pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (!interaction)
+    {
+        return false;
+    }
+
+    if (interaction->activeTool() == *tool)
+    {
+        return true;
+    }
+
+    interaction->setActiveTool(*tool);
+    Q_EMIT activeToolChanged();
+    return true;
 }
 
 QObject* EditorHost::preflight()
@@ -3025,6 +3061,18 @@ void EditorHost::registerFeatureHandlers()
          { moveSearch(-1); });
     bind(QStringLiteral("actionProperties"), [this]
          { setWorkspace(LoopWorkspace::Inspect); });
+
+    pdfinteraction::CommandCatalog::Handler move;
+    move.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+    {
+        const bool routed = requestMoveSelection(parameters);
+        m_session->catalog().finishInvocation(invocation,
+                                              routed ? pdfinteraction::CommandTerminalState::Completed
+                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                              routed ? QString() : QStringLiteral("move/rejected"));
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(MoveSelectionCommandId, std::move(move));
     refreshFeatureAvailability();
 }
 
@@ -3034,7 +3082,7 @@ void EditorHost::refreshFeatureAvailability()
     QHash<pdfinteraction::CommandId, bool> availability;
     for (const QString& id : { QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
                                QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
-                               QStringLiteral("actionFind"), QStringLiteral("actionProperties") })
+                               QStringLiteral("actionFind"), QStringLiteral("actionProperties"), MoveSelectionCommandId })
     {
         availability.insert(id, ready);
     }
@@ -3597,9 +3645,61 @@ void EditorHost::setInspectionMode(QString mode)
     m_inspectionMode = std::move(mode);
 }
 
+bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
+{
+    if (!hasDocument())
+    {
+        return false;
+    }
+    if (parameters.value(QStringLiteral("targetKind")).toString() != QLatin1String("PageBox"))
+    {
+        announceDocumentState(tr("Only page boxes can be moved."));
+        return false;
+    }
+
+    const QString box = parameters.value(QStringLiteral("targetId")).toString();
+    const int page = parameters.value(QStringLiteral("page")).toInt();
+    const double dx = parameters.value(QStringLiteral("dx")).toDouble();
+    const double dy = parameters.value(QStringLiteral("dy")).toDouble();
+    if (page < 0 || !std::isfinite(dx) || !std::isfinite(dy) || (dx == 0.0 && dy == 0.0))
+    {
+        return false;
+    }
+
+    // The move is only proposed here: the recipe, plan, approval and execute
+    // flow of the Fix workspace stays the one place a document is changed.
+    setWorkspace(LoopWorkspace::Fix);
+    m_actionListBindings = QJsonObject{ { QStringLiteral("box"), box },
+                                        { QStringLiteral("page_index"), page },
+                                        { QStringLiteral("dx"), dx },
+                                        { QStringLiteral("dy"), dy } };
+    if (selectActionListRecipeForOperation(TranslatePageBoxOperationId))
+    {
+        return true;
+    }
+    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the move.")
+                              .arg(TranslatePageBoxOperationId));
+    return false;
+}
+
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 {
-    Q_UNUSED(session);
+    if (hasDocument() && session.target.kind == pdfinteraction::InteractionTargetKind::PageBox)
+    {
+        if (session.fence.revision != m_session->facade().currentRevision())
+        {
+            announceDocumentState(tr("Move discarded: the document changed during the drag."));
+        }
+        else
+        {
+            m_session->catalog().invoke(MoveSelectionCommandId,
+                                        { { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                                          { QStringLiteral("targetId"), session.target.id },
+                                          { QStringLiteral("page"), session.target.pageIndex },
+                                          { QStringLiteral("dx"), session.pageDelta.x() },
+                                          { QStringLiteral("dy"), session.pageDelta.y() } });
+        }
+    }
     if (m_session->interaction())
     {
         m_session->interaction()->refreshOverlay();

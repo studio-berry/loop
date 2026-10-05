@@ -32,6 +32,7 @@
 #include <QPoint>
 #include <QPointF>
 #include <QRectF>
+#include <QString>
 
 #include <optional>
 
@@ -50,6 +51,30 @@ enum class InteractionKind
 };
 
 const char* getInteractionKindName(InteractionKind kind);
+
+/// The agreed tool vocabulary (issue #103). A tool decides what a left-button
+/// gesture means. The set is closed and the host parses a tool name into one of
+/// these at its own boundary, so a free-form string cannot reach the pointer
+/// path and an unknown tool is refused rather than coerced into a default.
+enum class InteractionTool
+{
+    /// Direct manipulation: a left press selects a target and a second press
+    /// on it starts a drag. This is the behavior every gesture had before the
+    /// vocabulary existed, so Select is the default.
+    Select,
+
+    /// The left button is a viewport grip: a left drag pans and never selects,
+    /// retargets or starts a transform. The configured pan button still pans
+    /// in every tool.
+    Hand
+};
+
+const char* getInteractionToolName(InteractionTool tool);
+
+/// Parses a tool name at the host boundary. Returns nothing for a name outside
+/// the vocabulary; the caller reports that, and the active tool is left as it
+/// was.
+std::optional<InteractionTool> interactionToolFromName(const QString& name);
 
 /// Why a transient interaction ended without completing.
 ///
@@ -105,6 +130,10 @@ struct DragSession
     /// Where the target would land if the drag completed now. Presentation only:
     /// it feeds the overlay, never the document.
     QRectF previewPageBounds;
+
+    /// The fence this drag completed against. completeDrag() already refuses a
+    /// stale token; carrying it lets the consumer re-check before it mutates.
+    RevisionFencedToken fence;
 };
 
 /// A cheap, per-event, revision-fenced snapshot of what the pointer is doing.

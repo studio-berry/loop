@@ -450,6 +450,62 @@ bool verifyNamedAccessibility(QQuickWindow* window,
     return passed;
 }
 
+/// Issue #103: Select and Hand are a single-select bound to the host's real
+/// active tool, not two independent check boxes. This drives the host and reads
+/// each button's `checked` state back from the live QML objects.
+bool verifyToolSelection(QQuickWindow* window, EditorHost& host)
+{
+    if (!window)
+    {
+        return false;
+    }
+
+    QQuickItem* selectButton = window->findChild<QQuickItem*>(QStringLiteral("selectToolButton"));
+    QQuickItem* handButton = window->findChild<QQuickItem*>(QStringLiteral("handToolButton"));
+    if (!selectButton || !handButton)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke tool_button_missing select=%d hand=%d\n",
+                selectButton ? 1 : 0,
+                handButton ? 1 : 0);
+        return false;
+    }
+
+    const auto checked = [](QQuickItem* item)
+    { return item->property("checked").toBool(); };
+
+    const bool initialSelect = host.activeTool() == QStringLiteral("select") &&
+                               checked(selectButton) && !checked(handButton);
+
+    const bool handApplied = host.setActiveTool(QStringLiteral("hand")) &&
+                             host.activeTool() == QStringLiteral("hand") &&
+                             checked(handButton) && !checked(selectButton);
+    if (!handApplied)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke tool_selection_mismatch hand=%d select=%d active=%s\n",
+                checked(handButton) ? 1 : 0,
+                checked(selectButton) ? 1 : 0,
+                host.activeTool().toLocal8Bit().constData());
+    }
+
+    const bool selectRestored = host.setActiveTool(QStringLiteral("select")) &&
+                                host.activeTool() == QStringLiteral("select") &&
+                                checked(selectButton) && !checked(handButton);
+
+    // A name outside the vocabulary is refused and changes nothing.
+    const bool unknownRefused = !host.setActiveTool(QStringLiteral("bogus")) &&
+                                host.activeTool() == QStringLiteral("select") &&
+                                checked(selectButton) && !checked(handButton);
+
+    fprintf(stdout,
+            "product-quick-a11y-smoke tool_selection initial=%d hand=%d select=%d unknown_refused=%d\n",
+            initialSelect ? 1 : 0,
+            handApplied ? 1 : 0,
+            selectRestored ? 1 : 0,
+            unknownRefused ? 1 : 0);
+
+    return initialSelect && handApplied && selectRestored && unknownRefused;
+}
+
 bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
 {
     if (!window)
@@ -831,6 +887,7 @@ int main(int argc, char** argv)
                                  const bool keyboardSurface = verifyKeyboardSurface(window, host);
                                  const bool workspaceSurfaces = verifyWorkspaceSurfaces(window, host);
                                  const bool fixLifecycle = verifyFixLifecyclePresentation(window, host);
+                                 const bool toolSelection = verifyToolSelection(window, host);
 
                                  // #195 acceptance 1 + 7: the shell starts on a freshly opened
                                  // document, so the preflight surface must present its not-checked
@@ -866,7 +923,7 @@ int main(int argc, char** argv)
                                                      focusHelper && canvasAccessible && preflightAccessible &&
                                                      railAccessible && findingsAccessible && runButtonAccessible &&
                                                      keyboardSurface && workspaceSurfaces && fixLifecycle &&
-                                                     preflightFresh && truthfulVisual;
+                                                     preflightFresh && truthfulVisual && toolSelection;
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);

@@ -106,11 +106,11 @@ public:
     /// still steering.
     RevisionFencedToken token() const;
 
-    /// The tool a gesture belongs to. Changing it cancels an active drag, which
-    /// is issue #141 AC3 -- a tool change must not leave a half-applied
-    /// transform behind.
-    void setActiveTool(const QString& toolId);
-    QString activeTool() const { return m_activeTool; }
+    /// The tool a gesture belongs to (issue #103). Changing it cancels an active
+    /// drag, which is issue #141 AC3 -- a tool change must not leave a
+    /// half-applied transform behind.
+    void setActiveTool(InteractionTool tool);
+    InteractionTool activeTool() const noexcept { return m_activeTool; }
 
     void handlePointer(const PointerIntent& intent);
     void handleWheel(const WheelIntent& intent);
@@ -205,7 +205,7 @@ private:
     InteractionState m_state;
     OverlayFrame m_overlay;
 
-    QString m_activeTool;
+    InteractionTool m_activeTool = InteractionTool::Select;
     Qt::KeyboardModifier m_zoomModifier = Qt::ControlModifier;
     Qt::MouseButton m_panButton = Qt::MiddleButton;
     int m_keyScrollStepPx = 40;
