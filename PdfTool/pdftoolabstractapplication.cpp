@@ -247,7 +247,8 @@ PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
 
     if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") ||
         command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
-        command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
+        command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle") ||
+        command == QStringLiteral("rollback"))
     {
         descriptor.outputFormats = { QStringLiteral("json") };
     }
@@ -392,6 +393,14 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
     {
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
         add(QStringLiteral("preflight-page-last"), { QStringLiteral("--preflight-page-last") }, QStringLiteral("page"), PDFToolValueType::Integer, {}, QStringLiteral("0"));
+    }
+    if (optionFlags.testFlag(Rollback))
+    {
+        add(QStringLiteral("to"), { QStringLiteral("--to") }, QStringLiteral("sha256"), PDFToolValueType::String, {}, {}, true);
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("reason"), { QStringLiteral("--reason") }, QStringLiteral("text"), PDFToolValueType::String);
+        add(QStringLiteral("report-file"), { QStringLiteral("--report-file") }, QStringLiteral("file"), PDFToolValueType::Path);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
@@ -706,6 +715,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(EvidenceBundleExport, QStringLiteral("evidence-bundle.export"));
     add(EvidenceBundleVerify, QStringLiteral("evidence-bundle.verify"));
     add(ActionList, QStringLiteral("action-list.execute"));
+    add(Rollback, QStringLiteral("history.rollback"));
     capabilities.sort();
     return capabilities;
 }
@@ -809,6 +819,15 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("param", "Invocation binding as key=value; may be repeated.", "key=value"));
         parser->addOption(QCommandLineOption("pswd", "Password for encrypted input PDFs.", "password"));
         parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+    }
+
+    if (optionFlags.testFlag(Rollback))
+    {
+        parser->addOption(QCommandLineOption("to", "Recorded revision artifact digest to restore.", "sha256"));
+        parser->addOption(QCommandLineOption(QStringList{ QStringLiteral("o"), QStringLiteral("output") }, "Destination file for the restored revision.", "file"));
+        parser->addOption(QCommandLineOption("profile", "Loop preflight profile (JSON) the restored revision is revalidated under.", "profile"));
+        parser->addOption(QCommandLineOption("reason", "Operator reason recorded on the rolled-back event.", "text"));
+        parser->addOption(QCommandLineOption("report-file", "Governed rollback report JSON path.", "file"));
     }
 
     if (optionFlags.testFlag(Redact))
@@ -1195,7 +1214,8 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
             const QString command = getStandardString(Command);
             if (command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
                 command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
-                command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle"))
+                command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle") ||
+                command == QStringLiteral("rollback"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
             }
@@ -2114,6 +2134,18 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.actionListOutputDocument = parser->value("output");
         options.actionListOutputDirectory = parser->value("output-dir");
         options.actionListParameterAssignments = parser->values("param");
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
+    }
+
+    if (optionFlags.testFlag(Rollback))
+    {
+        options.rollbackFiles = positionalArguments;
+        options.rollbackTargetSha256 = parser->value("to").trimmed();
+        options.rollbackOutputDocument = parser->value("output");
+        options.rollbackProfilePath = parser->value("profile");
+        options.rollbackReason = parser->value("reason");
+        options.rollbackReportFile = parser->value("report-file");
         options.password = parser->value("pswd");
         options.permissiveReading = !parser->isSet("no-permissive-reading");
     }

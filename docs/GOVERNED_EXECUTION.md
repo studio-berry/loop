@@ -372,3 +372,32 @@ instead (disposition of legacy #656).
 `scripts/ci/check_governed_parity.py` validates these records without opening a PDF.
 Use `--compare-identity` when several reports are expected to describe the same
 plan/source/profile tuple.
+
+The named cross-surface fixture lives in `UnitTests/testdata/governed-parity/`: one
+fixture and one equivalent `add-bleed` action list driven through CLI repair, CLI
+action-list, the Editor Action List route, and a PageMaster export. The receipts each
+pass the checker, the source and effective-profile identity is shared by the surfaces
+that revalidate the raw profile, and the action-list plan digest is shared by the
+action-list envelope family (CLI action-list and Editor). PageMaster publishes a
+derived source-identity digest and its own resolved-profile digest by design, so its
+manifest's document identity is what carries the shared fixture digest.
+`UnitTestsProductOperatorLoop::governedPublicationParityAcrossSurfaces` asserts this and
+regenerates the fixture receipts when `LOOP_GOVERNED_PARITY_OUT` is set; the CI
+`source_integrity` job runs `check_governed_parity.py` over the committed receipts.
+
+## Rollback receipt (#40)
+
+A rollback is a governed publication like any other. `PDFOperationHistoryStore::rollbackTo`
+restores a recorded revision as a **new** revision and then runs the same finalize path
+(`finalizeGovernedPublication`): it revalidates the restored bytes and issues a sign-off
+certificate bound to those bytes. The `rolled-back` event records
+`resultSummary.governed = { approval, revalidation, sign_off }` — the same three
+sub-objects every other surface publishes — plus the revalidation report digest and the
+effective profile digest, so `check_governed_parity.py` accepts a rollback receipt
+exactly like a repair or export receipt. A rollback requires the effective preflight
+profile and a sign-off actor/policy; without them it is refused (`rollback-profile-missing`).
+A tampered target, an unregistered current revision, or a chain that fails `verify()` is
+refused before any write. A revalidation failure fails closed: the restored destination
+is removed, a failed event is appended, and no sign-off or receipt is recorded. The
+Editor rollback route supplies the profile it already holds; Action List and PageMaster
+rollback surfaces are deferred (they publish through the same gateway when added).

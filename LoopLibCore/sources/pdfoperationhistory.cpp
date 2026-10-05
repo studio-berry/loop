@@ -270,7 +270,7 @@ QJsonObject PDFOperationHistoryVerification::toJson() const
 
 QJsonObject PDFRollbackRequest::toJson() const
 {
-    return QJsonObject{
+    QJsonObject object{
         { QStringLiteral("operation"), QStringLiteral("rollback") },
         { QStringLiteral("currentArtifactSha256"), currentArtifactSha256 },
         { QStringLiteral("targetArtifactSha256"), targetArtifactSha256 },
@@ -278,6 +278,19 @@ QJsonObject PDFRollbackRequest::toJson() const
         { QStringLiteral("reason"), reason },
         { QStringLiteral("approval"), approval.toJson() }
     };
+    if (!profile.isEmpty())
+    {
+        object.insert(QStringLiteral("profile"), profile);
+    }
+    if (!signOffActor.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("signOffActor"), signOffActor);
+    }
+    if (!signOffPolicy.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("signOffPolicy"), signOffPolicy);
+    }
+    return object;
 }
 
 bool PDFRollbackPoint::isValid() const

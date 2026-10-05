@@ -156,6 +156,14 @@ struct LOOPLIBCORESHARED_EXPORT PDFRollbackRequest
     QUuid targetExecutionId;
     QString reason;
     PDFApprovalRecord approval;
+    /// Effective preflight profile the restored revision is revalidated under
+    /// (#38). A rollback without a profile is refused: the restored bytes must
+    /// pass revalidation before the rolled-back revision is recorded.
+    QJsonObject profile;
+    /// Sign-off identity recorded on the revalidation certificate the rollback
+    /// issues. Both are required; a rollback that cannot name them is refused.
+    QString signOffActor;
+    QString signOffPolicy;
 
     QJsonObject toJson() const;
 };

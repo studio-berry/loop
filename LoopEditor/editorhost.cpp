@@ -2831,6 +2831,18 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     }
     targetExecutionId = event->executionId;
 
+    // P2: a rollback revalidates the restored revision through the #38 path, so the
+    // Editor must supply the effective profile it already holds. Without a validated
+    // profile the rollback is refused and recorded, never fabricated.
+    const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                        [this](const PreflightProfileChoice& choice)
+                                        { return choice.id == m_selectedPreflightProfileId; });
+    if (profileIt == m_preflightProfiles.cend() || !profileIt->valid)
+    {
+        announceDocumentState(tr("Select a validated preflight profile before returning to a recorded revision."));
+        return false;
+    }
+
     pdf::PDFRollbackRequest request;
     request.currentArtifactSha256 = currentDigest;
     request.targetArtifactSha256 = point->documentRevisionDigest;
@@ -2845,6 +2857,9 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     request.approval.decisionReference =
         QStringLiteral("editor-rollback:%1").arg(point->documentRevisionDigest);
     request.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    request.profile = profileIt->profile;
+    request.signOffActor = QStringLiteral("Editor");
+    request.signOffPolicy = QStringLiteral("desktop-rollback-postflight");
 
     // A new sibling file, never the open document: returning to a revision must not
     // overwrite what the operator has on screen.

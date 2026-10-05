@@ -48,9 +48,19 @@ event. Eviction removes only the digest-addressed artifact; the immutable event 
 marked `artifact_evicted`. Shared artifacts are retained until their last point is evicted. A retention failure is
 reported by the workflow after preserving the accepted event and output.
 
-`rollbackTo()` accepts only a non-evicted artifact referenced by an accepted event. It verifies the digest before
-opening the destination `QSaveFile`, then appends a new `history.rollback` execution and `rolled-back` event.
-Intervening history is never erased. A corrupt or missing target fails before the current document is touched.
+`rollbackTo()` accepts only a non-evicted artifact referenced by an accepted event. It verifies the
+chain (`verify()`) and the target digest before opening the destination `QSaveFile`, so a rollback
+never extends a compromised chain and never touches the current document on a corrupt or missing
+target. The restored revision is a **new** revision: `rollbackTo()` restores the target bytes to the
+destination, then revalidates those bytes through the same #38 governed path every other surface
+uses (`revalidateGovernedArtifact`/finalize) and appends a new `history.rollback` execution and
+`rolled-back` event. The event records the governed receipt (`resultSummary.governed` =
+`{approval, revalidation, sign_off}`), the revalidation report digest, and the effective profile
+digest; the sign-off certificate binds the restored bytes. A rollback requires the effective
+preflight profile and a sign-off actor/policy — without them it is refused
+(`rollback-profile-missing`). A revalidation failure fails closed: the restored destination is
+removed, a failed event is appended, and neither a sign-off nor a receipt is recorded. Intervening
+history is never erased or rewritten.
 
 The headless `PdfTool repair` and `action-list run/batch` paths create a per-output `<pdf>.loop-history` sidecar
 using this API. Editor and PageMaster UI wiring remains deferred until after 0.1.1; those surfaces must use this

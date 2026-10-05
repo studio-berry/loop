@@ -328,6 +328,14 @@ struct PDFToolOptions
     QString actionListOutputDirectory;
     QStringList actionListParameterAssignments;
 
+    // For the Rollback command
+    QStringList rollbackFiles;
+    QString rollbackTargetSha256;
+    QString rollbackOutputDocument;
+    QString rollbackProfilePath;
+    QString rollbackReason;
+    QString rollbackReportFile;
+
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
     // themselves. Null when not running under the contract.
@@ -435,6 +443,7 @@ public:
         EvidenceBundleVerify = 0x100000000000ULL,   ///< Verify a portable proof-of-preflight bundle
         PreflightReportFile = 0x200000000000ULL,   ///< Preflight --report-file output path
         BenchmarkPreflightProfile = 0x400000000000ULL,   ///< Benchmark --profile for a measured preflight phase
+        Rollback = 0x800000000000ULL,   ///< Restore a recorded revision as a new governed publication
     };
     Q_DECLARE_FLAGS(Options, Option)
 

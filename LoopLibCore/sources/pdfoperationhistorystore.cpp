@@ -22,7 +22,9 @@
 
 #include "pdfoperationhistorystore.h"
 #include "pdfartifactstore.h"
+#include "pdfgovernedexecution.h"
 #include "pdfschemaversion.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -58,6 +60,22 @@ QString queryError(const QSqlQuery& query)
 QString databaseError(const QSqlDatabase& database)
 {
     return database.lastError().text().isEmpty() ? QStringLiteral("SQLite database operation failed.") : database.lastError().text();
+}
+
+/// Stable plan digest for a rollback: binds the exact current/target revisions,
+/// the target execution, and the operator reason. Timestamps and the approval
+/// record are deliberately excluded so the same rollback intent hashes the same
+/// regardless of when it was authorized.
+QString rollbackPlanDigest(const PDFRollbackRequest& request)
+{
+    const QJsonObject envelope{
+        { QStringLiteral("operation"), QStringLiteral("history.rollback") },
+        { QStringLiteral("current_sha256"), request.currentArtifactSha256.trimmed().toLower() },
+        { QStringLiteral("target_sha256"), request.targetArtifactSha256.trimmed().toLower() },
+        { QStringLiteral("target_execution_id"), request.targetExecutionId.toString(QUuid::WithoutBraces) },
+        { QStringLiteral("reason"), request.reason }
+    };
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(envelope), QCryptographicHash::Sha256).toHex());
 }
 
 bool exec(QSqlDatabase& database, const QString& sql, QString* errorMessage)
@@ -942,6 +960,22 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
     {
         return PDFOperationResult(QStringLiteral("Rollback requires a valid approval record."));
     }
+    // P2: a rollback must revalidate the restored bytes, so the effective profile
+    // and the sign-off identity are mandatory inputs. Refuse rather than record a
+    // rolled-back revision nobody revalidated.
+    if (request.profile.isEmpty() || request.signOffActor.trimmed().isEmpty() ||
+        request.signOffPolicy.trimmed().isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("rollback-profile-missing: rollback requires the effective preflight profile and a sign-off actor/policy."));
+    }
+    // P1/P4: refuse to extend a chain that no longer verifies. A rollback is a new
+    // event on the same chain, so a compromised history must stop it before any write.
+    const PDFOperationHistoryVerification verification = verify();
+    if (!verification.verified)
+    {
+        return PDFOperationResult(QStringLiteral("Rollback refused: the operation history chain does not verify (%1).")
+                                      .arg(verification.integrity));
+    }
 
     PDFArtifactIdentity target;
     if (const PDFOperationResult resolveResult = resolveRollbackTarget(request, &target); !resolveResult)
@@ -996,15 +1030,67 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
         return PDFOperationResult(restoreResult.errorMessage);
     }
 
+    // P1: the restored revision is revalidated through the #38 path exactly like
+    // every other publication. The candidate is the restored bytes; the source is
+    // the document the operator is returning from.
+    const QString planDigest = rollbackPlanDigest(request);
+    PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = current.sha256;
+    approval.candidateSha256 = target.sha256;
+    approval.effectiveProfileDigest = computeProfileDigest(request.profile);
+    approval.approval = request.approval;
+
+    PDFGovernedExecutionRevalidation revalidation;
+    PDFGovernedExecutionSignOff signOff;
+    const PDFOperationResult finalizeResult =
+        finalizeGovernedPublication(approval,
+                                    planDigest,
+                                    current.sha256,
+                                    target.sha256,
+                                    destinationPath,
+                                    request.profile,
+                                    request.signOffActor,
+                                    request.signOffPolicy,
+                                    &revalidation,
+                                    &signOff);
+    if (!finalizeResult)
+    {
+        // Fail closed: nothing unverified survives. Remove the restored destination,
+        // record the failure, and issue neither sign-off nor receipt.
+        QFile::remove(destinationPath);
+        PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.status = PDFOperationHistoryStatus::Failed;
+        failed.resultSummary = QJsonObject{
+            { QStringLiteral("error"), finalizeResult.getErrorMessage() },
+            { QStringLiteral("reason_code"), revalidation.reasonCode },
+            { QStringLiteral("revalidation"), revalidation.toJson() }
+        };
+        appendEvent(failed);
+        return finalizeResult;
+    }
+
     PDFOperationHistoryEvent complete;
     complete.executionId = executionId;
     complete.status = PDFOperationHistoryStatus::RolledBack;
     complete.output = target;
+    complete.operatorIdentity = signOff.approval.actorId;
+    complete.documentRevisionDigest = target.sha256;
+    complete.effectiveProfileDigest = signOff.effectiveProfileDigest;
+    complete.reportArtifactSha256 = signOff.revalidationReportSha256;
+    // P1: the rolled-back event carries the same governed receipt shape as every
+    // other surface, so a reader can reconstruct the approval, revalidation, and
+    // sign-off that authorized the new revision.
     complete.resultSummary = QJsonObject{
         { QStringLiteral("targetArtifactSha256"), target.sha256 },
-        { QStringLiteral("reason"), request.reason }
+        { QStringLiteral("reason"), request.reason },
+        { QStringLiteral("governed"), QJsonObject{
+                                          { QStringLiteral("approval"), approval.toJson() },
+                                          { QStringLiteral("revalidation"), revalidation.toJson() },
+                                          { QStringLiteral("sign_off"), signOff.toJson() } } }
     };
-    complete.approval = request.approval;
+    complete.approval = signOff.approval;
     return appendEvent(complete, sequence);
 }
 
