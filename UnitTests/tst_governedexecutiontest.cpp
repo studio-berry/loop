@@ -22,6 +22,7 @@
 
 #include "pdfartifactidentity.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
 #include "pdfrepairoperation.h"
@@ -29,6 +30,7 @@
 #include "pdfsavepolicy.h"
 
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -41,6 +43,37 @@ namespace
 QString sha256Hex(const QByteArray& bytes)
 {
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+}
+
+/// Cancellation double that only reports cancelled once a test trips it. The
+/// preview seam flips it after the first rendered page so the render loop sees
+/// the cancel on the next page, exactly like an operator pressing stop.
+class TrippedCancelControl final : public pdf::PDFOperationControl
+{
+public:
+    bool isOperationCancelled() const override { return m_cancelled; }
+    void trip() const { m_cancelled = true; }
+
+private:
+    mutable bool m_cancelled = false;
+};
+
+bool readsAsValidPdf(const QString& path)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false);
+    reader.readFromFile(path);
+    return reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK;
+}
+
+QString fileSha256Hex(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return QString();
+    }
+    return sha256Hex(file.readAll());
 }
 
 QString goldenVectorPath(const QString& fileName)
@@ -99,6 +132,11 @@ private slots:
 
     // D5 — cross-surface identity equality (#656 disposition)
     void crossSurfaceEquality_isPlanIdentityNotIndependentPdfBytes();
+
+    // L04-03 / #35 — isolated, nonpublishing, plan-bound preview
+    void previewLeavesSourceBytesUntouched();
+    void cancelledPreviewLeavesNoArtifacts();
+    void previewRefusesPlanDigestMismatch();
 };
 
 void GovernedExecutionTest::planDigest_isDeterministicAndSensitive()
@@ -655,6 +693,137 @@ void GovernedExecutionTest::crossSurfaceEquality_isPlanIdentityNotIndependentPdf
     // Structural identity is what fail-closed proofs should assert when writer
     // bytes may drift; do not require byte-identical serialization here.
     QCOMPARE(first.getCatalog()->getPageCount(), second.getCatalog()->getPageCount());
+}
+
+void GovernedExecutionTest::previewLeavesSourceBytesUntouched()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString sourcePath = temporary.filePath(QStringLiteral("received.pdf"));
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    QVERIFY(writer.write(sourcePath, &source, true));
+    const QString digestBefore = fileSha256Hex(sourcePath);
+    QVERIFY(!digestBefore.isEmpty());
+
+    pdf::PDFRepairTransactionOptions transactionOptions;
+    transactionOptions.sourcePath = sourcePath;
+    pdf::PDFRepairTransaction transaction(source, transactionOptions);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+
+    pdf::PDFTechnicalPreview technicalPreview;
+    QVERIFY(pdf::buildTechnicalPreview(transaction, candidatePath, planDigest, &technicalPreview));
+    QCOMPARE(fileSha256Hex(candidatePath), technicalPreview.candidateSha256);
+    QVERIFY(readsAsValidPdf(candidatePath));
+
+    pdf::PDFVisualPreview visualPreview;
+    pdf::PDFRepairDiffOptions options;
+    QVERIFY(pdf::buildVisualPreview(transaction, candidatePath, planDigest, options, &visualPreview));
+    QCOMPARE(fileSha256Hex(candidatePath), visualPreview.candidateSha256);
+
+    // The trusted source file is byte-identical after both previews.
+    QCOMPARE(fileSha256Hex(sourcePath), digestBefore);
+
+    // P1 fidelity vocabulary: technical is Exact, visual is Simulated.
+    QCOMPARE(technicalPreview.fidelity, pdf::PDFRepairPreviewFidelity::Exact);
+    QCOMPARE(visualPreview.fidelity, pdf::PDFRepairPreviewFidelity::Simulated);
+    QCOMPARE(technicalPreview.toJson().value(QStringLiteral("fidelity_mode")).toString(), QStringLiteral("exact"));
+    QCOMPARE(visualPreview.toJson().value(QStringLiteral("fidelity_mode")).toString(), QStringLiteral("simulated"));
+    QVERIFY(technicalPreview.toJson().contains(QStringLiteral("fidelity_mode")));
+    QVERIFY(visualPreview.toJson().contains(QStringLiteral("fidelity_mode")));
+}
+
+void GovernedExecutionTest::cancelledPreviewLeavesNoArtifacts()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+    const QString renderDirectory = temporary.filePath(QStringLiteral("renders"));
+    QVERIFY(QDir().mkpath(renderDirectory));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+
+    TrippedCancelControl control;
+    pdf::PDFRepairTransactionOptions transactionOptions;
+    transactionOptions.operationControl = &control;
+    pdf::PDFRepairTransaction transaction(source, transactionOptions);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+
+    pdf::PDFRepairDiffOptions options;
+    options.renderDirectory = renderDirectory;
+    options.operationControl = &control;
+    // Cancel after the first rendered page: the render loop polls the control
+    // once per page, so tripping it here lands on the second page's check.
+    options.previewStageHook = [&control](const QString& stage)
+    {
+        if (stage == QStringLiteral("visual-page"))
+        {
+            control.trip();
+        }
+    };
+
+    pdf::PDFVisualPreview preview;
+    const pdf::PDFOperationResult result = pdf::buildVisualPreview(transaction, candidatePath, planDigest, options, &preview);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(preview.status, pdf::PDFRepairDiffStatus::Incomplete);
+    QVERIFY(preview.incompleteReasons.contains(QStringLiteral("cancelled")));
+    QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Incomplete);
+
+    // No externally visible artifact survives the cancelled preview.
+    QVERIFY(!QFile::exists(candidatePath));
+    QCOMPARE(QDir(renderDirectory).entryList(QDir::Files).size(), 0);
+    QVERIFY(QDir(temporary.path()).entryList(QDir::Files).isEmpty());
+    QVERIFY(!QFile::exists(temporary.filePath(QStringLiteral("approval.json"))));
+}
+
+void GovernedExecutionTest::previewRefusesPlanDigestMismatch()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString candidatePath = temporary.filePath(QStringLiteral("candidate.pdf"));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+    const QString planDigest = pdf::computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy());
+
+    pdf::PDFTechnicalPreview technicalPreview;
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, candidatePath, QString(), &technicalPreview));
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, candidatePath, QStringLiteral("not-a-digest"), &technicalPreview));
+    QVERIFY(!pdf::buildTechnicalPreview(transaction, candidatePath, QString(64, QLatin1Char('a')), &technicalPreview));
+
+    pdf::PDFVisualPreview visualPreview;
+    pdf::PDFRepairDiffOptions options;
+    QVERIFY(!pdf::buildVisualPreview(transaction, candidatePath, QString(), options, &visualPreview));
+    QVERIFY(!pdf::buildVisualPreview(transaction, candidatePath, QStringLiteral("deadbeef"), options, &visualPreview));
+    QVERIFY(!pdf::buildVisualPreview(transaction, candidatePath, QString(64, QLatin1Char('b')), options, &visualPreview));
+
+    // Every refusal happens before any candidate write.
+    QVERIFY(!QFile::exists(candidatePath));
+
+    // The matching digest is accepted and produces the candidate.
+    QVERIFY(pdf::buildTechnicalPreview(transaction, candidatePath, planDigest, &technicalPreview));
+    QVERIFY(QFile::exists(candidatePath));
 }
 
 QTEST_APPLESS_MAIN(GovernedExecutionTest)

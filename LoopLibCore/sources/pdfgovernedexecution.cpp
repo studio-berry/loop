@@ -27,7 +27,9 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 
 namespace pdf
@@ -70,6 +72,72 @@ QString digestJson(const QJsonObject& object)
     return digestHex(canonicalJson(object));
 }
 
+/// Fails closed unless the supplied digest is a well-formed SHA-256 that equals
+/// the plan digest recomputed from the transaction's own plans, source bytes,
+/// and merged save policy. This binds a preview to one exact analyzed plan.
+PDFOperationResult validatePreviewPlanDigest(const PDFRepairTransaction& transaction,
+                                             const QString& planDigest)
+{
+    if (!isPDFSha256(planDigest))
+    {
+        return PDFOperationResult(QStringLiteral("Preview plan digest is missing or malformed."));
+    }
+    const QString expected = computeOperationPlanDigest(transaction.plans(),
+                                                        transaction.sourceSha256(),
+                                                        transaction.savePolicy());
+    if (!sha256Matches(planDigest, expected))
+    {
+        return PDFOperationResult(QStringLiteral("Preview plan digest does not match the analyzed operation plan."));
+    }
+    return PDFOperationResult(true);
+}
+
+/// Removes the artifacts a preview call created: the candidate file, the render
+/// PNGs it rendered, and the candidate parent directory when this call created
+/// it and it is now empty. A caller-named path is removed because the artifact
+/// was never approved or published (the residue contract).
+void removePreviewResidue(const QString& candidatePath,
+                          bool candidateParentExisted,
+                          const QString& renderDirectory,
+                          const QVector<PDFRepairPageVisualDiff>& pages)
+{
+    if (!candidatePath.isEmpty())
+    {
+        QFile::remove(candidatePath);
+    }
+    if (!renderDirectory.isEmpty())
+    {
+        const QDir renderDir(renderDirectory);
+        for (const PDFRepairPageVisualDiff& page : pages)
+        {
+            for (const QString& name : { page.beforeImagePath, page.afterImagePath, page.diffImagePath })
+            {
+                if (!name.isEmpty())
+                {
+                    QFile::remove(renderDir.filePath(name));
+                }
+            }
+        }
+    }
+    if (candidateParentExisted || candidatePath.isEmpty())
+    {
+        return;
+    }
+    const QString parentPath = QFileInfo(candidatePath).absolutePath();
+    const QDir parent(parentPath);
+    if (parent.exists() && parent.isEmpty())
+    {
+        QDir().rmdir(parentPath);
+    }
+}
+
+/// A preview did not complete: it is either a hard failure or an incomplete
+/// report. Only a complete preview leaves its review artifact behind.
+bool previewDidNotComplete(const PDFOperationResult& result, PDFRepairDiffStatus status)
+{
+    return !result || status == PDFRepairDiffStatus::Incomplete || status == PDFRepairDiffStatus::Failed;
+}
+
 }   // namespace
 
 QString computeOperationPlanDigest(const QList<PDFRepairPlan>& plans,
@@ -106,6 +174,7 @@ QJsonObject PDFTechnicalPreview::toJson() const
         { QStringLiteral("plan_digest"), planDigest },
         { QStringLiteral("source_sha256"), sourceSha256 },
         { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("fidelity_mode"), pdfRepairPreviewFidelityName(fidelity) },
         { QStringLiteral("status"), pdfRepairDiffStatusName(status) },
         { QStringLiteral("structural_changes"), changesJson },
         { QStringLiteral("warnings"), QJsonArray::fromStringList(warnings) },
@@ -136,6 +205,7 @@ QJsonObject PDFVisualPreview::toJson() const
         { QStringLiteral("plan_digest"), planDigest },
         { QStringLiteral("source_sha256"), sourceSha256 },
         { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("fidelity_mode"), pdfRepairPreviewFidelityName(fidelity) },
         { QStringLiteral("status"), pdfRepairDiffStatusName(status) },
         { QStringLiteral("pages"), pagesJson },
         { QStringLiteral("warnings"), QJsonArray::fromStringList(warnings) },
@@ -235,17 +305,30 @@ PDFOperationResult buildTechnicalPreview(PDFRepairTransaction& transaction,
     {
         return PDFOperationResult(QStringLiteral("Technical preview output is null."));
     }
+    if (const PDFOperationResult binding = validatePreviewPlanDigest(transaction, planDigest); !binding)
+    {
+        return binding;
+    }
+
+    const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
     PDFRepairDiffOptions options;
     options.renderVisualDiff = false;
+    options.fidelity = PDFRepairPreviewFidelity::Exact;
+    options.operationControl = transaction.operationControl();
     PDFRepairDiffReport report;
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, options, &report);
+    if (previewDidNotComplete(compareResult, report.status))
+    {
+        removePreviewResidue(candidatePath, candidateParentExisted, options.renderDirectory, report.pages);
+    }
     if (!compareResult)
     {
         return compareResult;
     }
 
     *preview = PDFTechnicalPreview();
+    preview->fidelity = PDFRepairPreviewFidelity::Exact;
     preview->planDigest = planDigest;
     preview->sourceSha256 = report.sourceFingerprint;
     preview->candidateSha256 = report.candidateFingerprint;
@@ -266,21 +349,37 @@ PDFOperationResult buildVisualPreview(PDFRepairTransaction& transaction,
     {
         return PDFOperationResult(QStringLiteral("Visual preview output is null."));
     }
+    if (const PDFOperationResult binding = validatePreviewPlanDigest(transaction, planDigest); !binding)
+    {
+        return binding;
+    }
+
+    const bool candidateParentExisted = QFileInfo::exists(QFileInfo(candidatePath).absolutePath());
 
     PDFRepairDiffOptions visualOptions = options;
     visualOptions.renderVisualDiff = true;
     visualOptions.compareMetadata = false;
     visualOptions.compareResources = false;
     visualOptions.compareAnnotations = false;
+    visualOptions.fidelity = PDFRepairPreviewFidelity::Simulated;
+    if (!visualOptions.operationControl)
+    {
+        visualOptions.operationControl = transaction.operationControl();
+    }
 
     PDFRepairDiffReport report;
     const PDFOperationResult compareResult = transaction.compareCandidate(candidatePath, visualOptions, &report);
+    if (previewDidNotComplete(compareResult, report.status))
+    {
+        removePreviewResidue(candidatePath, candidateParentExisted, visualOptions.renderDirectory, report.pages);
+    }
     if (!compareResult)
     {
         return compareResult;
     }
 
     *preview = PDFVisualPreview();
+    preview->fidelity = PDFRepairPreviewFidelity::Simulated;
     preview->planDigest = planDigest;
     preview->sourceSha256 = report.sourceFingerprint;
     preview->candidateSha256 = report.candidateFingerprint;

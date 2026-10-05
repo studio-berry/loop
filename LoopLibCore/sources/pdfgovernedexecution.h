@@ -43,6 +43,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFTechnicalPreview
     QString planDigest;
     QString sourceSha256;
     QString candidateSha256;
+    PDFRepairPreviewFidelity fidelity = PDFRepairPreviewFidelity::Exact;
     PDFRepairDiffStatus status = PDFRepairDiffStatus::Complete;
     QVector<PDFRepairStructuralChange> structuralChanges;
     QStringList warnings;
@@ -57,6 +58,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFVisualPreview
     QString planDigest;
     QString sourceSha256;
     QString candidateSha256;
+    PDFRepairPreviewFidelity fidelity = PDFRepairPreviewFidelity::Simulated;
     PDFRepairDiffStatus status = PDFRepairDiffStatus::Complete;
     QVector<PDFRepairPageVisualDiff> pages;
     QStringList warnings;

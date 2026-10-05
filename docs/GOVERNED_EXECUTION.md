@@ -65,16 +65,40 @@ the generic `repair` path is L04-05 (#37) scope.
 
 ## Previews
 
-| Artifact | Schema | Contents |
-| --- | --- | --- |
-| Technical preview | `loop.technical-preview` | Structural/metadata diff only (`renderVisualDiff=false`) |
-| Visual preview | `loop.visual-preview` | Rendered page diffs only (structural comparison disabled) |
+| Artifact | Schema | Fidelity | Contents |
+| --- | --- | --- | --- |
+| Technical preview | `loop.technical-preview` | `exact` | Structural/metadata diff only (`renderVisualDiff=false`) |
+| Visual preview | `loop.visual-preview` | `simulated` | Rendered page diffs only (structural comparison disabled) |
 
-Both previews carry the same `plan_digest`, `source_sha256`, and `candidate_sha256`.
+Both previews carry the same `plan_digest`, `source_sha256`, and `candidate_sha256`, and
+each serializes its artifact-computation fidelity as `fidelity_mode`.
+
+`fidelity_mode` describes how faithfully the preview artifact was computed — it is not the
+interactive canvas render authority of `PreviewStateModel::Authority`
+(exact/approximate/authoritative, where `authoritative` means output-preview origin). A
+technical preview is `exact`: it structurally compares the serialized and reopened
+candidate bytes, so it reflects the real output. A visual preview is `simulated`: it is a
+rendered simulation and is never proof of print safety.
 
 Previews may materialize an isolated candidate for review. They have **no publication
 authority** (D2): they must not become an alternate path to a durable destination write.
 Only `pdf::publishGovernedArtifact()` publishes approved candidate bytes.
+
+A preview is bound to one exact plan. Both builders refuse an empty or malformed
+`planDigest`, and refuse a digest that does not equal
+`computeOperationPlanDigest(transaction.plans(), transaction.sourceSha256(), transaction.savePolicy())`.
+The refusal happens before any candidate write, so a mismatched plan cannot leave a
+preview artifact. The production caller (`PdfTool repair`) computes the digest from the
+same three inputs, so the binding does not change its behavior.
+
+### Preview residue contract
+
+A preview writes only to caller-named paths: the candidate path and, when requested, the
+render directory. On cancel or failure it removes what *that call* created — the candidate
+file it wrote, the render PNGs it rendered, and a parent directory it created via `mkpath`
+when it is now empty. A caller-named path is removed because the artifact was never
+approved or published. A completed preview leaves its candidate and renders for review;
+only cancellation, an incomplete comparison, or a hard failure removes them.
 
 ## Approval
 

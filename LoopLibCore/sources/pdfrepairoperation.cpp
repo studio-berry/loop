@@ -892,7 +892,8 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
 
 PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candidatePath,
                                                             PDFDocument* reopenedCandidate,
-                                                            QByteArray* candidateSha256)
+                                                            QByteArray* candidateSha256,
+                                                            const std::function<void(const QString& stage)>& stageHook)
 {
     m_artifactValidation = {};
     if (!m_hasCandidate)
@@ -938,7 +939,9 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         { return PDFOperationResult(true); },
         candidatePath,
         reopenedCandidate,
-        candidateSha256);
+        candidateSha256,
+        m_options.operationControl,
+        stageHook);
 }
 
 bool PDFRepairTransaction::postflightRequired() const
@@ -957,6 +960,15 @@ PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const
         result = mergePDFSavePolicies(result, entry.operation->savePolicy());
     }
     return result;
+}
+
+QString PDFRepairTransaction::sourceSha256() const
+{
+    if (!m_source)
+    {
+        return QString();
+    }
+    return QString::fromLatin1(m_source->getSourceDataHash().toHex()).toLower();
 }
 
 PDFOperationResult PDFRepairTransaction::refuseWeakenedSavePolicy() const
@@ -1032,10 +1044,29 @@ PDFOperationResult PDFRepairTransaction::compareCandidate(const QString& candida
                                                           PDFRepairDiffOptions options,
                                                           PDFRepairDiffReport* report)
 {
+    // The transaction's own control is authoritative: a caller that forgets to
+    // set it on the diff options must not make the preview cancel-blind.
+    if (m_options.operationControl)
+    {
+        options.operationControl = m_options.operationControl;
+    }
+
     PDFDocument reopenedCandidate;
-    const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate);
+    const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate, nullptr, options.previewStageHook);
     if (!serializeResult)
     {
+        if (report && PDFOperationControl::isOperationCancelled(m_options.operationControl))
+        {
+            // A cancelled serialization is an incomplete preview, not a hard
+            // failure: it carries the same Incomplete/"cancelled" status the
+            // render loop reports.
+            *report = PDFRepairDiffReport();
+            report->fidelity = options.fidelity;
+            report->status = PDFRepairDiffStatus::Incomplete;
+            report->incompleteReasons.append(QStringLiteral("cancelled"));
+            m_status = PDFRepairStatus::Incomplete;
+            return PDFOperationResult(true);
+        }
         return serializeResult;
     }
     options.expected = expectedChanges();
