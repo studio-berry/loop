@@ -115,6 +115,7 @@ private slots:
     void historyDatabaseUpgradeRecordsSchemaMigratedEvent();
     void governedPublicationAuditReconstructsAfterReopen();
     void governedPublicationAuditRefusesOnTamperedChain();
+    void governedPublicationAuditRejectsConflictingSignOff();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -1389,6 +1390,11 @@ void OperationHistoryTest::governedPublicationAuditReconstructsAfterReopen()
     QVERIFY2(reopened.open(&openError), qPrintable(openError));
     QVERIFY(reopened.verify().verified);
 
+    pdf::PDFOperationHistoryEvent preflight = reopened.events().last();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.resultSummary = QJsonObject();
+    QVERIFY(reopened.appendEvent(preflight));
+
     pdf::PDFGovernedPublicationAudit audit;
     const pdf::PDFOperationResult result = pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit);
     QVERIFY2(result, qPrintable(result.getErrorMessage()));
@@ -1486,6 +1492,33 @@ void OperationHistoryTest::governedPublicationAuditRefusesOnTamperedChain()
     QVERIFY(tamper(QStringLiteral("delete"),
                    QStringLiteral("DELETE FROM history_events WHERE sequence = 1"),
                    QStringLiteral("chain-")));
+}
+
+void OperationHistoryTest::governedPublicationAuditRejectsConflictingSignOff()
+{
+    for (const QString& field : { QStringLiteral("published_sha256"), QStringLiteral("candidate_sha256"),
+                                  QStringLiteral("source_sha256"), QStringLiteral("plan_digest"),
+                                  QStringLiteral("effective_profile_digest"), QStringLiteral("revalidation_report_sha256") })
+    {
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+        pdf::PDFArtifactStore artifacts(temporary.path());
+        QString published;
+        QVERIFY(appendGovernedPublicationFixture(databasePath, artifacts, &published, nullptr));
+        pdf::PDFOperationHistoryStore history(databasePath);
+        QVERIFY(history.open());
+        pdf::PDFOperationHistoryEvent event = history.events().last();
+        QJsonObject signOff = event.resultSummary.value(QStringLiteral("sign_off")).toObject();
+        signOff.insert(field, QString(64, QLatin1Char('9')));
+        event.resultSummary.insert(QStringLiteral("sign_off"), signOff);
+        QVERIFY(history.appendEvent(event));
+        QVERIFY(history.verify().verified);
+        pdf::PDFGovernedPublicationAudit audit;
+        QVERIFY(!pdf::reconstructGovernedPublicationAudit(history, published, &audit));
+        QVERIFY(!audit.reconstructed);
+        QCOMPARE(audit.refusal, QStringLiteral("sign-off-identity-mismatch"));
+    }
 }
 
 QTEST_MAIN(OperationHistoryTest)

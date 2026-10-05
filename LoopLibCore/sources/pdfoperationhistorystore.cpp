@@ -1242,7 +1242,9 @@ PDFOperationResult reconstructGovernedPublicationAudit(const PDFOperationHistory
     const PDFOperationHistoryEvent* accepted = nullptr;
     for (const PDFOperationHistoryEvent& event : events)
     {
-        if ((event.status != PDFOperationHistoryStatus::Accepted && event.status != PDFOperationHistoryStatus::RolledBack) || !event.output.has_value())
+        if ((event.status != PDFOperationHistoryStatus::Accepted && event.status != PDFOperationHistoryStatus::RolledBack) ||
+            !event.output.has_value() ||
+            (event.kind != PDFOperationHistoryEventKind::Operation && event.kind != PDFOperationHistoryEventKind::FixApplied))
         {
             continue;
         }
@@ -1342,6 +1344,27 @@ PDFOperationResult reconstructGovernedPublicationAudit(const PDFOperationHistory
             return PDFOperationResult(signOffError.isEmpty()
                                           ? QStringLiteral("The accepted event stored an invalid governed sign-off.")
                                           : signOffError);
+        }
+        const auto matches = [](const QString& stored, const QString& signedDigest)
+        {
+            return stored.isEmpty() || stored.compare(signedDigest, Qt::CaseInsensitive) == 0;
+        };
+        if (parsed.publishedSha256.compare(published, Qt::CaseInsensitive) != 0 ||
+            parsed.candidateSha256.compare(published, Qt::CaseInsensitive) != 0 ||
+            !matches(audit->planDigest, parsed.planDigest) ||
+            !matches(audit->sourceSha256, parsed.sourceSha256) ||
+            !matches(audit->inputArtifact.sha256, parsed.sourceSha256) ||
+            !matches(audit->candidateSha256, parsed.candidateSha256) ||
+            !matches(audit->effectiveProfileDigest, parsed.effectiveProfileDigest) ||
+            !matches(governedApproval.effectiveProfileDigest, parsed.effectiveProfileDigest) ||
+            !matches(revalidationJson.value(QStringLiteral("artifact_sha256")).toString(), parsed.publishedSha256) ||
+            !matches(revalidationJson.value(QStringLiteral("effective_profile_digest")).toString(), parsed.effectiveProfileDigest) ||
+            !matches(audit->reportArtifactSha256, parsed.revalidationReportSha256) ||
+            !matches(audit->revalidationReportSha256, parsed.revalidationReportSha256))
+        {
+            audit->reconstructed = false;
+            audit->refusal = QStringLiteral("sign-off-identity-mismatch");
+            return PDFOperationResult(QStringLiteral("The stored sign-off does not bind the publication's recorded identities."));
         }
         audit->signOff = parsed;
         if (audit->effectiveProfileDigest.isEmpty())

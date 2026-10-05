@@ -1,6 +1,10 @@
 format_version: 1
 kind: evidence
 claims:
+  - id: audit-publication-selection-and-signoff-binding
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - architecture:agent-policy:core
   - id: audit-reconstruction-reader
     evidence:
       - unit:UnitTests/tst_operationhistorytest.cpp
