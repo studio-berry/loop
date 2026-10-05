@@ -55,9 +55,12 @@ parameter is refused on the Action List planning path too. A repeated
 hides which value the operator meant.
 
 `PDFRepairTransactionOptions::expectedSourceSha256` binds a transaction to the source
-revision it was planned against; `analyze()` refuses a mismatch with "Repair plan is
-bound to a stale source revision." before any operation runs. An empty value keeps the
-historical behavior.
+revision it was planned against. Bound transactions require `sourcePath` to be
+readable without a password. Both `analyze()` and `apply()` reopen that source,
+verify its byte hash, and compare its parsed contents with the transaction source.
+A changed document retaining its original provenance hash or a changed source file
+is refused before candidate computation. Missing or unreadable source paths fail
+explicitly. An empty expected digest keeps the historical behavior.
 
 Migration decision: the legacy `pdftool addbleed` and `rgbtocmyk` commands remain
 registry-metadata consumers that bypass `PDFRepairTransaction`; converging them onto
@@ -96,8 +99,8 @@ same three inputs, so the binding does not change its behavior.
 A preview writes only to caller-named paths: the candidate path and, when requested, the
 render directory. On cancel or failure it removes what *that call* created — the candidate
 file it wrote, the render PNGs it rendered, and a parent directory it created via `mkpath`
-when it is now empty. A caller-named path is removed because the artifact was never
-approved or published. A completed preview leaves its candidate and renders for review;
+when it is now empty. Candidate removal requires a confirmed write by that preview;
+refused destinations and cancellation before serialization preserve existing files. A completed preview leaves its candidate and renders for review;
 only cancellation, an incomplete comparison, or a hard failure removes them.
 
 ## Approval
@@ -126,13 +129,13 @@ closed on short codes:
 - **expiry** — `PDFApprovalRecord.expiresUtc` (null = no declared expiry) is refused when
   it is at or before `PDFApprovalAuthorizationContext.evaluatedUtc` (`approval-expired`),
   and a declared expiry that cannot be evaluated is refused. `policy.requireExpiry`
-  additionally refuses an approval that declares no expiry.
+  additionally refuses an approval that declares no expiry. Malformed declared expiry values invalidate the parsed approval.
 - **waiver exclusion** — finding waivers and preflight decisions remain excluded.
 - **revocation** — an append-only `ApprovalRevoked` history event whose
   `approval.decisionReference` equals the approval's reference revokes it
   (`approval-revoked`). This mirrors certificate invalidation: one chain, no second
   registry. The resolver reads the chain through `PDFOperationHistoryStore::events()`
-  when a history store is in scope.
+  when a history store is in scope. An unavailable or compromised chain is refused as `approval-history`.
 - **profile binding** — when the caller supplies `expectedProfileDigest`, the approval's
   `effective_profile_digest` must equal it (`profile-binding`), so an approval taken
   against one effective profile cannot authorize a run under another.
@@ -177,10 +180,12 @@ Order of operations:
 3. **authorization** — `resolveApprovalAuthorization()` is the single decision point
    (`approval-unauthorized`, `approval-expired`, `approval-revoked`,
    `profile-binding`).
-4. **already-terminal replay** — with a history store in scope, an `Accepted`
-   `FixApplied` event whose published artifact SHA, approval decision reference, or
-   plan digest matches the request refuses with `already-terminal`. One plan produces
-   one published candidate.
+4. **already-terminal replay** � with a verified history store in scope, an `Accepted`
+   `FixApplied` event whose approval decision reference or plan digest matches the
+   request refuses with `already-terminal`. A supplied execution id is also refused
+   when its mutation history is terminal. Distinct plans may produce identical bytes.
+   Every accepted summary records the gateway receipt to preserve the plan identity.
+   History artifact identities must match the source and candidate before staging.
 5. **cancel check** — a cancelled control refuses with status `cancelled`.
 6. **stage** — the reviewed bytes are written to an isolated staging path beside the
    destination (or the caller's staged path is verified against them). The destination
@@ -191,7 +196,9 @@ Order of operations:
    and signed off (`finalizeGovernedPublication`). A failure removes the staging file
    and leaves the destination untouched (`revalidation-failed`).
 9. **`beforeCommit` seam + cancel check** — the test/qualification seam runs while the
-   destination is still untouched; a cancel here is `cancelled`.
+   destination is still untouched; a cancel here is `cancelled`. History integrity, replay, and
+   authorization are checked again at the current UTC time before the commit, so a
+   late revocation or expiry refuses publication.
 10. **atomic commit** — the reviewed bytes are committed through `PDFSafeFileWriter`
     under the requested overwrite policy (`destination-conflict` when `Fail` meets an
     existing file, otherwise `commit-failed`).
@@ -317,7 +324,11 @@ keeps its behavior. When a scope is supplied:
   only when the declared impact is complete and a baseline inspection is supplied.
   Undeclared, incomplete, or document-wide impact, and a missing baseline, fall back to
   a **full** run with the reason recorded (`impact-undeclared`, `impact-incomplete`,
-  `impact-document-wide`, `baseline-unavailable`).
+  `impact-document-wide`, `baseline-unavailable`). Check and evidence selection is
+  derived from the declared impact and the enabled profile checks, so a supplied plan
+  cannot independently omit an affected check. A reused baseline must be complete,
+  cover the enabled checks, and bind the same effective profile digest; missing or
+  mismatched profile identity selects a full run (`baseline-profile-mismatch`).
 - The finding delta between the baseline inspection and the published-bytes inspection
   is computed with `computeFindingDelta`, so a targeted run that omits a check carries
   its findings forward instead of falsely resolving them.

@@ -295,9 +295,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairTransactionOptions
     /// this path is refused; an empty value only disables that path check, not
     /// the policy check.
     QString sourcePath;
-    /// When set, analyze() refuses unless the source bytes hash to this
-    /// revision, before any operation runs. An empty value keeps the
-    /// historical behavior.
+    /// When set, analyze() and apply() require sourcePath to be readable without
+    /// a password, its bytes to hash to this revision, and its parsed contents
+    /// to match the source document. An empty value disables the revision check.
     QString expectedSourceSha256;
 };
 

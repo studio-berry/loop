@@ -44,6 +44,7 @@ claims:
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
 unresolved:
+  - Review fixes have source and syntax validation only; focused runtime tests require a configured build of the updated PR head
   - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
   - core:scripts/ci/check_independent_validation_gate.py
   - scripts/ci/check_independent_validation_gate.py runs only in the sealed holdout, not in this slice

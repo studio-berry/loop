@@ -133,6 +133,7 @@ private slots:
     void addBleedRefusesToWriteOverItsOwnInput();
     void rgbToCmykRefusesToWriteOverItsOwnInput();
     void repairRefusesToWriteOverItsOwnInput();
+    void actionListBatchReportsRefusedOutputAsFailed();
     void repairRefusesRepeatedParameterAssignment();
     void repairRefusesStaleApprovalBeforeWrite();
     void repairPublicationBindsCompleteEventIdentities();
@@ -1029,6 +1030,48 @@ void PdfToolContractTest::repairRefusesStaleApprovalBeforeWrite()
              QStringLiteral("approval-stale"));
     QVERIFY(refused.json.value(QStringLiteral("outputs")).toArray().isEmpty());
     QVERIFY(!QFile::exists(outputPath));
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+}
+
+void PdfToolContractTest::actionListBatchReportsRefusedOutputAsFailed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString recipePath = directory.filePath(QStringLiteral("recipe.json"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    const QJsonObject recipe{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+        { QStringLiteral("id"), QStringLiteral("batch-save-refusal") },
+        { QStringLiteral("name"), QStringLiteral("Batch save refusal") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("bleed") },
+                                       { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } }
+    };
+    QFile recipeFile(recipePath);
+    QVERIFY(recipeFile.open(QIODevice::WriteOnly));
+    const QByteArray recipeBytes = QJsonDocument(recipe).toJson();
+    QCOMPARE(recipeFile.write(recipeBytes), qint64(recipeBytes.size()));
+    recipeFile.close();
+
+    const ToolRun refused = runPdfTool({ QStringLiteral("action-list"), QStringLiteral("batch"), recipePath, inputPath,
+                                         QStringLiteral("--output-dir"), directory.path(),
+                                         QStringLiteral("--profile"), profilePath,
+                                         QStringLiteral("--overwrite"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json") });
+    verifyEnvelope(refused, 4, QStringLiteral("action-list"));
+    QVERIFY(!findDiagnostic(refused, QStringLiteral("save-policy.refused")).isEmpty());
+    const QJsonArray items = refused.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("items")).toArray();
+    QCOMPARE(items.size(), 1);
+    const QJsonObject item = items.first().toObject();
+    QCOMPARE(item.value(QStringLiteral("status")).toString(), QStringLiteral("failed"));
+    QVERIFY(item.value(QStringLiteral("error")).toString().contains(QStringLiteral("save policy")));
     QCOMPARE(fileDigest(inputPath), inputDigest);
 }
 

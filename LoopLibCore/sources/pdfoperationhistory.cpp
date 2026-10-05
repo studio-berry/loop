@@ -225,7 +225,14 @@ PDFApprovalRecord PDFApprovalRecord::fromJson(const QJsonObject& object)
     approval.evidenceSha256 = object.value(QStringLiteral("evidenceSha256")).toString().toLower();
     approval.decisionReference = object.value(QStringLiteral("decisionReference")).toString();
     approval.decidedUtc = dateTimeFromString(object.value(QStringLiteral("decidedUtc")).toString());
-    approval.expiresUtc = dateTimeFromString(object.value(QStringLiteral("expiresUtc")).toString());
+    const QJsonValue expiry = object.value(QStringLiteral("expiresUtc"));
+    approval.expiresUtc = dateTimeFromString(expiry.toString());
+    if (!expiry.isUndefined() && !expiry.isNull() &&
+        (!expiry.isString() || (!expiry.toString().isEmpty() && !approval.expiresUtc.isValid())))
+    {
+        // A malformed declared expiry must not become an unbounded approval.
+        approval.decidedUtc = QDateTime();
+    }
     return approval;
 }
 
