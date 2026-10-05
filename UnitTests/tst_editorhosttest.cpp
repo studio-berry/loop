@@ -254,6 +254,7 @@ private slots:
     // Workspace surfaces (#586).
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
+    void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
     void fixRollbackReturnsToARecordedRevision();
 };
@@ -1073,6 +1074,80 @@ void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
     QVERIFY(!host.approveActionListPlan());
     QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("planIsCurrent")).toBool(), false);
     QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
+}
+
+void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
+{
+    const QString commandId = QStringLiteral("actionMoveSelection");
+    const auto moveParameters = [](const QString& kind, double dx, double dy)
+    {
+        return QVariantMap{ { QStringLiteral("targetKind"), kind },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), dx },
+                            { QStringLiteral("dy"), dy } };
+    };
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("move.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("issue-104-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("issue-104-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Move a page box") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("move") },
+                                             { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                            { QStringLiteral("page_index"), 0 },
+                                                            { QStringLiteral("dx"), 1 },
+                                                            { QStringLiteral("dy"), 1 } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    QVERIFY(!host.isCommandEnabled(commandId));
+    QCOMPARE(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)), quint64(0));
+
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.isCommandEnabled(commandId));
+
+    // Only a page box is a document edit, and a zero move is not one.
+    host.setWorkspace(EditorHost::Document);
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("Finding"), 4.0, 5.0)) != 0);
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 0.0, 0.0)) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Document);
+
+    QVERIFY(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Fix);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
+    QCOMPARE(host.actionListBindings().size(), 4);
+    for (const QVariant& binding : host.actionListBindings())
+    {
+        const QVariantMap entry = binding.toMap();
+        if (entry.value(QStringLiteral("name")).toString() == QStringLiteral("dx"))
+        {
+            QCOMPARE(entry.value(QStringLiteral("value")).toDouble(), 4.0);
+        }
+    }
 }
 
 void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity()

@@ -63,6 +63,7 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionFindNext",
         "actionFindPrevious",
         "actionFullscreenMode",
+        "actionMoveSelection",
         "actionPageLayoutContinuous",
         "actionPageLayoutSinglePage",
         "actionPageLayoutTwoColumns",
