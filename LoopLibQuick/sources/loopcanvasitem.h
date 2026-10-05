@@ -139,7 +139,9 @@ public:
     int blockCount() const;
 
     QString activeTool() const;
-    void setActiveTool(const QString& toolId);
+    /// Parses a tool name (issue #103) and returns false for a name outside the
+    /// vocabulary, leaving the current tool in place.
+    bool setActiveTool(const QString& toolId);
 
     bool isTraceOverlayVisible() const noexcept { return m_traceOverlayVisible; }
     void setTraceOverlayVisible(bool visible);

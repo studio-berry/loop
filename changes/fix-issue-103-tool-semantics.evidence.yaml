@@ -1,0 +1,8 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: issue-103-tool-vocabulary-and-pointer-semantics
+    evidence:
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+unresolved: []

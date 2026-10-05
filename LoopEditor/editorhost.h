@@ -96,6 +96,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool cancelled READ cancelled NOTIFY presentationChanged)
     Q_PROPERTY(bool unsupported READ unsupported NOTIFY presentationChanged)
     Q_PROPERTY(int commandEpoch READ commandEpoch NOTIFY commandEpochChanged)
+    /// The active tool id (issue #103). One of the vocabulary names in
+    /// docs/INTERACTION_CONTRACT.md; the toolbar binds to it as a single-select.
+    Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(QObject* preflight READ preflight CONSTANT)
     Q_PROPERTY(QObject* actionList READ actionList CONSTANT)
     Q_PROPERTY(QObject* inspector READ inspector CONSTANT)
@@ -196,6 +199,8 @@ public:
     bool incomplete() const;
     bool cancelled() const;
     bool unsupported() const;
+    /// The operator's active tool as a vocabulary name (issue #103).
+    QString activeTool() const;
     int commandEpoch() const noexcept { return m_commandEpoch; }
 
     QObject* preflight();
@@ -406,6 +411,12 @@ public:
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();
 
+    /// Selects the active tool by vocabulary name (issue #103). Parses once at
+    /// this boundary and returns false for a name outside the vocabulary,
+    /// leaving the active tool unchanged. The interaction controller cancels an
+    /// in-flight drag with ToolChanged (#141 AC3).
+    Q_INVOKABLE bool setActiveTool(const QString& toolId);
+
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
     Q_INVOKABLE quint64 invokeCommand(const QString& commandId, const QVariantMap& parameters = {});
@@ -441,6 +452,7 @@ public:
 signals:
     void presentationChanged();
     void commandEpochChanged();
+    void activeToolChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
     void preflightProfilesChanged();
     void preflightProfileDraftChanged();
@@ -459,6 +471,7 @@ private:
     void registerShellHandlers();
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
+    bool requestMoveSelection(const QVariantMap& parameters);
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();

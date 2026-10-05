@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 193,
   "source_ui": "LoopEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
-  "expected_action_count": 107,
+  "expected_action_count": 108,
   "actions": [
     {
       "id": "actionAbout",
@@ -863,6 +863,45 @@
         "availability": "declared"
       },
       "menu_group": "Advanced"
+    },
+    {
+      "id": "actionMoveSelection",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionMoveSelection.label",
+        "parameters": [
+          {
+            "name": "targetKind",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "targetId",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "dx",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "dy",
+            "type": "number",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Edit"
     },
     {
       "id": "actionOpen",
