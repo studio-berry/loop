@@ -6,7 +6,12 @@
 #include "inspectormodel.h"
 #include "loopcanvasitem.h"
 #include "operatoracceptancehelpers.h"
+#include "pdfactionlist.h"
 #include "pdfartifactidentity.h"
+#include "pdfdocumentmanipulator.h"
+#include "pdfdocumentreader.h"
+#include "pdfgovernedexecution.h"
+#include "pdfpagemasterexport.h"
 #include "pdfpreflightverdict.h"
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
@@ -319,6 +324,135 @@ QString writeBleedRecipe(const QString& directory)
     return recipePath;
 }
 
+QString governedParityDirectory()
+{
+    return QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) + QStringLiteral("/testdata/governed-parity");
+}
+
+pdf::PDFDocument readGovernedFixture(const QString& path)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    return reader.readFromFile(path);
+}
+
+pdf::PDFArtifactIdentity identityForFile(const QString& path)
+{
+    pdf::PDFArtifactIdentity identity;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return identity;
+    }
+    const QByteArray bytes = file.readAll();
+    identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    identity.size = bytes.size();
+    identity.mediaType = QStringLiteral("application/pdf");
+    identity.logicalName = QFileInfo(path).fileName();
+    return identity;
+}
+
+/// The governed triple every surface publishes, normalized to the shape
+/// scripts/ci/check_governed_parity.py discovers.
+QJsonObject governedTriple(const QJsonObject& source)
+{
+    return QJsonObject{
+        { QStringLiteral("approval"), source.value(QStringLiteral("approval")) },
+        { QStringLiteral("revalidation"), source.value(QStringLiteral("revalidation")) },
+        { QStringLiteral("sign_off"), source.value(QStringLiteral("sign_off")) }
+    };
+}
+
+/// The checker's rules (scripts/ci/check_governed_parity.py) applied in-process:
+/// a self-consistent signed-off identity chain, verified bytes, and a passing
+/// verdict. Returns false and fills `why` on the first violation.
+bool governedRecordIsCheckerValid(const QJsonObject& governed, QString* why)
+{
+    const auto fail = [why](const QString& reason)
+    {
+        if (why)
+        {
+            *why = reason;
+        }
+        return false;
+    };
+    const QJsonObject approval = governed.value(QStringLiteral("approval")).toObject();
+    const QJsonObject revalidation = governed.value(QStringLiteral("revalidation")).toObject();
+    const QJsonObject signOff = governed.value(QStringLiteral("sign_off")).toObject();
+    if (approval.isEmpty() || revalidation.isEmpty() || signOff.isEmpty())
+    {
+        return fail(QStringLiteral("governed triple is incomplete"));
+    }
+    for (const QString& field : { QStringLiteral("plan_digest"), QStringLiteral("source_sha256"), QStringLiteral("candidate_sha256") })
+    {
+        if (!pdf::isPDFSha256(approval.value(field).toString()))
+        {
+            return fail(QStringLiteral("approval.%1 is not a digest").arg(field));
+        }
+    }
+    if (revalidation.value(QStringLiteral("bytes_verified")).toBool() != true)
+    {
+        return fail(QStringLiteral("revalidation.bytes_verified is not true"));
+    }
+    if (revalidation.value(QStringLiteral("sign_off_eligible")).toBool() != true)
+    {
+        return fail(QStringLiteral("revalidation.sign_off_eligible is not true"));
+    }
+    if (revalidation.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString() != QStringLiteral("pass"))
+    {
+        return fail(QStringLiteral("revalidation.verdict.state is not pass"));
+    }
+    for (const QString& field : { QStringLiteral("plan_digest"), QStringLiteral("source_sha256"), QStringLiteral("candidate_sha256"),
+                                  QStringLiteral("published_sha256"), QStringLiteral("revalidation_report_sha256"),
+                                  QStringLiteral("effective_profile_digest") })
+    {
+        if (!pdf::isPDFSha256(signOff.value(field).toString()))
+        {
+            return fail(QStringLiteral("sign_off.%1 is not a digest").arg(field));
+        }
+    }
+    if (signOff.value(QStringLiteral("published_sha256")).toString() != revalidation.value(QStringLiteral("artifact_sha256")).toString())
+    {
+        return fail(QStringLiteral("sign_off.published_sha256 does not match revalidation.artifact_sha256"));
+    }
+    if (signOff.value(QStringLiteral("revalidation_report_sha256")).toString() != revalidation.value(QStringLiteral("report_sha256")).toString())
+    {
+        return fail(QStringLiteral("sign_off.revalidation_report_sha256 does not match revalidation.report_sha256"));
+    }
+    if (signOff.value(QStringLiteral("effective_profile_digest")).toString() != revalidation.value(QStringLiteral("effective_profile_digest")).toString())
+    {
+        return fail(QStringLiteral("sign_off.effective_profile_digest does not match revalidation"));
+    }
+    const QJsonObject signOffApproval = signOff.value(QStringLiteral("approval")).toObject();
+    if (signOffApproval.value(QStringLiteral("decision")).toString() != QStringLiteral("approve") ||
+        signOffApproval.value(QStringLiteral("actorId")).toString().isEmpty() ||
+        signOffApproval.value(QStringLiteral("policyId")).toString().isEmpty())
+    {
+        return fail(QStringLiteral("sign_off.approval is not a complete approve certificate"));
+    }
+    return true;
+}
+
+/// Regenerates the committed cross-surface fixture from real surface output when
+/// LOOP_GOVERNED_PARITY_OUT is set. Unset (CI, normal runs) is a no-op.
+void captureGovernedRecords(const QMap<QString, QJsonObject>& records)
+{
+    const QString directory = qEnvironmentVariable("LOOP_GOVERNED_PARITY_OUT").trimmed();
+    if (directory.isEmpty())
+    {
+        return;
+    }
+    QDir().mkpath(directory);
+    for (auto it = records.cbegin(); it != records.cend(); ++it)
+    {
+        QFile file(QDir(directory).filePath(it.key() + QStringLiteral("-receipt.json")));
+        if (file.open(QIODevice::WriteOnly))
+        {
+            file.write(QJsonDocument(QJsonObject{ { QStringLiteral("governed"), it.value() } }).toJson(QJsonDocument::Indented));
+        }
+    }
+}
+
 }   // namespace
 
 class ProductOperatorLoopTest final : public QObject
@@ -340,6 +474,7 @@ private slots:
     void canvasBindingClearsWhenTheDocumentCloses();
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
+    void governedPublicationParityAcrossSurfaces();
     void compareReviewGoldenFixtureMatchesCoreFindingDelta();
     void compareWorkspaceBlocksAStaleComparison();
     void compareWorkspaceNavigatesMaterialDeltasAfterARun();
@@ -958,6 +1093,167 @@ void ProductOperatorLoopTest::adapterParityOverOneInspectionReceipt()
     QCOMPARE(identity, receiptJson.value(QStringLiteral("identity")).toString());
     trace.note(QStringLiteral("receipt-identity"), identity);
     trace.complete();
+}
+
+void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
+{
+    // Issue #40 / D5: one fixture and one equivalent plan reach every governed
+    // surface. Every surface publishes a receipt the parity checker accepts, and
+    // the source/profile identity is shared. Plan-digest equality is asserted
+    // within the action-list envelope family (CLI action-list and Editor), which
+    // is the family the surfaces actually share; repair and PageMaster publish
+    // different plan envelopes by design (ADR-011).
+    const QString fixture = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QString profile = operatoracceptance::defaultProfilePath();
+    const QString recipePath = governedParityDirectory() + QStringLiteral("/action-list-recipe.json");
+    QVERIFY2(QFileInfo::exists(fixture), fixture.toUtf8().constData());
+    QVERIFY2(QFileInfo::exists(profile), profile.toUtf8().constData());
+    QVERIFY2(QFileInfo::exists(recipePath), recipePath.toUtf8().constData());
+
+    const QString sourceSha = pdf::PDFRunIdentity::digestFile(fixture);
+    QVERIFY(pdf::isPDFSha256(sourceSha));
+
+    QJsonObject recipeObject;
+    QVERIFY(readJsonObject(recipePath, &recipeObject));
+    pdf::PDFActionList actionList;
+    const pdf::PDFOperationResult parsed = pdf::PDFActionList::fromJson(recipeObject, &actionList);
+    QVERIFY2(parsed, qPrintable(parsed.getErrorMessage()));
+
+    QTemporaryDir outputDirectory;
+    QVERIFY(outputDirectory.isValid());
+
+    QMap<QString, QJsonObject> records;
+
+    // 1. CLI repair: the operation-plan envelope.
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("repair.pdf"));
+        const QString report = outputDirectory.filePath(QStringLiteral("repair-report.json"));
+        QByteArray out;
+        QByteArray err;
+        int code = -1;
+        QVERIFY(operatoracceptance::runPdfTool(pdfToolPath(), repairArguments(fixture, output, report, false, profile), &out, &err, &code));
+        QVERIFY2(code == 0, qPrintable(QString::fromUtf8(err)));
+        QJsonObject reportJson;
+        QVERIFY(readJsonObject(report, &reportJson));
+        records.insert(QStringLiteral("repair"), governedTriple(reportJson));
+    }
+
+    // 2. CLI action-list run: the action-list envelope.
+    QJsonObject actionListGoverned;
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("action-list.pdf"));
+        QByteArray out;
+        QByteArray err;
+        int code = -1;
+        QVERIFY(operatoracceptance::runPdfTool(pdfToolPath(),
+                                               { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, fixture,
+                                                 QStringLiteral("--output"), output,
+                                                 QStringLiteral("--profile"), profile,
+                                                 QStringLiteral("--console-format"), QStringLiteral("json") },
+                                               &out, &err, &code));
+        QVERIFY2(code == 0, qPrintable(QString::fromUtf8(err)));
+        const QJsonObject envelope = QJsonDocument::fromJson(out).object();
+        actionListGoverned = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("governed")).toObject();
+        records.insert(QStringLiteral("action-list"), governedTriple(actionListGoverned));
+    }
+
+    // 3. Editor Action List worker: the same action-list envelope, published by
+    //    the one gateway the Editor route calls.
+    QJsonObject editorGoverned;
+    {
+        EditorHost host;
+        QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+        host.openFileUrl(QUrl::fromLocalFile(fixture));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+        QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+        QVERIFY(host.validateActionListRecipe());
+        QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+        QVERIFY(host.planActionList());
+        QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+        QVERIFY(host.approveActionListPlan());
+        QVERIFY(host.executeApprovedActionListPlan());
+        QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 120000);
+        const QVariantMap signOff = host.fixSignOff();
+        editorGoverned = QJsonObject::fromVariantMap(signOff.value(QStringLiteral("governed")).toMap());
+        records.insert(QStringLiteral("editor"), governedTriple(editorGoverned));
+    }
+
+    // 4. PageMaster export with the same action list and preflight gate.
+    QJsonObject pageMasterManifest;
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("pagemaster.pdf"));
+        const QString manifestPath = outputDirectory.filePath(QStringLiteral("pagemaster-manifest.json"));
+        pdf::PDFDocument source = readGovernedFixture(fixture);
+        QVERIFY(source.getCatalog() != nullptr);
+        const pdf::PDFPage* page = source.getCatalog()->getPage(0);
+        QVERIFY(page != nullptr);
+        const QRectF mediaBox = page->getMediaBox();
+        const QSizeF sizeMM(mediaBox.width() * pdf::PDF_POINT_TO_MM, mediaBox.height() * pdf::PDF_POINT_TO_MM);
+
+        pdf::PDFPageMasterExportJob job;
+        job.assembledDocuments.push_back({ pdf::PDFDocumentManipulator::createDocumentPage(0, 0, sizeMM, pdf::PageRotation::None) });
+        job.documents.emplace(0, std::move(source));
+        job.documentSourceIdentities.emplace(0, identityForFile(fixture));
+        job.outputFileNames.push_back(output);
+        job.overwriteFiles = true;
+        job.hasPreflightGate = true;
+        job.preflightProfilePath = profile;
+        job.forcePreflight = true;
+        job.hasActionList = true;
+        job.actionList = actionList;
+        job.manifestPath = manifestPath;
+
+        const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+        QVERIFY2(result.success, qPrintable(result.errorMessage));
+        pageMasterManifest = result.manifest;
+        const QJsonObject outputEntry = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+        records.insert(QStringLiteral("pagemaster"), governedTriple(outputEntry.value(QStringLiteral("governed")).toObject()));
+        // PageMaster publishes the action-list result alongside its governed block.
+        QVERIFY(!outputEntry.value(QStringLiteral("action_list_result")).toObject().isEmpty());
+    }
+
+    // Every surface must pass the checker's rules, and the committed fixture is
+    // regenerated from real surface output when a capture path is set.
+    for (auto it = records.cbegin(); it != records.cend(); ++it)
+    {
+        QString why;
+        QVERIFY2(governedRecordIsCheckerValid(it.value(), &why),
+                 qPrintable(QStringLiteral("%1: %2").arg(it.key(), why)));
+    }
+    captureGovernedRecords(records);
+
+    // Source identity: repair, action-list, and Editor bind the exact fixture
+    // digest. PageMaster publishes a derived source-identity-list digest, so the
+    // same source is asserted through its manifest's document identity.
+    for (const QString& surface : { QStringLiteral("repair"), QStringLiteral("action-list"), QStringLiteral("editor") })
+    {
+        QCOMPARE(records.value(surface).value(QStringLiteral("approval")).toObject().value(QStringLiteral("source_sha256")).toString(), sourceSha);
+    }
+    const QJsonObject documentIdentities =
+        pageMasterManifest.value(QStringLiteral("source_identities")).toObject().value(QStringLiteral("documents")).toArray().first().toObject();
+    QCOMPARE(documentIdentities.value(QStringLiteral("identity")).toObject().value(QStringLiteral("sha256")).toString(), sourceSha);
+
+    // Effective profile identity: the surfaces that revalidate the raw profile
+    // agree. PageMaster resolves a contextual profile, so its effective digest is
+    // its own resolved-profile digest (kept self-consistent by the checker pass).
+    const QString profileDigest = records.value(QStringLiteral("repair"))
+                                      .value(QStringLiteral("revalidation"))
+                                      .toObject()
+                                      .value(QStringLiteral("effective_profile_digest"))
+                                      .toString();
+    QVERIFY(pdf::isPDFSha256(profileDigest));
+    for (const QString& surface : { QStringLiteral("action-list"), QStringLiteral("editor") })
+    {
+        QCOMPARE(records.value(surface).value(QStringLiteral("revalidation")).toObject().value(QStringLiteral("effective_profile_digest")).toString(), profileDigest);
+    }
+    QVERIFY(pdf::isPDFSha256(records.value(QStringLiteral("pagemaster")).value(QStringLiteral("revalidation")).toObject().value(QStringLiteral("effective_profile_digest")).toString()));
+
+    // The action-list plan digest is shared across the action-list envelope family
+    // (CLI action-list and Editor), which is the family the surfaces share.
+    const QString actionListPlan = actionListGoverned.value(QStringLiteral("approval")).toObject().value(QStringLiteral("plan_digest")).toString();
+    const QString editorPlan = editorGoverned.value(QStringLiteral("approval")).toObject().value(QStringLiteral("plan_digest")).toString();
+    QVERIFY(pdf::isPDFSha256(actionListPlan));
+    QCOMPARE(editorPlan, actionListPlan);
 }
 
 void ProductOperatorLoopTest::compareReviewGoldenFixtureMatchesCoreFindingDelta()
