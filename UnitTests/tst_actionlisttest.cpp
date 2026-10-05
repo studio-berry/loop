@@ -23,6 +23,7 @@
 #include "actionlistrunsubmitter.h"
 #include "actionlistcontroller.h"
 #include "pdfactionlist.h"
+#include "independentvalidatorfixture.h"
 #include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
@@ -155,6 +156,8 @@ class ActionListTest : public QObject
 
 private slots:
     void parsesAndRoundTripsRecipe();
+    void standardsContractRequiresMigration();
+    void standardsRequirementSurvivesLaterSteps();
     void rejectsUnknownOperationAndWrongParameterType();
     void dryRunDoesNotMutateSource();
     void executesRegisteredOperationOnCandidate();
@@ -176,6 +179,64 @@ private slots:
     void rejectsNonObjectSelectValue();
     void rejectsMalformedStepInput();
 };
+
+void ActionListTest::standardsContractRequiresMigration()
+{
+    pdf::PDFActionList recipe;
+    recipe.id = QStringLiteral("legacy");
+    recipe.name = recipe.id;
+    pdf::PDFActionListStep step;
+    step.id = QStringLiteral("convert");
+    step.operationId = QStringLiteral("standards-convert");
+    step.parameters.insert(QStringLiteral("target"), QStringLiteral("pdfa-2b"));
+    recipe.steps.append(step);
+    QStringList errors;
+    QVERIFY(!pdf::PDFActionListExecutor().validate(recipe, {}, &errors));
+    QVERIFY(errors.join(QLatin1Char(' ')).contains(QLatin1String("migrate")));
+}
+
+void ActionListTest::standardsRequirementSurvivesLaterSteps()
+{
+    QTemporaryDir directory;
+    const auto settings = independent_test::settings(independent_test::writeVeraPdfScript(directory, QStringLiteral("false"), QStringLiteral("PDF/A-2B validation profile"), false));
+    QVERIFY(!settings.outputIntentIccData.isEmpty());
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const auto source = builder.build();
+    pdf::PDFActionList recipe;
+    recipe.id = QStringLiteral("convert-then-edit");
+    recipe.name = recipe.id;
+    pdf::PDFActionListStep convert;
+    convert.id = QStringLiteral("convert");
+    convert.operationId = QStringLiteral("standards-convert");
+    convert.parameters = independent_test::parameters(settings);
+    recipe.steps.append(convert);
+    pdf::PDFActionListStep bleed;
+    bleed.id = QStringLiteral("later-edit");
+    bleed.operationId = QStringLiteral("add-bleed");
+    bleed.parameters = QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } };
+    recipe.steps.append(bleed);
+    pdf::PDFActionListExecutionOptions options;
+    options.requirePostflight = false;
+    pdf::PDFDocument candidate;
+    pdf::PDFActionListExecutionResult execution;
+    const auto executed = pdf::PDFActionListExecutor().execute(recipe, source, options, &candidate, &execution);
+    QVERIFY2(executed, qPrintable(executed.getErrorMessage()));
+    QCOMPARE(execution.standardValidationRequirements.size(), 1);
+    QCOMPARE(execution.steps.size(), 2);
+    QVERIFY(candidate.getCatalog()->getPage(0)->getMediaBox().width() > 100.0);
+    const QString path = directory.filePath(QStringLiteral("output.pdf"));
+    QFile existing(path);
+    QVERIFY(existing.open(QIODevice::WriteOnly));
+    existing.write("existing destination");
+    existing.close();
+    QVERIFY(!pdf::PDFStandardConversion::writeCandidate(candidate, path, execution.standardValidationRequirements,
+                                                        nullptr, nullptr, &execution.independentValidation));
+    QCOMPARE(execution.independentValidation.size(), 1);
+    QVERIFY(existing.open(QIODevice::ReadOnly));
+    QCOMPARE(existing.readAll(), QByteArrayLiteral("existing destination"));
+    QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
 
 void ActionListTest::parsesAndRoundTripsRecipe()
 {

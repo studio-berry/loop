@@ -31,7 +31,10 @@ changes which pages are wanted, not what a wanted page should look like, and can
 in-flight renders on every pointer delta is exactly what it forbids.
 
 Commit is not this layer's. A completed drag is emitted as a `DragSession`; the owner routes
-it through P4-S2's `CommandCatalog`, which stays the only mutation path.
+it through P4-S2's `CommandCatalog`, which stays the only mutation path. The
+completed session carries the `RevisionFencedToken` it completed against
+(`DragSession::fence`) so the owner can re-check it before invoking. For a page
+box the command is `actionMoveSelection` (ADR-012).
 
 ## Input intents
 
@@ -75,6 +78,26 @@ is dropped rather than rebased, because rebasing a transform onto a revision the
 saw is a silent edit. `PointerAction::Leave` clears hover and deliberately does **not** end a
 drag — a gesture that dies at the edge of the view dies every time someone drags to the
 border.
+
+### Tools (issue #103)
+
+A tool is what a left-button gesture means. The vocabulary is closed and lives in
+`interactionstate.h` as `InteractionTool`:
+
+| Tool id | Left-button press |
+| --- | --- |
+| `select` | Selects the target under the pointer; a second press on the selection begins a drag. The default, and the behavior every gesture had before the vocabulary existed. |
+| `hand` | Begins an `InteractionKind::Pan`. Never selects, retargets or starts a transform. |
+
+A host parses a tool name into `InteractionTool` once, at its own boundary. A name outside
+the vocabulary is refused there — `interactionToolFromName()` returns nothing — so no
+free-form string reaches the pointer path and an unknown tool is never coerced into a
+default. The configured pan button (`m_panButton`, middle mouse by default) still pans in
+every tool, so Select keeps a middle-drag pan.
+
+Changing the tool calls `cancelActive(InteractionCancelReason::ToolChanged)` (issue #141 AC3),
+so a tool change mid-drag drops the gesture and commits nothing. Setting the tool that is
+already active is not a change and cancels nothing.
 
 ## Hit testing
 
@@ -300,7 +323,8 @@ wired up.
   See [QUICK_CANVAS_CONTRACT.md](QUICK_CANVAS_CONTRACT.md).
 - Text and annotation hit-test sources. `IHitTestSource` is the seam they will implement.
 - Marquee and tool gestures beyond the state they occupy in `InteractionKind`. P4-S9 and
-  P4-S11 decide which tools survive into the Quick product.
+  P4-S11 decide which further tools survive into the Quick product; the Select and Hand
+  vocabulary above is the first pair, with its pointer semantics in the controller.
 - Keyboard *commands*. Escape, arrows and PageUp/PageDown are viewport presentation and live
   here; everything else is a command id and belongs to the catalog, not to a shortcut table
   in this layer.

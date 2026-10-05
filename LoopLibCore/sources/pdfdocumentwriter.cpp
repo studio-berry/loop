@@ -147,6 +147,8 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
     PDFVersion version = document->getInfo()->version;
     device->write(QString("%PDF-%1.%2").arg(version.major).arg(version.minor).toLatin1());
     writeCRLF(device);
+    device->write("%\xE2\xE3\xCF\xD3");
+    writeCRLF(device);
     device->write("% PDF producer: ");
     device->write(PDF_LIBRARY_NAME);
     writeCRLF(device);
@@ -610,6 +612,7 @@ void PDFDocumentWriter::writeObjectHeader(QIODevice* device, PDFObjectReference 
 
 void PDFDocumentWriter::writeObjectFooter(QIODevice* device)
 {
+    writeCRLF(device);
     device->write("endobj");
     writeCRLF(device);
 }

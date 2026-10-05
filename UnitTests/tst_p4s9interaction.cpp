@@ -79,6 +79,9 @@ void P4S9InteractionTest::inspectorProjectsReportBackedSectionsAndBudgetStatus()
     findings.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { finding }, {});
 
     pdf::PreflightResult report;
+    report.profileName = QStringLiteral("Region fixture");
+    report.effectiveProfileDigest = QStringLiteral("effective-profile-1");
+    report.coverageScope = { { QStringLiteral("pages"), QStringLiteral("selected") } };
     pdf::PreflightCheckStatus status;
     status.id = finding.checkId;
     status.status = QStringLiteral("incomplete");
@@ -113,6 +116,11 @@ void P4S9InteractionTest::inspectorProjectsReportBackedSectionsAndBudgetStatus()
     };
 
     QCOMPARE(propertyValue(QStringLiteral("object")), QStringLiteral("image-42"));
+    QCOMPARE(propertyValue(QStringLiteral("document-revision")), QStringLiteral("rev-1"));
+    QCOMPARE(propertyValue(QStringLiteral("profile-name")), report.profileName);
+    QCOMPARE(propertyValue(QStringLiteral("profile-digest")), report.effectiveProfileDigest);
+    QVERIFY(propertyValue(QStringLiteral("coverage-scope")).contains(QStringLiteral("selected")));
+    QCOMPARE(propertyValue(QStringLiteral("targeting")), QStringLiteral("Page region available from the report; no object target."));
     QCOMPARE(propertyValue(QStringLiteral("bounds")), QStringLiteral("1,2 3x4"));
     QCOMPARE(propertyValue(QStringLiteral("evidence.effective_dpi")), QStringLiteral("180"));
     QCOMPARE(propertyValue(QStringLiteral("object-context.resource_name")), QStringLiteral("Im42"));

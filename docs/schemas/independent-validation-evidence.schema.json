@@ -2,78 +2,572 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loop.studio-berry.dev/schemas/independent-validation-evidence.schema.json",
   "title": "Loop independent validation evidence",
-  "type": "object",
-  "required": ["schema", "schema_version", "status", "input", "validators", "platform"],
-  "properties": {
-    "schema": { "const": "loop.independent-validation-evidence" },
-    "schema_version": { "const": 1 },
-    "candidate_sha": { "type": "string", "minLength": 7 },
-    "status": { "enum": ["passed", "rejected", "incomplete"] },
-    "input": {
-      "type": "object",
-      "required": ["path", "bytes", "sha256"],
-      "properties": {
-        "path": { "type": "string" },
-        "bytes": { "type": "integer", "minimum": 1 },
-        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-      },
-      "additionalProperties": false
+  "oneOf": [
+    {
+      "$ref": "#/$defs/historical_v1"
     },
-    "validators": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["claim", "program", "status"],
-        "properties": {
-          "claim": { "enum": ["structural", "signature", "standards"] },
-          "program": { "type": "string" },
-          "program_path": { "type": ["string", "null"] },
-          "configured_arguments": { "type": "array", "items": { "type": "string" } },
-          "arguments": { "type": "array", "items": { "type": "string" } },
-          "version": { "type": ["string", "null"] },
-          "status": { "enum": ["passed", "rejected", "incomplete"] },
-          "reason_code": { "type": "string" },
-          "duration_ms": { "type": "integer", "minimum": 0 },
-          "exit_code": { "type": "integer" },
-          "timed_out": { "type": "boolean" },
-          "stdout": { "type": "string" },
-          "stderr": { "type": "string" },
-          "error": { "type": "string" }
+    {
+      "$ref": "#/$defs/qualified_v2"
+    }
+  ],
+  "$defs": {
+    "historical_v1": {
+      "title": "Loop independent validation evidence",
+      "type": "object",
+      "required": [
+        "schema",
+        "schema_version",
+        "status",
+        "input",
+        "validators",
+        "platform"
+      ],
+      "properties": {
+        "schema": {
+          "const": "loop.independent-validation-evidence"
         },
-        "additionalProperties": false
-      }
-    },
-    "bundle": {
-      "description": "Third-party consumption of a portable proof-of-preflight bundle (docs/PREFLIGHT_EVIDENCE_BUNDLE.md).",
-      "type": "object",
-      "required": ["path", "status", "members_verified", "input_matches_manifest"],
-      "properties": {
-        "path": { "type": "string" },
-        "status": { "enum": ["passed", "rejected", "incomplete"] },
-        "reason_code": { "type": "string" },
-        "manifest_schema": { "type": ["string", "null"] },
-        "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "document_revision_digest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
-        "members_verified": { "type": "integer", "minimum": 0 },
-        "declared_members": { "type": "array", "items": { "type": "string" } },
-        "missing_members": { "type": "array", "items": { "type": "string" } },
-        "undeclared_members": { "type": "array", "items": { "type": "string" } },
-        "mismatched_members": { "type": "array", "items": { "type": "string" } },
-        "input_matches_manifest": { "type": "boolean" }
+        "schema_version": {
+          "const": 1
+        },
+        "candidate_sha": {
+          "type": "string",
+          "minLength": 7
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "rejected",
+            "incomplete"
+          ]
+        },
+        "input": {
+          "type": "object",
+          "required": [
+            "path",
+            "bytes",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "validators": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "claim",
+              "program",
+              "status"
+            ],
+            "properties": {
+              "claim": {
+                "enum": [
+                  "structural",
+                  "signature",
+                  "standards"
+                ]
+              },
+              "program": {
+                "type": "string"
+              },
+              "program_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "configured_arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "passed",
+                  "rejected",
+                  "incomplete"
+                ]
+              },
+              "reason_code": {
+                "type": "string"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "exit_code": {
+                "type": "integer"
+              },
+              "timed_out": {
+                "type": "boolean"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "bundle": {
+          "description": "Third-party consumption of a portable proof-of-preflight bundle (docs/PREFLIGHT_EVIDENCE_BUNDLE.md).",
+          "type": "object",
+          "required": [
+            "path",
+            "status",
+            "members_verified",
+            "input_matches_manifest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "passed",
+                "rejected",
+                "incomplete"
+              ]
+            },
+            "reason_code": {
+              "type": "string"
+            },
+            "manifest_schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "manifest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "document_revision_digest": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "members_verified": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "declared_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "missing_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "undeclared_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mismatched_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "input_matches_manifest": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "platform": {
+          "type": "object",
+          "required": [
+            "system",
+            "release",
+            "machine"
+          ],
+          "properties": {
+            "system": {
+              "type": "string"
+            },
+            "release": {
+              "type": "string"
+            },
+            "machine": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
-    "platform": {
+    "qualified_v2": {
+      "title": "Loop independent validation evidence",
       "type": "object",
-      "required": ["system", "release", "machine"],
+      "required": [
+        "schema",
+        "schema_version",
+        "status",
+        "input",
+        "validators",
+        "platform",
+        "candidate_sha"
+      ],
       "properties": {
-        "system": { "type": "string" },
-        "release": { "type": "string" },
-        "machine": { "type": "string" }
+        "schema": {
+          "const": "loop.independent-validation-evidence"
+        },
+        "schema_version": {
+          "const": 2
+        },
+        "candidate_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "rejected",
+            "incomplete"
+          ]
+        },
+        "input": {
+          "type": "object",
+          "required": [
+            "path",
+            "bytes",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "validators": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "claim",
+              "program",
+              "status",
+              "target",
+              "scope",
+              "version",
+              "command",
+              "report_sha256",
+              "limitations"
+            ],
+            "properties": {
+              "claim": {
+                "enum": [
+                  "structural",
+                  "signature",
+                  "standards"
+                ]
+              },
+              "program": {
+                "type": "string"
+              },
+              "program_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "configured_arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "arguments": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "passed",
+                  "rejected",
+                  "incomplete"
+                ]
+              },
+              "reason_code": {
+                "type": "string"
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "exit_code": {
+                "type": "integer"
+              },
+              "timed_out": {
+                "type": "boolean"
+              },
+              "stdout": {
+                "type": "string"
+              },
+              "stderr": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
+              "scope": {
+                "const": "exact-input-bytes"
+              },
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "report_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "stderr_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "limitations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "signatures": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "integrity",
+                    "signed_ranges",
+                    "coverage",
+                    "certificate_trust",
+                    "signed_revision_end"
+                  ],
+                  "properties": {
+                    "integrity": {
+                      "type": "string"
+                    },
+                    "signed_ranges": {
+                      "type": "string"
+                    },
+                    "coverage": {
+                      "type": "string"
+                    },
+                    "certificate_trust": {
+                      "type": "string"
+                    },
+                    "signed_revision_end": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 1
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "stdout_base64": {
+                "type": "string",
+                "contentEncoding": "base64"
+              }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "passed"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "arguments",
+                    "report_sha256"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "report_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "command": {
+                      "minItems": 2
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "bundle": {
+          "description": "Third-party consumption of a portable proof-of-preflight bundle (docs/PREFLIGHT_EVIDENCE_BUNDLE.md).",
+          "type": "object",
+          "required": [
+            "path",
+            "status",
+            "members_verified",
+            "input_matches_manifest"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "passed",
+                "rejected",
+                "incomplete"
+              ]
+            },
+            "reason_code": {
+              "type": "string"
+            },
+            "manifest_schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "manifest_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "document_revision_digest": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "members_verified": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "declared_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "missing_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "undeclared_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mismatched_members": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "input_matches_manifest": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "platform": {
+          "type": "object",
+          "required": [
+            "system",
+            "release",
+            "machine"
+          ],
+          "properties": {
+            "system": {
+              "type": "string"
+            },
+            "release": {
+              "type": "string"
+            },
+            "machine": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     }
-  },
-  "additionalProperties": false
+  }
 }

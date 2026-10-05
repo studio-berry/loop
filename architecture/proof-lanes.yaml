@@ -241,6 +241,47 @@ subsystems:
         bind: catalog
         id: docs/generated/preflight-corpus-coverage.json
         executes: binding
+  - id: independent-claims
+    summary: Independent standards/signature reports and source-bound reproduction packets; renderer goldens remain regression evidence.
+    paths:
+      - docs/independent-claims.json
+      - docs/schemas/independent-validation-evidence.schema.json
+      - UnitTests/independentvalidatorfixture.h
+      - loop-preflight/testdata/independent/**
+      - scripts/qualification/run_independent_validators.py
+      - scripts/qualification/install_oracle_bundle.py
+      - scripts/qualification/compare_independent_renders.py
+      - scripts/qualification/run_independent_packet.py
+      - scripts/qualification/verify_independent_packets.py
+      - scripts/qualification/test_run_independent_validators.py
+      - scripts/qualification/test_independent_packet.py
+      - scripts/qualification/test_independent_renders.py
+      - .github/workflows/independent-qualification.yml
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_run_independent_validators.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_independent_packet.py
+        executes: binding
+      - kind: differential
+        bind: ctest
+        id: UnitTestsConversionOracle
+        policy_module: core
+        executes: binding
+      - kind: differential
+        bind: ctest
+        id: UnitTestsOverprintRender
+        policy_module: core
+        executes: binding
+      - kind: integration
+        bind: workflow
+        id: independent-qualification
+        ref: .github/workflows/independent-qualification.yml
+        contains: verify_independent_packets
+        executes: binding
   - id: core-qualification
     summary: Internal L01 CI and package provenance checks; module admission remains reviewed.
     paths:

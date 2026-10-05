@@ -59,6 +59,11 @@ DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
     m_relay(new JobRelay, [](JobRelay* relay)
             { relay->deleteLater(); })
 {
+    connect(&m_revisionSource, &PDFDocumentContextSource::revisionChanged, this,
+            [this]()
+            { invalidateInspection(); });
+    connect(&context, &QObject::destroyed, this, [this]()
+            { invalidateInspection(); });
     m_handlersRegistered = registerHandlers();
     updateAvailability();
 }
@@ -125,7 +130,7 @@ bool DocumentFacade::registerHandlers()
 
     CommandCatalog::Handler save;
     save.invoke = [this](CommandInvocationId invocation, const QVariantMap&)
-    { beginSave(invocation, m_source); };
+    { beginSave(invocation, SaveCommandId, m_source); };
     save.cancel = [this](CommandInvocationId invocation)
     { requestCancellation(invocation); };
     registered = m_catalog->setHandler(SaveCommandId, std::move(save)) && registered;
@@ -135,7 +140,7 @@ bool DocumentFacade::registerHandlers()
     {
         DocumentSource target;
         target.path = parameters.value(QLatin1String(PathParameter)).toString();
-        beginSave(invocation, target);
+        beginSave(invocation, SaveAsCommandId, target);
     };
     saveAs.cancel = [this](CommandInvocationId invocation)
     { requestCancellation(invocation); };
@@ -159,44 +164,9 @@ void DocumentFacade::requestCancellation(CommandInvocationId invocation)
         return;
     }
 
-    const QString jobId = m_pendingJobId;
-    const std::shared_ptr<std::atomic_bool> workStarted = m_pendingWorkStarted;
-    m_submitter->cancel(jobId);
+    m_submitter->cancel(m_pendingJobId);
 
-    // Queued rather than resolved inline: work that is already running still
-    // reports its own terminal state, and that report must be allowed to arrive
-    // first.
-    m_relay->post([this, invocation, jobId, workStarted]()
-                  { resolveCancellation(invocation, jobId, workStarted); });
-}
-
-void DocumentFacade::resolveCancellation(CommandInvocationId invocation,
-                                         QString jobId,
-                                         std::shared_ptr<std::atomic_bool> workStarted)
-{
-    if (invocation != m_pendingInvocation)
-    {
-        // The work already reported. Cancellation was still terminal, just not
-        // through this path.
-        return;
-    }
-
-    if (workStarted && workStarted->load(std::memory_order_acquire))
-    {
-        return;
-    }
-
-    const pdf::PDFJobSnapshot snapshot = m_submitter->snapshot(jobId);
-    if (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running)
-    {
-        m_relay->post([this, invocation, jobId, workStarted]()
-                      { resolveCancellation(invocation, jobId, workStarted); });
-        return;
-    }
-
-    // Terminal without the work ever starting: the scheduler dropped it from the
-    // queue, so no completion is coming and the invocation would otherwise never
-    // reach a terminal state.
+    // Cancellation fences presentation even when the worker cannot stop yet.
     m_pendingJobId.clear();
     m_typedError = QStringLiteral("document/cancelled");
 
@@ -278,6 +248,61 @@ CommandInvocationId DocumentFacade::saveAs(const QString& path)
     return m_catalog ? m_catalog->invoke(SaveAsCommandId, parameters) : InvalidCommandInvocation;
 }
 
+CommandInvocationId DocumentFacade::retry()
+{
+    if (!m_catalog || !context() || m_pendingInvocation != InvalidCommandInvocation ||
+        m_operation.invocation == InvalidCommandInvocation || m_operation.pending ||
+        m_operation.generation != m_generation ||
+        (m_operation.result.state != CommandTerminalState::Failed &&
+         m_operation.result.state != CommandTerminalState::Cancelled) ||
+        (m_operation.result.state == CommandTerminalState::Cancelled &&
+         m_operation.result.typedError != QStringLiteral("document/cancelled")))
+    {
+        return InvalidCommandInvocation;
+    }
+
+    if (m_operation.command != OpenCommandId &&
+        !m_revisionSource.isCurrent(m_operation.revision))
+    {
+        return InvalidCommandInvocation;
+    }
+
+    if (m_operation.command != OpenCommandId)
+    {
+        const pdf::PDFJobStatus status = m_submitter->snapshot(m_operation.jobId).status;
+        if (status == pdf::PDFJobStatus::Queued || status == pdf::PDFJobStatus::Running)
+        {
+            return InvalidCommandInvocation;
+        }
+    }
+
+    const CommandId command = m_operation.command;
+    QVariantMap parameters;
+    if (command == OpenCommandId || command == SaveAsCommandId)
+    {
+        parameters.insert(QLatin1String(PathParameter), m_operation.target.path);
+    }
+    m_retryCause = m_operation.result;
+    const CommandInvocationId invocation = m_catalog->invoke(command, parameters);
+    m_retryCause = {};
+    return invocation;
+}
+
+void DocumentFacade::beginOperation(CommandInvocationId invocation,
+                                    const CommandId& command,
+                                    const DocumentSource& target)
+{
+    m_pendingInvocation = invocation;
+    m_operation = {};
+    m_operation.invocation = invocation;
+    m_operation.command = command;
+    m_operation.target = target;
+    m_operation.generation = m_generation;
+    m_operation.revision = currentRevision();
+    m_operation.pending = true;
+    m_operation.retryCause = std::exchange(m_retryCause, CommandResult());
+}
+
 bool DocumentFacade::cancelPendingOperation()
 {
     if (m_pendingInvocation == InvalidCommandInvocation || !m_catalog)
@@ -300,6 +325,7 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
 
     supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
 
+    setState(DocumentState::Opening);
     // Replacement drops the previous identity before any new work is issued, so
     // nothing computed against it can be admitted into the new one.
     detachDocument();
@@ -308,17 +334,13 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
     m_typedError.clear();
     setFacets({});
     setOutputState(DocumentOutputState::None);
-    setState(DocumentState::Opening);
 
-    m_pendingInvocation = invocation;
+    beginOperation(invocation, OpenCommandId, source);
 
     const quint64 generation = m_generation;
     const std::shared_ptr<JobRelay> relay = m_relay;
     IDocumentLoader* loader = m_loader;
     const DocumentSource captured = source;
-
-    m_pendingWorkStarted = std::make_shared<std::atomic_bool>(false);
-    const std::shared_ptr<std::atomic_bool> workStarted = m_pendingWorkStarted;
 
     pdf::PDFJobSpec spec;
     spec.kind = pdf::PDFJobKind::Other;
@@ -330,18 +352,19 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
 
     m_pendingJobId = m_submitter->submit(
         spec,
-        [this, relay, loader, captured, generation, invocation, workStarted](pdf::PDFJobContext& jobContext)
+        [this, relay, loader, captured, generation, invocation](pdf::PDFJobContext& jobContext)
         {
-            workStarted->store(true, std::memory_order_release);
             DocumentLoadResult result = loader->load(captured, jobContext);
             relay->post([this, invocation, generation, result = std::move(result)]() mutable
                         { admitLoadResult(invocation, generation, std::move(result)); });
         });
 
+    m_operation.jobId = m_pendingJobId;
     updateAvailability();
+    Q_EMIT operationChanged();
 }
 
-void DocumentFacade::beginSave(CommandInvocationId invocation, const DocumentSource& target)
+void DocumentFacade::beginSave(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target)
 {
     pdf::PDFDocumentContext* documentContext = context();
     if (m_state != DocumentState::Ready || !documentContext || !documentContext->getDocument())
@@ -362,7 +385,9 @@ void DocumentFacade::beginSave(CommandInvocationId invocation, const DocumentSou
 
     supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
 
-    m_pendingInvocation = invocation;
+    beginOperation(invocation, command, target);
+    m_typedError.clear();
+    setFacets(m_facets & ~DocumentFacets(DocumentFacet::Cancelled));
     setOutputState(DocumentOutputState::Pending);
 
     const quint64 generation = m_generation;
@@ -376,9 +401,6 @@ void DocumentFacade::beginSave(CommandInvocationId invocation, const DocumentSou
     const pdf::PDFDocumentPointer document = documentContext->getDocumentPointer();
     const pdf::PDFRevisionIdentity revision = m_revisionSource.currentRevision();
 
-    m_pendingWorkStarted = std::make_shared<std::atomic_bool>(false);
-    const std::shared_ptr<std::atomic_bool> workStarted = m_pendingWorkStarted;
-
     pdf::PDFJobSpec spec;
     spec.kind = pdf::PDFJobKind::Export;
     spec.priority = pdf::PDFJobPriority::Operator;
@@ -388,15 +410,16 @@ void DocumentFacade::beginSave(CommandInvocationId invocation, const DocumentSou
 
     m_pendingJobId = m_submitter->submit(
         spec,
-        [this, relay, writer, captured, document, generation, invocation, workStarted](pdf::PDFJobContext& jobContext)
+        [this, relay, writer, captured, document, generation, invocation](pdf::PDFJobContext& jobContext)
         {
-            workStarted->store(true, std::memory_order_release);
             DocumentWriteResult result = writer->write(captured, document.data(), jobContext);
             relay->post([this, invocation, generation, captured, result = std::move(result)]() mutable
                         { admitWriteResult(invocation, generation, captured, std::move(result)); });
         });
 
+    m_operation.jobId = m_pendingJobId;
     updateAvailability();
+    Q_EMIT operationChanged();
 }
 
 void DocumentFacade::performClose(CommandInvocationId invocation)
@@ -412,8 +435,10 @@ void DocumentFacade::performClose(CommandInvocationId invocation)
     setOutputState(DocumentOutputState::None);
     setState(DocumentState::Empty);
 
+    m_operation = {};
     finishPending(invocation, CommandTerminalState::Completed, QString());
     updateAvailability();
+    Q_EMIT operationChanged();
 }
 
 void DocumentFacade::admitLoadResult(CommandInvocationId invocation,
@@ -430,8 +455,7 @@ void DocumentFacade::admitLoadResult(CommandInvocationId invocation,
 
     if (invocation != m_pendingInvocation)
     {
-        // Same document, but the invocation already reached a terminal state —
-        // a cancellation the scheduler resolved first. Not a stale admission.
+        ++m_rejectedCompletions;
         return;
     }
 
@@ -564,6 +588,7 @@ void DocumentFacade::admitWriteResult(CommandInvocationId invocation,
 
     if (invocation != m_pendingInvocation)
     {
+        ++m_rejectedCompletions;
         return;
     }
 
@@ -633,6 +658,7 @@ void DocumentFacade::detachDocument()
     }
 
     ++m_generation;
+    m_inspection = {};
 
     // Availability computed against the previous document is not evidence about
     // the next one.
@@ -661,18 +687,13 @@ void DocumentFacade::supersedePending(CommandTerminalState state, QString typedE
     }
 
     const CommandInvocationId invocation = m_pendingInvocation;
-    m_pendingInvocation = InvalidCommandInvocation;
-    m_pendingWorkStarted.reset();
 
     if (m_outputState == DocumentOutputState::Pending)
     {
         setOutputState(DocumentOutputState::None);
     }
 
-    if (m_catalog)
-    {
-        m_catalog->finishInvocation(invocation, state, std::move(typedError));
-    }
+    finishPending(invocation, state, std::move(typedError));
 }
 
 }   // namespace pdfinteraction

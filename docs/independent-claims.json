@@ -1,0 +1,584 @@
+{
+  "schema": "loop.independent-claims",
+  "schema_version": 1,
+  "corpus_revision": "377728596647e40edf16003d68d620773ce96ec5",
+  "corpus_attribution": "veraPDF Consortium, veraPDF test corpus, CC BY 4.0. Converted derivatives are identified separately.",
+  "conversion_targets": [
+    "PDF/X-1a:2001",
+    "PDF/X-3:2002",
+    "PDF/X-4",
+    "PDF/A-2b"
+  ],
+  "declared_unsupported": [
+    "pdfx-5n",
+    "pdfx-5g",
+    "pdfa-3"
+  ],
+  "claims": [
+    {
+      "id": "structure",
+      "target": "pdf-structure",
+      "surfaces": [
+        "Core reader",
+        "PdfTool"
+      ],
+      "oracle": "qpdf",
+      "fixtures": [
+        "structural-positive"
+      ],
+      "limitations": [
+        "Structural validity does not establish conformance, signatures, or rendering."
+      ],
+      "scope": "listed fixtures and settings only",
+      "expected": "fixture-defined outcomes"
+    },
+    {
+      "id": "pdfa-2b",
+      "target": "PDF/A-2b",
+      "surfaces": [
+        "PDFStandardConversion",
+        "standards-convert",
+        "PageMaster"
+      ],
+      "oracle": "verapdf",
+      "fixtures": [
+        "pdfa-2b-conformant",
+        "pdfa-2b-forbidden-action",
+        "safely-convertible"
+      ],
+      "limitations": [
+        "Only PDF/A-2b and the pinned corpus are qualified."
+      ],
+      "scope": "listed fixtures and settings only",
+      "expected": "fixture-defined outcomes"
+    },
+    {
+      "id": "pdfx-1a-2001",
+      "target": "PDF/X-1a:2001",
+      "surfaces": [
+        "PDFStandardConversion",
+        "standards-convert",
+        "PageMaster"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "No qualified independent PDF/X oracle; conversion publication is refused."
+      ],
+      "enforcement": "refuse-conversion",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "pdfx-3-2002",
+      "target": "PDF/X-3:2002",
+      "surfaces": [
+        "PDFStandardConversion",
+        "standards-convert",
+        "PageMaster"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "No qualified independent PDF/X oracle; conversion publication is refused."
+      ],
+      "enforcement": "refuse-conversion",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "pdfx-4",
+      "target": "PDF/X-4",
+      "surfaces": [
+        "PDFStandardConversion",
+        "standards-convert",
+        "PageMaster"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "No qualified independent PDF/X oracle; conversion publication is refused."
+      ],
+      "enforcement": "refuse-conversion",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "pdfx-5n",
+      "target": "pdfx-5n",
+      "surfaces": [
+        "conformance-claims"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "Recognized declaration; production and validation remain unsupported."
+      ],
+      "enforcement": "unsupported",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "pdfx-5g",
+      "target": "pdfx-5g",
+      "surfaces": [
+        "conformance-claims"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "Recognized declaration; production and validation remain unsupported."
+      ],
+      "enforcement": "unsupported",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "pdfa-3",
+      "target": "pdfa-3",
+      "surfaces": [
+        "conformance-claims"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "Recognized declaration; production and validation remain unsupported."
+      ],
+      "enforcement": "unsupported",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    },
+    {
+      "id": "signature",
+      "target": "signed-revision-integrity",
+      "surfaces": [
+        "Core signatures",
+        "incremental save"
+      ],
+      "oracle": "pdfsig",
+      "fixtures": [
+        "signed-base",
+        "incremental-with-signature"
+      ],
+      "limitations": [
+        "Does not establish trust in an unknown certificate issuer, unsigned appended revisions, or long-term validation."
+      ],
+      "scope": "listed fixtures and settings only",
+      "expected": "fixture-defined outcomes"
+    },
+    {
+      "id": "conversion",
+      "target": "final-artifact",
+      "surfaces": [
+        "Repair transaction",
+        "Action Lists",
+        "PageMaster",
+        "Editor"
+      ],
+      "oracle": "verapdf",
+      "fixtures": [
+        "safely-convertible",
+        "pdfa-2b-forbidden-action"
+      ],
+      "limitations": [
+        "Transformation preparation alone cannot certify output."
+      ],
+      "scope": "listed fixtures and settings only",
+      "expected": "fixture-defined outcomes"
+    },
+    {
+      "id": "authoritative-rendering",
+      "target": "PDFTransparencyRenderer",
+      "surfaces": [
+        "Output Preview",
+        "Preflight analysis"
+      ],
+      "oracle": "ghostscript-tiffsep",
+      "fixtures": [
+        "overprint-cmyk-mode0-off",
+        "overprint-cmyk-mode0-on",
+        "overprint-cmyk-mode1-off",
+        "overprint-cmyk-mode1-on",
+        "overprint-white-on",
+        "overprint-separation-on",
+        "overprint-multiply-on",
+        "overprint-group-stroke-on",
+        "transparency-normal-cmyk",
+        "flatten-transparency-normal-cmyk"
+      ],
+      "limitations": [
+        "Controlled CMYK/spot planes at fixed geometry; no broad print or calibrated ICC claim."
+      ],
+      "scope": "listed fixtures and settings only",
+      "expected": "fixture-defined outcomes"
+    },
+    {
+      "id": "canvas-rendering",
+      "target": "ordinary-canvas",
+      "surfaces": [
+        "Editor canvas"
+      ],
+      "oracle": null,
+      "fixtures": [],
+      "limitations": [
+        "Approximate canvas and same-engine snapshots cannot establish print correctness."
+      ],
+      "enforcement": "disclosed-limitation",
+      "scope": "named limitation",
+      "expected": "unqualified"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "pdfa-2b-conformant",
+      "path": "loop-preflight/testdata/independent/pdfa-2b-conformant.pdf",
+      "sha256": "7db294af5f6572c2b009a57de9d629cbf231d1c3f43b7b895cf487eeb71cf788",
+      "bytes": 3263,
+      "source": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/377728596647e40edf16003d68d620773ce96ec5/PDF_A-2b/6.1%20File%20structure/6.1.2%20File%20header/veraPDF%20test%20suite%206-1-2-t02-pass-a.pdf",
+      "license": "CC-BY-4.0",
+      "class": "development",
+      "claim": "standards",
+      "target": "pdfa-2b",
+      "expected": "passed"
+    },
+    {
+      "id": "pdfa-2b-forbidden-action",
+      "path": "loop-preflight/testdata/independent/pdfa-2b-forbidden-action.pdf",
+      "sha256": "423e0f7b91108cd7c8c43544a41ddd6c62bff7be804cd101b8dd16b61edd1eb5",
+      "bytes": 3670,
+      "source": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/377728596647e40edf16003d68d620773ce96ec5/PDF_A-2b/6.5%20Action/6.5.1%20General/veraPDF%20test%20suite%206-5-1-t01-fail-a.pdf",
+      "license": "CC-BY-4.0",
+      "class": "development",
+      "claim": "standards",
+      "target": "pdfa-2b",
+      "expected": "rejected"
+    },
+    {
+      "id": "overprint-cmyk-mode0-off",
+      "path": "loop-preflight/testdata/fixtures/overprint-cmyk-mode0-off.pdf",
+      "sha256": "f6ba9c544b8aa27b131bc32d753a70305d1ed137e599b92d60d501667ffbd506",
+      "bytes": 1230,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-cmyk-mode0-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-cmyk-mode0-on.pdf",
+      "sha256": "b556150d0c6dbcacfec9f42b1e4563ea2e8acc60316e2e47f800d9c0b44b4167",
+      "bytes": 1228,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-cmyk-mode1-off",
+      "path": "loop-preflight/testdata/fixtures/overprint-cmyk-mode1-off.pdf",
+      "sha256": "7ea34c76b51792671a16dc35f203685419c245da5924259d7f65d445ea7313c4",
+      "bytes": 1230,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-cmyk-mode1-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-cmyk-mode1-on.pdf",
+      "sha256": "0e6495266a47be17173b619a484e8c8e592c3db0f109fe44daedb705f15625f8",
+      "bytes": 1228,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-white-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-white-on.pdf",
+      "sha256": "e02fae2cfd2ca8fa9b3b47a29906135887a80ffacc772ce9eb57d8ff114675ef",
+      "bytes": 1226,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-separation-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-separation-on.pdf",
+      "sha256": "35a0e39e0ecf493d998f0cc6a32abca096242dbbc6bebfcb29a6c9b5022caf72",
+      "bytes": 1231,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-multiply-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-multiply-on.pdf",
+      "sha256": "b0b84a02ee6e0041f26f1519319db37c8aad850de7f7761d4a1238ace7bc89c2",
+      "bytes": 1240,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "overprint-group-stroke-on",
+      "path": "loop-preflight/testdata/fixtures/overprint-group-stroke-on.pdf",
+      "sha256": "c155b6edf113d956e56bf5e217786dea4af222f68c296a083a224e664330ac4b",
+      "bytes": 1495,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "transparency-normal-cmyk",
+      "path": "loop-preflight/testdata/fixtures/transparency-normal-cmyk.pdf",
+      "sha256": "6061fa8fa06e634265aba191a1ecf31a4208f299fc21527c0c7420035d05038b",
+      "bytes": 1007,
+      "source": "Existing Loop synthetic fixture",
+      "license": "MIT",
+      "class": "development",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS"
+    },
+    {
+      "id": "signed-base",
+      "path": "UnitTests/testdata/signatures/signed-incremental-base.pdf",
+      "sha256": "b5bb03596f88ffdc3503b8ebf60a3d6d6ffa2936dab91db07935ad522245101d",
+      "bytes": 7219,
+      "source": "Existing signed fixture; private key not retained",
+      "license": "MIT",
+      "class": "regression",
+      "claim": "signature",
+      "expected": "passed"
+    },
+    {
+      "id": "structural-positive",
+      "path": "loop-preflight/testdata/independent/pdfa-2b-conformant.pdf",
+      "sha256": "7db294af5f6572c2b009a57de9d629cbf231d1c3f43b7b895cf487eeb71cf788",
+      "bytes": 3263,
+      "source": "https://raw.githubusercontent.com/veraPDF/veraPDF-corpus/377728596647e40edf16003d68d620773ce96ec5/PDF_A-2b/6.1%20File%20structure/6.1.2%20File%20header/veraPDF%20test%20suite%206-1-2-t02-pass-a.pdf",
+      "license": "CC-BY-4.0",
+      "class": "development",
+      "claim": "structural",
+      "target": "pdf-structure",
+      "expected": "passed"
+    }
+  ],
+  "required_platforms": [
+    "Linux",
+    "Windows"
+  ],
+  "tool_versions": {
+    "qpdf": "11.x or 12.x",
+    "pdfsig": "23.x through 29.x with a cryptographic signature backend",
+    "verapdf": "1.24.x, 1.26.x, 1.28.x or 1.30.x",
+    "ghostscript": "10.x"
+  },
+  "tool_distribution_policy": "Qualification requires per-platform SHA-256-pinned tool bundles and records each executable digest. Tools are external; none are bundled with Loop.",
+  "derived_fixtures": [
+    {
+      "id": "safely-convertible-input",
+      "claim": "standards",
+      "target": "pdfa-2b",
+      "expected": "rejected",
+      "source": "pdfa-2b-conformant",
+      "generator": "UnitTestsConversionOracle.realPdfaConversionTriad",
+      "artifact": "conversion/safely-convertible-input.pdf",
+      "limitations": [
+        "Only the metadata omission in this pinned source is measured."
+      ]
+    },
+    {
+      "id": "safely-convertible",
+      "claim": "standards",
+      "target": "pdfa-2b",
+      "expected": "passed",
+      "source": "safely-convertible-input",
+      "generator": "UnitTestsConversionOracle.realPdfaConversionTriad",
+      "artifact": "conversion/safely-convertible.pdf",
+      "limitations": [
+        "No claim of general PDF/A convertibility."
+      ]
+    },
+    {
+      "id": "incremental-with-signature",
+      "claim": "signature",
+      "expected": "passed",
+      "source": "signed-base",
+      "generator": "UnitTestsIncrementalSave",
+      "artifact": "save-policy/incremental-with-signature.pdf",
+      "limitations": [
+        "Original signed revision integrity; appended revision is not covered by that signature."
+      ]
+    },
+    {
+      "id": "flatten-transparency-normal-cmyk",
+      "claim": "rendering",
+      "expected": "passed",
+      "width": 128,
+      "height": 128,
+      "max_channel_delta": 2,
+      "differing_pixel_budget": 64,
+      "limit": "Controlled geometry and separations only; no general press or colorimetric certification.",
+      "regions": [
+        [
+          1,
+          1,
+          126,
+          126
+        ]
+      ],
+      "scope": "one text-free page; DeviceCMYK process and named spot separations; Generic CMS",
+      "source": "transparency-normal-cmyk",
+      "generator": "UnitTestsOverprintRender.exportIndependentRenders",
+      "artifact": "flatten-transparency-normal-cmyk.pdf",
+      "limitations": [
+        "72 dpi Core flattening; DeviceRGB raster conversion is not a calibrated press result."
+      ]
+    }
+  ],
+  "renderer_purposes": {
+    "InteractiveCanvas": "canvas-rendering",
+    "PrintPreview": "authoritative-rendering",
+    "PreflightAnalysis": "authoritative-rendering",
+    "SeparationPreview": "authoritative-rendering"
+  }
+}

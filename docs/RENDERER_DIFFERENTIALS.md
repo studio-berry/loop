@@ -1,7 +1,8 @@
 # Renderer differentials
 
-Color and overprint claims are measured against the Output Preview /
-`PDFTransparencyRenderer` path, not against page-view overprint.
+Internal color and overprint regression checks use the Output Preview /
+`PDFTransparencyRenderer` path. This policy selects the Core renderer; it does
+not establish independent correctness or standards compliance.
 
 `UnitTestsOverprintRender` renders each committed fixture at 128×128, compares
 pixels to `loop-preflight/testdata/renders/*.png`, and records numeric
@@ -42,3 +43,29 @@ the authoritative `PDFTransparencyRenderer` path
 asserts that escalated render matches `overprint-cmyk-mode1-on.png`, the same
 baseline `UnitTestsOverprintRender` checks — so canvas escalation and this
 measurement renderer are proven to agree, not just independently plausible.
+
+## Independent measurement scope
+
+With `LOOP_INDEPENDENT_RENDER_DIR` set, `UnitTestsOverprintRender` additionally
+exports DeviceCMYK process planes and all named spot separations from the
+controlled, text-free fixtures in [`independent-claims.json`](independent-claims.json).
+These exports do not refresh the existing PNG goldens. The Python qualification
+harness measures the planes against Ghostscript's [tiffsep device](https://ghostscript.readthedocs.io/en/latest/Devices.html#tiff-file-formats),
+retaining both outputs, raw commands, tool/profile identities, delta images and
+numeric region results. Missing or extra separations fail coverage.
+
+Settings are fixed: 128 by 128 pixels fitted to the page, 72 dpi Ghostscript
+geometry, 8-bit planes, no text or substituted fonts, Generic Core CMS and
+Ghostscript fast DeviceCMYK conversion with pinned default ICC profiles. Each
+fixture specifies its measurement regions and tolerances before execution.
+The flattened case also exports its final PDF at 72 dpi for independent rendering.
+A mismatch fails qualification. Never tune regions or tolerances, regenerate a
+sealed output, or refresh a regression golden to suppress an independent mismatch.
+
+Claims cover only the recorded fixture planes and settings. They do not prove
+calibrated ICC colorimetry, arbitrary fonts, press behavior, or general PDF/X or
+PDF/A conformance. Ordinary canvas rendering and same-engine goldens cannot
+supply those claims. Render-dependent inspection receipts disclose this limit
+through their existing limitations field.
+
+The initial Windows Ghostscript 10.08.0 diagnostic measured all ten cases. Seven failed separation coverage and three exceeded the fixed pixel tolerances. Full commands, planes and differences are retained in the local reproduction artifacts described in [the quality-review handoff](INDEPENDENT_QUALIFICATION_REVIEW.md). These results establish no rendering-fidelity qualification; the gate remains closed.

@@ -2,8 +2,17 @@
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
+#include "inspectormodel.h"
+#include "preflightcontroller.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
 
 #include <QAccessible>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QSaveFile>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -13,11 +22,126 @@
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QTimer>
+#include <QTemporaryDir>
 
 #include <cstdio>
+#include <memory>
 
 namespace
 {
+
+void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host, QQuickWindow* window)
+{
+    auto directory = std::make_shared<QTemporaryDir>();
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    const QString original = directory->filePath(QStringLiteral("finding-region.pdf"));
+    const QString replacement = directory->filePath(QStringLiteral("replacement.pdf"));
+    if (!directory->isValid() || !writer.write(original, &document, true) || !writer.write(replacement, &document, true))
+    {
+        application.exit(6);
+        return;
+    }
+
+    host.openFileUrl(QUrl::fromLocalFile(original));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, window, timer, directory, replacement, phase = 0, originalKey = QString(), findingId = QString()]() mutable
+                     {
+                         auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+                         auto* inspector = qobject_cast<pdfinteraction::InspectorModel*>(host.inspector());
+                         if (!host.hasDocument() || !preflight || !inspector)
+                         {
+                             return;
+                         }
+                         if (phase == 0)
+                         {
+                             host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+                             originalKey = preflight->documentKey();
+                             preflight->beginRun(originalKey, preflight->documentRevision(), QStringLiteral("source-profile"), QStringLiteral("navigation-fixture"));
+                             pdf::PreflightFinding finding;
+                             finding.checkId = QStringLiteral("bleed");
+                             finding.scope = QStringLiteral("page");
+                             finding.page = 2;
+                             finding.severity = QStringLiteral("error");
+                             finding.type = QStringLiteral("bleed");
+                             finding.bbox = QRectF(100, 200, 60, 80);
+                             finding.evidenceIds = { QStringLiteral("navigation-fixture-evidence") };
+                             findingId = finding.stableId();
+                             pdf::PreflightResult report;
+                             report.errors = { finding };
+                             report.profileName = QStringLiteral("Finding navigation fixture");
+                             report.effectiveProfileDigest = QStringLiteral("effective-profile-fixture");
+                             report.coverageScope = { { QStringLiteral("pages"), QStringLiteral("2") } };
+                             pdf::PreflightCheckStatus checkStatus;
+                             checkStatus.id = finding.checkId;
+                             checkStatus.status = QStringLiteral("incomplete");
+                             checkStatus.reason = QStringLiteral("Only the selected page region was inspected");
+                             report.checkStatuses = { checkStatus };
+                             if (!preflight->acceptResult(QStringLiteral("navigation-fixture"), preflight->documentRevision(), report))
+                             {
+                                 application.exit(6);
+                                 return;
+                             }
+                             const qreal zoomBefore = host.zoom();
+                             host.selectFinding(findingId);
+                             bool profileExposed = false;
+                             bool limitsExposed = false;
+                             for (int row = 0; row < inspector->rowCount(); ++row)
+                             {
+                                 const QModelIndex index = inspector->index(row);
+                                 const QString id = inspector->data(index, pdfinteraction::InspectorModel::PropertyIdRole).toString();
+                                 const QString value = inspector->data(index, pdfinteraction::InspectorModel::ValueRole).toString();
+                                 profileExposed |= id == QStringLiteral("profile-digest") && value == report.effectiveProfileDigest;
+                                 limitsExposed |= id == QStringLiteral("check-reason") && value == checkStatus.reason;
+                             }
+                             if (host.currentPage() != 1 || host.zoom() <= zoomBefore || inspector->selectionId() != findingId ||
+                                 !profileExposed || !limitsExposed)
+                             {
+                                 fprintf(stderr, "finding-navigation-fixture region_or_context_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             phase = 1;
+                             return;
+                         }
+                         if (phase == 1)
+                         {
+                             auto* canvas = window->findChild<pdfquick::LoopCanvasItem*>();
+                             auto* inspectorView = window->findChild<QQuickItem*>(QStringLiteral("inspectorView"));
+                             const auto* viewport = canvas ? canvas->viewport() : nullptr;
+                             const QRectF region = viewport ? viewport->pagePointToViewportMatrix(1).mapRect(QRectF(100, 200, 60, 80)) : QRectF();
+                             if (!viewport || canvas->currentPage() != 1 ||
+                                 QLineF(region.center(), viewport->viewportRect().center()).length() >= 2.0 ||
+                                 !inspectorView || inspectorView->property("count").toInt() != inspector->rowCount())
+                             {
+                                 fprintf(stderr, "finding-navigation-fixture quick_region_or_inspector_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             phase = 2;
+                             host.openFileUrl(QUrl::fromLocalFile(replacement));
+                             return;
+                         }
+                         if (preflight->documentKey() == originalKey)
+                         {
+                             return;
+                         }
+                         const qreal zoomBefore = host.zoom();
+                         const int pageBefore = host.currentPage();
+                         host.selectFinding(findingId);
+                         const bool passed = inspector->selectionKind() == pdfinteraction::InspectorModel::SelectionKind::EmptyCanvas &&
+                                             host.zoom() == zoomBefore && host.currentPage() == pageBefore;
+                         fprintf(stdout, "finding-navigation-fixture id=generated-two-page-region-and-identical-byte-replacement region=100,200,60,80 stale_rejected=%d\n", passed ? 1 : 0);
+                         fflush(stdout);
+                         timer->stop();
+                         application.exit(passed ? 0 : 6);
+                     });
+    timer->start(25);
+}
 
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
@@ -315,6 +439,62 @@ bool verifyNamedAccessibility(QQuickWindow* window,
     return passed;
 }
 
+/// Issue #103: Select and Hand are a single-select bound to the host's real
+/// active tool, not two independent check boxes. This drives the host and reads
+/// each button's `checked` state back from the live QML objects.
+bool verifyToolSelection(QQuickWindow* window, EditorHost& host)
+{
+    if (!window)
+    {
+        return false;
+    }
+
+    QQuickItem* selectButton = window->findChild<QQuickItem*>(QStringLiteral("selectToolButton"));
+    QQuickItem* handButton = window->findChild<QQuickItem*>(QStringLiteral("handToolButton"));
+    if (!selectButton || !handButton)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke tool_button_missing select=%d hand=%d\n",
+                selectButton ? 1 : 0,
+                handButton ? 1 : 0);
+        return false;
+    }
+
+    const auto checked = [](QQuickItem* item)
+    { return item->property("checked").toBool(); };
+
+    const bool initialSelect = host.activeTool() == QStringLiteral("select") &&
+                               checked(selectButton) && !checked(handButton);
+
+    const bool handApplied = host.setActiveTool(QStringLiteral("hand")) &&
+                             host.activeTool() == QStringLiteral("hand") &&
+                             checked(handButton) && !checked(selectButton);
+    if (!handApplied)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke tool_selection_mismatch hand=%d select=%d active=%s\n",
+                checked(handButton) ? 1 : 0,
+                checked(selectButton) ? 1 : 0,
+                host.activeTool().toLocal8Bit().constData());
+    }
+
+    const bool selectRestored = host.setActiveTool(QStringLiteral("select")) &&
+                                host.activeTool() == QStringLiteral("select") &&
+                                checked(selectButton) && !checked(handButton);
+
+    // A name outside the vocabulary is refused and changes nothing.
+    const bool unknownRefused = !host.setActiveTool(QStringLiteral("bogus")) &&
+                                host.activeTool() == QStringLiteral("select") &&
+                                checked(selectButton) && !checked(handButton);
+
+    fprintf(stdout,
+            "product-quick-a11y-smoke tool_selection initial=%d hand=%d select=%d unknown_refused=%d\n",
+            initialSelect ? 1 : 0,
+            handApplied ? 1 : 0,
+            selectRestored ? 1 : 0,
+            unknownRefused ? 1 : 0);
+
+    return initialSelect && handApplied && selectRestored && unknownRefused;
+}
+
 bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
 {
     if (!window)
@@ -368,11 +548,185 @@ bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
 
 }   // namespace
 
+namespace
+{
+
+bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* window,
+                        EditorHost& host, pdfinteraction::PreflightController& controller)
+{
+    const QList<QPair<QString, QString>> descriptions = {
+        { QStringLiteral("preflightVerdict"), controller.verdictDescription() },
+        { QStringLiteral("preflightLimitations"), controller.limitationDescription() },
+        { QStringLiteral("preflightSelectedFinding"), controller.selectedFindingDescription() },
+        { QStringLiteral("preflightJobStatus"), controller.jobDescription() }
+    };
+    QJsonArray nodes;
+    for (const auto& entry : descriptions)
+    {
+        auto* item = window->findChild<QQuickItem*>(entry.first);
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        if (!accessible || !item->activeFocusOnTab() || !accessible->state().focusable ||
+            accessible->text(QAccessible::Description) != entry.second)
+        {
+            fprintf(stderr, "operator-probe inaccessible_status=%s\n", qPrintable(entry.first));
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), entry.second },
+                                  { QStringLiteral("focusable"), true } });
+    }
+    for (const QString& objectName : { QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") })
+    {
+        auto* item = window->findChild<QQuickItem*>(objectName);
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        if (!accessible || accessible->text(QAccessible::Description).isEmpty())
+        {
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), accessible->text(QAccessible::Description) },
+                                  { QStringLiteral("enabled"), item->isEnabled() } });
+    }
+    QJsonObject snapshot{ { QStringLiteral("stage"), stage },
+                          { QStringLiteral("window_handle"), QString::number(qulonglong(window->winId())) },
+                          { QStringLiteral("nodes"), nodes },
+                          { QStringLiteral("has_document"), host.hasDocument() },
+                          { QStringLiteral("native_accessibility_active"), QAccessible::isActive() },
+                          { QStringLiteral("graphics_api"), graphicsApiName(window->rendererInterface()->graphicsApi()) } };
+    QSaveFile output(QDir(directory).filePath(QStringLiteral("stage-%1.json").arg(stage)));
+    const QByteArray bytes = QJsonDocument(snapshot).toJson();
+    return output.open(QIODevice::WriteOnly) && output.write(bytes) == bytes.size() && output.commit();
+}
+
+void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, EditorHost& host,
+                        const QString& directory)
+{
+    auto* controller = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+    auto* timer = new QTimer(&application);
+    host.setWorkspace(EditorHost::Preflight);
+    window->hide();
+    window->show();
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, window, &host, controller, directory, applied = -1, opening = false]() mutable
+                     {
+                         QFile input(QDir(directory).filePath(QStringLiteral("stage.command")));
+                         if (!input.open(QIODevice::ReadOnly))
+                         {
+                             return;
+                         }
+                         bool valid = false;
+                         const int stage = input.readAll().trimmed().toInt(&valid);
+                         if (!valid || stage < 0 || stage > 6 || stage > applied + 1)
+                         {
+                             application.exit(6);
+                             return;
+                         }
+                         if (stage <= applied)
+                         {
+                             return;
+                         }
+                         if (stage == 1 && !host.hasDocument())
+                         {
+                             if (!opening)
+                             {
+                                 opening = true;
+                                 host.openInitialPath(QDir(directory).filePath(QStringLiteral("operator-fixture.pdf")));
+                             }
+                             return;
+                         }
+                         const QString key = controller->documentKey();
+                         const QString revision = controller->documentRevision();
+                         switch (stage)
+                         {
+                             case 0:
+                                 controller->clear();
+                                 break;
+                             case 1:
+                                 controller->beginRun(key, revision, QStringLiteral("operator-fixture-profile"), QStringLiteral("operator-fixture-job-1"));
+                                 break;
+                             case 2:
+                             {
+                                 pdf::PreflightResult result;
+                                 result.errorCode = QStringLiteral("evidence-incomplete");
+                                 result.errorMessage = QStringLiteral("Font evidence is unavailable");
+                                 result.coverageScope = { { QStringLiteral("pages"), QJsonArray{ 1 } } };
+                                 pdf::PreflightCheckStatus check;
+                                 check.id = QStringLiteral("fonts");
+                                 check.status = QStringLiteral("incomplete");
+                                 check.reason = QStringLiteral("Font evidence is unavailable");
+                                 result.checkStatuses = { check };
+                                 pdf::PreflightFinding finding;
+                                 finding.checkId = QStringLiteral("bleed");
+                                 finding.scope = QStringLiteral("page");
+                                 finding.page = 1;
+                                 finding.severity = QStringLiteral("warning");
+                                 finding.message = QStringLiteral("Bleed needs inspection");
+                                 finding.bbox = QRectF(1, 2, 3, 4);
+                                 result.warnings = { finding };
+                                 if (!controller->acceptResult(controller->jobId(), revision, result))
+                                 {
+                                     application.exit(6);
+                                     return;
+                                 }
+                                 host.selectFinding(finding.stableId());
+                                 break;
+                             }
+                             case 3:
+                                 controller->beginRun(key, revision, {}, QStringLiteral("operator-fixture-job-2"));
+                                 controller->cancelRun(controller->jobId());
+                                 break;
+                             case 4:
+                                 controller->beginRun(key, revision, {}, QStringLiteral("operator-fixture-job-3"));
+                                 controller->failRun(controller->jobId(), revision, QStringLiteral("Worker evidence is unavailable"));
+                                 break;
+                             case 5:
+                                 controller->markProfileStale();
+                                 break;
+                             case 6:
+                                 fprintf(stdout, "operator-probe status=pass native_accessibility_active=%d\n", QAccessible::isActive() ? 1 : 0);
+                                 application.exit(0);
+                                 return;
+                         }
+                         applied = stage;
+                         host.setWorkspace(EditorHost::Preflight);
+                         QTimer::singleShot(100, &application, [&application, window, &host, controller, directory, stage]()
+                                            {
+                                                if (!writeProbeSnapshot(directory, stage, window, host, *controller))
+                                                {
+                                                    application.exit(6);
+                                                } });
+                     });
+    timer->start(100);
+}
+
+}   // namespace
+
 int main(int argc, char** argv)
 {
     QGuiApplication application(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::ProductQuickAccessibilitySmoke);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
+
+    const QStringList arguments = application.arguments();
+    const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
+    const bool nativeProbe = probeArgument >= 0;
+    QString probeDirectory;
+    if (nativeProbe)
+    {
+        if (probeArgument + 1 >= arguments.size() || !QDir(arguments.at(probeArgument + 1)).exists())
+        {
+            return 6;
+        }
+        probeDirectory = arguments.at(probeArgument + 1);
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 100, 100));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        if (!writer.write(QDir(probeDirectory).filePath(QStringLiteral("operator-fixture.pdf")), &document, true))
+        {
+            return 6;
+        }
+    }
 
     EditorHost host;
     QQmlApplicationEngine engine;
@@ -397,11 +751,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (nativeProbe)
+                         {
+                             QTimer::singleShot(0, &application, [&application, window, &host, probeDirectory]()
+                                                { startOperatorProbe(application, window, host, probeDirectory); });
                              return;
                          }
 
@@ -429,6 +790,7 @@ int main(int argc, char** argv)
                                  const bool keyboardSurface = verifyKeyboardSurface(window, host);
                                  const bool workspaceSurfaces = verifyWorkspaceSurfaces(window, host);
                                  const bool fixLifecycle = verifyFixLifecyclePresentation(window, host);
+                                 const bool toolSelection = verifyToolSelection(window, host);
 
                                  // #195 acceptance 1 + 7: the shell starts on a freshly opened
                                  // document, so the preflight surface must present its not-checked
@@ -464,13 +826,20 @@ int main(int argc, char** argv)
                                                      focusHelper && canvasAccessible && preflightAccessible &&
                                                      railAccessible && findingsAccessible && runButtonAccessible &&
                                                      keyboardSurface && workspaceSurfaces && fixLifecycle &&
-                                                     preflightFresh && truthfulVisual;
+                                                     preflightFresh && truthfulVisual && toolSelection;
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);
-                                 application.exit(passed ? 0 : 5);
+                                 if (passed && qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software"))
+                                 {
+                                     runFindingNavigationFixture(application, host, window);
+                                 }
+                                 else
+                                 {
+                                     application.exit(passed ? 0 : 5);
+                                 }
                              },
-                             Qt::DirectConnection);
+                             Qt::QueuedConnection);
                      });
 
     engine.loadFromModule(QStringLiteral("Loop.Quick"), QStringLiteral("Main"));
@@ -480,7 +849,7 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    QTimer::singleShot(10000, &application, [&application]()
+    QTimer::singleShot(nativeProbe ? 120000 : (qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software") ? 30000 : 10000), &application, [&application]()
                        { application.exit(4); });
 
     return application.exec();

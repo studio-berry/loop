@@ -685,6 +685,7 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("postflight"), postflight },
         { QStringLiteral("governed"), governed },
+        { QStringLiteral("independent_validation"), independentValidation },
         { QStringLiteral("steps"), stepJson }
     };
 }
@@ -789,6 +790,11 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
         for (const QString& error : bindingErrors)
         {
             appendError(errors, QStringLiteral("Step '%1': %2").arg(step.id, error));
+            valid = false;
+        }
+        if (operation->id() == QLatin1String("standards-convert") && parameters.value(QStringLiteral("validation_contract")).toInt() != 2)
+        {
+            appendError(errors, QStringLiteral("Step '%1' uses the retired standards-convert contract; migrate its parameters to validation_contract: 2.").arg(step.id));
             valid = false;
         }
         valid = validateValue(parameters, operation->parameterSchema(), QStringLiteral("step.%1.params").arg(step.id), errors) && valid;
@@ -1071,6 +1077,8 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
                     stepResult.status = PDFActionListStepStatus::Succeeded;
                 }
             }
+            if (applyResult && operation->id() == QLatin1String("standards-convert"))
+                result->standardValidationRequirements.append(standardConversionSettings(stepResult.resolvedParameters));
             stepResult.plan = currentPlan.toJson();
             if (selection.ok)
             {
