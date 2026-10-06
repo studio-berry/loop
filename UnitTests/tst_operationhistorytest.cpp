@@ -1392,9 +1392,11 @@ void OperationHistoryTest::governedPublicationAuditReconstructsAfterReopen()
     QVERIFY(reopened.verify().verified);
 
     pdf::PDFOperationHistoryEvent preflight = reopened.events().last();
+    preflight.entryId = QUuid::createUuid();
     preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
     preflight.resultSummary = QJsonObject();
-    QVERIFY(reopened.appendEvent(preflight));
+    const pdf::PDFOperationResult appended = reopened.appendEvent(preflight);
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
 
     pdf::PDFGovernedPublicationAudit audit;
     const pdf::PDFOperationResult result = pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit);
@@ -1510,10 +1512,12 @@ void OperationHistoryTest::governedPublicationAuditRejectsConflictingSignOff()
         pdf::PDFOperationHistoryStore history(databasePath);
         QVERIFY(history.open());
         pdf::PDFOperationHistoryEvent event = history.events().last();
+        event.entryId = QUuid::createUuid();
         QJsonObject signOff = event.resultSummary.value(QStringLiteral("sign_off")).toObject();
         signOff.insert(field, QString(64, QLatin1Char('9')));
         event.resultSummary.insert(QStringLiteral("sign_off"), signOff);
-        QVERIFY(history.appendEvent(event));
+        const pdf::PDFOperationResult appended = history.appendEvent(event);
+        QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
         QVERIFY(history.verify().verified);
         pdf::PDFGovernedPublicationAudit audit;
         QVERIFY(!pdf::reconstructGovernedPublicationAudit(history, published, &audit));

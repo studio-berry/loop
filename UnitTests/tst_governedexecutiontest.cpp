@@ -1898,10 +1898,14 @@ void GovernedExecutionTest::gatewayEventsBindCompleteIdentities()
     failedRequest.history = &history;
     failedRequest.operationId = QStringLiteral("governed.gateway.identity");
     failedRequest.inputArtifact = input.artifact;
-    failedRequest.outputArtifact = input.artifact;
+    const auto failedOutput = artifacts.importBytes(failedRequest.candidateBytes,
+                                                    { QStringLiteral("application/pdf"), QStringLiteral("invalid-candidate.pdf") });
+    QVERIFY(failedOutput.success);
+    failedRequest.outputArtifact = failedOutput.artifact;
     pdf::PDFGovernedMutationReceipt failedReceipt;
     QVERIFY(!pdf::executeGovernedMutation(failedRequest, &failedReceipt));
     QCOMPARE(failedReceipt.status, QStringLiteral("failed"));
+    QCOMPARE(failedReceipt.reasonCode, QStringLiteral("revalidation-failed"));
 
     const QList<pdf::PDFOperationHistoryEvent> afterFailure = history.events(&historyError);
     const pdf::PDFOperationHistoryEvent* failed = nullptr;
