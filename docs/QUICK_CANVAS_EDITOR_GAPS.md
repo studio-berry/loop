@@ -2,7 +2,7 @@
 
 Two gaps found while planning the canvas-editor GUI work. Gap 1 is fixed by
 the tool-vocabulary work for issue #103. Gap 2 is fixed for page boxes by issue
-#104 (ADR-012); findings, guides and text remain undraggable.
+#104 (ADR-012); findings, guides, handles and text are refused with a visible reason (#206).
 
 Verified against `origin/dev` at `e9953734`.
 
