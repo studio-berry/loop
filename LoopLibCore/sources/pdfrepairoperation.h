@@ -320,7 +320,8 @@ public:
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
                                           PDFDocument* reopenedCandidate,
-                                          QByteArray* candidateSha256 = nullptr);
+                                          QByteArray* candidateSha256 = nullptr,
+                                          const std::function<void(const QString& stage)>& stageHook = {});
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
@@ -333,6 +334,11 @@ public:
     const QList<PDFRepairPlan>& plans() const { return m_plans; }
     const QList<PDFRepairResult>& results() const { return m_results; }
     PDFOperationSavePolicy savePolicy() const;
+    /// Lowercase hex SHA-256 of the source bytes this transaction was planned
+    /// against; empty when the source is null.
+    QString sourceSha256() const;
+    /// The cancellation control the transaction was configured with, or null.
+    const PDFOperationControl* operationControl() const { return m_options.operationControl; }
     /// Declares the save policy the caller is asking for. Stricter than the
     /// operation-declared policy is allowed; weaker is refused here, before any
     /// analysis or mutation, so a surface cannot talk an operation out of its

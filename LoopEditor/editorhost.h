@@ -503,6 +503,7 @@ private:
                                const pdf::PreflightResult& result);
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
     void finishActionListJob(const pdf::PDFJobSnapshot& snapshot);
+    void finishRollbackJob(const pdf::PDFJobSnapshot& snapshot);
     bool submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                              pdfinteraction::ActionListController::State controllerState);
     void reloadActionListRecipes();
@@ -552,6 +553,19 @@ private:
     struct PreflightWorkerOutcome;
     QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
     QHash<QString, std::shared_ptr<pdfinteraction::ActionListWorkerOutcome>> m_actionListOutcomes;
+    /// Result of one scheduled rollback. The worker thread fills it; the interactive
+    /// thread reads it in finishRollbackJob, so it crosses threads only through the
+    /// scheduler's jobFinished dispatch.
+    struct RollbackJobOutcome
+    {
+        bool ok = false;
+        QString errorMessage;
+        QString destinationPath;
+        QString revision;   // digest prefix for the announcement
+        bool retentionSuccess = true;
+        QString retentionError;
+    };
+    QHash<QString, std::shared_ptr<RollbackJobOutcome>> m_rollbackOutcomes;
     struct PreflightProfileChoice
     {
         QString id;

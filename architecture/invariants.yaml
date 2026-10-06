@@ -41,7 +41,7 @@ checks:
   - id: d5-cross-surface-identity-equality
     enforcement: declared
     summary: Cross-surface equality is plan and governed output identity under pinned inputs, not raw PDF writer bytes.
-    todo: "Proven by check_governed_parity and ADR-011 issue 656 disposition. TODO bind named cross-surface fixtures in CI."
+    todo: "Bound: check_governed_parity.py runs in CI over the named cross-surface fixture UnitTests/testdata/governed-parity, and UnitTestsProductOperatorLoop::governedPublicationParityAcrossSurfaces drives repair, action-list, Editor, and PageMaster over one fixture and plan. ADR-011 issue 656 disposition."
 reusable_for:
   - product: ivory
     maps_to: Snapshot immutability and semantic dependency rules use boundaries plus invariants, with different layer ids.

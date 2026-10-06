@@ -1,0 +1,301 @@
+{
+    "governed": {
+        "approval": {
+            "approval": {
+                "actorId": "PageMaster",
+                "decidedUtc": "2026-10-05T10:49:53.750Z",
+                "decision": "approve",
+                "decisionReference": "pagemaster-plan:0942dd379af538592b43ee47d9bebe91392263ee90e435fc11b75f71e6c8a678",
+                "evidenceSha256": "0942dd379af538592b43ee47d9bebe91392263ee90e435fc11b75f71e6c8a678",
+                "expiresUtc": "",
+                "kind": "policy",
+                "policyId": "pagemaster-preflight",
+                "rationale": "PageMaster output passed the configured preflight gate before publication."
+            },
+            "candidate_sha256": "b1091231f0750a1bd4e6b3397654c4f0c0aa3fc902786508f8a729dd10a3a873",
+            "effective_profile_digest": "8a50c9e87dbd249f98a8f5d57686794378901cd11c27d5a24e6f5b474c9ef45a",
+            "plan_digest": "0942dd379af538592b43ee47d9bebe91392263ee90e435fc11b75f71e6c8a678",
+            "schema": "loop.governed-approval",
+            "schema_version": 1,
+            "source_sha256": "c9db17f71aa323ab3e374214c84acc5261c17df126b40b93df33881f1e7d4f07"
+        },
+        "revalidation": {
+            "artifact_sha256": "b1091231f0750a1bd4e6b3397654c4f0c0aa3fc902786508f8a729dd10a3a873",
+            "bytes_verified": true,
+            "effective_profile_digest": "e8b97007c252cab0303368c28e4ff07ed9b92be223d11063c7a03bdfd11abe02",
+            "reason": "",
+            "reason_code": "",
+            "report": {
+                "baseline_report_sha256": "",
+                "checks": [
+                    {
+                        "id": "embedded-fonts",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "image-resolution",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "bleed",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "trim",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "page-size",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "color-mode",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "transparency-risk",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "color-inventory",
+                        "status": "ok"
+                    },
+                    {
+                        "id": "white-overprint",
+                        "status": "ok"
+                    }
+                ],
+                "coverage_scope": {
+                    "claim": "Loop does not claim formal GWG conformance. This run does not evaluate GWG 2022/2024 certificate requirements for sheetfed-offset or packaging; a clean result covers only its enabled checks.",
+                    "enabled_checks": [
+                        "embedded-fonts",
+                        "image-resolution",
+                        "bleed",
+                        "trim",
+                        "page-size",
+                        "color-mode",
+                        "transparency-risk",
+                        "color-inventory",
+                        "white-overprint"
+                    ],
+                    "matrix_id": "loop-gwg-pdfx-v1"
+                },
+                "decisions": [
+                ],
+                "effective_profile_digest": "e8b97007c252cab0303368c28e4ff07ed9b92be223d11063c7a03bdfd11abe02",
+                "engine_version": "",
+                "errors": [
+                ],
+                "finding_delta": {
+                    "carried_forward": [
+                    ],
+                    "compared": false,
+                    "incomplete": [
+                    ],
+                    "introduced": [
+                    ],
+                    "resolved": [
+                    ],
+                    "unchanged": [
+                    ]
+                },
+                "fixups_available": [
+                ],
+                "inspection_complete": true,
+                "pass": true,
+                "profile": "Loop Default",
+                "profile_identity": {
+                    "digest": "e8b97007c252cab0303368c28e4ff07ed9b92be223d11063c7a03bdfd11abe02",
+                    "effective_digest": "e8b97007c252cab0303368c28e4ff07ed9b92be223d11063c7a03bdfd11abe02",
+                    "id": "loop-default",
+                    "name": "Loop Default",
+                    "provisional": false,
+                    "version": "1.0.0"
+                },
+                "reason": "",
+                "reason_code": "",
+                "revalidation": {
+                    "baseline_reused": false,
+                    "check_ids": [
+                        "embedded-fonts",
+                        "image-resolution",
+                        "bleed",
+                        "trim",
+                        "page-size",
+                        "color-mode",
+                        "transparency-risk",
+                        "color-inventory",
+                        "white-overprint"
+                    ],
+                    "full": true,
+                    "invalidated_domains": [
+                        "images",
+                        "colorants",
+                        "strokes",
+                        "overprint-transparency",
+                        "fonts"
+                    ],
+                    "invalidated_evidence_domains": [
+                        "images",
+                        "colorants",
+                        "strokes",
+                        "overprint-transparency",
+                        "fonts"
+                    ],
+                    "mode": "full",
+                    "pages": [
+                    ],
+                    "reason": "full-run",
+                    "recomputed_evidence_domains": [
+                        "images",
+                        "colorants",
+                        "overprint-transparency",
+                        "fonts"
+                    ],
+                    "requires_independent_oracle": false,
+                    "reusable_evidence_domains": [
+                    ],
+                    "reuse_prior_evidence": false,
+                    "reused_check_ids": [
+                    ]
+                },
+                "schema_kind": "preflight-report",
+                "schema_version": 4,
+                "scope": {
+                    "impact": {
+                        "all_pages": false,
+                        "declared": false,
+                        "document_wide": false,
+                        "domains": [
+                        ],
+                        "full_rewrite": false,
+                        "impact_complete": false,
+                        "mutates_document": true,
+                        "object_ids": [
+                        ],
+                        "pages": [
+                        ],
+                        "requires_independent_oracle": false
+                    },
+                    "mode": "full",
+                    "plan": {
+                        "check_ids": [
+                        ],
+                        "full": true,
+                        "invalidated_domains": [
+                        ],
+                        "invalidated_evidence_domains": [
+                        ],
+                        "pages": [
+                        ],
+                        "reason": "",
+                        "recomputed_evidence_domains": [
+                        ],
+                        "requires_independent_oracle": false,
+                        "reusable_evidence_domains": [
+                        ],
+                        "reuse_prior_evidence": false,
+                        "reused_check_ids": [
+                        ]
+                    },
+                    "reason": "full-run"
+                },
+                "state": "complete",
+                "verdict": {
+                    "blocking_finding_ids": [
+                    ],
+                    "reason": "Inspection completed with no blocking findings.",
+                    "reason_code": "no-blocking-findings",
+                    "state": "pass",
+                    "waived_finding_ids": [
+                    ]
+                },
+                "warnings": [
+                    {
+                        "check_id": "color-inventory",
+                        "evidence_ids": [
+                            "colorant:0"
+                        ],
+                        "id": "1aad53f09d01ad5a",
+                        "message": "Process output separation: Cyan",
+                        "object_id": "Cyan",
+                        "scope": "document",
+                        "severity": "info",
+                        "type": "separation"
+                    },
+                    {
+                        "check_id": "color-inventory",
+                        "evidence_ids": [
+                            "colorant:1"
+                        ],
+                        "id": "0e2ddbd45f3fe248",
+                        "message": "Process output separation: Magenta",
+                        "object_id": "Magenta",
+                        "scope": "document",
+                        "severity": "info",
+                        "type": "separation"
+                    },
+                    {
+                        "check_id": "color-inventory",
+                        "evidence_ids": [
+                            "colorant:2"
+                        ],
+                        "id": "47efa0eab3bba2fb",
+                        "message": "Process output separation: Yellow",
+                        "object_id": "Yellow",
+                        "scope": "document",
+                        "severity": "info",
+                        "type": "separation"
+                    },
+                    {
+                        "check_id": "color-inventory",
+                        "evidence_ids": [
+                            "colorant:3"
+                        ],
+                        "id": "ce16f2801548a9db",
+                        "message": "Process output separation: Black",
+                        "object_id": "Black",
+                        "scope": "document",
+                        "severity": "info",
+                        "type": "separation"
+                    }
+                ]
+            },
+            "report_sha256": "8f1a3f00af20bea98ae753286b8207abec08532a22c925319453db9e8f8539c0",
+            "schema": "loop.governed-revalidation",
+            "schema_version": 1,
+            "sign_off_eligible": true,
+            "state": "complete",
+            "verdict": {
+                "blocking_finding_ids": [
+                ],
+                "reason": "Inspection completed with no blocking findings.",
+                "reason_code": "no-blocking-findings",
+                "state": "pass",
+                "waived_finding_ids": [
+                ]
+            }
+        },
+        "sign_off": {
+            "approval": {
+                "actorId": "PageMaster",
+                "decidedUtc": "2026-10-05T10:49:54.121Z",
+                "decision": "approve",
+                "decisionReference": "published-revalidation:b1091231f0750a1bd4e6b3397654c4f0c0aa3fc902786508f8a729dd10a3a873",
+                "evidenceSha256": "8f1a3f00af20bea98ae753286b8207abec08532a22c925319453db9e8f8539c0",
+                "expiresUtc": "",
+                "kind": "system",
+                "policyId": "pagemaster-postflight",
+                "rationale": "Published bytes were reopened and passed the effective preflight profile."
+            },
+            "candidate_sha256": "b1091231f0750a1bd4e6b3397654c4f0c0aa3fc902786508f8a729dd10a3a873",
+            "effective_profile_digest": "e8b97007c252cab0303368c28e4ff07ed9b92be223d11063c7a03bdfd11abe02",
+            "plan_digest": "0942dd379af538592b43ee47d9bebe91392263ee90e435fc11b75f71e6c8a678",
+            "published_sha256": "b1091231f0750a1bd4e6b3397654c4f0c0aa3fc902786508f8a729dd10a3a873",
+            "revalidation_report_sha256": "8f1a3f00af20bea98ae753286b8207abec08532a22c925319453db9e8f8539c0",
+            "schema": "loop.governed-sign-off",
+            "schema_version": 1,
+            "source_sha256": "c9db17f71aa323ab3e374214c84acc5261c17df126b40b93df33881f1e7d4f07"
+        }
+    }
+}

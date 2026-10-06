@@ -99,6 +99,12 @@ struct LOOPLIBCORESHARED_EXPORT PreflightEvidenceBundleRequest
     QJsonObject signOff;
     /// Corrected output identity, when a correction is included.
     std::optional<PreflightEvidenceBundleOutput> output;
+    /// Optional path to the published artifact the sign-off binds. When set,
+    /// the bundle re-reads and re-hashes these bytes and refuses when they no
+    /// longer match the sign-off's `published_sha256` (`invalid-document-changed`).
+    /// A sign-off with neither this path nor an `output` identity is refused
+    /// rather than synthesized.
+    QString publishedArtifactPath;
     /// Operation-history slice for the revision, in sequence order.
     QList<PDFOperationHistoryEvent> history;
     /// Retained rollback points. Paths are reduced to content digests.

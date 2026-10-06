@@ -21,13 +21,19 @@
 // SOFTWARE.
 
 #include "pdfartifactstore.h"
+#include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
+#include "pdfgovernedexecution.h"
 #include "pdfoperationhistorystore.h"
 
 #include <QCryptographicHash>
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -40,6 +46,49 @@
 #include <atomic>
 #include <memory>
 
+namespace
+{
+
+/// A minimal, readable one-page PDF the governed profile below accepts. Distinct
+/// page sizes produce distinct digests so a test can hold several revisions.
+QByteArray minimalPdfBytes(qreal width = 200, qreal height = 200)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, width, height));
+    const pdf::PDFDocument document = builder.build();
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    pdf::PDFDocumentWriter writer(nullptr);
+    writer.write(&buffer, &document);
+    buffer.close();
+    return bytes;
+}
+
+QJsonObject rollbackTestProfile()
+{
+    return QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Rollback smoke") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") }, { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+}
+
+/// A well-formed rollback approval with the profile and sign-off identity the
+/// revalidating rollback requires.
+void approveRollback(pdf::PDFRollbackRequest& request)
+{
+    request.approval.kind = pdf::PDFApprovalKind::Human;
+    request.approval.actorId = QStringLiteral("test-operator");
+    request.approval.decision = QStringLiteral("approve");
+    request.approval.policyId = QStringLiteral("desktop-rollback");
+    request.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    request.profile = rollbackTestProfile();
+    request.signOffActor = QStringLiteral("test-rollback");
+    request.signOffPolicy = QStringLiteral("rollback-postflight");
+}
+
+}   // namespace
+
 class OperationHistoryTest final : public QObject
 {
     Q_OBJECT
@@ -49,8 +98,12 @@ private slots:
     void artifactStoreStreamsAndDetectsTampering();
     void importedInputIsReadOnlyAndDigestAddressed();
     void noSavePathProducesAnApprovedOutputRecord();
+    void approvalExpiryAndRevocationKindRoundTrip();
+    void unreadableOrCompromisedApprovalHistoryRefusesPublication();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
+    void rollbackRevalidatesAndRecordsGovernedReceipt();
+    void rollbackRefusesWithoutProfileOrOnCompromisedChain();
     void externalPayloadTamperingCompromisesChain();
     void provenanceKindsRoundTripAndMiddleDeletionCompromisesChain();
     void schemaVersionPersistsAcrossReopen();
@@ -61,6 +114,9 @@ private slots:
     void cancelledPreflightRunIsNotAccepted();
     void schemaMigratedEventAppendedOnRewrite();
     void historyDatabaseUpgradeRecordsSchemaMigratedEvent();
+    void governedPublicationAuditReconstructsAfterReopen();
+    void governedPublicationAuditRefusesOnTamperedChain();
+    void governedPublicationAuditRejectsConflictingSignOff();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -182,9 +238,12 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     QTemporaryDir temporary;
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
-    const auto input = artifacts.importBytes("input", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    const auto middle = artifacts.importBytes("middle", { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
-    const auto final = artifacts.importBytes("final", { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
+    const QByteArray inputBytes = minimalPdfBytes(200, 200);
+    const QByteArray middleBytes = minimalPdfBytes(210, 200);
+    const QByteArray finalBytes = minimalPdfBytes(220, 200);
+    const auto input = artifacts.importBytes(inputBytes, { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    const auto middle = artifacts.importBytes(middleBytes, { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
+    const auto final = artifacts.importBytes(finalBytes, { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
     const QByteArray inputError = input.errorMessage.toUtf8();
     const QByteArray middleError = middle.errorMessage.toUtf8();
     const QByteArray finalError = final.errorMessage.toUtf8();
@@ -246,7 +305,7 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
 
     QFile current(QDir(temporary.path()).filePath(QStringLiteral("current.pdf")));
     QVERIFY(current.open(QIODevice::WriteOnly));
-    QVERIFY(current.write("input") == 5);
+    QVERIFY(current.write(inputBytes) == inputBytes.size());
     current.close();
 
     pdf::PDFRollbackRequest rollback;
@@ -254,10 +313,7 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     rollback.targetArtifactSha256 = final.artifact.sha256;
     rollback.targetExecutionId = finalExecution;
     rollback.reason = QStringLiteral("test rollback");
-    rollback.approval.kind = pdf::PDFApprovalKind::System;
-    rollback.approval.actorId = QStringLiteral("test-system");
-    rollback.approval.decision = QStringLiteral("approve");
-    rollback.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    approveRollback(rollback);
     const auto eventsBeforeRollback = history.events();
     QCOMPARE(eventsBeforeRollback.size(), 2);
     QVERIFY(history.rollbackTo(rollback, artifacts, current.fileName()));
@@ -265,8 +321,9 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     QCOMPARE(eventsAfterRollback.size(), 4);
     QCOMPARE(eventsAfterRollback.at(0).entryId, eventsBeforeRollback.at(0).entryId);
     QCOMPARE(eventsAfterRollback.at(1).entryId, eventsBeforeRollback.at(1).entryId);
+    QCOMPARE(eventsAfterRollback.at(3).status, pdf::PDFOperationHistoryStatus::RolledBack);
     QVERIFY(current.open(QIODevice::ReadOnly));
-    QCOMPARE(current.readAll(), QByteArray("final"));
+    QCOMPARE(current.readAll(), finalBytes);
     current.close();
     QVERIFY(history.verify().verified);
 
@@ -281,7 +338,162 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
                                   QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(!history.rollbackTo(rollback, artifacts, current.fileName()));
     QVERIFY(current.open(QIODevice::ReadOnly));
-    QCOMPARE(current.readAll(), QByteArray("final"));
+    QCOMPARE(current.readAll(), finalBytes);
+}
+
+void OperationHistoryTest::rollbackRevalidatesAndRecordsGovernedReceipt()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const QByteArray sourceBytes = minimalPdfBytes(300, 300);
+    const QByteArray targetBytes = minimalPdfBytes(320, 300);
+    const auto source = artifacts.importBytes(sourceBytes, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    const auto target = artifacts.importBytes(targetBytes, { QStringLiteral("application/pdf"), QStringLiteral("target.pdf") });
+    QVERIFY2(source.success, source.errorMessage.toUtf8().constData());
+    QVERIFY2(target.success, target.errorMessage.toUtf8().constData());
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QString openError;
+    QVERIFY2(history.open(&openError), openError.toUtf8().constData());
+    QVERIFY(history.registerOriginalInput(source.artifact));
+    QVERIFY(history.registerArtifact(target.artifact));
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("test.revision");
+    execution.input = source.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = executionId;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.output = target.artifact;
+    accepted.approval.kind = pdf::PDFApprovalKind::Human;
+    accepted.approval.actorId = QStringLiteral("test-user");
+    accepted.approval.decision = QStringLiteral("approve");
+    accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    QVERIFY(history.appendEvent(accepted));
+
+    const QString destination = QDir(temporary.path()).filePath(QStringLiteral("restored.pdf"));
+    pdf::PDFRollbackRequest rollback;
+    rollback.currentArtifactSha256 = source.artifact.sha256;
+    rollback.targetArtifactSha256 = target.artifact.sha256;
+    rollback.targetExecutionId = executionId;
+    rollback.reason = QStringLiteral("governed rollback");
+    approveRollback(rollback);
+    {
+        QFile existing(destination);
+        QVERIFY(existing.open(QIODevice::WriteOnly));
+        QCOMPARE(existing.write(sourceBytes), qint64(sourceBytes.size()));
+    }
+    rollback.approval.decision = QStringLiteral("reject");
+    QVERIFY(!history.rollbackTo(rollback, artifacts, destination));
+    {
+        QFile existing(destination);
+        QVERIFY(existing.open(QIODevice::ReadOnly));
+        QCOMPARE(existing.readAll(), sourceBytes);
+    }
+    rollback.approval.decision = QStringLiteral("approve");
+    rollback.approval.expiresUtc = rollback.approval.decidedUtc.addSecs(3600);
+    QVERIFY(history.rollbackTo(rollback, artifacts, destination));
+
+    // The rolled-back event carries the same governed receipt every other surface
+    // records, and the sign-off binds the restored bytes.
+    const auto events = history.events();
+    QVERIFY(!events.isEmpty());
+    const pdf::PDFOperationHistoryEvent& rolledBack = events.last();
+    QCOMPARE(rolledBack.status, pdf::PDFOperationHistoryStatus::RolledBack);
+    const QJsonObject governed = rolledBack.resultSummary.value(QStringLiteral("governed")).toObject();
+    QVERIFY(!governed.isEmpty());
+    const QJsonObject approval = governed.value(QStringLiteral("approval")).toObject();
+    const QJsonObject revalidation = governed.value(QStringLiteral("revalidation")).toObject();
+    const QJsonObject signOff = governed.value(QStringLiteral("sign_off")).toObject();
+    QCOMPARE(approval.value(QStringLiteral("candidate_sha256")).toString(), target.artifact.sha256);
+    QCOMPARE(approval.value(QStringLiteral("source_sha256")).toString(), source.artifact.sha256);
+    QVERIFY(revalidation.value(QStringLiteral("bytes_verified")).toBool());
+    QVERIFY(revalidation.value(QStringLiteral("sign_off_eligible")).toBool());
+    QCOMPARE(revalidation.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(), QStringLiteral("pass"));
+    QCOMPARE(signOff.value(QStringLiteral("published_sha256")).toString(), target.artifact.sha256);
+    QCOMPARE(rolledBack.reportArtifactSha256, signOff.value(QStringLiteral("revalidation_report_sha256")).toString());
+    QCOMPARE(rolledBack.effectiveProfileDigest, signOff.value(QStringLiteral("effective_profile_digest")).toString());
+    QVERIFY(!rolledBack.effectiveProfileDigest.isEmpty());
+    QVERIFY(history.verify().verified);
+
+    QFile restored(destination);
+    QVERIFY(restored.open(QIODevice::ReadOnly));
+    QCOMPARE(restored.readAll(), targetBytes);
+    pdf::PDFGovernedPublicationAudit audit;
+    QVERIFY(pdf::reconstructGovernedPublicationAudit(history, target.artifact.sha256, &audit));
+    QCOMPARE(audit.executionId, rolledBack.executionId);
+    QCOMPARE(audit.operationId, QStringLiteral("history.rollback"));
+}
+
+void OperationHistoryTest::rollbackRefusesWithoutProfileOrOnCompromisedChain()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const QByteArray sourceBytes = minimalPdfBytes(400, 400);
+    const QByteArray targetBytes = minimalPdfBytes(420, 400);
+    const auto source = artifacts.importBytes(sourceBytes, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    const auto target = artifacts.importBytes(targetBytes, { QStringLiteral("application/pdf"), QStringLiteral("target.pdf") });
+    QVERIFY2(source.success, source.errorMessage.toUtf8().constData());
+    QVERIFY2(target.success, target.errorMessage.toUtf8().constData());
+
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QString openError;
+    QVERIFY2(history.open(&openError), openError.toUtf8().constData());
+    QVERIFY(history.registerOriginalInput(source.artifact));
+    QVERIFY(history.registerArtifact(target.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("test.revision");
+    execution.input = source.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = executionId;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.output = target.artifact;
+    QVERIFY(history.appendEvent(accepted));
+
+    pdf::PDFRollbackRequest rollback;
+    rollback.currentArtifactSha256 = source.artifact.sha256;
+    rollback.targetArtifactSha256 = target.artifact.sha256;
+    rollback.targetExecutionId = executionId;
+    rollback.approval.kind = pdf::PDFApprovalKind::Human;
+    rollback.approval.actorId = QStringLiteral("test-operator");
+    rollback.approval.decision = QStringLiteral("approve");
+    rollback.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    const QString destination = QDir(temporary.path()).filePath(QStringLiteral("refused.pdf"));
+    const int eventsBefore = history.events().size();
+
+    // P2: a rollback without a profile/sign-off identity is refused, not recorded.
+    const pdf::PDFOperationResult missingProfile = history.rollbackTo(rollback, artifacts, destination);
+    QVERIFY(!missingProfile);
+    QVERIFY(missingProfile.getErrorMessage().contains(QStringLiteral("rollback-profile-missing")));
+    QVERIFY(!QFileInfo::exists(destination));
+    QCOMPARE(history.events().size(), eventsBefore);
+
+    // P4: a rewritten history row compromises the chain, and the rollback refuses
+    // before extending it. No destination, no new event.
+    const QString connectionName = QStringLiteral("history-rollback-tamper");
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+    database.setDatabaseName(databasePath);
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE sequence = 1")));
+    database.close();
+    database = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
+
+    QVERIFY(!history.verify().verified);
+    approveRollback(rollback);
+    const pdf::PDFOperationResult compromised = history.rollbackTo(rollback, artifacts, destination);
+    QVERIFY(!compromised);
+    QVERIFY(compromised.getErrorMessage().contains(QStringLiteral("does not verify")));
+    QVERIFY(!QFileInfo::exists(destination));
+    QCOMPARE(history.events().size(), eventsBefore);
 }
 
 void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
@@ -360,6 +572,7 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
         pdf::PDFOperationHistoryEventKind::DecisionInvalidated,
         pdf::PDFOperationHistoryEventKind::CertificateIssued,
         pdf::PDFOperationHistoryEventKind::CertificateInvalidated,
+        pdf::PDFOperationHistoryEventKind::ApprovalRevoked,
         pdf::PDFOperationHistoryEventKind::SchemaMigrated
     };
 
@@ -984,6 +1197,390 @@ void OperationHistoryTest::noSavePathProducesAnApprovedOutputRecord()
     candidate.isOriginalInput = false;
     QVERIFY(!candidate.approvedOutput);
     QVERIFY(!candidate.toJson().value(QStringLiteral("approvedOutput")).toBool());
+}
+
+void OperationHistoryTest::approvalExpiryAndRevocationKindRoundTrip()
+{
+    // The optional expiry is additive and round-trips through the shared
+    // approval JSON without changing the well-formedness contract.
+    pdf::PDFApprovalRecord approval;
+    approval.kind = pdf::PDFApprovalKind::Human;
+    approval.actorId = QStringLiteral("operator");
+    approval.decision = QStringLiteral("approve");
+    approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    approval.expiresUtc = approval.decidedUtc.addSecs(3600);
+    QVERIFY(approval.isValid());
+    QVERIFY(!approval.isExpiredAt(approval.decidedUtc));
+    QVERIFY(!approval.isExpiredAt(approval.decidedUtc.addSecs(3599)));
+    QVERIFY(approval.isExpiredAt(approval.decidedUtc.addSecs(3600)));
+    QVERIFY(approval.isExpiredAt(approval.decidedUtc.addSecs(7200)));
+
+    const QJsonObject json = approval.toJson();
+    QVERIFY(json.contains(QStringLiteral("expiresUtc")));
+    const pdf::PDFApprovalRecord roundTripped = pdf::PDFApprovalRecord::fromJson(json);
+    QCOMPARE(roundTripped.expiresUtc.toUTC(), approval.expiresUtc.toUTC());
+    QCOMPARE(roundTripped.toJson(), json);
+
+    // An absent expiry round-trips as absent and is never expired.
+    const pdf::PDFApprovalRecord withoutExpiry;
+    QVERIFY(!withoutExpiry.isExpiredAt(QDateTime::currentDateTimeUtc()));
+    QVERIFY(!pdf::PDFApprovalRecord::fromJson(withoutExpiry.toJson()).expiresUtc.isValid());
+
+    // ApprovalRevoked is a canonical provenance kind in both directions.
+    QCOMPARE(pdf::pdfOperationHistoryEventKindToString(pdf::PDFOperationHistoryEventKind::ApprovalRevoked),
+             QStringLiteral("ApprovalRevoked"));
+    QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("ApprovalRevoked")),
+             pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
+    QCOMPARE(pdf::pdfOperationHistoryEventKindFromString(QStringLiteral("approvalrevoked")),
+             pdf::PDFOperationHistoryEventKind::ApprovalRevoked);
+}
+
+/// Appends one governed publication (running + accepted FixApplied) to a fresh
+/// store so a reconstruction reader can be exercised after reopen or tamper.
+bool appendGovernedPublicationFixture(const QString& databasePath,
+                                      pdf::PDFArtifactStore& artifacts,
+                                      QString* publishedSha256,
+                                      QUuid* executionId)
+{
+    const auto input = artifacts.importBytes(QByteArrayLiteral("governed source revision"),
+                                             { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    const auto output = artifacts.importBytes(QByteArrayLiteral("governed published candidate"),
+                                              { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
+    if (!input.success || !output.success)
+    {
+        return false;
+    }
+
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString reportDigest(64, QLatin1Char('f'));
+    const QString profileDigest(64, QLatin1Char('a'));
+    const QString sourceSha256 = input.artifact.sha256;
+    const QString candidateSha256 = output.artifact.sha256;
+    const QDateTime decidedUtc = QDateTime::currentDateTimeUtc();
+
+    const QJsonObject approvalRecord{
+        { QStringLiteral("kind"), QStringLiteral("human") },
+        { QStringLiteral("actorId"), QStringLiteral("operator") },
+        { QStringLiteral("decision"), QStringLiteral("approve") },
+        { QStringLiteral("policyId"), QStringLiteral("review") },
+        { QStringLiteral("rationale"), QStringLiteral("Reviewed the exact plan.") },
+        { QStringLiteral("evidenceSha256"), planDigest },
+        { QStringLiteral("decidedUtc"), decidedUtc.toString(Qt::ISODateWithMs) }
+    };
+    const QJsonObject governedApproval{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-approval") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("approval"), approvalRecord }
+    };
+    const QJsonObject signOffApproval{
+        { QStringLiteral("kind"), QStringLiteral("system") },
+        { QStringLiteral("actorId"), QStringLiteral("PdfTool") },
+        { QStringLiteral("decision"), QStringLiteral("approve") },
+        { QStringLiteral("policyId"), QStringLiteral("repair-postflight") },
+        { QStringLiteral("evidenceSha256"), reportDigest },
+        { QStringLiteral("decisionReference"), QStringLiteral("published-revalidation:%1").arg(candidateSha256) },
+        { QStringLiteral("decidedUtc"), decidedUtc.toString(Qt::ISODateWithMs) }
+    };
+    const QJsonObject signOff{
+        { QStringLiteral("schema"), QStringLiteral("loop.governed-sign-off") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("plan_digest"), planDigest },
+        { QStringLiteral("source_sha256"), sourceSha256 },
+        { QStringLiteral("candidate_sha256"), candidateSha256 },
+        { QStringLiteral("published_sha256"), candidateSha256 },
+        { QStringLiteral("revalidation_report_sha256"), reportDigest },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("approval"), signOffApproval }
+    };
+    const QJsonObject revalidation{
+        { QStringLiteral("state"), QStringLiteral("complete") },
+        { QStringLiteral("bytes_verified"), true },
+        { QStringLiteral("artifact_sha256"), candidateSha256 },
+        { QStringLiteral("report_sha256"), reportDigest },
+        { QStringLiteral("effective_profile_digest"), profileDigest },
+        { QStringLiteral("report"),
+          QJsonObject{ { QStringLiteral("finding_delta"),
+                         QJsonObject{ { QStringLiteral("resolved"), 1 }, { QStringLiteral("introduced"), 0 } } } } }
+    };
+
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QString openError;
+    if (!history.open(&openError) || !history.registerArtifact(input.artifact))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("repair.add-bleed");
+    execution.operationVersion = 1;
+    execution.input = input.artifact;
+    QUuid id;
+    if (!history.beginExecution(execution, &id))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = id;
+    running.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.operatorIdentity = QStringLiteral("operator");
+    running.documentRevisionDigest = sourceSha256;
+    running.effectiveProfileDigest = profileDigest;
+    running.approval.kind = pdf::PDFApprovalKind::Human;
+    running.approval.actorId = QStringLiteral("operator");
+    running.approval.decision = QStringLiteral("approve");
+    running.approval.decidedUtc = decidedUtc;
+    if (!history.appendEvent(running))
+    {
+        return false;
+    }
+
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = id;
+    accepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.operatorIdentity = QStringLiteral("PdfTool");
+    accepted.documentRevisionDigest = candidateSha256;
+    accepted.effectiveProfileDigest = profileDigest;
+    accepted.output = output.artifact;
+    accepted.reportArtifactSha256 = reportDigest;
+    accepted.approval = pdf::PDFApprovalRecord::fromJson(signOffApproval);
+    accepted.resultSummary = QJsonObject{
+        { QStringLiteral("status"), QStringLiteral("passed") },
+        { QStringLiteral("approval"), governedApproval },
+        { QStringLiteral("revalidation"), revalidation },
+        { QStringLiteral("sign_off"), signOff }
+    };
+    if (!history.appendEvent(accepted) || !history.verify().verified)
+    {
+        return false;
+    }
+
+    if (publishedSha256)
+    {
+        *publishedSha256 = candidateSha256;
+    }
+    if (executionId)
+    {
+        *executionId = id;
+    }
+    return true;
+}
+
+void OperationHistoryTest::governedPublicationAuditReconstructsAfterReopen()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    QString publishedSha256;
+    QUuid executionId;
+    QVERIFY(appendGovernedPublicationFixture(databasePath, artifacts, &publishedSha256, &executionId));
+
+    const QByteArray sourceBytes = QByteArrayLiteral("governed source revision");
+    const QString sourceSha256 = QString::fromLatin1(QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256).toHex());
+
+    // Close/reopen: the audit reconstructs the same identities from the durable chain.
+    pdf::PDFOperationHistoryStore reopened(databasePath);
+    QString openError;
+    QVERIFY2(reopened.open(&openError), qPrintable(openError));
+    QVERIFY(reopened.verify().verified);
+
+    pdf::PDFOperationHistoryEvent preflight = reopened.events().last();
+    preflight.entryId = QUuid::createUuid();
+    preflight.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    preflight.resultSummary = QJsonObject();
+    const pdf::PDFOperationResult appended = reopened.appendEvent(preflight);
+    QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult result = pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QVERIFY(audit.refusal.isEmpty());
+    QCOMPARE(audit.publishedSha256, publishedSha256);
+    QCOMPARE(audit.planDigest, QString(64, QLatin1Char('c')));
+    QCOMPARE(audit.sourceSha256, sourceSha256);
+    QCOMPARE(audit.candidateSha256, publishedSha256);
+    QCOMPARE(audit.effectiveProfileDigest, QString(64, QLatin1Char('a')));
+    QCOMPARE(audit.operationId, QStringLiteral("repair.add-bleed"));
+    QCOMPARE(audit.executionId, executionId);
+    QCOMPARE(audit.inputArtifact.sha256, sourceSha256);
+    // "Who approved what output": the authorizing approval, not the certificate.
+    QCOMPARE(audit.approval.kind, pdf::PDFApprovalKind::Human);
+    QCOMPARE(audit.approval.actorId, QStringLiteral("operator"));
+    QCOMPARE(audit.operatorIdentity, QStringLiteral("PdfTool"));
+    // Validation link.
+    QCOMPARE(audit.revalidationState, QStringLiteral("complete"));
+    QCOMPARE(audit.revalidationReportSha256, QString(64, QLatin1Char('f')));
+    QCOMPARE(audit.validationDelta.value(QStringLiteral("resolved")).toInt(), 1);
+    // Sign-off link round-trips from the chain.
+    QVERIFY(audit.signOff.has_value());
+    QCOMPARE(audit.signOff->publishedSha256, publishedSha256);
+    QCOMPARE(audit.signOff->planDigest, QString(64, QLatin1Char('c')));
+    QVERIFY(audit.toJson().value(QStringLiteral("reconstructed")).toBool());
+
+    // An output the chain never accepted is refused, not fabricated.
+    pdf::PDFGovernedPublicationAudit missing;
+    QVERIFY(!pdf::reconstructGovernedPublicationAudit(reopened, QString(64, QLatin1Char('9')), &missing));
+    QVERIFY(!missing.reconstructed);
+    QCOMPARE(missing.refusal, QStringLiteral("no-accepted-publication"));
+}
+
+void OperationHistoryTest::governedPublicationAuditRefusesOnTamperedChain()
+{
+    const auto tamper = [](const QString& label, const QString& statement, const QString& refusalPrefix)
+    {
+        QTemporaryDir temporary;
+        if (!temporary.isValid())
+        {
+            return false;
+        }
+        const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+        pdf::PDFArtifactStore artifacts(temporary.path());
+        QString publishedSha256;
+        if (!appendGovernedPublicationFixture(databasePath, artifacts, &publishedSha256, nullptr))
+        {
+            return false;
+        }
+
+        const QString connectionName = QStringLiteral("governed-audit-tamper-%1").arg(label);
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(databasePath);
+        if (!database.open())
+        {
+            return false;
+        }
+        QSqlQuery query(database);
+        const bool executed = query.exec(statement);
+        database.close();
+        database = QSqlDatabase();
+        QSqlDatabase::removeDatabase(connectionName);
+        if (!executed)
+        {
+            return false;
+        }
+
+        pdf::PDFOperationHistoryStore reopened(databasePath);
+        if (!reopened.open())
+        {
+            return false;
+        }
+        if (reopened.verify().verified)
+        {
+            return false;
+        }
+        pdf::PDFGovernedPublicationAudit audit;
+        if (pdf::reconstructGovernedPublicationAudit(reopened, publishedSha256, &audit))
+        {
+            return false;
+        }
+        if (audit.reconstructed || !audit.refusal.startsWith(refusalPrefix))
+        {
+            return false;
+        }
+        return true;
+    };
+
+    // An UPDATE of the accepted event's payload breaks the hash chain.
+    QVERIFY(tamper(QStringLiteral("update"),
+                   QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE status = 'accepted'"),
+                   QStringLiteral("chain-")));
+    // A DELETE of a history row is a chain break too.
+    QVERIFY(tamper(QStringLiteral("delete"),
+                   QStringLiteral("DELETE FROM history_events WHERE sequence = 1"),
+                   QStringLiteral("chain-")));
+}
+
+void OperationHistoryTest::governedPublicationAuditRejectsConflictingSignOff()
+{
+    for (const QString& field : { QStringLiteral("published_sha256"), QStringLiteral("candidate_sha256"),
+                                  QStringLiteral("source_sha256"), QStringLiteral("plan_digest"),
+                                  QStringLiteral("effective_profile_digest"), QStringLiteral("revalidation_report_sha256") })
+    {
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+        pdf::PDFArtifactStore artifacts(temporary.path());
+        QString published;
+        QVERIFY(appendGovernedPublicationFixture(databasePath, artifacts, &published, nullptr));
+        pdf::PDFOperationHistoryStore history(databasePath);
+        QVERIFY(history.open());
+        pdf::PDFOperationHistoryEvent event = history.events().last();
+        event.entryId = QUuid::createUuid();
+        QJsonObject signOff = event.resultSummary.value(QStringLiteral("sign_off")).toObject();
+        signOff.insert(field, QString(64, QLatin1Char('9')));
+        event.resultSummary.insert(QStringLiteral("sign_off"), signOff);
+        const pdf::PDFOperationResult appended = history.appendEvent(event);
+        QVERIFY2(appended, qPrintable(appended.getErrorMessage()));
+        QVERIFY(history.verify().verified);
+        pdf::PDFGovernedPublicationAudit audit;
+        QVERIFY(!pdf::reconstructGovernedPublicationAudit(history, published, &audit));
+        QVERIFY(!audit.reconstructed);
+        QCOMPARE(audit.refusal, QStringLiteral("sign-off-identity-mismatch"));
+    }
+}
+
+void OperationHistoryTest::unreadableOrCompromisedApprovalHistoryRefusesPublication()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    pdf::PDFOperationHistoryStore history(temporary.filePath(QStringLiteral("history.sqlite3")));
+    const QByteArray candidateBytes("candidate");
+    const QString planDigest(64, QLatin1Char('c'));
+    const QString sourceSha256(64, QLatin1Char('b'));
+    pdf::PDFGovernedExecutionApproval approval;
+    approval.planDigest = planDigest;
+    approval.sourceSha256 = sourceSha256;
+    approval.candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateBytes, QCryptographicHash::Sha256).toHex());
+    approval.approval.kind = pdf::PDFApprovalKind::Human;
+    approval.approval.actorId = QStringLiteral("operator");
+    approval.approval.decision = QStringLiteral("approve");
+    approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    approval.approval.decisionReference = QStringLiteral("approval:history");
+    pdf::PDFApprovalAuthorizationContext context;
+    context.history = &history;
+    const QString outputPath = temporary.filePath(QStringLiteral("output.pdf"));
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-history"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval, planDigest, sourceSha256, candidateBytes,
+                                          outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail, context));
+    QVERIFY(!QFile::exists(outputPath));
+
+    QUuid executionId;
+    const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY(input.success);
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(input.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("governed.history");
+    execution.input = input.artifact;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent revoked;
+    revoked.executionId = executionId;
+    revoked.kind = pdf::PDFOperationHistoryEventKind::ApprovalRevoked;
+    revoked.status = pdf::PDFOperationHistoryStatus::Rejected;
+    revoked.approval.decisionReference = approval.approval.decisionReference;
+    QVERIFY(history.appendEvent(revoked));
+    QVERIFY(history.verify().verified);
+    const QString connectionName = QStringLiteral("approval-history-tampering");
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(history.databasePath());
+        QVERIFY(database.open());
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET event_kind = 'operation'")));
+    }
+    QSqlDatabase::removeDatabase(connectionName);
+    QCOMPARE(pdf::resolveApprovalAuthorization(approval, context).code, QStringLiteral("approval-history"));
+    QVERIFY(!pdf::publishGovernedArtifact(approval, planDigest, sourceSha256, candidateBytes,
+                                          outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail, context));
+    QVERIFY(!QFile::exists(outputPath));
 }
 
 QTEST_MAIN(OperationHistoryTest)
