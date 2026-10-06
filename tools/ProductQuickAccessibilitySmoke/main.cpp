@@ -53,7 +53,7 @@ void runFindingNavigationFixture(QGuiApplication& application,
     host.openFileUrl(QUrl::fromLocalFile(original));
     auto* timer = new QTimer(&application);
     QObject::connect(timer, &QTimer::timeout, &application,
-                     [&application, &host, window, timer, directory, replacement, onPassed, phase = 0, originalKey = QString(), findingId = QString()]() mutable
+                     [&application, &host, window, timer, directory, replacement, onPassed, phase = 0, originalRevision = QString(), findingId = QString()]() mutable
                      {
                          auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
                          auto* inspector = qobject_cast<pdfinteraction::InspectorModel*>(host.inspector());
@@ -64,8 +64,8 @@ void runFindingNavigationFixture(QGuiApplication& application,
                          if (phase == 0)
                          {
                              host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
-                             originalKey = preflight->documentKey();
-                             preflight->beginRun(originalKey, preflight->documentRevision(), QStringLiteral("source-profile"), QStringLiteral("navigation-fixture"));
+                             originalRevision = preflight->documentRevision();
+                             preflight->beginRun(preflight->documentKey(), preflight->documentRevision(), QStringLiteral("source-profile"), QStringLiteral("navigation-fixture"));
                              pdf::PreflightFinding finding;
                              finding.checkId = QStringLiteral("bleed");
                              finding.scope = QStringLiteral("page");
@@ -130,7 +130,7 @@ void runFindingNavigationFixture(QGuiApplication& application,
                              host.openFileUrl(QUrl::fromLocalFile(replacement));
                              return;
                          }
-                         if (preflight->documentKey() == originalKey)
+                         if (preflight->documentRevision() == originalRevision)
                          {
                              return;
                          }
