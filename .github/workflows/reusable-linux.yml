@@ -405,11 +405,13 @@ jobs:
         run: python3 -m unittest scripts.agent.test_check_change scripts.agent.test_architecture_contracts -v
 
       - name: Upload agent-fast evidence
-        if: inputs.fast
+        if: ${{ always() && inputs.fast }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: agent-fast-evidence
-          path: loop/agent-fast-evidence.json
+          path: |
+            loop/agent-fast-evidence.json
+            loop/build/Testing/Temporary/LastTest.log
           if-no-files-found: error
 
       - name: Verify loop-release product surface
