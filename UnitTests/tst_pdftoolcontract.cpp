@@ -56,6 +56,10 @@ ToolRun runPdfTool(const QStringList& arguments)
     QProcess process;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    if (arguments.value(0) == QStringLiteral("action-list"))
+    {
+        environment.insert(QStringLiteral("QT_FORCE_STDERR_LOGGING"), QStringLiteral("1"));
+    }
     process.setProcessEnvironment(environment);
     process.setProgram(QStringLiteral(PDFTOOL_EXECUTABLE_PATH));
     process.setArguments(arguments);
