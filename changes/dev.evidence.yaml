@@ -1,0 +1,14 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: action-list-preflight-shared-parameter-registration
+    evidence:
+      - unit:agent-policy:pdftool
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:core
+      - architecture:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+unresolved:
+  - Full promotion qualification is provided by hosted CI; shared-parser runtime validation uses the isolated PR 221 build.

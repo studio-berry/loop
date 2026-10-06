@@ -806,7 +806,10 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addPositionalArgument("input", "Input PDF (or multiple PDFs for batch).", "input.pdf ...");
         parser->addOption(QCommandLineOption(QStringList{ QStringLiteral("o"), QStringLiteral("output") }, "Output PDF for action-list run.", "file"));
         parser->addOption(QCommandLineOption("output-dir", "Output directory for action-list batch.", "directory"));
-        parser->addOption(QCommandLineOption("param", "Invocation binding as key=value; may be repeated.", "key=value"));
+        if (!optionFlags.testFlag(PreflightProfile))
+        {
+            parser->addOption(QCommandLineOption("param", "Invocation binding as key=value; may be repeated.", "key=value"));
+        }
         parser->addOption(QCommandLineOption("pswd", "Password for encrypted input PDFs.", "password"));
         parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
     }
