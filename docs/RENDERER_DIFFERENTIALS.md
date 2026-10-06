@@ -44,6 +44,34 @@ asserts that escalated render matches `overprint-cmyk-mode1-on.png`, the same
 baseline `UnitTestsOverprintRender` checks — so canvas escalation and this
 measurement renderer are proven to agree, not just independently plausible.
 
+## Fidelity and origin on the two preview surfaces (#28)
+
+The ordinary canvas banner and the Production Preview both render the same
+projection, `EditorHost::previewFidelityStateName()` /
+`previewFidelityOriginName()` / `previewFidelityVisual()` /
+`previewFidelitySummary()`, so neither surface presents the fast canvas pixels
+as the authoritative render. The state vocabulary is `unavailable`, `stale`,
+`exact`, `approximate` and `authoritative`; the origin is `none`, `fast-canvas`
+or `output-preview`. `approximate` is the overprint-sensitive page on the fast
+canvas path, and `previewRequiresAuthoritative()` is true exactly then: its
+`previewFidelitySummary()` states that those pixels cannot stand as proof of
+print-safe output, and no preview state resolves to a pass treatment.
+`EditorHost::ensureAuthoritativePreview()` is the explicit switch the preview
+surfaces call before a page is presented as proof; it moves the current page to
+the output-preview render and returns false when the page is already
+authoritative or exact.
+
+`UnitTestsPageSurface::fastCanvasOverprintRenderIsNotTheAuthoritativeGolden`
+proves the distinction against the same committed baseline: for
+`overprint-cmyk-mode1-on.pdf` the marked (authoritative) render matches
+`overprint-cmyk-mode1-on.png` while the unmarked fast render does not, and the
+fast render's own diagnostics report the approximation rather than exact
+overprint fidelity. `UnitTestsEditorHost::previewFidelityNamesTheOriginAndSwitchesExplicitly`
+proves the host projection and the explicit switch, and
+`UnitTestsLoopStateVisual::previewFidelityNeverClaimsAPass` pins that no
+fidelity state reads as a pass. The interactive preview still certifies nothing
+about publication safety.
+
 ## Independent measurement scope
 
 With `LOOP_INDEPENDENT_RENDER_DIR` set, `UnitTestsOverprintRender` additionally

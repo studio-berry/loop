@@ -25,12 +25,16 @@
 #include <QTemporaryDir>
 
 #include <cstdio>
+#include <functional>
 #include <memory>
 
 namespace
 {
 
-void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host, QQuickWindow* window)
+void runFindingNavigationFixture(QGuiApplication& application,
+                                 EditorHost& host,
+                                 QQuickWindow* window,
+                                 std::function<void()> onPassed)
 {
     auto directory = std::make_shared<QTemporaryDir>();
     pdf::PDFDocumentBuilder builder;
@@ -49,7 +53,7 @@ void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host,
     host.openFileUrl(QUrl::fromLocalFile(original));
     auto* timer = new QTimer(&application);
     QObject::connect(timer, &QTimer::timeout, &application,
-                     [&application, &host, window, timer, directory, replacement, phase = 0, originalRevision = QString(), findingId = QString()]() mutable
+                     [&application, &host, window, timer, directory, replacement, onPassed, phase = 0, originalRevision = QString(), findingId = QString()]() mutable
                      {
                          auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
                          auto* inspector = qobject_cast<pdfinteraction::InspectorModel*>(host.inspector());
@@ -138,7 +142,14 @@ void runFindingNavigationFixture(QGuiApplication& application, EditorHost& host,
                          fprintf(stdout, "finding-navigation-fixture id=generated-two-page-region-and-identical-byte-replacement region=100,200,60,80 stale_rejected=%d\n", passed ? 1 : 0);
                          fflush(stdout);
                          timer->stop();
-                         application.exit(passed ? 0 : 6);
+                         if (passed && onPassed)
+                         {
+                             onPassed();
+                         }
+                         else
+                         {
+                             application.exit(passed ? 0 : 6);
+                         }
                      });
     timer->start(25);
 }
@@ -285,8 +296,8 @@ QString visibleWorkspacePaneName(QQuickWindow* window)
     return QString();
 }
 
-/// #586 acceptance: no *enabled* workspace destination may resolve to the placeholder
-/// pane, and every destination it reaches must expose a screen-reader name and role.
+/// #586 acceptance: every workspace destination resolves to a real surface (never the
+/// retired placeholder pane) carrying a screen-reader name and role.
 bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
 {
     struct Entry
@@ -295,9 +306,9 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         const char* expectedObjectName;
         QAccessible::Role expectedRole;
     };
-    // Every enabled destination must resolve to real content carrying a screen-reader name
-    // and role. Compare stays a visible but disabled destination by product decision
-    // (#560): the assertion is that it cannot be reached, not that it renders.
+    // Every destination must resolve to real content carrying a screen-reader name and
+    // role. Compare is a real surface now: it renders the comparison facts ComparePane
+    // projects from EditorHost, not placeholder content.
     static const Entry entries[] = {
         { EditorHost::Document, "documentPane", QAccessible::Pane },
         { EditorHost::Preflight, "preflightPane", QAccessible::Grouping },
@@ -305,6 +316,7 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         { EditorHost::Pages, "pagesProductionPane", QAccessible::Grouping },
         { EditorHost::Inspect, "inspectPane", QAccessible::Grouping },
         { EditorHost::Fix, "actionListPane", QAccessible::Grouping },
+        { EditorHost::Compare, "comparePane", QAccessible::Grouping },
     };
 
     bool passed = true;
@@ -316,8 +328,7 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         const QString visible = visibleWorkspacePaneName(window);
         const bool enabled = host.isWorkspaceEnabled(entry.workspace);
         const bool nameMatches = visible == QString::fromLatin1(entry.expectedObjectName);
-        const bool reachable = enabled && nameMatches &&
-                               visible != QStringLiteral("workspacePlaceholderPane");
+        const bool reachable = enabled && nameMatches;
         const bool accessible = reachable && verifyNamedAccessibility(window, visible, entry.expectedRole, true);
 
         if (!reachable || !accessible)
@@ -333,20 +344,24 @@ bool verifyWorkspaceSurfaces(QQuickWindow* window, EditorHost& host)
         }
     }
 
-    // The disabled destination may not be entered, and entering it must not silently show
-    // placeholder content in place of a real surface.
+    // Compare must be enterable and resolve to its own pane, never placeholder content.
     host.setWorkspace(EditorHost::Fix);
     QCoreApplication::processEvents();
     const bool beforeCompare = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
     host.setWorkspace(EditorHost::Compare);
     QCoreApplication::processEvents();
-    const bool compareDisabled = !host.isWorkspaceEnabled(EditorHost::Compare);
-    const bool compareDidNotNavigate = visibleWorkspacePaneName(window) == QStringLiteral("actionListPane");
-    if (!compareDisabled || !beforeCompare || !compareDidNotNavigate)
+    const bool compareEnabled = host.isWorkspaceEnabled(EditorHost::Compare);
+    const bool compareReachable = visibleWorkspacePaneName(window) == QStringLiteral("comparePane");
+    fprintf(stdout,
+            "product-quick-a11y-smoke compare_workspace_enabled=%d reachable=%d before=%d\n",
+            compareEnabled ? 1 : 0,
+            compareReachable ? 1 : 0,
+            beforeCompare ? 1 : 0);
+    if (!beforeCompare || !compareEnabled || !compareReachable)
     {
         fprintf(stderr,
-                "product-quick-a11y-smoke disabled_workspace_reachable workspace=%d visible=%s\n",
-                static_cast<int>(EditorHost::Compare),
+                "product-quick-a11y-smoke compare_workspace_unreachable enabled=%d visible=%s\n",
+                compareEnabled ? 1 : 0,
                 visibleWorkspacePaneName(window).toLocal8Bit().constData());
         passed = false;
     }
@@ -544,6 +559,92 @@ bool verifyKeyboardSurface(QQuickWindow* window, EditorHost& host)
             focusMoved ? 1 : 0,
             focusRestored ? 1 : 0);
     return allTabReachable && firstFocused && focusMoved && focusRestored;
+}
+
+/// #27 acceptance failure case: a partial inspection must stay visible in the one-document
+/// Quick operator shell and must never look like a clear document. Drives EditorHost through a
+/// real generated one-page fixture, observes mid-run progress, then accepts Core's own
+/// fail-closed `unsupported-scope` result (a partially inspected document: no blocking finding,
+/// but the enabled check produced no evidence). Prints a result line naming the fixture so the
+/// software-backend smoke run carries the incomplete fixture next to the representative one.
+void runIncompleteInspectionFixture(QGuiApplication& application, EditorHost& host)
+{
+    auto directory = std::make_shared<QTemporaryDir>();
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    const QString fixture = directory->filePath(QStringLiteral("partial-inspection.pdf"));
+    if (!directory->isValid() || !writer.write(fixture, &document, true))
+    {
+        application.exit(6);
+        return;
+    }
+
+    host.openFileUrl(QUrl::fromLocalFile(fixture));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, timer, directory, phase = 0]() mutable
+                     {
+                         auto* preflight = qobject_cast<pdfinteraction::PreflightController*>(host.preflight());
+                         if (!host.hasDocument() || !preflight)
+                         {
+                             return;
+                         }
+                         const QString jobId = QStringLiteral("partial-inspection-job");
+                         if (phase == 0)
+                         {
+                             host.setWorkspace(EditorHost::Preflight);
+                             host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+                             const QString revision = preflight->documentRevision();
+                             preflight->beginRun(preflight->documentKey(), revision,
+                                                 QStringLiteral("partial-inspection-profile"), jobId);
+                             const bool progressVisible =
+                                 preflight->updateProgress(jobId, revision, 40) &&
+                                 preflight->property("progress").toInt() == 40 &&
+                                 host.preflightStateName() == QStringLiteral("running");
+
+                             pdf::PreflightResult result;
+                             result.errorCode = QStringLiteral("unsupported-scope");
+                             result.errorMessage =
+                                 QStringLiteral("The selected restriction excludes the inspected page");
+                             result.coverageScope = { { QStringLiteral("pages"), QJsonArray{ 2 } } };
+                             pdf::PreflightCheckStatus check;
+                             check.id = QStringLiteral("bleed");
+                             check.status = QStringLiteral("not_applicable");
+                             check.reason = QStringLiteral("restriction_excluded_all_content");
+                             result.checkStatuses = { check };
+                             if (!progressVisible || !preflight->acceptResult(jobId, revision, result))
+                             {
+                                 fprintf(stderr, "incomplete-inspection-fixture progress_or_accept_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             phase = 1;
+                             return;
+                         }
+
+                         const QString stateName = host.preflightStateName();
+                         const QVariantMap visual = host.preflightStateVisual();
+                         const bool incomplete =
+                             stateName == QStringLiteral("incomplete") &&
+                             stateName != QStringLiteral("pass") &&
+                             preflight->property("progress").toInt() == 100 &&
+                             !host.preflightOperatorSummary().trimmed().isEmpty() &&
+                             !preflight->limitationDescription().trimmed().isEmpty() &&
+                             visual.value(QStringLiteral("kind")).toString() == QStringLiteral("Incomplete") &&
+                             visual.value(QStringLiteral("accessibleName")).toString() == QStringLiteral("Incomplete") &&
+                             visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success") &&
+                             visual.value(QStringLiteral("icon")).toString() != QStringLiteral("Checkmark");
+                         fprintf(stdout,
+                                 "incomplete-inspection-fixture id=generated-one-page-unsupported-scope state=%s incomplete=%d\n",
+                                 stateName.toLocal8Bit().constData(),
+                                 incomplete ? 1 : 0);
+                         fflush(stdout);
+                         timer->stop();
+                         application.exit(incomplete ? 0 : 6);
+                     });
+    timer->start(25);
 }
 
 }   // namespace
@@ -832,7 +933,9 @@ int main(int argc, char** argv)
                                  fflush(stdout);
                                  if (passed && qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software"))
                                  {
-                                     runFindingNavigationFixture(application, host, window);
+                                     runFindingNavigationFixture(application, host, window,
+                                                                 [&application, &host]()
+                                                                 { runIncompleteInspectionFixture(application, host); });
                                  }
                                  else
                                  {

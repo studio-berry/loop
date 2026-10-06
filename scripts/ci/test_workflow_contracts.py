@@ -301,6 +301,34 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('(Join-Path $InstallDir "share\\loop")', smoke)
         self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loop")', smoke)
 
+    def test_package_workflows_qualify_accessibility_against_the_installed_tree(self):
+        linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
+        windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        # The installed tree, not the developer build tree, is what a user runs
+        # and where the Widgets-free profile is verified.
+        self.assertIn("-InstallTree build/install", linux)
+        self.assertIn('-InstallTree ".\\loop\\build\\install"', windows)
+        for workflow in (linux, windows):
+            self.assertIn("verify_quick_accessibility_evidence.py", workflow)
+            self.assertIn("quick-a11y-native.json", workflow)
+            self.assertIn("quick-a11y-software.json", workflow)
+        # Windows drives the native OS accessibility backend and requires it;
+        # Linux records the lane unavailable because a headless runner has no
+        # AT-SPI accessibility bus. Either way a software-only smoke cannot
+        # satisfy the native claim.
+        self.assertIn("run-installed-quick-a11y-uia.ps1", windows)
+        self.assertIn("--require-native-accessibility", windows)
+        self.assertNotIn("run-installed-quick-a11y-uia.ps1", linux)
+        self.assertIn("quick-a11y-native-accessibility-unavailable.txt", linux)
+        # Native runs before software, and both before the fail-closed gate.
+        for workflow in (linux, windows):
+            names = [step.splitlines()[0] for step in workflow.split("      - name: ")]
+            native_index = names.index("Run product Quick accessibility qualification harness (native)")
+            software_index = names.index("Run product Quick accessibility qualification harness (software)")
+            verify_index = names.index("Verify installed-tree accessibility qualification evidence")
+            self.assertLess(native_index, software_index)
+            self.assertLess(software_index, verify_index)
+
 
 if __name__ == "__main__":
     unittest.main()

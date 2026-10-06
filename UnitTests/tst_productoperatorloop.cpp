@@ -11,20 +11,27 @@
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfrepairoperation.h"
+#include "preflightengine.h"
 #include "preflightfindingsmodel.h"
 #include "previewstatemodel.h"
+#include "loopstatevisual.h"
+#include "looptokens.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -230,6 +237,88 @@ QString receiptIdentity(const QJsonObject& report)
     return QString::fromLatin1(QCryptographicHash::hash(pdf::canonicalJson(identity), QCryptographicHash::Sha256).toHex());
 }
 
+pdf::PreflightResult preflightResultFromJson(const QJsonObject& object)
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = object.value(QStringLiteral("inspectionComplete")).toBool(true);
+    for (const QJsonValue& value : object.value(QStringLiteral("findings")).toArray())
+    {
+        const QJsonObject entry = value.toObject();
+        pdf::PreflightFinding finding;
+        finding.checkId = entry.value(QStringLiteral("checkId")).toString();
+        finding.scope = entry.value(QStringLiteral("scope")).toString(QStringLiteral("page"));
+        finding.page = entry.value(QStringLiteral("page")).toInt(1);
+        finding.type = entry.value(QStringLiteral("type")).toString();
+        finding.severity = entry.value(QStringLiteral("severity")).toString();
+        finding.message = entry.value(QStringLiteral("message")).toString();
+        if (finding.severity == QStringLiteral("warning"))
+        {
+            result.warnings.append(finding);
+        }
+        else
+        {
+            result.errors.append(finding);
+        }
+    }
+    for (const QJsonValue& value : object.value(QStringLiteral("checkStatuses")).toArray())
+    {
+        const QJsonObject entry = value.toObject();
+        pdf::PreflightCheckStatus status;
+        status.id = entry.value(QStringLiteral("id")).toString();
+        status.status = entry.value(QStringLiteral("status")).toString();
+        result.checkStatuses.append(status);
+    }
+    return result;
+}
+
+QStringList sortedLabels(const QStringList& findingIds, const QHash<QString, QString>& labelById)
+{
+    QStringList labels;
+    labels.reserve(findingIds.size());
+    for (const QString& findingId : findingIds)
+    {
+        labels.append(labelById.value(findingId, findingId));
+    }
+    labels.sort();
+    return labels;
+}
+
+QStringList sortedStrings(const QJsonArray& array)
+{
+    QStringList values;
+    for (const QJsonValue& value : array)
+    {
+        values.append(value.toString());
+    }
+    values.sort();
+    return values;
+}
+
+QString writeBleedRecipe(const QString& directory)
+{
+    const QString recipePath = QDir(directory).filePath(QStringLiteral("compare-review-recipe.json"));
+    QFile recipe(recipePath);
+    if (!recipe.open(QIODevice::WriteOnly))
+    {
+        return QString();
+    }
+    recipe.write(QJsonDocument(QJsonObject{
+                                   { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                   { QStringLiteral("id"), QStringLiteral("compare-review") },
+                                   { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                   { QStringLiteral("steps"),
+                                     QJsonArray{ QJsonObject{
+                                         { QStringLiteral("id"), QStringLiteral("bleed") },
+                                         { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                         { QStringLiteral("params"),
+                                           QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                        { QStringLiteral("mode"), QStringLiteral("mirror") },
+                                                        { QStringLiteral("force"), true } } } } } } })
+                     .toJson(QJsonDocument::Compact));
+    recipe.close();
+    return recipePath;
+}
+
 }   // namespace
 
 class ProductOperatorLoopTest final : public QObject
@@ -246,10 +335,14 @@ private slots:
     void operatorLoop_blockedOutputProducesActionableFailure();
     void openDetectPinpointInspectUnderstandState();
     void findingNavigationMovesCanvasToTheFindingPage();
+    void partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument();
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
+    void compareReviewGoldenFixtureMatchesCoreFindingDelta();
+    void compareWorkspaceBlocksAStaleComparison();
+    void compareWorkspaceNavigatesMaterialDeltasAfterARun();
 };
 
 void ProductOperatorLoopTest::initTestCase()
@@ -580,6 +673,78 @@ void ProductOperatorLoopTest::findingNavigationMovesCanvasToTheFindingPage()
     QCOMPARE(host.currentPage(), 1);
 }
 
+void ProductOperatorLoopTest::partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument()
+{
+    // #27 failure case. The representative document (bleed-missing.pdf, one page) is inspected
+    // under the corpus `restriction-pages` restriction: the profile scopes its only enabled check
+    // to page 2 of a one-page document, so Core cannot collect that check's evidence and reduces
+    // the report to an `incomplete` verdict (reason_code `unsupported-scope`) instead of a clean
+    // pass. The operator shell must present exactly that partial inspection - progress while it
+    // runs, an incomplete verdict after it - and must never render a clear document.
+    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY2(QFileInfo::exists(source), source.toUtf8().constData());
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("loop-test-partial-inspection") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Partial inspection fixture") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } } } } });
+    const QString profilePath = directory.filePath(QStringLiteral("partial-inspection.json"));
+    {
+        QFile output(profilePath);
+        QVERIFY(output.open(QIODevice::WriteOnly));
+        const QByteArray bytes = QJsonDocument(profile).toJson();
+        QCOMPARE(output.write(bytes), bytes.size());
+    }
+
+    EditorHost host;
+    QVERIFY2(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)),
+             "the restricted inspection profile must import and become the selected profile");
+    QVERIFY(host.selectedPreflightProfileId().endsWith(QStringLiteral("partial-inspection.json")));
+
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QCOMPARE(host.pageCount(), 1);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+
+    auto* preflight = qobject_cast<PreflightController*>(host.preflight());
+    QVERIFY(preflight);
+    QSignalSpy progressSpy(preflight, &PreflightController::progressChanged);
+
+    // The operator sees progress while the inspection is live...
+    QVERIFY(host.runPreflight());
+    QCOMPARE(host.preflightStateName(), QStringLiteral("running"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY2(!progressSpy.isEmpty(), "the operator must observe preflight progress while it runs");
+    QCOMPARE(preflight->property("progress").toInt(), 100);
+
+    // ...and a partial inspection stays visible as incomplete, never as a clear document.
+    QCOMPARE(host.preflightStateName(), QStringLiteral("incomplete"));
+    QVERIFY2(host.preflightStateName() != QStringLiteral("pass"),
+             "a partial inspection must never present as a clean pass");
+    QVERIFY(host.hasPreflightReport());
+    QVERIFY2(host.preflightOperatorSummary().trimmed().contains(QStringLiteral("finish inspecting")),
+             qPrintable(host.preflightOperatorSummary()));
+    QVERIFY2(preflight->limitationDescription().trimmed().contains(QStringLiteral("bleed")),
+             qPrintable(preflight->limitationDescription()));
+
+    // The rendered treatment is Core's incomplete state itself, not a re-derived or pass-like one.
+    const pdfquick::tokens::LoopStateVisual expected =
+        pdfquick::tokens::resolvePreflightStateVisual(QStringLiteral("incomplete"));
+    QCOMPARE(expected.kind, pdfquick::tokens::StateKind::Incomplete);
+    const QVariantMap visual = host.preflightStateVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), pdfquick::tokens::stateKindName(expected.kind));
+    QCOMPARE(visual.value(QStringLiteral("colorRole")).toString(), pdfquick::tokens::colorRoleName(expected.colorRole));
+    QCOMPARE(visual.value(QStringLiteral("icon")).toString(), pdfquick::tokens::stateIconName(expected.icon));
+    QCOMPARE(visual.value(QStringLiteral("accessibleName")).toString(), pdfquick::tokens::stateAccessibleName(expected.kind));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+    QVERIFY(visual.value(QStringLiteral("icon")).toString() != QStringLiteral("Checkmark"));
+    QVERIFY(visual.value(QStringLiteral("accessibleName")).toString() != QStringLiteral("Passed"));
+}
+
 void ProductOperatorLoopTest::workspaceTransitionsKeepTheOpenDocumentBound()
 {
     const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
@@ -793,6 +958,131 @@ void ProductOperatorLoopTest::adapterParityOverOneInspectionReceipt()
     QCOMPARE(identity, receiptJson.value(QStringLiteral("identity")).toString());
     trace.note(QStringLiteral("receipt-identity"), identity);
     trace.complete();
+}
+
+void ProductOperatorLoopTest::compareReviewGoldenFixtureMatchesCoreFindingDelta()
+{
+    const QString path = QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) +
+                         QStringLiteral("/testdata/compare-review/golden-comparison.json");
+    QJsonObject golden;
+    QVERIFY2(readJsonObject(path, &golden), qPrintable(path));
+
+    const pdf::PreflightResult before =
+        preflightResultFromJson(golden.value(QStringLiteral("before")).toObject());
+    const pdf::PreflightResult after =
+        preflightResultFromJson(golden.value(QStringLiteral("after")).toObject());
+
+    QHash<QString, QString> labelById;
+    for (const pdf::PreflightResult* result : { &before, &after })
+    {
+        for (const pdf::PreflightFinding& finding : result->errors)
+        {
+            labelById.insert(finding.stableId(), finding.type);
+        }
+        for (const pdf::PreflightFinding& finding : result->warnings)
+        {
+            labelById.insert(finding.stableId(), finding.type);
+        }
+    }
+
+    const pdf::PDFRepairFindingDelta delta = pdf::computeFindingDelta(before, after);
+    const QJsonObject expected = golden.value(QStringLiteral("expected")).toObject();
+    QCOMPARE(delta.compared, expected.value(QStringLiteral("compared")).toBool());
+    QCOMPARE(sortedLabels(delta.resolvedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("resolved")).toArray()));
+    QCOMPARE(sortedLabels(delta.unchangedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("unchanged")).toArray()));
+    QCOMPARE(sortedLabels(delta.introducedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("introduced")).toArray()));
+    QCOMPARE(sortedLabels(delta.incompleteFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("incomplete")).toArray()));
+
+    // The same pair classifies the same way on a re-run; the Compare workspace never shows a
+    // delta Core would derive differently the second time.
+    const pdf::PDFRepairFindingDelta again = pdf::computeFindingDelta(before, after);
+    QCOMPARE(again.resolvedFindingIds, delta.resolvedFindingIds);
+    QCOMPARE(again.unchangedFindingIds, delta.unchangedFindingIds);
+    QCOMPARE(again.introducedFindingIds, delta.introducedFindingIds);
+}
+
+void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString recipePath = writeBleedRecipe(directory.path());
+    QVERIFY(!recipePath.isEmpty());
+
+    const QString documentPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(documentPath));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    const QVariantMap review = host.compareReview();
+    QVERIFY(review.value(QStringLiteral("available")).toBool());
+    QVERIFY(!review.value(QStringLiteral("blocked")).toBool());
+    QCOMPARE(review.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("preview-ready"));
+
+    // The comparison is bound to the exact input the plan was produced from.
+    const QVariantMap before = review.value(QStringLiteral("before")).toMap();
+    QVERIFY(!before.value(QStringLiteral("sourceSha256")).toString().isEmpty());
+    QCOMPARE(before.value(QStringLiteral("sourceSha256")).toString(),
+             host.fixPlanIdentity().value(QStringLiteral("sourceSha256")).toString());
+    QCOMPARE(review.value(QStringLiteral("plan")).toMap().value(QStringLiteral("planDigest")).toString(),
+             host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString());
+
+    // A revision change makes the plan and preview stale. The comparison blocks instead of
+    // silently refreshing, and its material deltas stay unnavigable.
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    const QVariantMap stale = host.compareReview();
+    QVERIFY(stale.value(QStringLiteral("available")).toBool());
+    QVERIFY2(stale.value(QStringLiteral("blocked")).toBool(),
+             qPrintable(stale.value(QStringLiteral("blockedReason")).toString()));
+    QCOMPARE(stale.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("stale"));
+    QVERIFY(!stale.value(QStringLiteral("blockedReason")).toString().trimmed().isEmpty());
+    QVERIFY(!host.navigateCompareDelta(0));
+}
+
+void ProductOperatorLoopTest::compareWorkspaceNavigatesMaterialDeltasAfterARun()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString recipePath = writeBleedRecipe(directory.path());
+    QVERIFY(!recipePath.isEmpty());
+
+    const QString documentPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(documentPath));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 120000);
+
+    const QVariantMap review = host.compareReview();
+    QVERIFY(review.value(QStringLiteral("available")).toBool());
+    QVERIFY(!review.value(QStringLiteral("blocked")).toBool());
+    QCOMPARE(review.value(QStringLiteral("findingDelta")).toMap().value(QStringLiteral("compared")).toBool(),
+             true);
+    QVERIFY(review.value(QStringLiteral("hasMaterialDeltas")).toBool());
+
+    // Navigating a material delta routes to the step that produced it; it never mutates a
+    // document or reruns the comparison.
+    QVERIFY(host.navigateCompareDelta(0));
+    QCOMPARE(host.workspace(), EditorHost::Inspect);
 }
 
 QTEST_MAIN(ProductOperatorLoopTest)

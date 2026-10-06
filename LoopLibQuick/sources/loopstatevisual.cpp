@@ -267,4 +267,76 @@ LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName)
              QStringLiteral("No correction planned") };
 }
 
+QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact)
+{
+    // The host owns these four facts; this orders them and names the result. An open
+    // document whose preview belongs to an earlier revision is stale before it is
+    // anything else, and an authoritative render is authoritative before it is judged
+    // on its (ascertained later) diagnostics.
+    if (!hasDocument)
+    {
+        return QStringLiteral("unavailable");
+    }
+    if (stale)
+    {
+        return QStringLiteral("stale");
+    }
+    if (authoritative)
+    {
+        return QStringLiteral("authoritative");
+    }
+    if (!exact)
+    {
+        // The fast canvas path on overprint-sensitive content: overprint is not simulated.
+        return QStringLiteral("approximate");
+    }
+    return QStringLiteral("exact");
+}
+
+QString previewFidelityOriginName(const QString& stateName)
+{
+    const QString normalized = stateName.trimmed().toLower();
+
+    if (normalized == QLatin1String("authoritative"))
+    {
+        return QStringLiteral("output-preview");
+    }
+    if (normalized == QLatin1String("approximate") || normalized == QLatin1String("exact"))
+    {
+        return QStringLiteral("fast-canvas");
+    }
+    return QStringLiteral("none");
+}
+
+LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName)
+{
+    const QString normalized = stateName.trimmed().toLower();
+
+    if (normalized == QLatin1String("authoritative"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::BadgeOverlay,
+                 QStringLiteral("Authoritative output-preview render") };
+    }
+    if (normalized == QLatin1String("approximate"))
+    {
+        // The overprint-sensitive fast render: never a pass, never a proof of print-safe output.
+        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Cross,
+                 QStringLiteral("Approximate render, overprint is not simulated") };
+    }
+    if (normalized == QLatin1String("exact"))
+    {
+        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare,
+                 QStringLiteral("Fast preview path, no overprint-sensitive content") };
+    }
+    if (normalized == QLatin1String("stale"))
+    {
+        return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
+                 QStringLiteral("Preview is stale for the current revision") };
+    }
+
+    // "unavailable", an empty string and anything unrecognised: no preview to trust.
+    return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline,
+             QStringLiteral("Preview fidelity unavailable") };
+}
+
 }   // namespace pdfquick::tokens

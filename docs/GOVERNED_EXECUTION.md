@@ -20,11 +20,51 @@ Canonical JSON bytes are pinned in [`docs/CANONICAL_JSON.md`](CANONICAL_JSON.md)
 Any change to the plan, source identity, or save policy produces a new digest. Approvals
 bind to one digest and become invalid when the plan changes.
 
+`pdf::computeActionListPlanDigest()` binds the same identities for Action List plans: the
+`action-list-plan` envelope carries the merged operation save policy, so a save-policy
+change moves the Action List digest and invalidates approvals bound to it.
+
 Destination path, overwrite/collision policy, and publication target are **not** part of
 the semantic plan digest (D3). They are bound later as execution inputs to
 `publishGovernedArtifact` / `PDFSaveRequest` / `PDFSafeFileWriter`. Changing only the
 destination must not silently change semantic operation identity. Trusted-source and
 in-place overwrite refusal stays fail-closed.
+
+## Registry and plan identity
+
+`pdf::PDFRepairRegistry` is the single registration authority for repair operations.
+`registerOperation` refuses a null operation, an empty id, and an id that is already
+registered (the first registration wins), so a duplicate cannot silently shadow a
+built-in. `PDFRepairRegistry::instance()` remains the production registry; a
+default-constructed registry is isolated for tests and tools.
+
+`PDFRepairRegistry::digest()` is the versioned registry identity: SHA-256 over the
+canonical `{"id", "version"}` set of every registered operation, sorted by id.
+`computeOperationPlanDigest()` carries it as `registry_digest` inside the
+`operation-plan` envelope, so any change to the registered id/version set moves every
+plan digest and invalidates approvals bound to an earlier registry. The envelope
+`schema_version` stays `"1.0"`: the added key is non-breaking because nothing durable
+stores raw envelopes.
+
+`PDFRepairTransaction::add()` validates `parameters` against the operation's
+`parameterSchema()` with the shared `validateJsonSchemaFragment()` — the same validator
+the Action List planner uses — and refuses before any candidate work. The validator
+fails whenever it records a violation, so an unknown key or a missing required
+parameter is refused on the Action List planning path too. A repeated
+`--param` key is refused by `PdfTool repair` for the same reason: last-wins assignment
+hides which value the operator meant.
+
+`PDFRepairTransactionOptions::expectedSourceSha256` binds a transaction to the source
+revision it was planned against. Bound transactions require `sourcePath` to be
+readable without a password. Both `analyze()` and `apply()` reopen that source,
+verify its byte hash, and compare its parsed contents with the transaction source.
+A changed document retaining its original provenance hash or a changed source file
+is refused before candidate computation. Missing or unreadable source paths fail
+explicitly. An empty expected digest keeps the historical behavior.
+
+Migration decision: the legacy `pdftool addbleed` and `rgbtocmyk` commands remain
+registry-metadata consumers that bypass `PDFRepairTransaction`; converging them onto
+the generic `repair` path is L04-05 (#37) scope.
 
 ## Previews
 

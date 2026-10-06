@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: installed-package-accessibility-qualification
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+      - architecture:scripts/ci/test_verify_quick_accessibility_evidence.py
+unresolved: []

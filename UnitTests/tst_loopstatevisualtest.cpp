@@ -29,6 +29,7 @@
 #include <cmath>
 #include <set>
 
+using pdfquick::tokens::classifyPreviewFidelityState;
 using pdfquick::tokens::ColorRole;
 using pdfquick::tokens::FocusOutlineOffsetPx;
 using pdfquick::tokens::FocusOutlineWidthPx;
@@ -36,7 +37,9 @@ using pdfquick::tokens::LoopStateVisual;
 using pdfquick::tokens::LoopTheme;
 using pdfquick::tokens::MinimumKeyboardTargetPx;
 using pdfquick::tokens::MinimumPointerTargetPx;
+using pdfquick::tokens::previewFidelityOriginName;
 using pdfquick::tokens::resolveFixLifecycleStateVisual;
+using pdfquick::tokens::resolvePreviewFidelityStateVisual;
 using pdfquick::tokens::resolveStateVisual;
 using pdfquick::tokens::SpaceL;
 using pdfquick::tokens::SpaceM;
@@ -235,6 +238,14 @@ private slots:
     void fixLifecycleStatesStayDistinctWithoutColour();
     void fixLifecycleNeverClaimsAPass_data();
     void fixLifecycleNeverClaimsAPass();
+
+    void previewFidelityClassification_data();
+    void previewFidelityClassification();
+    void previewFidelityOrigin_data();
+    void previewFidelityOrigin();
+    void previewFidelityStatesStayDistinctWithoutColour();
+    void previewFidelityNeverClaimsAPass_data();
+    void previewFidelityNeverClaimsAPass();
 };
 
 void LoopStateVisualTest::severityMapping_data()
@@ -797,6 +808,101 @@ void LoopStateVisualTest::fixLifecycleNeverClaimsAPass()
 
     // A lifecycle state describes the operator's route, never a preflight verdict: only a real
     // pass may look like one.
+    QVERIFY(visual.kind != StateKind::Passed);
+    QVERIFY(visual.colorRole != ColorRole::Success);
+}
+
+void LoopStateVisualTest::previewFidelityClassification_data()
+{
+    QTest::addColumn<bool>("hasDocument");
+    QTest::addColumn<bool>("stale");
+    QTest::addColumn<bool>("authoritative");
+    QTest::addColumn<bool>("exact");
+    QTest::addColumn<QString>("expectedName");
+
+    QTest::newRow("no document") << false << false << false << true << QStringLiteral("unavailable");
+    QTest::newRow("stale outranks every render fact") << true << true << true << true << QStringLiteral("stale");
+    QTest::newRow("authoritative origin outranks pending diagnostics") << true << false << true << false << QStringLiteral("authoritative");
+    QTest::newRow("overprint content on the fast canvas") << true << false << false << false << QStringLiteral("approximate");
+    QTest::newRow("fast canvas with no overprint content") << true << false << false << true << QStringLiteral("exact");
+}
+
+void LoopStateVisualTest::previewFidelityClassification()
+{
+    QFETCH(bool, hasDocument);
+    QFETCH(bool, stale);
+    QFETCH(bool, authoritative);
+    QFETCH(bool, exact);
+    QFETCH(QString, expectedName);
+
+    QCOMPARE(classifyPreviewFidelityState(hasDocument, stale, authoritative, exact), expectedName);
+}
+
+void LoopStateVisualTest::previewFidelityOrigin_data()
+{
+    QTest::addColumn<QString>("stateName");
+    QTest::addColumn<QString>("expectedOrigin");
+
+    QTest::newRow("authoritative") << QStringLiteral("authoritative") << QStringLiteral("output-preview");
+    QTest::newRow("approximate") << QStringLiteral("approximate") << QStringLiteral("fast-canvas");
+    QTest::newRow("exact") << QStringLiteral("exact") << QStringLiteral("fast-canvas");
+    QTest::newRow("stale") << QStringLiteral("stale") << QStringLiteral("none");
+    QTest::newRow("unavailable") << QStringLiteral("unavailable") << QStringLiteral("none");
+    QTest::newRow("unrecognised") << QStringLiteral("garbage") << QStringLiteral("none");
+}
+
+void LoopStateVisualTest::previewFidelityOrigin()
+{
+    QFETCH(QString, stateName);
+    QFETCH(QString, expectedOrigin);
+
+    QCOMPARE(previewFidelityOriginName(stateName), expectedOrigin);
+}
+
+/// The fidelity-and-origin states the preview surfaces promise to keep visibly and semantically
+/// distinct (#28): each carries its own shape and its own spoken name, so no two states are told
+/// apart by colour alone.
+void LoopStateVisualTest::previewFidelityStatesStayDistinctWithoutColour()
+{
+    const QStringList states = { QStringLiteral("unavailable"), QStringLiteral("stale"),
+                                 QStringLiteral("exact"), QStringLiteral("approximate"),
+                                 QStringLiteral("authoritative") };
+
+    QSet<int> icons;
+    QSet<QString> names;
+    for (const QString& state : states)
+    {
+        const LoopStateVisual visual = resolvePreviewFidelityStateVisual(state);
+        icons.insert(static_cast<int>(visual.icon));
+        names.insert(visual.accessibleName);
+        QVERIFY2(!visual.accessibleName.trimmed().isEmpty(), qPrintable(state));
+    }
+
+    QCOMPARE(icons.size(), states.size());
+    QCOMPARE(names.size(), states.size());
+}
+
+void LoopStateVisualTest::previewFidelityNeverClaimsAPass_data()
+{
+    QTest::addColumn<QString>("stateName");
+
+    for (const QString& state : { QStringLiteral("unavailable"), QStringLiteral("stale"),
+                                  QStringLiteral("exact"), QStringLiteral("approximate"),
+                                  QStringLiteral("authoritative"), QString() })
+    {
+        QTest::newRow(qPrintable(state.isEmpty() ? QStringLiteral("empty") : state)) << state;
+    }
+}
+
+void LoopStateVisualTest::previewFidelityNeverClaimsAPass()
+{
+    QFETCH(QString, stateName);
+
+    const LoopStateVisual visual = resolvePreviewFidelityStateVisual(stateName);
+
+    // The interactive preview proves a render path, never publication safety, so no
+    // fidelity-and-origin state may read as a pass. This is the failure case of #28:
+    // approximate canvas pixels can never be cited as proof of print-safe output.
     QVERIFY(visual.kind != StateKind::Passed);
     QVERIFY(visual.colorRole != ColorRole::Success);
 }

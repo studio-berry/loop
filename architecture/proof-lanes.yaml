@@ -523,7 +523,6 @@ migration:
     - CMakeLists.txt
     - cmake/**
   deferred_targets:
-    - UnitTestsActionList
     - UnitTestsAuthorSettings
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
@@ -533,4 +532,3 @@ migration:
     - UnitTestsProductionGeometry
     - UnitTestsResourceBudget
     - UnitTestsShellInspectorDispatch
-    - UnitTestsShellWorkspace

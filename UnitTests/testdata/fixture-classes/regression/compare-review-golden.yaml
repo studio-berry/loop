@@ -1,0 +1,10 @@
+id: compare-review-golden
+class: regression
+origin: UnitTests/testdata/compare-review/golden-comparison.json
+expected_behavior: A before/after preflight pair with a cleared bleed finding, an unchanged resolution warning and an introduced font finding classifies through pdf::computeFindingDelta as resolved [bleed], unchanged [resolution], introduced [font], incomplete []. The Compare workspace presents that Core delta. Do not retune the expected buckets to absorb a classification change.
+difficulty: medium
+why_it_exists: Pins the technical finding delta the Compare and review workspace renders, so a drift in PDFRepairFindingDelta classification is caught at the Core DTO rather than in QML copy.
+metrics:
+  - compare-review-delta-classification
+approval_required: true
+expected_output: delta-match

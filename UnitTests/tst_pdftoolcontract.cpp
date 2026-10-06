@@ -56,6 +56,10 @@ ToolRun runPdfTool(const QStringList& arguments)
     QProcess process;
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    if (arguments.value(0) == QStringLiteral("action-list"))
+    {
+        environment.insert(QStringLiteral("QT_FORCE_STDERR_LOGGING"), QStringLiteral("1"));
+    }
     process.setProcessEnvironment(environment);
     process.setProgram(QStringLiteral(PDFTOOL_EXECUTABLE_PATH));
     process.setArguments(arguments);
@@ -132,6 +136,9 @@ private slots:
     void redactRefusesToWriteOverItsOwnInput();
     void addBleedRefusesToWriteOverItsOwnInput();
     void rgbToCmykRefusesToWriteOverItsOwnInput();
+    void repairRefusesToWriteOverItsOwnInput();
+    void actionListBatchReportsRefusedOutputAsFailed();
+    void repairRefusesRepeatedParameterAssignment();
     void evidenceBundleExportVerifyPair();
     void evidenceBundleRejectsNonJsonOutput();
     void benchmarkWithoutPreflightProfileIsIncomplete();
@@ -913,6 +920,135 @@ void PdfToolContractTest::rgbToCmykRefusesToWriteOverItsOwnInput()
     QCOMPARE(legitimate.exitCode, 0);
     QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
     QVERIFY(QFile(candidatePath).exists());
+}
+
+void PdfToolContractTest::repairRefusesToWriteOverItsOwnInput()
+{
+    // Repair never appends in place, so even with --overwrite the trusted
+    // input may not come back as the repair's own output.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    QVERIFY(!inputDigest.isEmpty());
+
+    const ToolRun refused = runPdfTool({ QStringLiteral("repair"),
+                                         inputPath,
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                         QStringLiteral("--param"), QStringLiteral("force=true"),
+                                         QStringLiteral("--profile"), profilePath,
+                                         QStringLiteral("--overwrite"),
+                                         QStringLiteral("--output"), inputPath,
+                                         QStringLiteral("--console-format"), QStringLiteral("json") });
+
+    verifyEnvelope(refused, 4, QStringLiteral("repair"));
+    const QJsonObject diagnostic = findDiagnostic(refused, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(refused.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(refused.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+
+    // The refusal has to be about the destination, not about repair: the same
+    // document and the same caller still publish at a distinct path.
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("repair"),
+                                            inputPath,
+                                            QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                            QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                            QStringLiteral("--param"), QStringLiteral("mode=mirror"),
+                                            QStringLiteral("--param"), QStringLiteral("force=true"),
+                                            QStringLiteral("--profile"), profilePath,
+                                            QStringLiteral("--output"), candidatePath,
+                                            QStringLiteral("--console-format"), QStringLiteral("json") });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
+    QVERIFY(QFile::exists(candidatePath));
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+}
+
+void PdfToolContractTest::actionListBatchReportsRefusedOutputAsFailed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString recipePath = directory.filePath(QStringLiteral("recipe.json"));
+    const QString profilePath =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+    const QByteArray inputDigest = fileDigest(inputPath);
+    const QJsonObject recipe{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+        { QStringLiteral("id"), QStringLiteral("batch-save-refusal") },
+        { QStringLiteral("name"), QStringLiteral("Batch save refusal") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("bleed") },
+                                       { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } }
+    };
+    QFile recipeFile(recipePath);
+    QVERIFY(recipeFile.open(QIODevice::WriteOnly));
+    const QByteArray recipeBytes = QJsonDocument(recipe).toJson();
+    QCOMPARE(recipeFile.write(recipeBytes), qint64(recipeBytes.size()));
+    recipeFile.close();
+
+    const ToolRun refused = runPdfTool({ QStringLiteral("action-list"), QStringLiteral("batch"), recipePath, inputPath,
+                                         QStringLiteral("--output-dir"), directory.path(),
+                                         QStringLiteral("--profile"), profilePath,
+                                         QStringLiteral("--overwrite"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json") });
+    verifyEnvelope(refused, 4, QStringLiteral("action-list"));
+    QVERIFY(!findDiagnostic(refused, QStringLiteral("save-policy.refused")).isEmpty());
+    const QJsonArray items = refused.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("items")).toArray();
+    QCOMPARE(items.size(), 1);
+    const QJsonObject item = items.first().toObject();
+    QCOMPARE(item.value(QStringLiteral("status")).toString(), QStringLiteral("failed"));
+    QVERIFY(item.value(QStringLiteral("error")).toString().contains(QStringLiteral("save policy")));
+    QCOMPARE(fileDigest(inputPath), inputDigest);
+}
+
+void PdfToolContractTest::repairRefusesRepeatedParameterAssignment()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/bleed-missing.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const ToolRun refused = runPdfTool({ QStringLiteral("repair"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json"),
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=4"),
+                                         QStringLiteral("--dry-run"),
+                                         inputPath });
+    verifyEnvelope(refused, 2, QStringLiteral("repair"));
+    const QJsonObject diagnostic = findDiagnostic(refused, QStringLiteral("cli.invalid-arguments"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(refused.stdoutData)));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("assigned more than once")));
+
+    // The refusal has to be about the repeated key, not about the invocation:
+    // the same command with distinct parameter keys still plans.
+    const ToolRun planned = runPdfTool({ QStringLiteral("repair"),
+                                         QStringLiteral("--console-format"), QStringLiteral("json"),
+                                         QStringLiteral("--operation"), QStringLiteral("add-bleed"),
+                                         QStringLiteral("--param"), QStringLiteral("bleed_mm=3"),
+                                         QStringLiteral("--param"), QStringLiteral("force=true"),
+                                         QStringLiteral("--dry-run"),
+                                         inputPath });
+    QCOMPARE(planned.exitCode, 0);
+    QVERIFY(findDiagnostic(planned, QStringLiteral("cli.invalid-arguments")).isEmpty());
 }
 
 void PdfToolContractTest::evidenceBundleExportVerifyPair()

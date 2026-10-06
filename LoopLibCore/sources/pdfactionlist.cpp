@@ -34,7 +34,6 @@
 #include <QJsonValue>
 #include <QSet>
 
-#include <cmath>
 #include <utility>
 
 namespace pdf
@@ -135,135 +134,12 @@ bool parseFailurePolicy(const QJsonValue& value, PDFActionListFailurePolicy* pol
     return false;
 }
 
-bool isJsonNumber(const QJsonValue& value)
-{
-    return value.isDouble() && std::isfinite(value.toDouble());
-}
-
-bool matchesType(const QJsonValue& value, const QString& type)
-{
-    if (type == QStringLiteral("object"))
-        return value.isObject();
-    if (type == QStringLiteral("array"))
-        return value.isArray();
-    if (type == QStringLiteral("string"))
-        return value.isString();
-    if (type == QStringLiteral("boolean"))
-        return value.isBool();
-    if (type == QStringLiteral("number"))
-        return isJsonNumber(value);
-    if (type == QStringLiteral("integer"))
-    {
-        return isJsonNumber(value) && std::floor(value.toDouble()) == value.toDouble();
-    }
-    return false;
-}
-
-bool valuesEqual(const QJsonValue& left, const QJsonValue& right)
-{
-    return QJsonDocument(left.toObject()).toJson(QJsonDocument::Compact) ==
-               QJsonDocument(right.toObject()).toJson(QJsonDocument::Compact) ||
-           left == right;
-}
-
 void appendError(QStringList* errors, const QString& error)
 {
     if (errors)
     {
         errors->append(error);
     }
-}
-
-bool validateValue(const QJsonValue& value,
-                   const QJsonObject& schema,
-                   const QString& path,
-                   QStringList* errors)
-{
-    const QString type = schema.value(QStringLiteral("type")).toString();
-    if (!type.isEmpty() && !matchesType(value, type))
-    {
-        appendError(errors, QStringLiteral("%1 must be a %2.").arg(path, type));
-        return false;
-    }
-
-    const QJsonArray enumValues = schema.value(QStringLiteral("enum")).toArray();
-    if (!enumValues.isEmpty())
-    {
-        bool found = false;
-        for (const QJsonValue& allowed : enumValues)
-        {
-            if (valuesEqual(value, allowed))
-            {
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-        {
-            appendError(errors, QStringLiteral("%1 contains a value outside the allowed set.").arg(path));
-            return false;
-        }
-    }
-
-    if (value.isString() && schema.contains(QStringLiteral("minLength")) &&
-        value.toString().size() < schema.value(QStringLiteral("minLength")).toInt())
-    {
-        appendError(errors, QStringLiteral("%1 is shorter than the minimum length.").arg(path));
-        return false;
-    }
-
-    if (isJsonNumber(value))
-    {
-        const double number = value.toDouble();
-        if (schema.contains(QStringLiteral("minimum")) && number < schema.value(QStringLiteral("minimum")).toDouble())
-        {
-            appendError(errors, QStringLiteral("%1 is below the minimum.").arg(path));
-            return false;
-        }
-        if (schema.contains(QStringLiteral("maximum")) && number > schema.value(QStringLiteral("maximum")).toDouble())
-        {
-            appendError(errors, QStringLiteral("%1 is above the maximum.").arg(path));
-            return false;
-        }
-    }
-
-    if (!value.isObject())
-    {
-        return true;
-    }
-
-    const QJsonObject object = value.toObject();
-    const QJsonObject properties = schema.value(QStringLiteral("properties")).toObject();
-    const QJsonArray required = schema.value(QStringLiteral("required")).toArray();
-    for (const QJsonValue& requiredValue : required)
-    {
-        const QString key = requiredValue.toString();
-        if (!object.contains(key))
-        {
-            appendError(errors, QStringLiteral("%1.%2 is required.").arg(path, key));
-        }
-    }
-
-    if (schema.value(QStringLiteral("additionalProperties")).toBool(true) == false)
-    {
-        for (auto it = object.begin(); it != object.end(); ++it)
-        {
-            if (!properties.contains(it.key()))
-            {
-                appendError(errors, QStringLiteral("%1.%2 is not a supported parameter.").arg(path, it.key()));
-            }
-        }
-    }
-
-    bool valid = true;
-    for (auto it = object.begin(); it != object.end(); ++it)
-    {
-        if (properties.contains(it.key()))
-        {
-            valid = validateValue(it.value(), properties.value(it.key()).toObject(), path + QLatin1Char('.') + it.key(), errors) && valid;
-        }
-    }
-    return valid;
 }
 
 QJsonValue resolveValue(const QJsonValue& value, const QJsonObject& bindings, QStringList* errors)
@@ -685,6 +561,7 @@ QJsonObject PDFActionListExecutionResult::toJson() const
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("postflight"), postflight },
         { QStringLiteral("governed"), governed },
+        { QStringLiteral("save_policy"), savePolicy.toJson() },
         { QStringLiteral("independent_validation"), independentValidation },
         { QStringLiteral("steps"), stepJson }
     };
@@ -693,12 +570,14 @@ QJsonObject PDFActionListExecutionResult::toJson() const
 QString computeActionListPlanDigest(const PDFActionList& actionList,
                                     const QJsonObject& bindings,
                                     const QString& sourceSha256,
-                                    const QJsonObject& effectiveProfile)
+                                    const QJsonObject& effectiveProfile,
+                                    const PDFOperationSavePolicy& savePolicy)
 {
     const QJsonObject envelope{
         { QStringLiteral("schema_kind"), QStringLiteral("action-list-plan") },
         { QStringLiteral("schema_version"), QStringLiteral("1.0") },
         { QStringLiteral("source_sha256"), sourceSha256.trimmed().toLower() },
+        { QStringLiteral("save_policy"), savePolicy.toJson() },
         { QStringLiteral("action_list"), actionList.toJson() },
         { QStringLiteral("bindings"), bindings },
         { QStringLiteral("effective_profile"), effectiveProfile }
@@ -719,6 +598,19 @@ bool PDFActionListExecutor::isSupportedSchema(const QString& schema)
 PDFActionListExecutor::PDFActionListExecutor(const PDFRepairRegistry& registry) :
     m_registry(&registry)
 {
+}
+
+PDFOperationSavePolicy PDFActionListExecutor::mergedSavePolicy(const PDFActionList& actionList) const
+{
+    PDFOperationSavePolicy result = PDFOperationSavePolicy::incrementalAppend(QStringLiteral("empty action list"));
+    for (const PDFActionListStep& step : actionList.steps)
+    {
+        if (const PDFRepairOperation* operation = m_registry->find(step.operationId))
+        {
+            result = mergePDFSavePolicies(result, operation->savePolicy());
+        }
+    }
+    return result;
 }
 
 PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionList,
@@ -797,7 +689,7 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
             appendError(errors, QStringLiteral("Step '%1' uses the retired standards-convert contract; migrate its parameters to validation_contract: 2.").arg(step.id));
             valid = false;
         }
-        valid = validateValue(parameters, operation->parameterSchema(), QStringLiteral("step.%1.params").arg(step.id), errors) && valid;
+        valid = validateJsonSchemaFragment(parameters, operation->parameterSchema(), QStringLiteral("step.%1.params").arg(step.id), errors) && valid;
 
         if (!step.select.isEmpty())
         {
@@ -828,6 +720,20 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
     result->actionListId = actionList.id;
     result->actionListSchema = actionList.schema;
     result->recipeHash = recipeHash(actionList);
+    // The merged policy is the floor for this plan and every write derived
+    // from it: it is reported on the result and bound into the plan digest.
+    result->savePolicy = mergedSavePolicy(actionList);
+    if (options.requestedSavePolicy.has_value() &&
+        savePolicyIsWeaker(*options.requestedSavePolicy, result->savePolicy))
+    {
+        result->status = QStringLiteral("failed");
+        const QString message = savePolicyWeakenedMessage(*options.requestedSavePolicy, result->savePolicy);
+        result->diagnostics.append(QJsonObject{
+            { QStringLiteral("code"), QStringLiteral("action-list.save-policy-refused") },
+            { QStringLiteral("severity"), QStringLiteral("error") },
+            { QStringLiteral("message"), message } });
+        return PDFOperationResult(message);
+    }
     result->sourceSha256 = sourceSha256ForActionList(source);
     if (result->sourceSha256.isEmpty())
     {
@@ -855,7 +761,8 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
     result->planDigest = computeActionListPlanDigest(actionList,
                                                      options.bindings,
                                                      result->sourceSha256,
-                                                     effectiveProfile);
+                                                     effectiveProfile,
+                                                     result->savePolicy);
     QElapsedTimer totalTimer;
     totalTimer.start();
 
@@ -908,6 +815,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
             stepResult.status = PDFActionListStepStatus::Succeeded;
             stepResult.plan = QJsonObject{
                 { QStringLiteral("operation"), operation->id() },
+                { QStringLiteral("save_policy"), operation->savePolicy().toJson() },
                 { QStringLiteral("selection"), selection.toJson() }
             };
             populateAffectedScope(&stepResult, selection, PDFRepairPlan());
@@ -921,6 +829,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
         repairPlan.operationVersion = operation->version();
         repairPlan.parameters = stepResult.resolvedParameters;
         repairPlan.risk = operation->risk();
+        repairPlan.savePolicy = operation->savePolicy();
         repairPlan.domains = operation->domains();
         const PDFOperationResult analyzeResult = operation->analyze(source, stepResult.resolvedParameters, &repairPlan);
         if (!analyzeResult)
@@ -1037,6 +946,9 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
         }
 
         PDFRepairPlan currentPlan;
+        // analyze() fills the semantic plan; the declared save policy is
+        // attached here exactly like PDFRepairTransaction::analyze() does.
+        currentPlan.savePolicy = operation->savePolicy();
         const PDFOperationResult analyzeResult = operation->analyze(working, stepResult.resolvedParameters, &currentPlan);
         PDFRepairResult repairResult;
         repairResult.operationId = operation->id();

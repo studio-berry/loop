@@ -1,0 +1,30 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: compare-review-workspace
+    evidence:
+      - unit:agent-policy:quick
+      - fixture:regression:compare-review-golden
+  - id: quick-module
+    evidence:
+      - unit:agent-policy:quick
+  - id: plugins-module
+    evidence:
+      - unit:agent-policy:plugins
+  - id: build-policy
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: fixture-classification
+    evidence:
+      - fixture:regression:bleed-box-margin
+      - fixture:regression:compare-review-golden
+      - sealed-eval:mixed-surface-holdout
+  - id: architecture-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: documentation
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved: []

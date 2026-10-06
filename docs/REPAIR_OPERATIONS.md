@@ -78,6 +78,16 @@ The Editor's preflight workflows resolve `add-bleed`, `downsample-images`, and
 `rgb-to-cmyk` from that registry and review a separate serialized candidate
 before writing it. PdfTool's `repair` command uses the same transaction contract.
 
+## Registry registration contract
+
+`PDFRepairRegistry` is the single registration authority for repair operations.
+`registerOperation` refuses a null operation, an empty id, and an id that is
+already registered — the first registration wins, so a duplicate cannot shadow
+a registered operation. Every registered operation carries a stable id and a
+version; changing the meaning of an existing operation requires raising
+`version()`, because the registered id/version set is hashed into the registry
+digest that every operation-plan digest binds.
+
 ## PdfTool contract
 
 Example:
