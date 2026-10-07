@@ -41,7 +41,7 @@ branch protection when a token can read it.
 - Release gate pull_request branches: `stable`
 - Integration workflow: `.github/workflows/ci.yml`
 - Integration pull_request branches: `dev`, `unstable`
-- Packaging workflows: `.github/workflows/LinuxInstall.yml`, `.github/workflows/WindowsInstall.yml`
+- Packaging workflows: `.github/workflows/LinuxInstall.yml`, `.github/workflows/WindowsInstall.yml`, `.github/workflows/NativeAccessibilityQualification.yml`
 - Packaging events: `workflow_dispatch`
 
 `master` is not part of the Loop branch policy. It is retained only in older

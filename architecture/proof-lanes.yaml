@@ -374,6 +374,7 @@ subsystems:
       - scripts/ci/test_native_atspi_probe.py
       - scripts/ci/verify_quick_accessibility_evidence.py
       - scripts/ci/test_verify_quick_accessibility_evidence.py
+      - .github/workflows/NativeAccessibilityQualification.yml
     required:
       - kind: unit
         bind: policy
@@ -394,13 +395,13 @@ subsystems:
       - kind: packaging
         bind: workflow
         id: linux-native-accessibility
-        ref: .github/workflows/LinuxInstall.yml
+        ref: .github/workflows/NativeAccessibilityQualification.yml
         contains: "qualify_linux:"
         executes: binding
       - kind: packaging
         bind: workflow
         id: windows-native-accessibility
-        ref: .github/workflows/WindowsInstall.yml
+        ref: .github/workflows/NativeAccessibilityQualification.yml
         contains: "qualify_windows:"
         executes: binding
   - id: agent-policy
