@@ -141,10 +141,8 @@ jobs:
           ./vcpkg/vcpkg integrate install
           echo "VCPKG_BINARY_SOURCES=clear;files,$VCPKG_DEFAULT_BINARY_CACHE,readwrite" >> "$GITHUB_ENV"
 
-      # Restore-only: this workflow runs the qualification checkout, so no cache
-      # save may happen here for a later run to restore.
-      - name: 'VCPKG: Restore vcpkg dependency cache'
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+      - name: 'VCPKG: Cache vcpkg dependencies'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ./vcpkg/downloads
@@ -181,8 +179,8 @@ jobs:
           dir: '${{ github.workspace }}/qt/'
           install-deps: 'true'
           modules: 'qtspeech qtmultimedia'
-          # No cache save, for the same reason as the vcpkg restore above.
-          cache: 'false'
+          cache: 'true'
+          cache-key-prefix: ${{ runner.os }}-qt-6111
 
       - name: Build Project
         working-directory: loop
