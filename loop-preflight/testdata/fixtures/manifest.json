@@ -1016,5 +1016,60 @@
     },
     "source": "hand-built",
     "notes": "DocInfo GTS_PDFXVersion PDF/X-5n so conformance-claims reports check-unsupported (closes the post-#665 corpus gap)."
+  },
+  {
+    "id": "color-icc-cmyk-profile",
+    "pdf": "color-icc-cmyk-profile.pdf",
+    "profile": "testdata/profiles/test-color-mode-rgb.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["color-mode"]
+    },
+    "source": "generated",
+    "notes": "#113 regression: an ICCBased space whose embedded profile and /N are CMYK, checked against an RGB-only profile. It was classified as DeviceRGB and passed; it is now classified by the profile header and reported as DeviceCMYK."
+  },
+  {
+    "id": "color-icc-alternate-conflict",
+    "pdf": "color-icc-alternate-conflict.pdf",
+    "profile": "testdata/profiles/test-color-mode-rgb.json",
+    "expect": {
+      "pass": false,
+      "check_ids": ["color-mode"]
+    },
+    "source": "generated",
+    "notes": "#113 regression: a CMYK profile declared with /N 3, so the derived /Alternate is DeviceRGB. Passing on the alternate would clear an RGB-only profile; the conflict is reported instead."
+  },
+  {
+    "id": "invisible-content-zero-font-size",
+    "pdf": "invisible-content-zero-font-size.pdf",
+    "profile": "testdata/profiles/test-invisible-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["invisible-content"]
+    },
+    "source": "generated",
+    "notes": "#117 regression: text shown at font size 0 passed clean."
+  },
+  {
+    "id": "invisible-content-empty-clip",
+    "pdf": "invisible-content-empty-clip.pdf",
+    "profile": "testdata/profiles/test-invisible-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["invisible-content"]
+    },
+    "source": "generated",
+    "notes": "#117 regression: a filled rectangle painted under a clipping path of zero height passed clean."
+  },
+  {
+    "id": "invisible-content-outside-clip",
+    "pdf": "invisible-content-outside-clip.pdf",
+    "profile": "testdata/profiles/test-invisible-content.json",
+    "expect": {
+      "pass": true,
+      "check_ids": ["invisible-content"]
+    },
+    "source": "generated",
+    "notes": "#117 regression: a filled rectangle painted entirely outside the active clip passed clean."
   }
 ]

@@ -5206,7 +5206,7 @@ protected:
             m_currentOperator = currentOperator;
         }
 
-        if (processOrder != ProcessOrder::BeforeOperation || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
+        if (processOrder != ProcessOrder::BeforeOperation)
         {
             return;
         }
@@ -5217,9 +5217,21 @@ protected:
             case Operator::TextShowTextIndividualSpacing:
             case Operator::TextNextLineShowText:
             case Operator::TextSetSpacingAndShowText:
-                m_findings.append({ QStringLiteral("invisible-content"), QRectF(),
-                                    QStringLiteral("text render mode 3 (%1)").arg(QString::fromLatin1(operatorAsText)), false });
+            {
+                const PDFPageContentProcessorState* state = getGraphicState();
+                const QString operatorName = QString::fromLatin1(operatorAsText);
+                if (state->getTextRenderingMode() == TextRenderingMode::Invisible)
+                {
+                    m_findings.append({ QStringLiteral("invisible-content"), QRectF(),
+                                        QStringLiteral("text render mode 3 (%1)").arg(operatorName), false });
+                }
+                if (state->getTextFontSize() == 0.0)
+                {
+                    m_findings.append({ QStringLiteral("invisible-content"), QRectF(),
+                                        QStringLiteral("text font size is zero (%1)").arg(operatorName), false });
+                }
                 break;
+            }
             default:
                 break;
         }
@@ -5282,6 +5294,12 @@ protected:
         const PaintedGeometry painted = clipPainted(world, fill);
         if (painted.clippedAway)
         {
+            const QRectF clipBounds = m_clip.path.boundingRect().normalized();
+            const bool degenerateClip = clipBounds.width() <= 0.0 || clipBounds.height() <= 0.0;
+            m_findings.append({ QStringLiteral("invisible-content"), rawBounds,
+                                degenerateClip ? QStringLiteral("painted under a zero-area clipping path")
+                                               : QStringLiteral("painted entirely outside the clipping path"),
+                                false });
             return;
         }
 

@@ -65,6 +65,8 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
+        "color-icc-alternate-conflict",
+        "color-icc-cmyk-profile",
         "color-rgb"
       ],
       "uninspected_fixtures": [
@@ -163,7 +165,10 @@
       "corpus_gap": null,
       "coverage": "partial",
       "finding_fixtures": [
-        "invisible-content"
+        "invisible-content",
+        "invisible-content-empty-clip",
+        "invisible-content-outside-clip",
+        "invisible-content-zero-font-size"
       ],
       "uninspected_fixtures": []
     },
@@ -281,6 +286,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 85,
+  "source_fixtures": 90,
   "unattributed_findings": 1
 }

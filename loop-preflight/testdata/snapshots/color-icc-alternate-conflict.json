@@ -1,0 +1,37 @@
+{
+    "checks": [
+        {
+            "id": "color-mode",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "color-mode",
+            "message": "Disallowed color space(s) found on page 1: ICCBased (profile conflicts with /N or /Alternate) (allowed: RGB)",
+            "page": 1,
+            "scope": "page",
+            "severity": "error",
+            "type": "color-mode"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Color Mode RGB Only",
+    "schema_kind": "preflight-report",
+    "schema_version": 4,
+    "verdict": {
+        "blocking_finding_ids": [
+            "528d93f17acabe3d"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}
