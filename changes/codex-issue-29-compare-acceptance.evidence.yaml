@@ -1,0 +1,18 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: compare-review-acceptance
+    evidence:
+      - unit:agent-policy:quick
+      - fixture:regression:compare-review-golden
+  - id: governed-comparison-host-regression
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:.github/workflows/reusable-linux.yml
+      - packaging:.github/workflows/reusable-windows.yml
+unresolved:
+  - Native Windows UIA, Linux runtime, and installed-product qualification are not exercised by the software Quick interaction smoke.
