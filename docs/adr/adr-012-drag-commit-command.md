@@ -337,6 +337,28 @@ the sketch above:
   before it invokes the command.
 - `actionUndo` and `actionRedo` are unchanged (Q4).
 
+## Drag-commit disposition per target family (#206)
+
+Every completed drag has one recorded disposition. `getDragCommitDisposition`
+(`LoopLibInteraction/sources/interactiontarget.h`) is the single answer, and
+`EditorHost::onDragCompleted` acts on it: an admitted kind runs
+`actionMoveSelection` once under the revision fence above, and a refused kind
+changes nothing and emits `dragRefused(targetKind, targetId)` plus an
+accessibility announcement. The session is then dropped and the overlay
+refreshed, so the document, selection and overlay are unchanged.
+
+| Family | Disposition | Reason | Owning surface |
+| --- | --- | --- | --- |
+| Page box | Commit | Document truth; `translate-page-box` is the governed operation | Fix workspace |
+| Finding | Refused | A finding is derived `PDFEvidenceRecord` geometry; moving it edits nothing real | Fix workspace, by correcting the cause |
+| Guide | Refused | Presentation state with no approved contract | None until a guide contract exists |
+| Drag handle | Refused | Transform handles have no approved contract (rotate/scale is a separate decision) | None until a transform contract exists |
+| Text | Refused | No text target kind exists, so no drag can start on text; editing text is a content mutation that needs its own contract or expansion decision (#141) | None |
+
+A refused kind is refused at completion rather than at press so the operator
+gets the typed reason. Admitting a kind later means changing its disposition
+together with its contract, never the disposition alone.
+
 ## Local verification limit
 
 No build or test lane was run for this ADR. `build-local/` does not exist and

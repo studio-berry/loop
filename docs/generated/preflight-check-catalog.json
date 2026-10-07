@@ -128,7 +128,7 @@
       "fixups": [
         "rgb-to-cmyk"
       ],
-      "limitations": "Does not convert color; ICC-based spaces are classified by the alternate.",
+      "limitations": "Does not convert color. An ICC-based space is classified by its embedded profile header (gray, RGB or CMYK); a profile that is unreadable, not a device space, or disagrees with its /N or /Alternate is reported as its own disallowed space instead of being passed on the alternate. Separation, DeviceN, Lab and Cal spaces are still mapped to a fixed device family.",
       "measures": "Whether page color spaces are in the allowed list.",
       "parameters": [
         {
@@ -148,7 +148,7 @@
       ],
       "severity": [
         {
-          "condition": "a page paints at least one color space outside the allowed list. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "a page paints at least one color space outside the allowed list, including an ICCBased space whose profile is unreadable or conflicts with its /N or /Alternate. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "color-mode",
           "severity": "error"
         }
@@ -610,7 +610,7 @@
         "packaging"
       ],
       "fixups": [],
-      "limitations": "Not a full GWG hidden-content suite.",
+      "limitations": "Not a full GWG hidden-content suite. Covers text render mode 3, zero font size, zero-alpha graphics state, zero-area clipping paths, and paint that falls entirely outside the active clip. An entirely empty clipping path is ignored by the content processor and so is not detected. Content hidden by a fully transparent soft mask is not detected, and zero horizontal scaling is not detected because the content processor clamps it to 1% before the state is read.",
       "measures": "Content marked invisible or outside view.",
       "parameters": [
         {
@@ -623,7 +623,7 @@
       ],
       "severity": [
         {
-          "condition": "the page paints with text render mode 3, or a path is painted at zero fill/stroke alpha. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
+          "condition": "the page shows text with render mode 3, or font size 0, or paints a path at zero fill/stroke alpha, under a zero-area clipping path, or entirely outside the active clip. The profile's check severity (error|warning|info, default error) replaces it and warning/info route the finding to warnings.",
           "finding_type": "invisible-content",
           "severity": "error"
         }

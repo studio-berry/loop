@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "Loop Test - Color Mode RGB Only",
+  "description": "Test-only profile for #113 ICCBased color-mode fixtures; only RGB may be painted.",
+  "checks": [
+    { "id": "color-mode", "allowed": ["RGB"], "severity": "error" }
+  ]
+}

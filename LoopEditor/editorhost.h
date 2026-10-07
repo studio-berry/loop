@@ -381,7 +381,11 @@ public:
     /// the exact plan digest for the current revision and arms execution; a plan whose
     /// revision or digest moved is never armed. Rejecting records the decision and leaves
     /// the plan visible for inspection; replanning clears both.
-    Q_INVOKABLE bool approveActionListPlan();
+    /// QML must supply the displayed identities; the no-argument helper is C++ only.
+    bool approveActionListPlan();
+    Q_INVOKABLE bool approveActionListPlan(const QString& planDigest,
+                                           const QString& sourceSha256,
+                                           const QString& documentRevision);
     Q_INVOKABLE bool rejectActionListPlan();
     Q_INVOKABLE bool executeApprovedActionListPlan();
     Q_INVOKABLE void replanActionList();
@@ -464,6 +468,9 @@ public:
     const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
 
 signals:
+    /// A completed drag was refused rather than committed (#206). Both values are the
+    /// target's stable names so a surface can explain the refusal.
+    void dragRefused(const QString& targetKind, const QString& targetId);
     void presentationChanged();
     void commandEpochChanged();
     void activeToolChanged();
@@ -516,6 +523,7 @@ private:
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
+    static QString dragRefusalMessage(pdfinteraction::InteractionTargetKind kind);
     void onDragCompleted(pdfinteraction::DragSession session);
     void onInteractionSelectionChanged(pdfinteraction::InteractionTarget target);
     void syncProductionState();

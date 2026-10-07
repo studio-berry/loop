@@ -839,6 +839,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("pageFidelityIsAuthoritative"), pageFidelityIsAuthoritative());
 
     QVariantList steps;
+    QVariantList plannedSteps;
     QString candidateSha256;
     QString technicalStatus;
     QString visualStatus;
@@ -847,6 +848,13 @@ QVariantMap EditorHost::fixPreview() const
     QVariantList changedPageList;
     for (const pdf::PDFActionListStepResult& step : result.steps)
     {
+        plannedSteps.append(QVariantMap{
+            { QStringLiteral("stepId"), step.stepId },
+            { QStringLiteral("operation"), step.operationId },
+            { QStringLiteral("parameters"), step.resolvedParameters.toVariantMap() },
+            { QStringLiteral("scope"), step.affectedScope.toVariantList() },
+            { QStringLiteral("impact"), step.plan.value(QStringLiteral("expected_changes")).toObject().toVariantMap() },
+            { QStringLiteral("risk"), step.plan.value(QStringLiteral("risk")).toString() } });
         const QJsonObject technical = step.repairResult.value(QStringLiteral("technical_preview")).toObject();
         const QJsonObject visual = step.repairResult.value(QStringLiteral("visual_preview")).toObject();
         if (technical.isEmpty() && visual.isEmpty())
@@ -909,6 +917,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("changedPageCount"), changedPages);
     preview.insert(QStringLiteral("changedPages"), changedPageList);
     preview.insert(QStringLiteral("steps"), steps);
+    preview.insert(QStringLiteral("plannedSteps"), plannedSteps);
     return preview;
 }
 
@@ -2518,7 +2527,7 @@ bool EditorHost::planActionList()
 
 bool EditorHost::runActionList()
 {
-    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned)
+    if (!fixExecutionArmed())
     {
         return false;
     }
@@ -2552,8 +2561,18 @@ void EditorHost::clearFixReview()
 
 bool EditorHost::approveActionListPlan()
 {
+    return approveActionListPlan(fixCurrentPlanDigest(), fixRunResult().sourceSha256,
+                                 m_fixPlannedDocumentRevision);
+}
+
+bool EditorHost::approveActionListPlan(const QString& planDigest,
+                                       const QString& sourceSha256,
+                                       const QString& documentRevision)
+{
     if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
-        !fixPlanIsCurrent())
+        !fixPlanIsCurrent() || planDigest.isEmpty() || sourceSha256.isEmpty() ||
+        planDigest != m_fixPlannedPlanDigest || planDigest != fixCurrentPlanDigest() ||
+        sourceSha256 != fixRunResult().sourceSha256 || documentRevision != m_fixPlannedDocumentRevision)
     {
         return false;
     }
@@ -2582,10 +2601,6 @@ bool EditorHost::rejectActionListPlan()
 
 bool EditorHost::executeApprovedActionListPlan()
 {
-    if (!fixExecutionArmed())
-    {
-        return false;
-    }
     return runActionList();
 }
 
@@ -4134,9 +4149,32 @@ bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
     return false;
 }
 
+QString EditorHost::dragRefusalMessage(pdfinteraction::InteractionTargetKind kind)
+{
+    switch (kind)
+    {
+        case pdfinteraction::InteractionTargetKind::Finding:
+            return tr("A finding can't be moved: its position comes from the document. Fix the cause in the Fix workspace.");
+        case pdfinteraction::InteractionTargetKind::Guide:
+            return tr("A guide can't be moved yet: guide editing has no approved contract.");
+        case pdfinteraction::InteractionTargetKind::DragHandle:
+            return tr("A handle can't be dragged yet: transforms have no approved contract.");
+        case pdfinteraction::InteractionTargetKind::PageBox:
+        case pdfinteraction::InteractionTargetKind::Page:
+        case pdfinteraction::InteractionTargetKind::None:
+            break;
+    }
+    return tr("This can't be moved.");
+}
+
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 {
-    if (hasDocument() && session.target.kind == pdfinteraction::InteractionTargetKind::PageBox)
+    if (hasDocument() && pdfinteraction::getDragCommitDisposition(session.target.kind) == pdfinteraction::DragCommitDisposition::Refused)
+    {
+        announceDocumentState(dragRefusalMessage(session.target.kind));
+        Q_EMIT dragRefused(QString::fromLatin1(pdfinteraction::getInteractionTargetKindName(session.target.kind)), session.target.id);
+    }
+    else if (hasDocument())
     {
         if (session.fence.revision != m_session->facade().currentRevision())
         {

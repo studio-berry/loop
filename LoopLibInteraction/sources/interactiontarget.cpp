@@ -46,4 +46,9 @@ const char* getInteractionTargetKindName(InteractionTargetKind kind)
     return "unknown";
 }
 
+DragCommitDisposition getDragCommitDisposition(InteractionTargetKind kind)
+{
+    return kind == InteractionTargetKind::PageBox ? DragCommitDisposition::Commit : DragCommitDisposition::Refused;
+}
+
 }   // namespace pdfinteraction
