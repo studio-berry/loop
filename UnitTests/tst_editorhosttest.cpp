@@ -255,6 +255,7 @@ private slots:
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
+    void completedDragOfARefusedKindIsReportedAndChangesNothing();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
     void confirmActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
@@ -1150,6 +1151,69 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
             QCOMPARE(entry.value(QStringLiteral("value")).toDouble(), 4.0);
         }
     }
+}
+
+void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("refused-drag.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    QVERIFY(session->interaction() != nullptr);
+
+    host.setWorkspace(EditorHost::Document);
+    const auto revisionBefore = session->facade().currentRevision();
+    QSignalSpy refusedSpy(&host, &EditorHost::dragRefused);
+
+    const struct
+    {
+        pdfinteraction::InteractionTargetKind kind;
+        const char* name;
+    } refusedKinds[] = { { pdfinteraction::InteractionTargetKind::Finding, "finding" },
+                         { pdfinteraction::InteractionTargetKind::Guide, "guide" },
+                         { pdfinteraction::InteractionTargetKind::DragHandle, "drag-handle" } };
+    for (const auto& refused : refusedKinds)
+    {
+        pdfinteraction::DragSession dragged;
+        dragged.target.kind = refused.kind;
+        dragged.target.pageIndex = 0;
+        dragged.target.id = QStringLiteral("subject");
+        dragged.pageDelta = QPointF(4.0, 5.0);
+        dragged.exceededThreshold = true;
+
+        const int before = refusedSpy.count();
+        Q_EMIT session->interaction()->dragCompleted(dragged);
+
+        QCOMPARE(refusedSpy.count(), before + 1);
+        QCOMPARE(refusedSpy.last().at(0).toString(), QString::fromLatin1(refused.name));
+        QCOMPARE(refusedSpy.last().at(1).toString(), QStringLiteral("subject"));
+        QCOMPARE(host.workspace(), EditorHost::Document);
+        QCOMPARE(session->facade().currentRevision(), revisionBefore);
+    }
+
+    // A page box is admitted, so it is never reported as refused.
+    pdfinteraction::DragSession boxDrag;
+    boxDrag.target.kind = pdfinteraction::InteractionTargetKind::PageBox;
+    boxDrag.target.pageIndex = 0;
+    boxDrag.target.id = QStringLiteral("trim");
+    boxDrag.pageDelta = QPointF(4.0, 5.0);
+    boxDrag.exceededThreshold = true;
+    const int refusalsBeforeBox = refusedSpy.count();
+    Q_EMIT session->interaction()->dragCompleted(boxDrag);
+    QCOMPARE(refusedSpy.count(), refusalsBeforeBox);
 }
 
 void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity()

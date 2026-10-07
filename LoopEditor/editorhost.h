@@ -464,6 +464,9 @@ public:
     const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
 
 signals:
+    /// A completed drag was refused rather than committed (#206). Both values are the
+    /// target's stable names so a surface can explain the refusal.
+    void dragRefused(const QString& targetKind, const QString& targetId);
     void presentationChanged();
     void commandEpochChanged();
     void activeToolChanged();
@@ -516,6 +519,7 @@ private:
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
+    static QString dragRefusalMessage(pdfinteraction::InteractionTargetKind kind);
     void onDragCompleted(pdfinteraction::DragSession session);
     void onInteractionSelectionChanged(pdfinteraction::InteractionTarget target);
     void syncProductionState();

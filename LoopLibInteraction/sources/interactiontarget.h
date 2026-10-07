@@ -66,6 +66,25 @@ enum class InteractionTargetKind
 
 const char* getInteractionTargetKindName(InteractionTargetKind kind);
 
+/// What a completed drag of a target kind is allowed to become (issue #206).
+///
+/// Every kind has exactly one answer, so a completed drag is never silently
+/// dropped: it either runs through the command catalog or the owner reports a
+/// typed refusal. A kind moves to Commit only with its own contract (#141),
+/// never by being added here first.
+enum class DragCommitDisposition
+{
+    /// The owner routes the session through `CommandCatalog` (ADR-012).
+    Commit,
+
+    /// The owner changes nothing and tells the operator why.
+    Refused
+};
+
+/// Only a page box is document truth a move may edit. A finding is derived
+/// evidence, a guide is presentation state, and there is no text target kind.
+DragCommitDisposition getDragCommitDisposition(InteractionTargetKind kind);
+
 /// One addressable thing, identified the way its owner already identifies it.
 ///
 /// `id` is a stable id from the producing domain -- pdf::PDFEvidenceRecord::id

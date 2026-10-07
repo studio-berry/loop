@@ -4124,9 +4124,32 @@ bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
     return false;
 }
 
+QString EditorHost::dragRefusalMessage(pdfinteraction::InteractionTargetKind kind)
+{
+    switch (kind)
+    {
+        case pdfinteraction::InteractionTargetKind::Finding:
+            return tr("A finding can't be moved: its position comes from the document. Fix the cause in the Fix workspace.");
+        case pdfinteraction::InteractionTargetKind::Guide:
+            return tr("A guide can't be moved yet: guide editing has no approved contract.");
+        case pdfinteraction::InteractionTargetKind::DragHandle:
+            return tr("A handle can't be dragged yet: transforms have no approved contract.");
+        case pdfinteraction::InteractionTargetKind::PageBox:
+        case pdfinteraction::InteractionTargetKind::Page:
+        case pdfinteraction::InteractionTargetKind::None:
+            break;
+    }
+    return tr("This can't be moved.");
+}
+
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 {
-    if (hasDocument() && session.target.kind == pdfinteraction::InteractionTargetKind::PageBox)
+    if (hasDocument() && pdfinteraction::getDragCommitDisposition(session.target.kind) == pdfinteraction::DragCommitDisposition::Refused)
+    {
+        announceDocumentState(dragRefusalMessage(session.target.kind));
+        Q_EMIT dragRefused(QString::fromLatin1(pdfinteraction::getInteractionTargetKindName(session.target.kind)), session.target.id);
+    }
+    else if (hasDocument())
     {
         if (session.fence.revision != m_session->facade().currentRevision())
         {
