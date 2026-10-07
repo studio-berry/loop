@@ -256,6 +256,10 @@ private slots:
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void completedDragOfARefusedKindIsReportedAndChangesNothing();
+    void shippedRecipeIsListedButNeverSelectedByDefault();
+    void shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRevalidation();
+    void operatorRecipeWinsOverShippedRecipe();
+    void invalidOperatorRecipeStopsMoveWithoutShippedFallback();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
     void confirmActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
@@ -1151,6 +1155,208 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
             QCOMPARE(entry.value(QStringLiteral("value")).toDouble(), 4.0);
         }
     }
+}
+
+QString shippedTranslatePageBoxRecipeId()
+{
+    return QStringLiteral(":/loop/builtin-recipe-translate-page-box.json");
+}
+
+// The operator recipe directory is shared by every test in the process, so each recipe test
+// starts from an empty one; the shipped recipe is compiled in and is unaffected.
+void clearOperatorActionListRecipes()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    QDir(QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes")))
+        .removeRecursively();
+}
+
+QString recipesDirectory()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes"));
+}
+
+bool writeTranslatePageBoxRecipe(const QString& path, const QString& id, const QJsonValue& pageIndex)
+{
+    QFile recipe(path);
+    if (!recipe.open(QIODevice::WriteOnly))
+    {
+        return false;
+    }
+    const QJsonDocument document(QJsonObject{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), id },
+        { QStringLiteral("name"), id },
+        { QStringLiteral("steps"),
+          QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("move") },
+                                   { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                   { QStringLiteral("params"),
+                                     QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                  { QStringLiteral("page_index"), pageIndex },
+                                                  { QStringLiteral("dx"), 2 },
+                                                  { QStringLiteral("dy"), 3 } } } } } } });
+    return recipe.write(document.toJson(QJsonDocument::Compact)) >= 0;
+}
+
+// A page whose trim box sits inside its media box, so a 2/3 point move stays in bounds.
+bool writeTrimmedPageDocument(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return writer.write(path, &document, true);
+}
+
+void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
+{
+    clearOperatorActionListRecipes();
+
+    EditorHost host;
+    bool listed = false;
+    for (const QVariant& entry : host.actionListRecipes())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")).toString() == shippedTranslatePageBoxRecipeId())
+        {
+            listed = true;
+            QVERIFY(item.value(QStringLiteral("valid")).toBool());
+            QVERIFY(item.value(QStringLiteral("builtIn")).toBool());
+        }
+    }
+    QVERIFY(listed);
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+}
+
+void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRevalidation()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("default-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // A drag proposes the move, and the shipped recipe binds to it with no import. Nothing is
+    // selected before the drag, so the shipped recipe is never a silent default.
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionMoveSelection"), move) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Fix);
+    QCOMPARE(host.selectedActionListRecipeId(), shippedTranslatePageBoxRecipeId());
+    QCOMPARE(host.actionListBindings().size(), 4);
+
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    const QString approvedDigest = host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!approvedDigest.isEmpty());
+
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.fixExecutionArmed());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("succeeded"));
+
+    // The published artifact is bound to the approved plan and is not the as-received input.
+    const QVariantMap signOff = host.fixSignOff();
+    QCOMPARE(signOff.value(QStringLiteral("planDigest")).toString(), approvedDigest);
+    const QString publishedSha256 = signOff.value(QStringLiteral("publishedSha256")).toString();
+    QCOMPARE(publishedSha256.size(), 64);
+    QVERIFY(publishedSha256 != QString::fromLatin1(sourceDigest));
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+}
+
+void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("operator-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    const QString recipePath = directory.filePath(QStringLiteral("operator-move.json"));
+    QVERIFY(writeTranslatePageBoxRecipe(recipePath, QStringLiteral("operator-move"), 0));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // A valid operator recipe that offers the operation is selected ahead of the shipped one, and
+    // it is named on the surface so the operator can see which recipe the plan belongs to.
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionMoveSelection"), move) != 0);
+    QVERIFY(!host.selectedActionListRecipeId().isEmpty());
+    QVERIFY(host.selectedActionListRecipeId() != shippedTranslatePageBoxRecipeId());
+    QVERIFY(host.selectedActionListRecipeId().endsWith(QStringLiteral("operator-move.json")));
+}
+
+void EditorHostTest::invalidOperatorRecipeStopsMoveWithoutShippedFallback()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("broken-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    // The operator recipe offers the operation with a page index the schema refuses, so it is
+    // invalid. It sits in the recipes directory before the host starts, as an imported copy would.
+    QVERIFY(QDir().mkpath(recipesDirectory()));
+    const QString brokenPath = QDir(recipesDirectory()).filePath(QStringLiteral("broken-move.json"));
+    QVERIFY(writeTranslatePageBoxRecipe(brokenPath, QStringLiteral("broken-move"), QStringLiteral("first")));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // The move is refused and nothing is selected: the shipped recipe must not run in place of
+    // the operator's invalid one.
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    host.invokeCommand(QStringLiteral("actionMoveSelection"), move);
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+    QVERIFY(!host.selectActionListRecipeForOperation(QStringLiteral("translate-page-box")));
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+
+    bool brokenIsInvalid = false;
+    for (const QVariant& entry : host.actionListRecipes())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("name")).toString() == QStringLiteral("broken-move"))
+        {
+            brokenIsInvalid = !item.value(QStringLiteral("valid")).toBool();
+        }
+    }
+    QVERIFY(brokenIsInvalid);
 }
 
 void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()

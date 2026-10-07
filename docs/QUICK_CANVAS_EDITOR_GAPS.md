@@ -91,7 +91,8 @@ reported rather than invented.
 `PageBox` target. The command routes the move into the Fix workspace as a bound
 `translate-page-box` operation, so plan, approval and execute stay the governed
 flow. See `docs/adr/adr-012-drag-commit-command.md`, "Implementation notes".
-The move needs a recipe that offers `translate-page-box`; none ships built in.
+The move runs through a recipe that offers `translate-page-box`. A recipe ships built in
+(ADR-013); an operator recipe that offers the operation takes precedence over it.
 
 ## Why no code accompanied gap 2 at first
 
