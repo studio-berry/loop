@@ -9,7 +9,7 @@ claims:
     evidence:
       - unit:agent-policy:quick
       - unit:UnitTestsProductOperatorLoop
-      - unit:UnitTestsEditorHost
+      - unit:UnitTests/tst_editorhosttest.cpp
   - id: governed-comparison-host-regression
     evidence:
       - unit:UnitTestsGovernedExecution

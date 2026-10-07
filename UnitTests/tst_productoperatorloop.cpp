@@ -1358,6 +1358,7 @@ void ProductOperatorLoopTest::planApprovalJourneyBindsDisplayedIdentityAndBlocks
     const QString planDigest = displayed.value(QStringLiteral("planDigest")).toString();
     const QString inputIdentity = displayed.value(QStringLiteral("sourceSha256")).toString();
     QCOMPARE(inputIdentity.size(), 64);
+    QCOMPARE(inputIdentity, QString::fromLatin1(sourceDigest.toHex()));
     const QString revision = displayed.value(QStringLiteral("plannedRevision")).toString();
     QVERIFY(text("fixPlanIdentityLabel").contains(planDigest));
     QVERIFY(text("fixPlanIdentityLabel").contains(inputIdentity));
