@@ -204,7 +204,7 @@ jobs:
           mkdir -p "$evidence_dir"
           set -o pipefail
           echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
-          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -InstallTree build/install -Backend native -SourceSha "$LOOP_SOURCE_SHA" -EvidenceJson "$evidence_dir/quick-a11y-native.json" 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+          xvfb-run -a pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -InstallTree build/install -Backend native -Platform xcb -SourceSha "$LOOP_SOURCE_SHA" -EvidenceJson "$evidence_dir/quick-a11y-native.json" 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
 
       - name: Run product Quick accessibility qualification harness (software)
         working-directory: loop

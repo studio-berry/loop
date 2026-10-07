@@ -254,7 +254,7 @@ jobs:
         if: ${{ !inputs.fast }}
         working-directory: loop
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Backend native
+          xvfb-run -a pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Backend native -Platform xcb
           pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Backend software
 
       - name: Test Widgets-absent release profile
@@ -379,7 +379,7 @@ jobs:
       - name: Run product Quick accessibility smoke (native)
         if: ${{ !inputs.fast }}
         working-directory: loop
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend native
+        run: xvfb-run -a pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend native -Platform xcb
 
       - name: Run product Quick accessibility smoke (software)
         if: ${{ !inputs.fast }}
