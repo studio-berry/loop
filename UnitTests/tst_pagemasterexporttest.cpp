@@ -86,6 +86,7 @@ private slots:
     void cancel_betweenOutputs_keepsCommitted();
     void cancel_closeDetach_invalidatesProgressAndBoundedWait();
     void atomicWrite_leavesNoPartialFiles();
+    void governed_gatewayCancelBeforeCommitWritesNothing();
     void manifest_persistedWithWrittenStatuses();
     void manifest_persistFailure_removesNewOutput();
     void manifest_persistFailure_keepsOverwrittenOutput();
@@ -1122,6 +1123,37 @@ void PageMasterExportTest::atomicWrite_leavesNoPartialFiles()
     const QDir directory(tempDir.path());
     const QStringList partialFiles = directory.entryList({ QStringLiteral("*.partial") }, QDir::Files);
     QVERIFY(partialFiles.isEmpty());
+}
+
+void PageMasterExportTest::governed_gatewayCancelBeforeCommitWritesNothing()
+{
+    // The beforeOutputCommit seam runs inside the gateway after the staged bytes are
+    // finalized and before the commit. A cancel raised there must leave the final path
+    // untouched and report the export as cancelled.
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    pdf::PDFDocument source = buildFilledPage();
+    const QString outputPath = tempDir.filePath(QStringLiteral("gateway-cancel.pdf"));
+
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+
+    std::atomic_bool cancel{ false };
+    job.cancelFlag = &cancel;
+    job.beforeOutputCommit = [&cancel](const QString&)
+    { cancel.store(true, std::memory_order_release); };
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(result.cancelled);
+    QVERIFY(result.writtenFiles.isEmpty());
+    QVERIFY(!QFile::exists(outputPath));
+    const QDir directory(tempDir.path());
+    QVERIFY(directory.entryList({ QStringLiteral("*.loop-staging-*") }, QDir::Files).isEmpty());
 }
 
 void PageMasterExportTest::manifest_persistedWithWrittenStatuses()

@@ -33,7 +33,7 @@ The LoopEditor shell exposes these workspace IDs:
 | Pages / Production | `PDFPageMasterExport`, ADR-003, ADR-004 | document, preflight |
 | Inspect | Core inspection + contextual plugins | document, preflight |
 | Fix | bounded Core/PdfTool operations | document, preflight |
-| Compare | Core `PDFDiff`, pending product decision | document, preflight |
+| Compare | Core comparison facts (repair diff / finding delta), presented read-only | document, preflight |
 
 The implemented composition is:
 
@@ -45,8 +45,10 @@ status: document state · production state · preflight state · page/zoom
 
 Manifest-driven menus group the 108 catalog actions by shell menu and
 workspace `target`, with `ADVANCED` actions gated behind the release-profile
-developer diagnostics flag. Compare remains visible on the rail but disabled
-until the product decision closes.
+developer diagnostics flag. Compare is enabled: it presents the before/after
+artifact identities, technical finding delta, preserved attributes and
+unresolved risk the shell already owns, and blocks a stale preview or a
+mismatched plan digest instead of refreshing it.
 
 The canvas remains the existing PDF rendering surface. The inspector is a
 single context dispatcher for page, image, finding, separation, and empty-canvas
@@ -68,7 +70,7 @@ of PDF operations.
 ### Workspace surfaces
 
 Every enabled destination resolves to a real surface; the placeholder pane is
-kept only for the disabled Compare destination, whose entry the shell refuses.
+retired, so no rail entry can reach placeholder content.
 Production Preview, Pages / Production, Inspect and the governed-correction Fix
 route are described in [`WORKSPACE_SURFACES_586.md`](WORKSPACE_SURFACES_586.md),
 together with the Fix lifecycle's ten states and the identity each affordance is

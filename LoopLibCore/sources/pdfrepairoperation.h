@@ -252,18 +252,32 @@ public:
     QJsonObject descriptor() const;
 };
 
+/// Shared JSON-schema fragment validator for operation parameters. The repair
+/// transaction and the Action List planner judge parameters by this one rule.
+LOOPLIBCORESHARED_EXPORT bool validateJsonSchemaFragment(const QJsonValue& value,
+                                                         const QJsonObject& schema,
+                                                         const QString& path,
+                                                         QStringList* errors);
+
 class LOOPLIBCORESHARED_EXPORT PDFRepairRegistry
 {
 public:
+    /// Production uses instance(); a default-constructed registry is isolated
+    /// from the singleton so tests and tools can register without side effects.
+    PDFRepairRegistry() = default;
     static PDFRepairRegistry& instance();
 
-    void registerOperation(std::unique_ptr<PDFRepairOperation> operation);
+    /// Refuses a null operation, an empty id, and an id that is already
+    /// registered; the first registration wins.
+    PDFOperationResult registerOperation(std::unique_ptr<PDFRepairOperation> operation);
     const PDFRepairOperation* find(const QString& operationId) const;
     QStringList operationIds() const;
     QJsonArray descriptors() const;
+    /// Canonical identity of the registered {id, version} set, sorted by id.
+    /// Bound into every operation-plan digest.
+    QString digest() const;
 
 private:
-    PDFRepairRegistry() = default;
     PDFRepairRegistry(const PDFRepairRegistry&) = delete;
     PDFRepairRegistry& operator=(const PDFRepairRegistry&) = delete;
     std::map<QString, std::unique_ptr<PDFRepairOperation>> m_operations;
@@ -281,6 +295,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairTransactionOptions
     /// this path is refused; an empty value only disables that path check, not
     /// the policy check.
     QString sourcePath;
+    /// When set, analyze() and apply() require sourcePath to be readable without
+    /// a password, its bytes to hash to this revision, and its parsed contents
+    /// to match the source document. An empty value disables the revision check.
+    QString expectedSourceSha256;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFRepairTransaction
@@ -302,7 +320,8 @@ public:
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
                                           PDFDocument* reopenedCandidate,
-                                          QByteArray* candidateSha256 = nullptr);
+                                          QByteArray* candidateSha256 = nullptr,
+                                          const std::function<void(const QString& stage)>& stageHook = {});
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
@@ -315,6 +334,11 @@ public:
     const QList<PDFRepairPlan>& plans() const { return m_plans; }
     const QList<PDFRepairResult>& results() const { return m_results; }
     PDFOperationSavePolicy savePolicy() const;
+    /// Lowercase hex SHA-256 of the source bytes this transaction was planned
+    /// against; empty when the source is null.
+    QString sourceSha256() const;
+    /// The cancellation control the transaction was configured with, or null.
+    const PDFOperationControl* operationControl() const { return m_options.operationControl; }
     /// Declares the save policy the caller is asking for. Stricter than the
     /// operation-declared policy is allowed; weaker is refused here, before any
     /// analysis or mutation, so a surface cannot talk an operation out of its

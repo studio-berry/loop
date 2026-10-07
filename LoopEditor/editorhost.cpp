@@ -411,6 +411,7 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
             {
                 m_activeAsyncJobs.remove(snapshot.jobId);
+                finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
                 refreshCanvasTrace(); });
@@ -1064,6 +1065,330 @@ QString EditorHost::previewStaleReason() const
     return QString();
 }
 
+QString EditorHost::previewFidelityStateName() const
+{
+    return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
+                                                          !previewStaleReason().isEmpty(),
+                                                          pageFidelityIsAuthoritative(),
+                                                          pageFidelityIsExact());
+}
+
+QVariantMap EditorHost::previewFidelityVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreviewFidelityStateVisual(previewFidelityStateName());
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    result.insert(QStringLiteral("accessibleName"), visual.accessibleName);
+    return result;
+}
+
+QColor EditorHost::previewFidelityColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolvePreviewFidelityStateVisual(previewFidelityStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::previewFidelityOriginName() const
+{
+    return pdfquick::tokens::previewFidelityOriginName(previewFidelityStateName());
+}
+
+bool EditorHost::previewRequiresAuthoritative() const
+{
+    return previewFidelityStateName() == QLatin1String("approximate");
+}
+
+QString EditorHost::previewFidelitySummary() const
+{
+    const QString state = previewFidelityStateName();
+
+    if (state == QLatin1String("unavailable"))
+    {
+        return tr("No document is open, so there is no preview to describe.");
+    }
+    if (state == QLatin1String("stale"))
+    {
+        return tr("Not current evidence: %1").arg(previewStaleReason());
+    }
+    if (state == QLatin1String("authoritative") && !pageFidelityIsExact())
+    {
+        return tr("Fidelity authoritative but still approximate, origin output-preview: this page is "
+                  "rendered with the overprint-accurate compositor, yet its diagnostics report an "
+                  "approximation (%1). Do not read it as an exact render.")
+            .arg(pageFidelityReason());
+    }
+    if (state == QLatin1String("authoritative"))
+    {
+        return tr("Fidelity authoritative, origin output-preview: this page is rendered with the "
+                  "overprint-accurate compositor. Read it with the plates and separations; it does "
+                  "not by itself certify publication safety.");
+    }
+    if (state == QLatin1String("approximate"))
+    {
+        return tr("Fidelity approximate, origin fast-canvas: overprint is not simulated (%1). These "
+                  "canvas pixels cannot stand as proof of print-safe output; switch this page to the "
+                  "authoritative overprint render before any print claim.")
+            .arg(pageFidelityReason());
+    }
+    return tr("Fidelity exact, origin fast-canvas: this page reports no overprint-sensitive content. "
+              "The interactive preview still does not certify print-safe output.");
+}
+
+QVariantMap EditorHost::compareReview() const
+{
+    const QVariantMap identity = fixPlanIdentity();
+    const QVariantMap preview = fixPreview();
+    const QVariantMap recheck = fixRecheck();
+    const QVariantMap signOff = fixSignOff();
+    const pdf::PDFActionListExecutionResult result = fixRunResult();
+
+    const QString planDigest = identity.value(QStringLiteral("planDigest")).toString();
+    const QString reviewedPlanDigest = identity.value(QStringLiteral("reviewedPlanDigest")).toString();
+    const QString publishedPlanDigest = signOff.value(QStringLiteral("planDigest")).toString();
+    const bool planIsCurrent = identity.value(QStringLiteral("planIsCurrent")).toBool();
+    // The shell's own lifecycle already decided whether the plan and its preview still
+    // describe the open revision; the comparison does not second-guess it.
+    const QString lifecycle = fixLifecycleStateName();
+    const bool comparisonStale = lifecycle == QLatin1String("stale");
+    QString staleReason;
+    if (comparisonStale)
+    {
+        staleReason = previewStaleReason();
+        if (staleReason.isEmpty())
+        {
+            staleReason = tr("The comparison belongs to a different document revision. Plan the "
+                             "correction again; it is not refreshed.");
+        }
+    }
+
+    // Before/after artifact identities: the exact input the plan bound to, and the
+    // candidate Core serialized plus the bytes a governed run published.
+    QVariantMap before;
+    before.insert(QStringLiteral("documentKey"), identity.value(QStringLiteral("documentKey")));
+    before.insert(QStringLiteral("documentRevision"), identity.value(QStringLiteral("documentRevision")));
+    before.insert(QStringLiteral("plannedRevision"), identity.value(QStringLiteral("plannedRevision")));
+    before.insert(QStringLiteral("sourceSha256"), identity.value(QStringLiteral("sourceSha256")));
+
+    QVariantMap after;
+    after.insert(QStringLiteral("candidateSha256"), preview.value(QStringLiteral("candidateSha256")));
+    after.insert(QStringLiteral("publishedSha256"), signOff.value(QStringLiteral("publishedSha256")));
+    after.insert(QStringLiteral("reviewDecision"), identity.value(QStringLiteral("reviewDecision")));
+    after.insert(QStringLiteral("publicationStatus"), signOff.value(QStringLiteral("status")));
+
+    QVariantMap plan;
+    plan.insert(QStringLiteral("planDigest"), planDigest);
+    plan.insert(QStringLiteral("reviewedPlanDigest"), reviewedPlanDigest);
+    plan.insert(QStringLiteral("publishedPlanDigest"), publishedPlanDigest);
+    plan.insert(QStringLiteral("planIsCurrent"), planIsCurrent);
+    plan.insert(QStringLiteral("recipeId"), identity.value(QStringLiteral("recipeId")));
+    plan.insert(QStringLiteral("recipeHash"), identity.value(QStringLiteral("recipeHash")));
+    plan.insert(QStringLiteral("effectiveProfileDigest"),
+                identity.value(QStringLiteral("effectiveProfileDigest")));
+
+    // Core's technical finding delta, carried through unchanged.
+    QVariantMap findingDelta;
+    findingDelta.insert(QStringLiteral("compared"), recheck.value(QStringLiteral("compared")));
+    findingDelta.insert(QStringLiteral("resolved"), recheck.value(QStringLiteral("resolved")));
+    findingDelta.insert(QStringLiteral("unchanged"), recheck.value(QStringLiteral("unchanged")));
+    findingDelta.insert(QStringLiteral("introduced"), recheck.value(QStringLiteral("introduced")));
+    findingDelta.insert(QStringLiteral("incomplete"), recheck.value(QStringLiteral("incomplete")));
+
+    // The declared change surface, the facts the comparison preserved and the risk it
+    // left unresolved, all read off Core's own step plans and finding deltas.
+    QVariantList declaredChangeAttributes;
+    QVariantList carriedForwardFindings;
+    QVariantList unresolvedFindings;
+    QVariantList unresolvedMessages;
+    QVariantList materialDeltas;
+    QVariantList steps;
+    QString highestRisk;
+    // Core names risk low < medium < high < destructive; a name outside that set ranks above all of them.
+    const QStringList riskOrder{ QStringLiteral("low"), QStringLiteral("medium"), QStringLiteral("high"),
+                                 QStringLiteral("destructive") };
+    const auto riskRank = [&riskOrder](const QString& risk)
+    {
+        const qsizetype position = riskOrder.indexOf(risk);
+        return position < 0 ? riskOrder.size() : position;
+    };
+    QString savePolicyMode;
+    QString savePolicyRationale;
+    for (int index = 0; index < result.steps.size(); ++index)
+    {
+        const pdf::PDFActionListStepResult& step = result.steps.at(index);
+        const QJsonObject stepPlan = step.plan;
+        const QJsonObject expected = stepPlan.value(QStringLiteral("expected_changes")).toObject();
+        for (auto it = expected.constBegin(); it != expected.constEnd(); ++it)
+        {
+            if (it.value().toBool() && !declaredChangeAttributes.contains(it.key()))
+            {
+                declaredChangeAttributes.append(it.key());
+            }
+        }
+        const QString stepRisk = stepPlan.value(QStringLiteral("risk")).toString();
+        if (highestRisk.isEmpty() || riskRank(stepRisk) > riskRank(highestRisk))
+        {
+            highestRisk = stepRisk;
+        }
+        if (savePolicyMode.isEmpty())
+        {
+            const QJsonObject savePolicy = stepPlan.value(QStringLiteral("save_policy")).toObject();
+            savePolicyMode = savePolicy.value(QStringLiteral("mode")).toString();
+            savePolicyRationale = savePolicy.value(QStringLiteral("rationale")).toString();
+        }
+        for (const QJsonValue& reason : stepPlan.value(QStringLiteral("unsupported_reasons")).toArray())
+        {
+            unresolvedMessages.append(reason.toString());
+        }
+        for (const QJsonValue& warning : stepPlan.value(QStringLiteral("warnings")).toArray())
+        {
+            unresolvedMessages.append(warning.toString());
+        }
+
+        QVariantMap stepEntry;
+        stepEntry.insert(QStringLiteral("index"), index);
+        stepEntry.insert(QStringLiteral("stepId"), step.stepId);
+        stepEntry.insert(QStringLiteral("operation"), step.operationId);
+        stepEntry.insert(QStringLiteral("status"), pdfActionListStepStatusName(step.status));
+        steps.append(stepEntry);
+
+        const QJsonObject stepDelta = step.repairResult.value(QStringLiteral("finding_delta")).toObject();
+        for (const QJsonValue& finding : stepDelta.value(QStringLiteral("carried_forward")).toArray())
+        {
+            carriedForwardFindings.append(finding.toString());
+        }
+        for (const QJsonValue& finding : stepDelta.value(QStringLiteral("incomplete")).toArray())
+        {
+            unresolvedFindings.append(finding.toString());
+        }
+        for (const QJsonValue& reason : step.repairResult.value(QStringLiteral("incomplete_reasons")).toArray())
+        {
+            unresolvedMessages.append(reason.toString());
+        }
+        for (const QJsonValue& warning : step.repairResult.value(QStringLiteral("warnings")).toArray())
+        {
+            unresolvedMessages.append(warning.toString());
+        }
+
+        // Material deltas the operator navigates: what the step cleared, introduced or
+        // could not finish rechecking. The owning step index is kept for the route.
+        for (const QJsonValue& finding : stepDelta.value(QStringLiteral("resolved")).toArray())
+        {
+            materialDeltas.append(QVariantMap{ { QStringLiteral("kind"), QStringLiteral("resolved") },
+                                               { QStringLiteral("findingId"), finding.toString() },
+                                               { QStringLiteral("stepIndex"), index } });
+        }
+        for (const QJsonValue& finding : stepDelta.value(QStringLiteral("introduced")).toArray())
+        {
+            materialDeltas.append(QVariantMap{ { QStringLiteral("kind"), QStringLiteral("introduced") },
+                                               { QStringLiteral("findingId"), finding.toString() },
+                                               { QStringLiteral("stepIndex"), index } });
+        }
+        for (const QJsonValue& finding : stepDelta.value(QStringLiteral("incomplete")).toArray())
+        {
+            materialDeltas.append(QVariantMap{ { QStringLiteral("kind"), QStringLiteral("incomplete") },
+                                               { QStringLiteral("findingId"), finding.toString() },
+                                               { QStringLiteral("stepIndex"), index } });
+        }
+    }
+
+    QVariantMap preserved;
+    preserved.insert(QStringLiteral("declaredChangeAttributes"), declaredChangeAttributes);
+    preserved.insert(QStringLiteral("unchangedFindings"), recheck.value(QStringLiteral("unchanged")));
+    preserved.insert(QStringLiteral("carriedForwardFindings"), carriedForwardFindings);
+    preserved.insert(QStringLiteral("savePolicyMode"), savePolicyMode);
+    preserved.insert(QStringLiteral("savePolicyRationale"), savePolicyRationale);
+
+    QVariantMap risk;
+    risk.insert(QStringLiteral("level"), highestRisk);
+    risk.insert(QStringLiteral("introducedFindings"), recheck.value(QStringLiteral("introduced")));
+    risk.insert(QStringLiteral("incompleteFindings"), unresolvedFindings);
+    risk.insert(QStringLiteral("messages"), unresolvedMessages);
+    risk.insert(QStringLiteral("hasIntroduced"), recheck.value(QStringLiteral("hasIntroducedFindings")));
+    risk.insert(QStringLiteral("hasIncomplete"), recheck.value(QStringLiteral("hasIncompleteFindings")));
+
+    QVariantMap review;
+    review.insert(QStringLiteral("available"),
+                  hasDocument() && (!planDigest.isEmpty() || !result.steps.isEmpty()));
+    review.insert(QStringLiteral("before"), before);
+    review.insert(QStringLiteral("after"), after);
+    review.insert(QStringLiteral("plan"), plan);
+    review.insert(QStringLiteral("findingDelta"), findingDelta);
+    review.insert(QStringLiteral("preserved"), preserved);
+    review.insert(QStringLiteral("unresolvedRisk"), risk);
+    review.insert(QStringLiteral("materialDeltas"), materialDeltas);
+    review.insert(QStringLiteral("hasMaterialDeltas"), !materialDeltas.isEmpty());
+    review.insert(QStringLiteral("steps"), steps);
+    review.insert(QStringLiteral("stale"), comparisonStale);
+    review.insert(QStringLiteral("staleReason"), staleReason);
+
+    // Fail closed: a comparison that cannot describe the open revision, or whose reviewed
+    // or published digest is not the plan on screen, is blocked rather than refreshed.
+    QString blockedReason;
+    if (review.value(QStringLiteral("available")).toBool())
+    {
+        if (comparisonStale)
+        {
+            blockedReason = staleReason;
+        }
+        else if (!reviewedPlanDigest.isEmpty() && reviewedPlanDigest != planDigest)
+        {
+            blockedReason = tr("The reviewed plan digest does not match the plan on screen. It is not "
+                               "refreshed; review the current plan again.");
+        }
+        else if (!publishedPlanDigest.isEmpty() && !planDigest.isEmpty() &&
+                 publishedPlanDigest != planDigest)
+        {
+            blockedReason = tr("The published artifact belongs to a different plan. It is not refreshed.");
+        }
+    }
+    review.insert(QStringLiteral("lifecycleStateName"), lifecycle);
+    review.insert(QStringLiteral("blocked"), !blockedReason.isEmpty());
+    review.insert(QStringLiteral("blockedReason"), blockedReason);
+    return review;
+}
+
+bool EditorHost::navigateCompareDelta(int deltaIndex)
+{
+    const QVariantMap review = compareReview();
+    if (review.value(QStringLiteral("blocked")).toBool())
+    {
+        return false;
+    }
+
+    const QVariantList deltas = review.value(QStringLiteral("materialDeltas")).toList();
+    if (deltaIndex < 0 || deltaIndex >= deltas.size())
+    {
+        return false;
+    }
+
+    const QVariantMap delta = deltas.at(deltaIndex).toMap();
+    const int stepIndex = delta.value(QStringLiteral("stepIndex")).toInt();
+    const QString findingId = delta.value(QStringLiteral("findingId")).toString();
+    if (stepIndex < 0)
+    {
+        return false;
+    }
+
+    if (!inspectActionListStep(stepIndex))
+    {
+        return false;
+    }
+
+    setWorkspace(LoopWorkspace::Inspect);
+    if (!findingId.isEmpty())
+    {
+        selectFinding(findingId);
+    }
+    return true;
+}
+
 QString EditorHost::productionStateName() const
 {
     if (!hasDocument())
@@ -1336,6 +1661,18 @@ void EditorHost::toggleCurrentPageFidelity()
     const bool wasAuthoritative = m_session->surfaces()->isPageAuthoritativeOverprint(pageIndex);
     m_session->surfaces()->setPageAuthoritativeOverprint(pageIndex, !wasAuthoritative);
     bumpPresentation();
+}
+
+bool EditorHost::ensureAuthoritativePreview()
+{
+    if (!hasDocument() || !previewRequiresAuthoritative())
+    {
+        return false;
+    }
+
+    m_session->surfaces()->setPageAuthoritativeOverprint(currentPage(), true);
+    bumpPresentation();
+    return true;
 }
 
 void EditorHost::selectFinding(const QString& findingId)
@@ -2186,6 +2523,14 @@ bool EditorHost::cancelActionList()
 
 bool EditorHost::confirmActionListPlan()
 {
+    // "Approve and run" must not execute a plan nobody reviewed: the armed path binds
+    // execution to the operator's approval of the exact plan digest on the current
+    // revision. An unreviewed plan is refused here.
+    if (!fixExecutionArmed())
+    {
+        announceDocumentState(tr("Approve the current correction plan before running it."));
+        return false;
+    }
     return runActionList();
 }
 
@@ -2487,6 +2832,18 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     }
     targetExecutionId = event->executionId;
 
+    // P2: a rollback revalidates the restored revision through the #38 path, so the
+    // Editor must supply the effective profile it already holds. Without a validated
+    // profile the rollback is refused and recorded, never fabricated.
+    const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                        [this](const PreflightProfileChoice& choice)
+                                        { return choice.id == m_selectedPreflightProfileId; });
+    if (profileIt == m_preflightProfiles.cend() || !profileIt->valid)
+    {
+        announceDocumentState(tr("Select a validated preflight profile before returning to a recorded revision."));
+        return false;
+    }
+
     pdf::PDFRollbackRequest request;
     request.currentArtifactSha256 = currentDigest;
     request.targetArtifactSha256 = point->documentRevisionDigest;
@@ -2501,6 +2858,9 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     request.approval.decisionReference =
         QStringLiteral("editor-rollback:%1").arg(point->documentRevisionDigest);
     request.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    request.profile = profileIt->profile;
+    request.signOffActor = QStringLiteral("Editor");
+    request.signOffPolicy = QStringLiteral("desktop-rollback-postflight");
 
     // A new sibling file, never the open document: returning to a revision must not
     // overwrite what the operator has on screen.
@@ -2510,30 +2870,80 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
                                                 .arg(documentInfo.completeBaseName(),
                                                      point->documentRevisionDigest.left(8)));
 
-    pdf::PDFArtifactStore artifacts(historyDirectory);
-    if (const pdf::PDFOperationResult rollback = history.rollbackTo(request, artifacts, destination); !rollback)
+    // One rollback at a time: a second request while the first is still restoring would
+    // race the same history and publish two revisions from one document state.
+    if (!m_rollbackOutcomes.isEmpty())
     {
-        announceDocumentState(tr("The document was not rolled back: %1").arg(rollback.getErrorMessage()));
+        announceDocumentState(tr("A rollback is already in progress."));
         return false;
     }
 
-    // The restored revision and its rolled-back event are already published, so a retention
-    // failure is reported alongside them rather than hiding the new revision.
-    const pdf::PDFHistoryRetentionResult retention = history.enforceRetention({}, artifacts);
-    const QString revision = point->documentRevisionDigest.left(12);
-    const QString destinationName = QFileInfo(destination).fileName();
-    if (retention.success)
+    // The restore revalidates the recovered bytes through PreflightEngine, which refuses
+    // to run on this interactive thread (registered at construction), so the work is
+    // scheduled exactly like the Action List run. The worker builds its own stores: Qt SQL
+    // connections are thread-affine, so the GUI-thread history opened above must never be
+    // touched off-thread.
+    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("rollback.%1").arg(point->documentRevisionDigest.left(8));
+    spec.checkId = QStringLiteral("rollback");
+    spec.progressModel = QStringLiteral("rollback-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    auto outcome = std::make_shared<RollbackJobOutcome>();
+    outcome->destinationPath = destination;
+    outcome->revision = point->documentRevisionDigest.left(12);
+    m_rollbackOutcomes.insert(jobId, outcome);
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        [request, historyPath, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
+        {
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+            pdf::PDFOperationHistoryStore workerHistory(historyPath);
+            QString openError;
+            if (!workerHistory.open(&openError))
+            {
+                throw std::runtime_error(
+                    QStringLiteral("Recorded revisions are unavailable: %1").arg(openError).toStdString());
+            }
+            pdf::PDFArtifactStore artifacts(historyDirectory);
+            const pdf::PDFOperationResult rollback = workerHistory.rollbackTo(request, artifacts, destination);
+            if (!rollback)
+            {
+                outcome->errorMessage = rollback.getErrorMessage();
+                return;
+            }
+            outcome->ok = true;
+            if (context.isCancellationRequested())
+            {
+                // The restored revision is already published; skipping retention keeps it
+                // rather than hiding it behind a cancelled job.
+                return;
+            }
+            const pdf::PDFHistoryRetentionResult retention = workerHistory.enforceRetention({}, artifacts);
+            outcome->retentionSuccess = retention.success;
+            outcome->retentionError = retention.errorMessage;
+        });
+    if (submittedId != jobId)
     {
-        announceDocumentState(tr("Returned to revision %1 as %2.").arg(revision, destinationName));
+        m_rollbackOutcomes.remove(jobId);
+        announceDocumentState(tr("Unable to schedule the rollback."));
+        return false;
     }
-    else
-    {
-        announceDocumentState(tr("Returned to revision %1 as %2, but history retention could not be enforced: %3")
-                                  .arg(revision, destinationName, retention.errorMessage));
-    }
-    openFileUrl(QUrl::fromLocalFile(destination));
-    refreshFixRollbackPoints();
-    return retention.success;
+
+    // The rollback is scheduled, not complete: finishRollbackJob announces the outcome.
+    return true;
 }
 
 void EditorHost::discardActionListPlan()
@@ -3437,6 +3847,43 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
     }
 }
 
+void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const std::shared_ptr<RollbackJobOutcome> outcome = m_rollbackOutcomes.take(snapshot.jobId);
+    if (!outcome)
+    {
+        return;
+    }
+
+    if (snapshot.status == pdf::PDFJobStatus::Stale || snapshot.status == pdf::PDFJobStatus::Cancelled ||
+        !hasDocument() || !m_session->revisionSource() ||
+        snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != m_session->facade().currentRevision().toString())
+    {
+        return;
+    }
+
+    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome->ok)
+    {
+        const QString destinationName = QFileInfo(outcome->destinationPath).fileName();
+        if (outcome->retentionSuccess)
+        {
+            announceDocumentState(tr("Returned to revision %1 as %2.").arg(outcome->revision, destinationName));
+        }
+        else
+        {
+            announceDocumentState(tr("Returned to revision %1 as %2, but history retention could not be enforced: %3")
+                                      .arg(outcome->revision, destinationName, outcome->retentionError));
+        }
+        openFileUrl(QUrl::fromLocalFile(outcome->destinationPath));
+        refreshFixRollbackPoints();
+        return;
+    }
+
+    const QString message = outcome->errorMessage.isEmpty() ? snapshot.errorMessage : outcome->errorMessage;
+    announceDocumentState(tr("The document was not rolled back: %1").arg(message));
+}
+
 void EditorHost::refreshCanvasTrace()
 {
     if (m_canvas)
@@ -3625,14 +4072,9 @@ void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::Evid
 bool EditorHost::isWorkspaceEnabled(LoopWorkspace workspace) const
 {
     // QML supplies registered enum values, but the public invokable can also
-    // be reached through QVariant/int callers. Reject out-of-range values and
-    // the explicitly deferred Compare destination fail-closed.
-    if (workspace < LoopWorkspace::Document || workspace > LoopWorkspace::Compare)
-    {
-        return false;
-    }
-
-    return workspace != LoopWorkspace::Compare;
+    // be reached through QVariant/int callers. Reject out-of-range values
+    // fail-closed; every registered destination resolves to a real surface.
+    return workspace >= LoopWorkspace::Document && workspace <= LoopWorkspace::Compare;
 }
 
 void EditorHost::setInspectionMode(QString mode)

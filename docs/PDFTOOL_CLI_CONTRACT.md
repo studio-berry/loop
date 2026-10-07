@@ -245,8 +245,22 @@ process must no longer appear successful.
 | `verify-evidence-bundle` | `{ "verification": <bundle verification record> }` | `1 findings` when the bundle does not verify |
 | `ocr` | `{ "report": <existing OCR report> }` | `5 partial-output` |
 | `schema` | `{ "matrix": <compatibility matrix> }` or the artifact diagnostic (below) | `1 findings` when the artifact is incompatible |
+| `rollback` | `{ "status": "rolled-back", "approval", "revalidation", "sign_off", "target", "output", "history" }` | `2 invalid-invocation` when `--to`/`--output`/`--profile` is missing or output paths collide; `3 input-error` when the target revision is not recorded; `4 processing-failure` on a chain, revalidation, or report write failure |
 | `render`, `separate`, image/attachment extraction | Summary + `outputs[]` | `5 partial-output` |
 | `optimize`, `redact`, encrypt/decrypt, unite, add-bleed | Operation data + final output | Usually `4 processing-failure` on failure |
+
+### `rollback`
+
+`pdftool rollback <document> --to <sha256> --output <file> --profile <profile> [--reason <text>] [--report-file <file>]`
+is JSON-only (a different `--console-format` is an invalid invocation, exit `2`). It restores a
+recorded revision as a **new** revision: it digest-verifies the prior artifact, revalidates it in staging before atomically publishing to
+`--output` through the same #38 path every other surface uses,
+and records a `rolled-back` event whose `resultSummary.governed` carries the
+`{approval, revalidation, sign_off}` receipt. A rollback without a profile, a tampered target, or
+a chain that fails `verify()` is refused before any write; a revalidation failure preserves the
+destination and records a failed event. The command never rewrites history and never
+restores unverified bytes. Input, output, profile, and report paths must be distinct. If the report
+write fails after publication, exit `4` retains the primary output and reports the failure.
 
 ### `schema`
 

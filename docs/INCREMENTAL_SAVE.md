@@ -54,6 +54,22 @@ save boundary and additionally refuses a candidate whose output resolves to
 `PDFRepairTransactionOptions::sourcePath`. PdfTool reports the refusal as
 diagnostic `save-policy.refused` with exit code 4.
 
+`PdfTool repair` validates its publish destination with the same helper before
+`publishGovernedArtifact`; `--output <source>` is refused with diagnostic
+`save-policy.refused` and exit code 4 even when `--overwrite` is passed, because
+repair never appends in place.
+
+The Action List carries the same contract. Every step plan reports the
+operation-declared policy as `save_policy`, and
+`PDFActionListExecutor::mergedSavePolicy()` merges the policies of all step
+operations conservatively onto the execution result. The merged policy is part
+of the Action List plan digest, so a policy change moves the digest and
+invalidates approvals bound to it. `PDFActionListExecutionOptions::requestedSavePolicy`
+may ask for more safety than the declaration, but a weaker request is refused
+with diagnostic `action-list.save-policy-refused` before any step work (dry
+runs included). `PdfTool action-list run`/`batch` and the Editor publication
+boundary validate the save request before writing the candidate.
+
 These guarantees are pinned by name, not by convention:
 `everyRegisteredOperationDeclaresItsSavePolicy` (no registered operation may
 rely on the undeclared default),
@@ -62,8 +78,11 @@ rely on the undeclared default),
 `candidateSaveRefusesToOverwriteTheSourceOnDisk`,
 `sourceBytesSurviveSuccessCancelAndFailure`,
 `noNonIncrementalOperationCanBeAppendedToASignedSource`, and, for the
-corrective CLI commands, `addBleedRefusesToWriteOverItsOwnInput` and
-`rgbToCmykRefusesToWriteOverItsOwnInput`.
+corrective CLI commands, `addBleedRefusesToWriteOverItsOwnInput`,
+`rgbToCmykRefusesToWriteOverItsOwnInput` and
+`repairRefusesToWriteOverItsOwnInput`; for the Action List,
+`stepPlansCarryDeclaredSavePolicy` and
+`executeRefusesWeakenedRequestedSavePolicy`.
 
 The editor content-save path preserves object numbers and does not run the
 storage-shrinking optimizer before the controller chooses its write mode. This

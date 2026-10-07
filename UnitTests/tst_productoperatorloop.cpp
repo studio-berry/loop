@@ -6,25 +6,37 @@
 #include "inspectormodel.h"
 #include "loopcanvasitem.h"
 #include "operatoracceptancehelpers.h"
+#include "pdfactionlist.h"
 #include "pdfartifactidentity.h"
+#include "pdfdocumentmanipulator.h"
+#include "pdfdocumentreader.h"
+#include "pdfgovernedexecution.h"
+#include "pdfpagemasterexport.h"
 #include "pdfpreflightverdict.h"
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfrepairoperation.h"
+#include "preflightengine.h"
 #include "preflightfindingsmodel.h"
 #include "previewstatemodel.h"
+#include "loopstatevisual.h"
+#include "looptokens.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
 #include <QQuickWindow>
 #include <QSaveFile>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -230,6 +242,217 @@ QString receiptIdentity(const QJsonObject& report)
     return QString::fromLatin1(QCryptographicHash::hash(pdf::canonicalJson(identity), QCryptographicHash::Sha256).toHex());
 }
 
+pdf::PreflightResult preflightResultFromJson(const QJsonObject& object)
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = object.value(QStringLiteral("inspectionComplete")).toBool(true);
+    for (const QJsonValue& value : object.value(QStringLiteral("findings")).toArray())
+    {
+        const QJsonObject entry = value.toObject();
+        pdf::PreflightFinding finding;
+        finding.checkId = entry.value(QStringLiteral("checkId")).toString();
+        finding.scope = entry.value(QStringLiteral("scope")).toString(QStringLiteral("page"));
+        finding.page = entry.value(QStringLiteral("page")).toInt(1);
+        finding.type = entry.value(QStringLiteral("type")).toString();
+        finding.severity = entry.value(QStringLiteral("severity")).toString();
+        finding.message = entry.value(QStringLiteral("message")).toString();
+        if (finding.severity == QStringLiteral("warning"))
+        {
+            result.warnings.append(finding);
+        }
+        else
+        {
+            result.errors.append(finding);
+        }
+    }
+    for (const QJsonValue& value : object.value(QStringLiteral("checkStatuses")).toArray())
+    {
+        const QJsonObject entry = value.toObject();
+        pdf::PreflightCheckStatus status;
+        status.id = entry.value(QStringLiteral("id")).toString();
+        status.status = entry.value(QStringLiteral("status")).toString();
+        result.checkStatuses.append(status);
+    }
+    return result;
+}
+
+QStringList sortedLabels(const QStringList& findingIds, const QHash<QString, QString>& labelById)
+{
+    QStringList labels;
+    labels.reserve(findingIds.size());
+    for (const QString& findingId : findingIds)
+    {
+        labels.append(labelById.value(findingId, findingId));
+    }
+    labels.sort();
+    return labels;
+}
+
+QStringList sortedStrings(const QJsonArray& array)
+{
+    QStringList values;
+    for (const QJsonValue& value : array)
+    {
+        values.append(value.toString());
+    }
+    values.sort();
+    return values;
+}
+
+QString writeBleedRecipe(const QString& directory)
+{
+    const QString recipePath = QDir(directory).filePath(QStringLiteral("compare-review-recipe.json"));
+    QFile recipe(recipePath);
+    if (!recipe.open(QIODevice::WriteOnly))
+    {
+        return QString();
+    }
+    recipe.write(QJsonDocument(QJsonObject{
+                                   { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                   { QStringLiteral("id"), QStringLiteral("compare-review") },
+                                   { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                   { QStringLiteral("steps"),
+                                     QJsonArray{ QJsonObject{
+                                         { QStringLiteral("id"), QStringLiteral("bleed") },
+                                         { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                         { QStringLiteral("params"),
+                                           QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                        { QStringLiteral("mode"), QStringLiteral("mirror") },
+                                                        { QStringLiteral("force"), true } } } } } } })
+                     .toJson(QJsonDocument::Compact));
+    recipe.close();
+    return recipePath;
+}
+
+QString governedParityDirectory()
+{
+    return QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) + QStringLiteral("/testdata/governed-parity");
+}
+
+pdf::PDFDocument readGovernedFixture(const QString& path)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    return reader.readFromFile(path);
+}
+
+pdf::PDFArtifactIdentity identityForFile(const QString& path)
+{
+    pdf::PDFArtifactIdentity identity;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return identity;
+    }
+    const QByteArray bytes = file.readAll();
+    identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    identity.size = bytes.size();
+    identity.mediaType = QStringLiteral("application/pdf");
+    identity.logicalName = QFileInfo(path).fileName();
+    return identity;
+}
+
+/// The governed triple every surface publishes, normalized to the shape
+/// scripts/ci/check_governed_parity.py discovers.
+QJsonObject governedTriple(const QJsonObject& source)
+{
+    return QJsonObject{
+        { QStringLiteral("approval"), source.value(QStringLiteral("approval")) },
+        { QStringLiteral("revalidation"), source.value(QStringLiteral("revalidation")) },
+        { QStringLiteral("sign_off"), source.value(QStringLiteral("sign_off")) }
+    };
+}
+
+/// The checker's rules (scripts/ci/check_governed_parity.py) applied in-process:
+/// a self-consistent signed-off identity chain, verified bytes, and a passing
+/// verdict. Returns false and fills `why` on the first violation.
+bool governedRecordIsCheckerValid(const QJsonObject& governed, QString* why)
+{
+    const auto fail = [why](const QString& reason)
+    {
+        if (why)
+        {
+            *why = reason;
+        }
+        return false;
+    };
+    const QJsonObject approval = governed.value(QStringLiteral("approval")).toObject();
+    const QJsonObject revalidation = governed.value(QStringLiteral("revalidation")).toObject();
+    const QJsonObject signOff = governed.value(QStringLiteral("sign_off")).toObject();
+    if (approval.isEmpty() || revalidation.isEmpty() || signOff.isEmpty())
+    {
+        return fail(QStringLiteral("governed triple is incomplete"));
+    }
+    for (const QString& field : { QStringLiteral("plan_digest"), QStringLiteral("source_sha256"), QStringLiteral("candidate_sha256") })
+    {
+        if (!pdf::isPDFSha256(approval.value(field).toString()))
+        {
+            return fail(QStringLiteral("approval.%1 is not a digest").arg(field));
+        }
+    }
+    if (revalidation.value(QStringLiteral("bytes_verified")).toBool() != true)
+    {
+        return fail(QStringLiteral("revalidation.bytes_verified is not true"));
+    }
+    if (revalidation.value(QStringLiteral("sign_off_eligible")).toBool() != true)
+    {
+        return fail(QStringLiteral("revalidation.sign_off_eligible is not true"));
+    }
+    if (revalidation.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString() != QStringLiteral("pass"))
+    {
+        return fail(QStringLiteral("revalidation.verdict.state is not pass"));
+    }
+    for (const QString& field : { QStringLiteral("plan_digest"), QStringLiteral("source_sha256"), QStringLiteral("candidate_sha256"),
+                                  QStringLiteral("published_sha256"), QStringLiteral("revalidation_report_sha256"),
+                                  QStringLiteral("effective_profile_digest") })
+    {
+        if (!pdf::isPDFSha256(signOff.value(field).toString()))
+        {
+            return fail(QStringLiteral("sign_off.%1 is not a digest").arg(field));
+        }
+    }
+    if (signOff.value(QStringLiteral("published_sha256")).toString() != revalidation.value(QStringLiteral("artifact_sha256")).toString())
+    {
+        return fail(QStringLiteral("sign_off.published_sha256 does not match revalidation.artifact_sha256"));
+    }
+    if (signOff.value(QStringLiteral("revalidation_report_sha256")).toString() != revalidation.value(QStringLiteral("report_sha256")).toString())
+    {
+        return fail(QStringLiteral("sign_off.revalidation_report_sha256 does not match revalidation.report_sha256"));
+    }
+    if (signOff.value(QStringLiteral("effective_profile_digest")).toString() != revalidation.value(QStringLiteral("effective_profile_digest")).toString())
+    {
+        return fail(QStringLiteral("sign_off.effective_profile_digest does not match revalidation"));
+    }
+    const QJsonObject signOffApproval = signOff.value(QStringLiteral("approval")).toObject();
+    if (signOffApproval.value(QStringLiteral("decision")).toString() != QStringLiteral("approve") ||
+        signOffApproval.value(QStringLiteral("actorId")).toString().isEmpty() ||
+        signOffApproval.value(QStringLiteral("policyId")).toString().isEmpty())
+    {
+        return fail(QStringLiteral("sign_off.approval is not a complete approve certificate"));
+    }
+    return true;
+}
+
+/// Regenerates the committed cross-surface fixture from real surface output when
+/// LOOP_GOVERNED_PARITY_OUT is set. Unset (CI, normal runs) is a no-op.
+void captureGovernedRecords(const QMap<QString, QJsonObject>& records)
+{
+    const QString directory = qEnvironmentVariable("LOOP_GOVERNED_PARITY_OUT").trimmed();
+    if (directory.isEmpty())
+    {
+        return;
+    }
+    QDir().mkpath(directory);
+    for (auto it = records.cbegin(); it != records.cend(); ++it)
+    {
+        QFile file(QDir(directory).filePath(it.key() + QStringLiteral("-receipt.json")));
+        if (file.open(QIODevice::WriteOnly))
+        {
+            file.write(QJsonDocument(QJsonObject{ { QStringLiteral("governed"), it.value() } }).toJson(QJsonDocument::Indented));
+        }
+    }
+}
+
 }   // namespace
 
 class ProductOperatorLoopTest final : public QObject
@@ -246,10 +469,15 @@ private slots:
     void operatorLoop_blockedOutputProducesActionableFailure();
     void openDetectPinpointInspectUnderstandState();
     void findingNavigationMovesCanvasToTheFindingPage();
+    void partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument();
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
+    void governedPublicationParityAcrossSurfaces();
+    void compareReviewGoldenFixtureMatchesCoreFindingDelta();
+    void compareWorkspaceBlocksAStaleComparison();
+    void compareWorkspaceNavigatesMaterialDeltasAfterARun();
 };
 
 void ProductOperatorLoopTest::initTestCase()
@@ -580,6 +808,78 @@ void ProductOperatorLoopTest::findingNavigationMovesCanvasToTheFindingPage()
     QCOMPARE(host.currentPage(), 1);
 }
 
+void ProductOperatorLoopTest::partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument()
+{
+    // #27 failure case. The representative document (bleed-missing.pdf, one page) is inspected
+    // under the corpus `restriction-pages` restriction: the profile scopes its only enabled check
+    // to page 2 of a one-page document, so Core cannot collect that check's evidence and reduces
+    // the report to an `incomplete` verdict (reason_code `unsupported-scope`) instead of a clean
+    // pass. The operator shell must present exactly that partial inspection - progress while it
+    // runs, an incomplete verdict after it - and must never render a clear document.
+    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY2(QFileInfo::exists(source), source.toUtf8().constData());
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QJsonObject profile = pdf::exportPreflightProfile(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("loop-test-partial-inspection") },
+        { QStringLiteral("version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("name"), QStringLiteral("Partial inspection fixture") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("pages"), QStringLiteral("2") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } } } } });
+    const QString profilePath = directory.filePath(QStringLiteral("partial-inspection.json"));
+    {
+        QFile output(profilePath);
+        QVERIFY(output.open(QIODevice::WriteOnly));
+        const QByteArray bytes = QJsonDocument(profile).toJson();
+        QCOMPARE(output.write(bytes), bytes.size());
+    }
+
+    EditorHost host;
+    QVERIFY2(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)),
+             "the restricted inspection profile must import and become the selected profile");
+    QVERIFY(host.selectedPreflightProfileId().endsWith(QStringLiteral("partial-inspection.json")));
+
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QCOMPARE(host.pageCount(), 1);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+
+    auto* preflight = qobject_cast<PreflightController*>(host.preflight());
+    QVERIFY(preflight);
+    QSignalSpy progressSpy(preflight, &PreflightController::progressChanged);
+
+    // The operator sees progress while the inspection is live...
+    QVERIFY(host.runPreflight());
+    QCOMPARE(host.preflightStateName(), QStringLiteral("running"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY2(!progressSpy.isEmpty(), "the operator must observe preflight progress while it runs");
+    QCOMPARE(preflight->property("progress").toInt(), 100);
+
+    // ...and a partial inspection stays visible as incomplete, never as a clear document.
+    QCOMPARE(host.preflightStateName(), QStringLiteral("incomplete"));
+    QVERIFY2(host.preflightStateName() != QStringLiteral("pass"),
+             "a partial inspection must never present as a clean pass");
+    QVERIFY(host.hasPreflightReport());
+    QVERIFY2(host.preflightOperatorSummary().trimmed().contains(QStringLiteral("finish inspecting")),
+             qPrintable(host.preflightOperatorSummary()));
+    QVERIFY2(preflight->limitationDescription().trimmed().contains(QStringLiteral("bleed")),
+             qPrintable(preflight->limitationDescription()));
+
+    // The rendered treatment is Core's incomplete state itself, not a re-derived or pass-like one.
+    const pdfquick::tokens::LoopStateVisual expected =
+        pdfquick::tokens::resolvePreflightStateVisual(QStringLiteral("incomplete"));
+    QCOMPARE(expected.kind, pdfquick::tokens::StateKind::Incomplete);
+    const QVariantMap visual = host.preflightStateVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), pdfquick::tokens::stateKindName(expected.kind));
+    QCOMPARE(visual.value(QStringLiteral("colorRole")).toString(), pdfquick::tokens::colorRoleName(expected.colorRole));
+    QCOMPARE(visual.value(QStringLiteral("icon")).toString(), pdfquick::tokens::stateIconName(expected.icon));
+    QCOMPARE(visual.value(QStringLiteral("accessibleName")).toString(), pdfquick::tokens::stateAccessibleName(expected.kind));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+    QVERIFY(visual.value(QStringLiteral("icon")).toString() != QStringLiteral("Checkmark"));
+    QVERIFY(visual.value(QStringLiteral("accessibleName")).toString() != QStringLiteral("Passed"));
+}
+
 void ProductOperatorLoopTest::workspaceTransitionsKeepTheOpenDocumentBound()
 {
     const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
@@ -793,6 +1093,292 @@ void ProductOperatorLoopTest::adapterParityOverOneInspectionReceipt()
     QCOMPARE(identity, receiptJson.value(QStringLiteral("identity")).toString());
     trace.note(QStringLiteral("receipt-identity"), identity);
     trace.complete();
+}
+
+void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
+{
+    // Issue #40 / D5: one fixture and one equivalent plan reach every governed
+    // surface. Every surface publishes a receipt the parity checker accepts, and
+    // the source/profile identity is shared. Plan-digest equality is asserted
+    // within the action-list envelope family (CLI action-list and Editor), which
+    // is the family the surfaces actually share; repair and PageMaster publish
+    // different plan envelopes by design (ADR-011).
+    const QString fixture = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QString profile = operatoracceptance::defaultProfilePath();
+    const QString recipePath = governedParityDirectory() + QStringLiteral("/action-list-recipe.json");
+    QVERIFY2(QFileInfo::exists(fixture), fixture.toUtf8().constData());
+    QVERIFY2(QFileInfo::exists(profile), profile.toUtf8().constData());
+    QVERIFY2(QFileInfo::exists(recipePath), recipePath.toUtf8().constData());
+
+    const QString sourceSha = pdf::PDFRunIdentity::digestFile(fixture);
+    QVERIFY(pdf::isPDFSha256(sourceSha));
+
+    QJsonObject recipeObject;
+    QVERIFY(readJsonObject(recipePath, &recipeObject));
+    pdf::PDFActionList actionList;
+    const pdf::PDFOperationResult parsed = pdf::PDFActionList::fromJson(recipeObject, &actionList);
+    QVERIFY2(parsed, qPrintable(parsed.getErrorMessage()));
+
+    QTemporaryDir outputDirectory;
+    QVERIFY(outputDirectory.isValid());
+
+    QMap<QString, QJsonObject> records;
+
+    // 1. CLI repair: the operation-plan envelope.
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("repair.pdf"));
+        const QString report = outputDirectory.filePath(QStringLiteral("repair-report.json"));
+        QByteArray out;
+        QByteArray err;
+        int code = -1;
+        QVERIFY(operatoracceptance::runPdfTool(pdfToolPath(), repairArguments(fixture, output, report, false, profile), &out, &err, &code));
+        QVERIFY2(code == 0, qPrintable(QString::fromUtf8(err)));
+        QJsonObject reportJson;
+        QVERIFY(readJsonObject(report, &reportJson));
+        records.insert(QStringLiteral("repair"), governedTriple(reportJson));
+    }
+
+    // 2. CLI action-list run: the action-list envelope.
+    QJsonObject actionListGoverned;
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("action-list.pdf"));
+        QByteArray out;
+        QByteArray err;
+        int code = -1;
+        QVERIFY(operatoracceptance::runPdfTool(pdfToolPath(),
+                                               { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, fixture,
+                                                 QStringLiteral("--output"), output,
+                                                 QStringLiteral("--profile"), profile,
+                                                 QStringLiteral("--console-format"), QStringLiteral("json") },
+                                               &out, &err, &code));
+        QVERIFY2(code == 0, qPrintable(QString::fromUtf8(err)));
+        const QJsonObject envelope = QJsonDocument::fromJson(out).object();
+        actionListGoverned = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("governed")).toObject();
+        records.insert(QStringLiteral("action-list"), governedTriple(actionListGoverned));
+    }
+
+    // 3. Editor Action List worker: the same action-list envelope, published by
+    //    the one gateway the Editor route calls.
+    QJsonObject editorGoverned;
+    {
+        EditorHost host;
+        QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+        host.openFileUrl(QUrl::fromLocalFile(fixture));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+        QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+        QVERIFY(host.validateActionListRecipe());
+        QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+        QVERIFY(host.planActionList());
+        QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+        QVERIFY(host.approveActionListPlan());
+        QVERIFY(host.executeApprovedActionListPlan());
+        QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 120000);
+        const QVariantMap signOff = host.fixSignOff();
+        editorGoverned = QJsonObject::fromVariantMap(signOff.value(QStringLiteral("governed")).toMap());
+        records.insert(QStringLiteral("editor"), governedTriple(editorGoverned));
+    }
+
+    // 4. PageMaster export with the same action list and preflight gate.
+    QJsonObject pageMasterManifest;
+    {
+        const QString output = outputDirectory.filePath(QStringLiteral("pagemaster.pdf"));
+        const QString manifestPath = outputDirectory.filePath(QStringLiteral("pagemaster-manifest.json"));
+        pdf::PDFDocument source = readGovernedFixture(fixture);
+        QVERIFY(source.getCatalog() != nullptr);
+        const pdf::PDFPage* page = source.getCatalog()->getPage(0);
+        QVERIFY(page != nullptr);
+        const QRectF mediaBox = page->getMediaBox();
+        const QSizeF sizeMM(mediaBox.width() * pdf::PDF_POINT_TO_MM, mediaBox.height() * pdf::PDF_POINT_TO_MM);
+
+        pdf::PDFPageMasterExportJob job;
+        job.assembledDocuments.push_back({ pdf::PDFDocumentManipulator::createDocumentPage(0, 0, sizeMM, pdf::PageRotation::None) });
+        job.documents.emplace(0, std::move(source));
+        job.documentSourceIdentities.emplace(0, identityForFile(fixture));
+        job.outputFileNames.push_back(output);
+        job.overwriteFiles = true;
+        job.hasPreflightGate = true;
+        job.preflightProfilePath = profile;
+        job.forcePreflight = true;
+        job.hasActionList = true;
+        job.actionList = actionList;
+        job.manifestPath = manifestPath;
+
+        const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+        QVERIFY2(result.success, qPrintable(result.errorMessage));
+        pageMasterManifest = result.manifest;
+        const QJsonObject outputEntry = result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject();
+        records.insert(QStringLiteral("pagemaster"), governedTriple(outputEntry.value(QStringLiteral("governed")).toObject()));
+        // PageMaster publishes the action-list result alongside its governed block.
+        QVERIFY(!outputEntry.value(QStringLiteral("action_list_result")).toObject().isEmpty());
+    }
+
+    // Every surface must pass the checker's rules, and the committed fixture is
+    // regenerated from real surface output when a capture path is set.
+    for (auto it = records.cbegin(); it != records.cend(); ++it)
+    {
+        QString why;
+        QVERIFY2(governedRecordIsCheckerValid(it.value(), &why),
+                 qPrintable(QStringLiteral("%1: %2").arg(it.key(), why)));
+    }
+    captureGovernedRecords(records);
+
+    // Source identity: repair, action-list, and Editor bind the exact fixture
+    // digest. PageMaster publishes a derived source-identity-list digest, so the
+    // same source is asserted through its manifest's document identity.
+    for (const QString& surface : { QStringLiteral("repair"), QStringLiteral("action-list"), QStringLiteral("editor") })
+    {
+        QCOMPARE(records.value(surface).value(QStringLiteral("approval")).toObject().value(QStringLiteral("source_sha256")).toString(), sourceSha);
+    }
+    const QJsonObject documentIdentities =
+        pageMasterManifest.value(QStringLiteral("source_identities")).toObject().value(QStringLiteral("documents")).toArray().first().toObject();
+    QCOMPARE(documentIdentities.value(QStringLiteral("identity")).toObject().value(QStringLiteral("sha256")).toString(), sourceSha);
+
+    // Effective profile identity: the surfaces that revalidate the raw profile
+    // agree. PageMaster resolves a contextual profile, so its effective digest is
+    // its own resolved-profile digest (kept self-consistent by the checker pass).
+    const QString profileDigest = records.value(QStringLiteral("repair"))
+                                      .value(QStringLiteral("revalidation"))
+                                      .toObject()
+                                      .value(QStringLiteral("effective_profile_digest"))
+                                      .toString();
+    QVERIFY(pdf::isPDFSha256(profileDigest));
+    for (const QString& surface : { QStringLiteral("action-list"), QStringLiteral("editor") })
+    {
+        QCOMPARE(records.value(surface).value(QStringLiteral("revalidation")).toObject().value(QStringLiteral("effective_profile_digest")).toString(), profileDigest);
+    }
+    QVERIFY(pdf::isPDFSha256(records.value(QStringLiteral("pagemaster")).value(QStringLiteral("revalidation")).toObject().value(QStringLiteral("effective_profile_digest")).toString()));
+
+    // The action-list plan digest is shared across the action-list envelope family
+    // (CLI action-list and Editor), which is the family the surfaces share.
+    const QString actionListPlan = actionListGoverned.value(QStringLiteral("approval")).toObject().value(QStringLiteral("plan_digest")).toString();
+    const QString editorPlan = editorGoverned.value(QStringLiteral("approval")).toObject().value(QStringLiteral("plan_digest")).toString();
+    QVERIFY(pdf::isPDFSha256(actionListPlan));
+    QCOMPARE(editorPlan, actionListPlan);
+}
+
+void ProductOperatorLoopTest::compareReviewGoldenFixtureMatchesCoreFindingDelta()
+{
+    const QString path = QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) +
+                         QStringLiteral("/testdata/compare-review/golden-comparison.json");
+    QJsonObject golden;
+    QVERIFY2(readJsonObject(path, &golden), qPrintable(path));
+
+    const pdf::PreflightResult before =
+        preflightResultFromJson(golden.value(QStringLiteral("before")).toObject());
+    const pdf::PreflightResult after =
+        preflightResultFromJson(golden.value(QStringLiteral("after")).toObject());
+
+    QHash<QString, QString> labelById;
+    for (const pdf::PreflightResult* result : { &before, &after })
+    {
+        for (const pdf::PreflightFinding& finding : result->errors)
+        {
+            labelById.insert(finding.stableId(), finding.type);
+        }
+        for (const pdf::PreflightFinding& finding : result->warnings)
+        {
+            labelById.insert(finding.stableId(), finding.type);
+        }
+    }
+
+    const pdf::PDFRepairFindingDelta delta = pdf::computeFindingDelta(before, after);
+    const QJsonObject expected = golden.value(QStringLiteral("expected")).toObject();
+    QCOMPARE(delta.compared, expected.value(QStringLiteral("compared")).toBool());
+    QCOMPARE(sortedLabels(delta.resolvedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("resolved")).toArray()));
+    QCOMPARE(sortedLabels(delta.unchangedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("unchanged")).toArray()));
+    QCOMPARE(sortedLabels(delta.introducedFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("introduced")).toArray()));
+    QCOMPARE(sortedLabels(delta.incompleteFindingIds, labelById),
+             sortedStrings(expected.value(QStringLiteral("incomplete")).toArray()));
+
+    // The same pair classifies the same way on a re-run; the Compare workspace never shows a
+    // delta Core would derive differently the second time.
+    const pdf::PDFRepairFindingDelta again = pdf::computeFindingDelta(before, after);
+    QCOMPARE(again.resolvedFindingIds, delta.resolvedFindingIds);
+    QCOMPARE(again.unchangedFindingIds, delta.unchangedFindingIds);
+    QCOMPARE(again.introducedFindingIds, delta.introducedFindingIds);
+}
+
+void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString recipePath = writeBleedRecipe(directory.path());
+    QVERIFY(!recipePath.isEmpty());
+
+    const QString documentPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(documentPath));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    const QVariantMap review = host.compareReview();
+    QVERIFY(review.value(QStringLiteral("available")).toBool());
+    QVERIFY(!review.value(QStringLiteral("blocked")).toBool());
+    QCOMPARE(review.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("preview-ready"));
+
+    // The comparison is bound to the exact input the plan was produced from.
+    const QVariantMap before = review.value(QStringLiteral("before")).toMap();
+    QVERIFY(!before.value(QStringLiteral("sourceSha256")).toString().isEmpty());
+    QCOMPARE(before.value(QStringLiteral("sourceSha256")).toString(),
+             host.fixPlanIdentity().value(QStringLiteral("sourceSha256")).toString());
+    QCOMPARE(review.value(QStringLiteral("plan")).toMap().value(QStringLiteral("planDigest")).toString(),
+             host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString());
+
+    // A revision change makes the plan and preview stale. The comparison blocks instead of
+    // silently refreshing, and its material deltas stay unnavigable.
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    const QVariantMap stale = host.compareReview();
+    QVERIFY(stale.value(QStringLiteral("available")).toBool());
+    QVERIFY2(stale.value(QStringLiteral("blocked")).toBool(),
+             qPrintable(stale.value(QStringLiteral("blockedReason")).toString()));
+    QCOMPARE(stale.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("stale"));
+    QVERIFY(!stale.value(QStringLiteral("blockedReason")).toString().trimmed().isEmpty());
+    QVERIFY(!host.navigateCompareDelta(0));
+}
+
+void ProductOperatorLoopTest::compareWorkspaceNavigatesMaterialDeltasAfterARun()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString recipePath = writeBleedRecipe(directory.path());
+    QVERIFY(!recipePath.isEmpty());
+
+    const QString documentPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(documentPath));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 120000);
+
+    const QVariantMap review = host.compareReview();
+    QVERIFY(review.value(QStringLiteral("available")).toBool());
+    QVERIFY(!review.value(QStringLiteral("blocked")).toBool());
+    QCOMPARE(review.value(QStringLiteral("findingDelta")).toMap().value(QStringLiteral("compared")).toBool(),
+             true);
+    QVERIFY(review.value(QStringLiteral("hasMaterialDeltas")).toBool());
+
+    // Navigating a material delta routes to the step that produced it; it never mutates a
+    // document or reruns the comparison.
+    QVERIFY(host.navigateCompareDelta(0));
+    QCOMPARE(host.workspace(), EditorHost::Inspect);
 }
 
 QTEST_MAIN(ProductOperatorLoopTest)

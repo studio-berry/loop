@@ -25,6 +25,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -155,11 +156,43 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         {
             if (!effectivePreflightProfile.isEmpty())
             {
+                QTemporaryDir stagingDirectory;
+                const QString stagedCandidatePath =
+                    stagingDirectory.isValid() ? stagingDirectory.filePath(QStringLiteral("editor-candidate.pdf")) : QString();
                 QTemporaryDir publicationDirectory;
-                const QString publicationPath = publicationDirectory.filePath(QStringLiteral("editor-candidate.pdf"));
-                if (!publicationDirectory.isValid() || !pdf::PDFStandardConversion::writeCandidate(
-                                                           candidate, publicationPath, outcome->executionResult.standardValidationRequirements,
-                                                           &candidate, nullptr, &outcome->executionResult.independentValidation, context.operationControl()))
+                const QString publicationPath =
+                    publicationDirectory.isValid() ? publicationDirectory.filePath(QStringLiteral("editor-publication.pdf")) : QString();
+                // The trusted source path is not known at this layer and the
+                // publication target is a fresh temporary artifact, so this
+                // validation cannot refuse today; it keeps the publication
+                // boundary on the same save contract as the CLI write paths.
+                pdf::PDFSaveRequest publicationRequest;
+                publicationRequest.outputPath = publicationPath;
+                publicationRequest.required = outcome->executionResult.savePolicy;
+                publicationRequest.requested = outcome->executionResult.savePolicy;
+                publicationRequest.appendInPlace = false;
+                const pdf::PDFOperationResult saveRequest = pdf::validateSaveRequest(publicationRequest);
+                if (stagedCandidatePath.isEmpty() || publicationPath.isEmpty())
+                {
+                    outcome->ok = false;
+                    outcome->executionResult.status = QStringLiteral("failed");
+                    outcome->executionResult.diagnostics.append(QJsonObject{
+                        { QStringLiteral("code"), QStringLiteral("action-list.publication-serialize-failed") },
+                        { QStringLiteral("severity"), QStringLiteral("error") },
+                        { QStringLiteral("message"), QStringLiteral("The Editor candidate could not be staged for governed revalidation.") } });
+                }
+                else if (!saveRequest)
+                {
+                    outcome->ok = false;
+                    outcome->executionResult.status = QStringLiteral("failed");
+                    outcome->executionResult.diagnostics.append(QJsonObject{
+                        { QStringLiteral("code"), QStringLiteral("save-policy.refused") },
+                        { QStringLiteral("severity"), QStringLiteral("error") },
+                        { QStringLiteral("message"), saveRequest.getErrorMessage() } });
+                }
+                else if (!pdf::PDFStandardConversion::writeCandidate(
+                             candidate, stagedCandidatePath, outcome->executionResult.standardValidationRequirements,
+                             &candidate, nullptr, &outcome->executionResult.independentValidation, context.operationControl()))
                 {
                     outcome->ok = false;
                     outcome->executionResult.status = QStringLiteral("failed");
@@ -170,9 +203,9 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                 }
                 else
                 {
-                    QFile publicationFile(publicationPath);
+                    QFile stagedFile(stagedCandidatePath);
                     QByteArray candidateData;
-                    if (!publicationFile.open(QIODevice::ReadOnly))
+                    if (!stagedFile.open(QIODevice::ReadOnly))
                     {
                         outcome->ok = false;
                         outcome->executionResult.status = QStringLiteral("failed");
@@ -183,12 +216,16 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                     }
                     else
                     {
-                        candidateData = publicationFile.readAll();
+                        candidateData = stagedFile.readAll();
                         const QString candidateSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
+                        const QString expectedProfileDigest = effectivePreflightProfile.isEmpty()
+                                                                  ? QString()
+                                                                  : pdf::computeProfileDigest(effectivePreflightProfile);
                         pdf::PDFGovernedExecutionApproval approval;
                         approval.planDigest = outcome->executionResult.planDigest;
                         approval.sourceSha256 = outcome->executionResult.sourceSha256;
                         approval.candidateSha256 = candidateSha256;
+                        approval.effectiveProfileDigest = expectedProfileDigest;
                         approval.approval.kind = pdf::PDFApprovalKind::Human;
                         approval.approval.actorId = QStringLiteral("Editor");
                         approval.approval.decision = QStringLiteral("approve");
@@ -197,22 +234,37 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                         approval.approval.evidenceSha256 = approval.planDigest;
                         approval.approval.decisionReference = QStringLiteral("editor-confirmation:%1").arg(approval.planDigest);
                         approval.approval.decidedUtc = QDateTime::currentDateTimeUtc();
-                        pdf::PDFGovernedExecutionRevalidation revalidation;
-                        pdf::PDFGovernedExecutionSignOff signOff;
-                        const pdf::PDFOperationResult governedResult = pdf::finalizeGovernedPublication(approval,
-                                                                                                        approval.planDigest,
-                                                                                                        approval.sourceSha256,
-                                                                                                        approval.candidateSha256,
-                                                                                                        publicationPath,
-                                                                                                        effectivePreflightProfile,
-                                                                                                        QStringLiteral("Editor"),
-                                                                                                        QStringLiteral("desktop-postflight"),
-                                                                                                        &revalidation,
-                                                                                                        &signOff);
+                        // The Editor worker has no operation-history store in scope, so
+                        // revocation cannot be resolved here; #37 centralizes execution
+                        // where the chain becomes available.
+                        pdf::PDFApprovalAuthorizationContext authorizationContext;
+                        authorizationContext.evaluatedUtc = QDateTime::currentDateTimeUtc();
+                        authorizationContext.expectedProfileDigest = expectedProfileDigest;
+
+                        // The gateway validates the exact staged bytes the worker applies,
+                        // never a second serialization; the artifact the operator receives
+                        // is the reopened candidate from those same bytes.
+                        pdf::PDFGovernedMutationRequest mutation;
+                        mutation.approval = approval;
+                        mutation.authorization = authorizationContext;
+                        mutation.planDigest = approval.planDigest;
+                        mutation.sourceSha256 = approval.sourceSha256;
+                        mutation.candidateBytes = candidateData;
+                        mutation.stagedCandidatePath = stagedCandidatePath;
+                        mutation.destinationPath = publicationPath;
+                        mutation.overwritePolicy = pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite;
+                        mutation.profile = effectivePreflightProfile;
+                        mutation.profileDigest = expectedProfileDigest;
+                        mutation.signOffActor = QStringLiteral("Editor");
+                        mutation.signOffPolicy = QStringLiteral("desktop-postflight");
+                        mutation.operationControl = context.operationControl();
+                        pdf::PDFGovernedMutationReceipt receipt;
+                        const pdf::PDFOperationResult governedResult = pdf::executeGovernedMutation(mutation, &receipt);
                         outcome->executionResult.governed = QJsonObject{
                             { QStringLiteral("approval"), approval.toJson() },
-                            { QStringLiteral("revalidation"), revalidation.toJson() },
-                            { QStringLiteral("sign_off"), signOff.toJson() }
+                            { QStringLiteral("revalidation"), receipt.revalidation.toJson() },
+                            { QStringLiteral("sign_off"), receipt.signOff.toJson() },
+                            { QStringLiteral("receipt"), receipt.toJson() }
                         };
                         if (!governedResult)
                         {

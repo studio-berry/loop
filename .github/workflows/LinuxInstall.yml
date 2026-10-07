@@ -195,11 +195,16 @@ jobs:
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loop
         run: |
+          # Qualify the INSTALLED tree (the tree a user runs and the tree the
+          # Widgets-free profile is verified against), not the developer build
+          # tree: the harness runs from a staging copy of build/install so the
+          # LoopLibCore/LoopLibQuick and deployed Qt closure resolve from the
+          # installed layout. Native is distinct from software and fatal on failure.
           evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
           echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
-          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+          xvfb-run -a pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -InstallTree build/install -Backend native -Platform xcb -SourceSha "$LOOP_SOURCE_SHA" -EvidenceJson "$evidence_dir/quick-a11y-native.json" 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
 
       - name: Run product Quick accessibility qualification harness (software)
         working-directory: loop
@@ -208,7 +213,27 @@ jobs:
           mkdir -p "$evidence_dir"
           set -o pipefail
           echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-software.txt"
-          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend software 2>&1 | tee -a "$evidence_dir/quick-a11y-software.txt"
+          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -InstallTree build/install -Backend software -SourceSha "$LOOP_SOURCE_SHA" -EvidenceJson "$evidence_dir/quick-a11y-software.json" 2>&1 | tee -a "$evidence_dir/quick-a11y-software.txt"
+
+      - name: Verify installed-tree accessibility qualification evidence
+        working-directory: loop
+        run: |
+          # Fail closed: a missing, skipped or failed native lane, or a software-only
+          # record offered as the native claim, fails here even though each harness
+          # run already exited zero.
+          #
+          # The native OS accessibility backend (AT-SPI) is not exercised here: the
+          # hosted Linux runner is headless and has no accessibility bus, so the
+          # native-accessibility lane is unavailable, not passing. Record it so it
+          # cannot read as absent-and-fine; Windows drives the equivalent lane
+          # (UI Automation) and requires it.
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          printf 'lane=native-accessibility-backend\nstatus=unavailable\nreason=headless Linux runner has no AT-SPI accessibility bus\nsource_sha=%s\n' "$LOOP_SOURCE_SHA" > "$evidence_dir/quick-a11y-native-accessibility-unavailable.txt"
+          python3 scripts/ci/verify_quick_accessibility_evidence.py \
+            --native "$evidence_dir/quick-a11y-native.json" \
+            --software "$evidence_dir/quick-a11y-software.json" \
+            --source-sha "$LOOP_SOURCE_SHA" \
+            --install-tree build/install
 
       - name: Read version
         id: get_version

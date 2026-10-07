@@ -263,6 +263,7 @@ int main(int argc, char* argv[])
                            ((command == QStringLiteral("preflight") || command == QStringLiteral("verify-certificate") || command == QStringLiteral("ocr") ||
                              command == QStringLiteral("capabilities") || command == QStringLiteral("schema") ||
                              command == QStringLiteral("export-evidence-bundle") || command == QStringLiteral("verify-evidence-bundle") ||
+                             command == QStringLiteral("rollback") ||
                              command == QStringLiteral("worker-ping") || command == QStringLiteral("worker-open") ||
                              command == QStringLiteral("worker-preflight")) &&
                             !commandLineSpecifiesConsoleFormat(arguments));
@@ -332,6 +333,7 @@ int main(int argc, char* argv[])
         ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("verify-certificate") || displayCommand == QStringLiteral("ocr") ||
           displayCommand == QStringLiteral("capabilities") || displayCommand == QStringLiteral("schema") ||
           displayCommand == QStringLiteral("export-evidence-bundle") || displayCommand == QStringLiteral("verify-evidence-bundle") ||
+          displayCommand == QStringLiteral("rollback") ||
           displayCommand == QStringLiteral("worker-ping") || displayCommand == QStringLiteral("worker-open") ||
           displayCommand == QStringLiteral("worker-preflight")) &&
          !commandLineSpecifiesConsoleFormat(arguments)))

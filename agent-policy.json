@@ -92,11 +92,13 @@
         "UnitTests/tst_documentsearchtest.cpp",
         "UnitTests/tst_filenamesanitizertest.cpp",
         "UnitTests/tst_fontencodingtest.cpp",
+        "UnitTests/tst_governedexecutiontest.cpp",
         "UnitTests/tst_imagedecodeguardtest.cpp",
         "UnitTests/tst_imageoptimizertest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_jbig2decodertest.cpp",
         "UnitTests/tst_lifecycletest.cpp",
+        "UnitTests/tst_operationimpacttest.cpp",
         "UnitTests/tst_overprinttest.cpp",
         "UnitTests/tst_overprintrendertest.cpp",
         "UnitTests/tst_pageboxcorpustest.cpp",
@@ -108,11 +110,13 @@
         "UnitTests/tst_rgbtocmykfixup.cpp",
         "UnitTests/tst_safefilewritertest.cpp",
         "UnitTests/tst_transparencyflattenertest.cpp",
+        "UnitTests/testdata/canonical-json/**",
         "loop-preflight/testdata/page-box-corpus/**"
       ],
       "targets": ["LoopLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsActionList",
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBlockingThreadGuard",
         "UnitTestsBleedFixup",
@@ -201,12 +205,13 @@
         "UnitTests/tst_interactiontracecontracttest.cpp",
         "UnitTests/tst_overlayframetest.cpp",
         "UnitTests/tst_hittestsourcetest.cpp",
+        "UnitTests/tst_actionlisttest.cpp",
         "docs/interaction-boundary-policy.json",
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoopLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
+      "tests": ["UnitTestsActionList", "UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
     },
     "quick": {
       "paths": [
@@ -229,10 +234,12 @@
         "UnitTests/tst_quickaccessibilitytest.cpp",
         "UnitTests/tst_shellkeyboardtest.cpp",
         "UnitTests/tst_loopstatevisualtest.cpp",
+        "UnitTests/tst_shellworkspacetest.cpp",
+        "UnitTests/testdata/compare-review/**",
         "tools/ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoopLibQuick", "LoopEditor", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsShellWorkspace", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual", "UnitTestsQuickDocumentModel"]
     },
     "developer_widgets": {
       "paths": [

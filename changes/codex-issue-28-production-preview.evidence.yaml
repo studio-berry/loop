@@ -1,0 +1,16 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: preview-fidelity-and-origin-on-both-surfaces
+    evidence:
+      - unit:agent-policy:quick
+      - unit:agent-policy:interaction
+      - unit:UnitTests/tst_loopstatevisualtest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - differential:UnitTestsOverprintRender
+  - id: approximate-canvas-pixels-are-not-the-authoritative-golden
+    evidence:
+      - unit:UnitTests/tst_pagesurfacetest.cpp
+      - differential:UnitTestsOverprintRender
+unresolved:
+  - Only UnitTestsLoopStateVisual, UnitTestsEditorHost and UnitTestsPageSurface were built and run locally; the other mapped quick/interaction suites are proven by the linux-build and windows-build CI lanes, not by this worktree.

@@ -31,6 +31,8 @@
 #include "pdfimageoptimizer.h"
 #include "pdfjobscheduler.h"
 #include "pdfobjectselector.h"
+#include "pdfoperationhistorystore.h"
+#include "pdfpreflightverdict.h"
 #include "pdfrepairdiff.h"
 
 #include <QPainter>
@@ -133,6 +135,41 @@ pdf::PDFActionList bleedRecipe(const QString& id)
     return actionList;
 }
 
+pdf::PDFActionList grommetRecipe(const QString& id)
+{
+    pdf::PDFActionList actionList;
+    const pdf::PDFOperationResult parsed = pdf::PDFActionList::fromJson(
+        QJsonObject{
+            { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+            { QStringLiteral("id"), id },
+            { QStringLiteral("name"), id },
+            { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                           { QStringLiteral("id"), QStringLiteral("grommets") },
+                                           { QStringLiteral("operation"), QStringLiteral("production.place-grommets") },
+                                           { QStringLiteral("params"), QJsonObject{
+                                                                           { QStringLiteral("rect"), QJsonObject{
+                                                                                                         { QStringLiteral("x"), 10.0 },
+                                                                                                         { QStringLiteral("y"), 10.0 },
+                                                                                                         { QStringLiteral("width"), 20.0 },
+                                                                                                         { QStringLiteral("height"), 20.0 } } } } } } } } },
+        &actionList);
+    Q_ASSERT(parsed);
+    return actionList;
+}
+
+void verifyStepPlanCarriesDeclaredSavePolicy(const pdf::PDFActionListStepResult& stepResult)
+{
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(stepResult.operationId);
+    QVERIFY(operation);
+    const pdf::PDFOperationSavePolicy declared = operation->savePolicy();
+    const QJsonObject savePolicy = stepResult.plan.value(QStringLiteral("save_policy")).toObject();
+    QCOMPARE(savePolicy.value(QStringLiteral("mode")).toString(),
+             QString::fromLatin1(pdf::getPDFSaveModeName(declared.mode)));
+    QCOMPARE(savePolicy.value(QStringLiteral("invalidates_signatures")).toBool(), declared.invalidatesSignatures);
+    QCOMPARE(savePolicy.value(QStringLiteral("reversible_in_session")).toBool(), declared.reversibleInSession);
+    QCOMPARE(savePolicy.value(QStringLiteral("rationale")).toString(), declared.rationale);
+}
+
 pdf::PDFDocument rgbDocumentMissingBleed()
 {
     pdf::PDFDocumentBuilder builder;
@@ -159,6 +196,7 @@ private slots:
     void standardsContractRequiresMigration();
     void standardsRequirementSurvivesLaterSteps();
     void rejectsUnknownOperationAndWrongParameterType();
+    void rejectsUnknownAndMissingStepParameters();
     void dryRunDoesNotMutateSource();
     void executesRegisteredOperationOnCandidate();
     void cancellationLeavesSourceUntouched();
@@ -178,6 +216,11 @@ private slots:
     void selectExecuteFailsClosedWhenRevisionDigestStaleWithFrozenRevision();
     void rejectsNonObjectSelectValue();
     void rejectsMalformedStepInput();
+    void stepPlansCarryDeclaredSavePolicy();
+    void executeRefusesWeakenedRequestedSavePolicy();
+    void executionResultReportsMergedSavePolicy();
+    void fullClassStepCannotBeNarrowed();
+    void oracleClassStepFailsClosedWithoutIndependentValidation();
 };
 
 void ActionListTest::standardsContractRequiresMigration()
@@ -281,6 +324,30 @@ void ActionListTest::rejectsUnknownOperationAndWrongParameterType()
     QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("Unknown operation")));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("force must be a boolean")));
+}
+
+void ActionListTest::rejectsUnknownAndMissingStepParameters()
+{
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("ambiguous") },
+                                             { QStringLiteral("name"), QStringLiteral("Ambiguous") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleedmillimeters"), 3.0 } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("convert") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("rgb-to-cmyk") },
+                                                                                { QStringLiteral("params"), QJsonObject() } } } } },
+                                         &actionList));
+    QStringList errors;
+    QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
+    const QString joined = errors.join(QLatin1Char('\n'));
+    QVERIFY(joined.contains(QStringLiteral("bleedmillimeters is not a supported parameter")));
+    QVERIFY(joined.contains(QStringLiteral("target_icc_base64 is required")));
 }
 
 void ActionListTest::dryRunDoesNotMutateSource()
@@ -516,6 +583,42 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     QCOMPARE(signOff.value(QStringLiteral("published_sha256")).toString(), cliOutputHash);
     QCOMPARE(adapterOutcome->executionResult.governed.value(QStringLiteral("sign_off")).toObject().value(QStringLiteral("plan_digest")).toString(),
              adapterOutcome->executionResult.planDigest);
+
+    // The published output's own chain binds the same identities, so the reader
+    // can reconstruct who approved this exact output from the canonical chain.
+    const QString historyPath =
+        QDir(QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history"))
+            .filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(historyPath);
+    QString historyError;
+    QVERIFY2(history.open(&historyError), qPrintable(historyError));
+    QVERIFY(history.verify().verified);
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events(&historyError);
+    QVERIFY2(historyError.isEmpty(), qPrintable(historyError));
+    const pdf::PDFOperationHistoryEvent* accepted = nullptr;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.kind == pdf::PDFOperationHistoryEventKind::FixApplied &&
+            event.status == pdf::PDFOperationHistoryStatus::Accepted)
+        {
+            accepted = &event;
+        }
+    }
+    QVERIFY(accepted != nullptr);
+    QVERIFY(accepted->output.has_value());
+    QCOMPARE(accepted->output->sha256, cliOutputHash);
+    QVERIFY(!accepted->effectiveProfileDigest.isEmpty());
+    QVERIFY(!accepted->reportArtifactSha256.isEmpty());
+    QVERIFY(accepted->resultSummary.value(QStringLiteral("governed")).toObject().value(QStringLiteral("sign_off")).toObject().contains(QStringLiteral("published_sha256")));
+
+    pdf::PDFGovernedPublicationAudit audit;
+    const pdf::PDFOperationResult reconstructed =
+        pdf::reconstructGovernedPublicationAudit(history, cliOutputHash, &audit);
+    QVERIFY2(reconstructed, qPrintable(reconstructed.getErrorMessage()));
+    QVERIFY(audit.reconstructed);
+    QCOMPARE(audit.publishedSha256, cliOutputHash);
+    QVERIFY(audit.signOff.has_value());
+    QCOMPARE(audit.signOff->publishedSha256, cliOutputHash);
 }
 
 void ActionListTest::surfacesPerStepValidationErrors()
@@ -1052,6 +1155,281 @@ void ActionListTest::dryRunDoesNotRequirePreflightProfile()
     QVERIFY(process.waitForFinished(30000));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
     QCOMPARE(process.exitCode(), 0);
+}
+
+void ActionListTest::stepPlansCarryDeclaredSavePolicy()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("declared-save-policy") },
+                                             { QStringLiteral("name"), QStringLiteral("Declared save policy") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("grommets") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("production.place-grommets") },
+                                                                                { QStringLiteral("params"), QJsonObject{
+                                                                                                                { QStringLiteral("rect"), QJsonObject{
+                                                                                                                                              { QStringLiteral("x"), 10.0 },
+                                                                                                                                              { QStringLiteral("y"), 10.0 },
+                                                                                                                                              { QStringLiteral("width"), 20.0 },
+                                                                                                                                              { QStringLiteral("height"), 20.0 } } } } } } } } },
+                                         &actionList));
+
+    pdf::PDFActionListExecutionResult planResult;
+    QVERIFY(pdf::PDFActionListExecutor().plan(actionList, source, {}, &planResult));
+    QCOMPARE(planResult.status, QStringLiteral("planned"));
+    QCOMPARE(planResult.steps.size(), 3);
+    for (const pdf::PDFActionListStepResult& stepResult : planResult.steps)
+    {
+        verifyStepPlanCarriesDeclaredSavePolicy(stepResult);
+    }
+
+    // The execute-time step plan is rebuilt from analyze(); it must carry the
+    // same declared policy as the plan-time step plan.
+    pdf::PDFActionListExecutionOptions options;
+    options.requirePostflight = false;
+    pdf::PDFActionListExecutionResult executionResult;
+    pdf::PDFDocument candidate;
+    const pdf::PDFOperationResult executed = pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &executionResult);
+    QVERIFY2(executed, qPrintable(executed.getErrorMessage()));
+    QCOMPARE(executionResult.status, QStringLiteral("succeeded"));
+    QCOMPARE(executionResult.steps.size(), 3);
+    for (const pdf::PDFActionListStepResult& stepResult : executionResult.steps)
+    {
+        verifyStepPlanCarriesDeclaredSavePolicy(stepResult);
+    }
+
+    pdf::PDFActionList emptySelectionList = actionList;
+    emptySelectionList.schema = QStringLiteral("loop-action-list/2");
+    emptySelectionList.steps = { actionList.steps[1] };
+    emptySelectionList.steps.front().select = QJsonObject{
+        { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+        { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } }
+    };
+    pdf::PDFActionListExecutionResult emptyPlan;
+    QVERIFY(pdf::PDFActionListExecutor().plan(emptySelectionList, source, options, &emptyPlan));
+    QCOMPARE(emptyPlan.steps.size(), 1);
+    QVERIFY(emptyPlan.steps.front().selectionScope.value(QStringLiteral("empty")).toBool());
+    verifyStepPlanCarriesDeclaredSavePolicy(emptyPlan.steps.front());
+
+    pdf::PDFActionListExecutionResult emptyExecution;
+    pdf::PDFDocument unchangedCandidate;
+    QVERIFY(pdf::PDFActionListExecutor().execute(emptySelectionList, source, options, &unchangedCandidate, &emptyExecution));
+    QCOMPARE(emptyExecution.steps.size(), 1);
+    QCOMPARE(emptyExecution.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
+    verifyStepPlanCarriesDeclaredSavePolicy(emptyExecution.steps.front());
+    QVERIFY(unchangedCandidate == source);
+}
+
+void ActionListTest::executeRefusesWeakenedRequestedSavePolicy()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("weakened-save-policy"));
+
+    // add-bleed declares save-as-new-artifact; asking for an append is weaker.
+    pdf::PDFActionListExecutionOptions weakenedOptions;
+    weakenedOptions.requirePostflight = false;
+    weakenedOptions.requestedSavePolicy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("caller wants an append"));
+    pdf::PDFActionListExecutionResult refusedResult;
+    pdf::PDFDocument refusedCandidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, weakenedOptions, &refusedCandidate, &refusedResult));
+    QCOMPARE(refusedResult.status, QStringLiteral("failed"));
+    QVERIFY(refusedCandidate == pdf::PDFDocument());
+    QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+    bool sawRefusal = false;
+    for (const QJsonValue& value : refusedResult.diagnostics)
+    {
+        const QJsonObject diagnostic = value.toObject();
+        if (diagnostic.value(QStringLiteral("code")).toString() == QStringLiteral("action-list.save-policy-refused"))
+        {
+            sawRefusal = true;
+            QCOMPARE(diagnostic.value(QStringLiteral("message")).toString(),
+                     QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'save-as-new-artifact'."));
+        }
+    }
+    QVERIFY(sawRefusal);
+
+    // Dry-run parity: plan() refuses the same request before any step work.
+    pdf::PDFActionListExecutionResult refusedPlan;
+    QVERIFY(!pdf::PDFActionListExecutor().plan(actionList, source, weakenedOptions, &refusedPlan));
+    QCOMPARE(refusedPlan.status, QStringLiteral("failed"));
+
+    // Stricter than declared is accepted: place-grommets declares
+    // incremental-append, so a full-rewrite request is allowed.
+    pdf::PDFActionListExecutionOptions stricterOptions;
+    stricterOptions.requirePostflight = false;
+    stricterOptions.requestedSavePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller wants a rewrite"));
+    pdf::PDFActionListExecutionResult acceptedResult;
+    pdf::PDFDocument acceptedCandidate;
+    const pdf::PDFOperationResult accepted = pdf::PDFActionListExecutor().execute(grommetRecipe(QStringLiteral("stricter-save-policy")),
+                                                                                  source,
+                                                                                  stricterOptions,
+                                                                                  &acceptedCandidate,
+                                                                                  &acceptedResult);
+    QVERIFY2(accepted, qPrintable(accepted.getErrorMessage()));
+    QCOMPARE(acceptedResult.status, QStringLiteral("succeeded"));
+    QVERIFY(acceptedCandidate != pdf::PDFDocument());
+    QCOMPARE(acceptedResult.savePolicy.mode, pdf::PDFSaveMode::IncrementalAppend);
+}
+
+void ActionListTest::executionResultReportsMergedSavePolicy()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFActionList mixedList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("merged-save-policy") },
+                                             { QStringLiteral("name"), QStringLiteral("Merged save policy") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("grommets") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("production.place-grommets") },
+                                                                                { QStringLiteral("params"), QJsonObject{
+                                                                                                                { QStringLiteral("rect"), QJsonObject{
+                                                                                                                                              { QStringLiteral("x"), 10.0 },
+                                                                                                                                              { QStringLiteral("y"), 10.0 },
+                                                                                                                                              { QStringLiteral("width"), 20.0 },
+                                                                                                                                              { QStringLiteral("height"), 20.0 } } } } } } } } },
+                                         &mixedList));
+
+    pdf::PDFActionListExecutionResult mixedPlan;
+    QVERIFY(pdf::PDFActionListExecutor().plan(mixedList, source, {}, &mixedPlan));
+    QCOMPARE(mixedPlan.savePolicy.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+    QVERIFY(mixedPlan.savePolicy.invalidatesSignatures);
+    QVERIFY(!mixedPlan.savePolicy.reversibleInSession);
+    QVERIFY(mixedPlan.savePolicy.rationale.contains(QStringLiteral("bleed correction must preserve the trusted source")));
+    QVERIFY(mixedPlan.savePolicy.rationale.contains(QStringLiteral("image downsampling removes prior image data")));
+    QVERIFY(mixedPlan.savePolicy.rationale.contains(QStringLiteral("planning-only operation does not mutate the document")));
+    QCOMPARE(mixedPlan.toJson().value(QStringLiteral("save_policy")).toObject().value(QStringLiteral("mode")).toString(),
+             QStringLiteral("save-as-new-artifact"));
+
+    // An all-incremental recipe merges to the append mode.
+    pdf::PDFActionListExecutionResult grommetPlan;
+    QVERIFY(pdf::PDFActionListExecutor().plan(grommetRecipe(QStringLiteral("merged-append")), source, {}, &grommetPlan));
+    QCOMPARE(grommetPlan.savePolicy.mode, pdf::PDFSaveMode::IncrementalAppend);
+    QVERIFY(grommetPlan.savePolicy.rationale.contains(QStringLiteral("planning-only operation does not mutate the document")));
+}
+
+void ActionListTest::fullClassStepCannotBeNarrowed()
+{
+    const pdf::PDFDocument source = createTwoPageDistinctImageDocument(600);
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("full-class-step") },
+                                             { QStringLiteral("name"), QStringLiteral("Full class step") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                                                            { QStringLiteral("select"), QJsonObject{
+                                                                                                            { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                            { QStringLiteral("predicate"), QJsonObject{
+                                                                                                                                               { QStringLiteral("and"), QJsonArray{
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } } } } },
+                                         &actionList));
+
+    pdf::PDFActionListExecutionOptions options;
+    options.revision = pdf::revisionIdentityForDocument(source);
+    pdf::PDFActionListExecutionResult planResult;
+    QVERIFY(pdf::PDFActionListExecutor().plan(actionList, source, options, &planResult));
+    QCOMPARE(planResult.steps.size(), 1);
+    QCOMPARE(planResult.steps.front().selectionScope.value(QStringLiteral("count")).toInt(), 1);
+
+    // The operation-owned impact is authoritative: the page-local selection
+    // cannot narrow a document-wide full-rewrite step's revalidation.
+    const pdf::PDFRepairOperation* downsample = pdf::PDFRepairRegistry::instance().find(QStringLiteral("downsample-images"));
+    QVERIFY(downsample);
+    pdf::PDFRepairPlan stepPlan;
+    stepPlan.targets.append({ 0, {}, QStringLiteral("pages/0/images") });
+    const pdf::PDFRevalidationPlan revalidation = pdf::planRepairStepPreflight(
+        downsample,
+        source,
+        QJsonObject{ { QStringLiteral("target_dpi"), 150 } },
+        { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") },
+        stepPlan);
+    QVERIFY(revalidation.full);
+    QVERIFY(revalidation.pages.isEmpty());
+    QCOMPARE(revalidation.reason, QStringLiteral("document-wide"));
+    QVERIFY(downsample->impact(&source, QJsonObject{ { QStringLiteral("target_dpi"), 150 } }).fullRewrite);
+}
+
+void ActionListTest::oracleClassStepFailsClosedWithoutIndependentValidation()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    // No validator program is configured: the independent oracle is absent.
+    const pdf::PDFStandardConversionSettings settings = independent_test::settings(QString());
+    const QJsonObject parameters = independent_test::parameters(settings);
+
+    // standards-convert declares an independent-oracle impact, so Loop's own
+    // checks can never complete its step revalidation.
+    const pdf::PDFRepairOperation* standard = pdf::PDFRepairRegistry::instance().find(QStringLiteral("standards-convert"));
+    QVERIFY(standard);
+    const pdf::PDFRevalidationPlan stepPlan = pdf::planRepairStepPreflight(
+        standard, source, parameters, { QStringLiteral("color-mode") }, pdf::PDFRepairPlan());
+    QVERIFY(stepPlan.full);
+    QVERIFY(stepPlan.requiresIndependentOracle);
+    QCOMPARE(stepPlan.reason, QStringLiteral("independent-oracle"));
+
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("oracle-step") },
+                                             { QStringLiteral("name"), QStringLiteral("Oracle step") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("convert") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("standards-convert") },
+                                                                            { QStringLiteral("params"), parameters } } } } },
+                                         &actionList));
+
+    // Without the oracle the step fails closed: no candidate is produced and
+    // the refusal names the missing independent validation.
+    pdf::PDFActionListExecutionOptions options;
+    options.requirePostflight = false;
+    pdf::PDFActionListExecutionResult executionResult;
+    pdf::PDFDocument candidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &executionResult));
+    QCOMPARE(executionResult.status, QStringLiteral("failed"));
+    QVERIFY(candidate == pdf::PDFDocument());
+    QCOMPARE(executionResult.steps.front().status, pdf::PDFActionListStepStatus::Failed);
+    bool sawIndependentValidationRefusal = false;
+    for (const QJsonValue& value : executionResult.steps.front().diagnostics)
+    {
+        const QJsonObject diagnostic = value.toObject();
+        if (diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("independent validator")))
+        {
+            sawIndependentValidationRefusal = true;
+        }
+    }
+    QVERIFY(sawIndependentValidationRefusal);
 }
 
 QTEST_GUILESS_MAIN(ActionListTest)

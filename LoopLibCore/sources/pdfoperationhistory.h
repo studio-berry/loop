@@ -59,6 +59,7 @@ enum class PDFOperationHistoryEventKind
     DecisionInvalidated,
     CertificateIssued,
     CertificateInvalidated,
+    ApprovalRevoked,
     SchemaMigrated
 };
 
@@ -87,8 +88,16 @@ struct LOOPLIBCORESHARED_EXPORT PDFApprovalRecord
     QString evidenceSha256;
     QString decisionReference;
     QDateTime decidedUtc;
+    /// Optional binding of the approval to a validity window. A null value means
+    /// the approval declares no expiry; `isValid()` stays a well-formedness check
+    /// and does not consult it.
+    QDateTime expiresUtc;
 
     bool isValid() const;
+    /// True only when an expiry is declared and it is at or before `utc`. An
+    /// absent expiry or an invalid `utc` cannot be evaluated and returns false;
+    /// the authorization resolver is responsible for the fail-closed decision.
+    bool isExpiredAt(const QDateTime& utc) const;
     QJsonObject toJson() const;
     static PDFApprovalRecord fromJson(const QJsonObject& object);
 };
@@ -147,6 +156,14 @@ struct LOOPLIBCORESHARED_EXPORT PDFRollbackRequest
     QUuid targetExecutionId;
     QString reason;
     PDFApprovalRecord approval;
+    /// Effective preflight profile the restored revision is revalidated under
+    /// (#38). A rollback without a profile is refused: the restored bytes must
+    /// pass revalidation before the rolled-back revision is recorded.
+    QJsonObject profile;
+    /// Sign-off identity recorded on the revalidation certificate the rollback
+    /// issues. Both are required; a rollback that cannot name them is refused.
+    QString signOffActor;
+    QString signOffPolicy;
 
     QJsonObject toJson() const;
 };

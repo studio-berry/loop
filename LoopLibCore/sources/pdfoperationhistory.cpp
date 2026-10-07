@@ -108,6 +108,8 @@ QString pdfOperationHistoryEventKindToString(PDFOperationHistoryEventKind kind)
             return QStringLiteral("CertificateIssued");
         case PDFOperationHistoryEventKind::CertificateInvalidated:
             return QStringLiteral("CertificateInvalidated");
+        case PDFOperationHistoryEventKind::ApprovalRevoked:
+            return QStringLiteral("ApprovalRevoked");
         case PDFOperationHistoryEventKind::SchemaMigrated:
             return QStringLiteral("SchemaMigrated");
     }
@@ -131,6 +133,8 @@ PDFOperationHistoryEventKind pdfOperationHistoryEventKindFromString(const QStrin
         return PDFOperationHistoryEventKind::CertificateIssued;
     if (normalized == QStringLiteral("certificateinvalidated"))
         return PDFOperationHistoryEventKind::CertificateInvalidated;
+    if (normalized == QStringLiteral("approvalrevoked"))
+        return PDFOperationHistoryEventKind::ApprovalRevoked;
     if (normalized == QStringLiteral("schemamigrated"))
         return PDFOperationHistoryEventKind::SchemaMigrated;
     return PDFOperationHistoryEventKind::Operation;
@@ -186,6 +190,15 @@ bool PDFApprovalRecord::isValid() const
     return evidenceSha256.isEmpty() || isPDFSha256(evidenceSha256);
 }
 
+bool PDFApprovalRecord::isExpiredAt(const QDateTime& utc) const
+{
+    if (!expiresUtc.isValid() || !utc.isValid())
+    {
+        return false;
+    }
+    return expiresUtc.toUTC() <= utc.toUTC();
+}
+
 QJsonObject PDFApprovalRecord::toJson() const
 {
     return QJsonObject{
@@ -196,7 +209,8 @@ QJsonObject PDFApprovalRecord::toJson() const
         { QStringLiteral("rationale"), rationale },
         { QStringLiteral("evidenceSha256"), evidenceSha256 },
         { QStringLiteral("decisionReference"), decisionReference },
-        { QStringLiteral("decidedUtc"), dateTimeString(decidedUtc) }
+        { QStringLiteral("decidedUtc"), dateTimeString(decidedUtc) },
+        { QStringLiteral("expiresUtc"), dateTimeString(expiresUtc) }
     };
 }
 
@@ -211,6 +225,14 @@ PDFApprovalRecord PDFApprovalRecord::fromJson(const QJsonObject& object)
     approval.evidenceSha256 = object.value(QStringLiteral("evidenceSha256")).toString().toLower();
     approval.decisionReference = object.value(QStringLiteral("decisionReference")).toString();
     approval.decidedUtc = dateTimeFromString(object.value(QStringLiteral("decidedUtc")).toString());
+    const QJsonValue expiry = object.value(QStringLiteral("expiresUtc"));
+    approval.expiresUtc = dateTimeFromString(expiry.toString());
+    if (!expiry.isUndefined() && !expiry.isNull() &&
+        (!expiry.isString() || (!expiry.toString().isEmpty() && !approval.expiresUtc.isValid())))
+    {
+        // A malformed declared expiry must not become an unbounded approval.
+        approval.decidedUtc = QDateTime();
+    }
     return approval;
 }
 
@@ -255,7 +277,7 @@ QJsonObject PDFOperationHistoryVerification::toJson() const
 
 QJsonObject PDFRollbackRequest::toJson() const
 {
-    return QJsonObject{
+    QJsonObject object{
         { QStringLiteral("operation"), QStringLiteral("rollback") },
         { QStringLiteral("currentArtifactSha256"), currentArtifactSha256 },
         { QStringLiteral("targetArtifactSha256"), targetArtifactSha256 },
@@ -263,6 +285,19 @@ QJsonObject PDFRollbackRequest::toJson() const
         { QStringLiteral("reason"), reason },
         { QStringLiteral("approval"), approval.toJson() }
     };
+    if (!profile.isEmpty())
+    {
+        object.insert(QStringLiteral("profile"), profile);
+    }
+    if (!signOffActor.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("signOffActor"), signOffActor);
+    }
+    if (!signOffPolicy.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("signOffPolicy"), signOffPolicy);
+    }
+    return object;
 }
 
 bool PDFRollbackPoint::isValid() const
@@ -299,6 +334,12 @@ QByteArray computeOperationHistoryEventHash(const PDFOperationHistoryEvent& even
         // Keep schema-v2 operation hashes verifiable after the provenance
         // fields are added. New provenance kinds always hash every field.
         approval.remove(QStringLiteral("decisionReference"));
+    }
+    if (!event.approval.expiresUtc.isValid())
+    {
+        // An approval that declares no expiry must hash exactly as it did before
+        // the expiry field existed, so already-committed chains stay verifiable.
+        approval.remove(QStringLiteral("expiresUtc"));
     }
 
     QJsonObject canonical{

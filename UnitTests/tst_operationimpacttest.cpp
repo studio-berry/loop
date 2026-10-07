@@ -40,6 +40,7 @@ class OperationImpactTest : public QObject
     Q_OBJECT
 
 private slots:
+    void undeclaredImpactSelectsFullRevalidation();
     void incompleteImpactSelectsFullRevalidation();
     void fullRewriteSelectsFullRevalidation();
     void documentPolicySelectsFullRevalidation();
@@ -132,6 +133,29 @@ QJsonObject multiCheckImageProfile()
 }
 
 }   // namespace
+
+void OperationImpactTest::undeclaredImpactSelectsFullRevalidation()
+{
+    pdf::PDFOperationImpact impact;
+    QVERIFY(!impact.declared);
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(
+        impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("impact-undeclared"));
+    QCOMPARE(plan.checkIds.size(), 2);
+    QVERIFY(plan.pages.isEmpty());
+
+    // A step with no operation at all has no impact declaration either, so
+    // the step planner starts from full revalidation.
+    const pdf::PDFDocument document = buildLowDpiImagePage();
+    pdf::PDFRepairPlan repair;
+    repair.targets.append({ 0, {}, QStringLiteral("page/1/image") });
+    const pdf::PDFRevalidationPlan stepPlan = pdf::planRepairStepPreflight(
+        nullptr, document, {}, { QStringLiteral("image-resolution") }, repair);
+    QVERIFY(stepPlan.full);
+    QCOMPARE(stepPlan.reason, QStringLiteral("operation-impact-unknown"));
+    QVERIFY(stepPlan.pages.isEmpty());
+}
 
 void OperationImpactTest::incompleteImpactSelectsFullRevalidation()
 {

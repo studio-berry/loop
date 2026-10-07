@@ -45,7 +45,9 @@ subsystems:
       - LoopLibCore/sources/pdfsafefilewriter.cpp
       - LoopLibCore/sources/pdfsafefilewriter.h
       - UnitTests/tst_governedexecutiontest.cpp
+      - UnitTests/tst_productoperatorloop.cpp
       - UnitTests/testdata/canonical-json/**
+      - UnitTests/testdata/governed-parity/**
       - docs/CANONICAL_JSON.md
       - docs/GOVERNED_EXECUTION.md
       - docs/adr/adr-011-architecture-contracts-d1-d5.md
@@ -55,6 +57,11 @@ subsystems:
         bind: ctest
         id: UnitTestsGovernedExecution
         policy_module: core
+        executes: binding
+      - kind: unit
+        bind: ctest
+        id: UnitTestsProductOperatorLoop
+        policy_module: quick
         executes: binding
       - kind: unit
         bind: script
@@ -523,7 +530,6 @@ migration:
     - CMakeLists.txt
     - cmake/**
   deferred_targets:
-    - UnitTestsActionList
     - UnitTestsAuthorSettings
     - UnitTestsContentEditor
     - UnitTestsFindingNavigation
@@ -533,4 +539,3 @@ migration:
     - UnitTestsProductionGeometry
     - UnitTestsResourceBudget
     - UnitTestsShellInspectorDispatch
-    - UnitTestsShellWorkspace

@@ -48,7 +48,7 @@ qt_add_qml_module(LoopEditor
         qml/PreflightPane.qml
         qml/ActionListPane.qml
         qml/InspectorPane.qml
-        qml/WorkspacePlaceholderPane.qml
+        qml/ComparePane.qml
         qml/StateBadge.qml
         qml/InspectPane.qml
         qml/ProductionPreviewPane.qml

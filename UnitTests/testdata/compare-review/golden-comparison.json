@@ -1,0 +1,35 @@
+{
+  "id": "compare-review-golden",
+  "schema": "loop-compare-review-golden/1",
+  "description": "Golden before/after preflight pair that pins Core's PDFRepairFindingDelta classification. The Compare workspace presents exactly this delta; the fixture protects resolved/unchanged/introduced/incomplete from drift. Labels are the finding `type`; the test resolves each finding's stableId and maps the delta back to these labels.",
+  "before": {
+    "inspectionComplete": true,
+    "findings": [
+      { "checkId": "bleed", "scope": "page", "page": 1, "type": "bleed", "severity": "error", "message": "Bleed is insufficient" },
+      { "checkId": "image-resolution", "scope": "page", "page": 1, "type": "resolution", "severity": "warning", "message": "Image resolution below target" }
+    ],
+    "checkStatuses": [
+      { "id": "bleed", "status": "failed" },
+      { "id": "image-resolution", "status": "warning" }
+    ]
+  },
+  "after": {
+    "inspectionComplete": true,
+    "findings": [
+      { "checkId": "image-resolution", "scope": "page", "page": 1, "type": "resolution", "severity": "warning", "message": "Image resolution below target" },
+      { "checkId": "font-embedding", "scope": "page", "page": 2, "type": "font", "severity": "error", "message": "Font is not embedded" }
+    ],
+    "checkStatuses": [
+      { "id": "bleed", "status": "ok" },
+      { "id": "image-resolution", "status": "warning" },
+      { "id": "font-embedding", "status": "failed" }
+    ]
+  },
+  "expected": {
+    "compared": true,
+    "resolved": [ "bleed" ],
+    "unchanged": [ "resolution" ],
+    "introduced": [ "font" ],
+    "incomplete": []
+  }
+}

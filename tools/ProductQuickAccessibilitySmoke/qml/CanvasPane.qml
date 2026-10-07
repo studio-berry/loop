@@ -53,11 +53,14 @@ Item {
         Accessible.description: qsTr("The selected finding's registered evidence mode.")
     }
 
-    // Persistent, non-modal render-fidelity indicator (issue #49). Unlike a
-    // toast, this stays up for as long as the current page is approximated so
-    // an operator cannot miss overprinted artwork that will drop out on
-    // press. Mirrors Main.qml's stateBanner: a Pane + Label status bar, shown
-    // only when there is something to say.
+    // Persistent, non-modal render-fidelity indicator (issue #49, #28). Unlike a
+    // toast, this stays up for as long as the page is not an exact fast render so an operator
+    // cannot miss overprinted artwork that will drop out on press. It names
+    // both the fidelity and the render origin (fast canvas path vs the
+    // authoritative output-preview path) via EditorHost's projection, and lets
+    // the operator escalate the current page. The words come from
+    // previewFidelitySummary; QML derives nothing. Mirrors Main.qml's
+    // stateBanner: a Pane + Label status bar.
     Pane {
         id: fidelityBanner
         objectName: "renderFidelityBanner"
@@ -65,11 +68,13 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         padding: 8
-        visible: root.host && root.host.hasDocument
-                 && (!root.host.pageFidelityIsExact || root.host.pageFidelityIsAuthoritative)
+        visible: root.host && root.host.hasDocument && root.host.previewFidelityStateName !== "exact"
 
         Accessible.role: Accessible.StatusBar
         Accessible.name: qsTr("Render fidelity status")
+        Accessible.description: root.host && root.host.previewFidelityOriginName === "output-preview"
+                                ? qsTr("Authoritative output-preview render")
+                                : qsTr("Fast canvas render")
 
         RowLayout {
             anchors.fill: parent
@@ -79,18 +84,7 @@ Item {
                 id: fidelityLabel
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: {
-                    if (!root.host) {
-                        return ""
-                    }
-                    if (root.host.pageFidelityIsAuthoritative && root.host.pageFidelityIsExact) {
-                        return qsTr("Accurate render")
-                    }
-                    const reason = root.host.pageFidelityReason
-                    return reason.length > 0
-                           ? qsTr("Approximate render: %1").arg(reason)
-                           : qsTr("Approximate render")
-                }
+                text: root.host ? root.host.previewFidelitySummary : ""
                 Accessible.name: qsTr("Render fidelity message")
             }
 

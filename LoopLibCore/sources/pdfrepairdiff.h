@@ -56,6 +56,18 @@ enum class PDFRepairChangeClass
     Informational
 };
 
+/// How faithfully a preview artifact reflects what publication would produce.
+/// `Exact` means the preview is computed over the serialized and reopened
+/// candidate bytes (a structural comparison of real output); `Simulated` means
+/// the preview is a rendered simulation that can never prove print safety.
+/// This describes artifact-computation fidelity, not the interactive canvas
+/// render authority of `PreviewStateModel::Authority`.
+enum class PDFRepairPreviewFidelity
+{
+    Exact,
+    Simulated
+};
+
 struct LOOPLIBCORESHARED_EXPORT PDFRepairExpectedChanges
 {
     bool pageBoxes = false;
@@ -101,6 +113,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairDiffOptions
     QVector<int> affectedPages;
     QVector<PDFRepairAllowedRegion> allowedRegions;
     const PDFOperationControl* operationControl = nullptr;
+    PDFRepairPreviewFidelity fidelity = PDFRepairPreviewFidelity::Exact;
+    /// Test-only crash/cancel seam. Empty in production. Invoked with the
+    /// stage name at the candidate commit window and after each rendered page.
+    std::function<void(const QString& stage)> previewStageHook;
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFRepairPageVisualDiff
@@ -136,6 +152,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairDiffReport
 {
     int schemaVersion = 1;
     PDFRepairDiffStatus status = PDFRepairDiffStatus::Complete;
+    PDFRepairPreviewFidelity fidelity = PDFRepairPreviewFidelity::Exact;
     QString sourceFingerprint;
     QString candidateFingerprint;
     QVector<PDFRepairPageVisualDiff> pages;
@@ -175,16 +192,25 @@ public:
     ///
     /// If requested, serializedCandidateBytes receives the exact bytes written
     /// to candidatePath, not a parser-normalized representation.
+    ///
+    /// When operationControl reports cancellation before or after the write,
+    /// the candidate this call created is removed and a cancellation result is
+    /// returned, so a cancelled serialization leaves no artifact behind.
+    /// stageHook, when set, is invoked once the candidate bytes are committed
+    /// (before the reopen).
     static PDFOperationResult buildSerializedCandidate(
         const PDFDocument& source,
         const std::function<PDFOperationResult(PDFDocument*)>& applyRepair,
         const QString& candidatePath,
         PDFDocument* reopenedCandidate,
-        QByteArray* serializedCandidateBytes = nullptr);
+        QByteArray* serializedCandidateBytes = nullptr,
+        const PDFOperationControl* operationControl = nullptr,
+        const std::function<void(const QString& stage)>& stageHook = {});
 };
 
 LOOPLIBCORESHARED_EXPORT QString pdfRepairDiffStatusName(PDFRepairDiffStatus status);
 LOOPLIBCORESHARED_EXPORT QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass);
+LOOPLIBCORESHARED_EXPORT QString pdfRepairPreviewFidelityName(PDFRepairPreviewFidelity fidelity);
 
 }   // namespace pdf
 

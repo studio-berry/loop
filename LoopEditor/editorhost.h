@@ -162,6 +162,13 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString fixRollbackSummary READ fixRollbackSummary NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap previewIdentity READ previewIdentity NOTIFY presentationChanged)
     Q_PROPERTY(QString previewStaleReason READ previewStaleReason NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityStateName READ previewFidelityStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap previewFidelityVisual READ previewFidelityVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor previewFidelityColor READ previewFidelityColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelityOriginName READ previewFidelityOriginName NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
+    Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -293,6 +300,35 @@ public:
     QVariantMap previewIdentity() const;
     QString previewStaleReason() const;
 
+    /// Render fidelity and origin of the interactive preview (#28), the same fact on the
+    /// ordinary canvas and in the Production Preview. `previewFidelityStateName` is one of
+    /// `unavailable`, `stale`, `exact`, `approximate` or `authoritative`, derived by
+    /// `pdfquick::tokens::classifyPreviewFidelityState()` from the preview state and the
+    /// current page's render diagnostics; `previewFidelityOriginName` names the render path
+    /// (`none`, `fast-canvas`, `output-preview`). `previewRequiresAuthoritative` is true for
+    /// the overprint-sensitive fast render (`approximate`), whose pixels are not proof of
+    /// print-safe output. The interactive preview never certifies publication safety: only
+    /// `authoritative` names the output-preview origin, and no state reaches a pass.
+    QString previewFidelityStateName() const;
+    QVariantMap previewFidelityVisual() const;
+    QColor previewFidelityColor() const;
+    QString previewFidelityOriginName() const;
+    QString previewFidelitySummary() const;
+    bool previewRequiresAuthoritative() const;
+
+    /// Read-only composition of the Core comparison facts for the Compare workspace:
+    /// the before/after artifact identities, the technical finding delta, the attributes
+    /// the comparison preserved, and the risk it left unresolved. Every field is a
+    /// projection of fixPlanIdentity, fixPreview, fixRecheck and fixSignOff (Core's own
+    /// run result), never a second comparison model. `blocked`/`blockedReason` name why a
+    /// stale preview or a plan digest that does not match the plan on screen may not be
+    /// presented as current.
+    QVariantMap compareReview() const;
+
+    /// Moves to the step or finding behind one entry of compareReview()'s
+    /// `materialDeltas`. Navigation only: it plans, approves and executes nothing.
+    Q_INVOKABLE bool navigateCompareDelta(int deltaIndex);
+
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
     /// content, or none is known yet. Separate from the document-wide
@@ -364,6 +400,13 @@ public:
     /// authoritative overprint-accurate one. Re-renders only that page;
     /// the document stays open.
     Q_INVOKABLE void toggleCurrentPageFidelity();
+
+    /// The explicit switch the preview surfaces call before a page is presented as proof:
+    /// when the current page is the overprint-sensitive fast render, it moves that page to
+    /// the authoritative output-preview render and returns true. A page that is already
+    /// authoritative, is exact, or has no document returns false and is left alone.
+    Q_INVOKABLE bool ensureAuthoritativePreview();
+
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
@@ -375,9 +418,9 @@ public:
 
     /// The Inspect workspace's corrective intent: selects and binds, then stops.
     void onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent);
-    /// Compare remains a visible but disabled destination until its product
-    /// decision is approved. This check is shared by QML and C++ callers so a
-    /// non-QML caller cannot bypass the shell routing policy.
+    /// Every registered workspace resolves to a real surface; the public
+    /// invokable still rejects an out-of-range value fail-closed, so a
+    /// non-QML caller cannot route past the shell's policy.
     Q_INVOKABLE bool isWorkspaceEnabled(LoopWorkspace workspace) const;
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();
@@ -460,6 +503,7 @@ private:
                                const pdf::PreflightResult& result);
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
     void finishActionListJob(const pdf::PDFJobSnapshot& snapshot);
+    void finishRollbackJob(const pdf::PDFJobSnapshot& snapshot);
     bool submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                              pdfinteraction::ActionListController::State controllerState);
     void reloadActionListRecipes();
@@ -509,6 +553,19 @@ private:
     struct PreflightWorkerOutcome;
     QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
     QHash<QString, std::shared_ptr<pdfinteraction::ActionListWorkerOutcome>> m_actionListOutcomes;
+    /// Result of one scheduled rollback. The worker thread fills it; the interactive
+    /// thread reads it in finishRollbackJob, so it crosses threads only through the
+    /// scheduler's jobFinished dispatch.
+    struct RollbackJobOutcome
+    {
+        bool ok = false;
+        QString errorMessage;
+        QString destinationPath;
+        QString revision;   // digest prefix for the announcement
+        bool retentionSuccess = true;
+        QString retentionError;
+    };
+    QHash<QString, std::shared_ptr<RollbackJobOutcome>> m_rollbackOutcomes;
     struct PreflightProfileChoice
     {
         QString id;

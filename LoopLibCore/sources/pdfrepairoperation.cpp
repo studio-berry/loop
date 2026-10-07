@@ -21,13 +21,19 @@
 // SOFTWARE.
 
 #include "pdfrepairoperation.h"
+#include "pdfartifactidentity.h"
+#include "pdfdocumentreader.h"
 #include "pdfstandardconversion.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
 #include "preflightengine.h"
 
 #include <QMap>
+#include <QCryptographicHash>
+#include <QJsonValue>
+
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace pdf
@@ -99,7 +105,177 @@ QJsonObject expectedChangesObject(const PDFRepairExpectedChanges& expected)
     };
 }
 
+PDFOperationResult validateBoundSource(const PDFDocument& source, const PDFRepairTransactionOptions& options)
+{
+    if (options.expectedSourceSha256.isEmpty())
+    {
+        return PDFOperationResult(true);
+    }
+    const QString expected = options.expectedSourceSha256.trimmed().toLower();
+    if (!isPDFSha256(expected))
+    {
+        return PDFOperationResult(QStringLiteral("Expected source revision must be a SHA-256 digest."));
+    }
+    if (QString::fromLatin1(source.getSourceDataHash().toHex()) != expected)
+    {
+        return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
+    }
+    if (options.sourcePath.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("A source path is required to verify a bound repair revision."));
+    }
+    PDFDocumentReader reader(nullptr, [](bool* passwordObtained)
+                             {
+                                 *passwordObtained = false;
+                                 return QString(); }, false, false);
+    reader.setOperationControl(options.operationControl);
+    const PDFDocument persistedSource = reader.readFromFile(options.sourcePath);
+    if (reader.getReadingResult() != PDFDocumentReader::Result::OK)
+    {
+        return PDFOperationResult(QStringLiteral("Cannot verify bound repair source: %1").arg(reader.getErrorMessage()));
+    }
+    if (QString::fromLatin1(persistedSource.getSourceDataHash().toHex()) != expected ||
+        source != persistedSource)
+    {
+        return PDFOperationResult(QStringLiteral("Repair plan is bound to a stale source revision."));
+    }
+    return PDFOperationResult(true);
+}
+
+bool isJsonNumber(const QJsonValue& value)
+{
+    return value.isDouble() && std::isfinite(value.toDouble());
+}
+
+bool matchesType(const QJsonValue& value, const QString& type)
+{
+    if (type == QStringLiteral("object"))
+        return value.isObject();
+    if (type == QStringLiteral("array"))
+        return value.isArray();
+    if (type == QStringLiteral("string"))
+        return value.isString();
+    if (type == QStringLiteral("boolean"))
+        return value.isBool();
+    if (type == QStringLiteral("number"))
+        return isJsonNumber(value);
+    if (type == QStringLiteral("integer"))
+    {
+        return isJsonNumber(value) && std::floor(value.toDouble()) == value.toDouble();
+    }
+    return false;
+}
+
+bool valuesEqual(const QJsonValue& left, const QJsonValue& right)
+{
+    // QJsonValue::toObject() yields an empty object for a non-object value, so comparing
+    // serialised objects would call any two scalars equal and make the enum check a no-op.
+    return left.type() == right.type() && left == right;
+}
+
+void appendError(QStringList* errors, const QString& error)
+{
+    if (errors)
+    {
+        errors->append(error);
+    }
+}
+
 }   // namespace
+
+bool validateJsonSchemaFragment(const QJsonValue& value,
+                                const QJsonObject& schema,
+                                const QString& path,
+                                QStringList* errors)
+{
+    const QString type = schema.value(QStringLiteral("type")).toString();
+    if (!type.isEmpty() && !matchesType(value, type))
+    {
+        appendError(errors, QStringLiteral("%1 must be a %2.").arg(path, type));
+        return false;
+    }
+
+    const QJsonArray enumValues = schema.value(QStringLiteral("enum")).toArray();
+    if (!enumValues.isEmpty())
+    {
+        bool found = false;
+        for (const QJsonValue& allowed : enumValues)
+        {
+            if (valuesEqual(value, allowed))
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            appendError(errors, QStringLiteral("%1 contains a value outside the allowed set.").arg(path));
+            return false;
+        }
+    }
+
+    if (value.isString() && schema.contains(QStringLiteral("minLength")) &&
+        value.toString().size() < schema.value(QStringLiteral("minLength")).toInt())
+    {
+        appendError(errors, QStringLiteral("%1 is shorter than the minimum length.").arg(path));
+        return false;
+    }
+
+    if (isJsonNumber(value))
+    {
+        const double number = value.toDouble();
+        if (schema.contains(QStringLiteral("minimum")) && number < schema.value(QStringLiteral("minimum")).toDouble())
+        {
+            appendError(errors, QStringLiteral("%1 is below the minimum.").arg(path));
+            return false;
+        }
+        if (schema.contains(QStringLiteral("maximum")) && number > schema.value(QStringLiteral("maximum")).toDouble())
+        {
+            appendError(errors, QStringLiteral("%1 is above the maximum.").arg(path));
+            return false;
+        }
+    }
+
+    if (!value.isObject())
+    {
+        return true;
+    }
+
+    const QJsonObject object = value.toObject();
+    const QJsonObject properties = schema.value(QStringLiteral("properties")).toObject();
+    const QJsonArray required = schema.value(QStringLiteral("required")).toArray();
+    bool valid = true;
+    for (const QJsonValue& requiredValue : required)
+    {
+        const QString key = requiredValue.toString();
+        if (!object.contains(key))
+        {
+            appendError(errors, QStringLiteral("%1.%2 is required.").arg(path, key));
+            valid = false;
+        }
+    }
+
+    if (schema.value(QStringLiteral("additionalProperties")).toBool(true) == false)
+    {
+        for (auto it = object.begin(); it != object.end(); ++it)
+        {
+            if (!properties.contains(it.key()))
+            {
+                appendError(errors, QStringLiteral("%1.%2 is not a supported parameter.").arg(path, it.key()));
+                valid = false;
+            }
+        }
+    }
+
+    for (auto it = object.begin(); it != object.end(); ++it)
+    {
+        if (properties.contains(it.key()))
+        {
+            valid = validateJsonSchemaFragment(it.value(), properties.value(it.key()).toObject(), path + QLatin1Char('.') + it.key(), errors) && valid;
+        }
+    }
+    return valid;
+}
 
 QString pdfRepairStatusName(PDFRepairStatus status)
 {
@@ -478,13 +654,23 @@ PDFRepairRegistry& PDFRepairRegistry::instance()
     return registry;
 }
 
-void PDFRepairRegistry::registerOperation(std::unique_ptr<PDFRepairOperation> operation)
+PDFOperationResult PDFRepairRegistry::registerOperation(std::unique_ptr<PDFRepairOperation> operation)
 {
-    if (!operation || operation->id().isEmpty())
+    if (!operation)
     {
-        return;
+        return PDFOperationResult(QStringLiteral("Repair operation must not be null."));
     }
-    m_operations.insert_or_assign(operation->id(), std::move(operation));
+    const QString operationId = operation->id();
+    if (operationId.isEmpty())
+    {
+        return PDFOperationResult(QStringLiteral("Repair operation id must not be empty."));
+    }
+    if (m_operations.find(operationId) != m_operations.cend())
+    {
+        return PDFOperationResult(QStringLiteral("Repair operation '%1' is already registered.").arg(operationId));
+    }
+    m_operations.emplace(operationId, std::move(operation));
+    return PDFOperationResult(true);
 }
 
 const PDFRepairOperation* PDFRepairRegistry::find(const QString& operationId) const
@@ -513,6 +699,18 @@ QJsonArray PDFRepairRegistry::descriptors() const
     return result;
 }
 
+QString PDFRepairRegistry::digest() const
+{
+    QJsonArray identities;
+    for (const auto& entry : m_operations)
+    {
+        identities.append(QJsonObject{
+            { QStringLiteral("id"), entry.first },
+            { QStringLiteral("version"), entry.second->version() } });
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(identities), QCryptographicHash::Sha256).toHex());
+}
+
 PDFRepairTransaction::PDFRepairTransaction(const PDFDocument& source,
                                            PDFRepairTransactionOptions options) :
     m_source(&source),
@@ -530,6 +728,11 @@ PDFOperationResult PDFRepairTransaction::add(const PDFRepairOperation* operation
     if (m_entries.size() >= m_options.maxOperations)
     {
         return PDFOperationResult(QStringLiteral("Repair transaction operation limit exceeded."));
+    }
+    QStringList parameterErrors;
+    if (!validateJsonSchemaFragment(QJsonValue(parameters), operation->parameterSchema(), QStringLiteral("parameters"), &parameterErrors))
+    {
+        return PDFOperationResult(parameterErrors.join(QStringLiteral("; ")));
     }
     m_entries.append({ operation, parameters });
     m_analyzed = false;
@@ -555,6 +758,14 @@ PDFOperationResult PDFRepairTransaction::analyze()
     {
         m_status = PDFRepairStatus::Failed;
         return PDFOperationResult(QStringLiteral("Repair transaction source is null."));
+    }
+
+    if (const PDFOperationResult revision = validateBoundSource(*m_source, m_options); !revision)
+    {
+        m_status = PDFRepairStatus::Failed;
+        m_candidate = PDFDocument();
+        m_hasCandidate = false;
+        return revision;
     }
 
     for (const Entry& entry : m_entries)
@@ -616,6 +827,14 @@ PDFOperationResult PDFRepairTransaction::apply()
         {
             return PDFOperationResult(QStringLiteral("Repair transaction is not fully planned."));
         }
+    }
+
+    if (const PDFOperationResult revision = validateBoundSource(*m_source, m_options); !revision)
+    {
+        m_status = PDFRepairStatus::Failed;
+        m_candidate = PDFDocument();
+        m_hasCandidate = false;
+        return revision;
     }
 
     if (PDFOperationControl::isOperationCancelled(m_options.operationControl))
@@ -717,7 +936,8 @@ PDFOperationResult PDFRepairTransaction::validateCandidate(const QString& profil
 
 PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candidatePath,
                                                             PDFDocument* reopenedCandidate,
-                                                            QByteArray* candidateSha256)
+                                                            QByteArray* candidateSha256,
+                                                            const std::function<void(const QString& stage)>& stageHook)
 {
     m_artifactValidation = {};
     if (!m_hasCandidate)
@@ -738,7 +958,7 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     request.required = savePolicy();
     request.requested = effective;
     request.requestedExplicitly = m_hasRequestedSavePolicy;
-    request.appendInPlace = effective.mode == PDFSaveMode::IncrementalAppend;
+    request.appendInPlace = false;
     const PDFOperationResult saveRequestRefusal = validateSaveRequest(request);
     if (!saveRequestRefusal)
     {
@@ -753,9 +973,14 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     }
     if (!requirements.isEmpty())
     {
-        return PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
-                                                     reopenedCandidate, candidateSha256,
-                                                     &m_artifactValidation, m_options.operationControl);
+        const PDFOperationResult serialized = PDFStandardConversion::writeCandidate(m_candidate, candidatePath, requirements,
+                                                                                    reopenedCandidate, candidateSha256,
+                                                                                    &m_artifactValidation, m_options.operationControl);
+        if (serialized && stageHook)
+        {
+            stageHook(QStringLiteral("candidate-committed"));
+        }
+        return serialized;
     }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
@@ -763,7 +988,9 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         { return PDFOperationResult(true); },
         candidatePath,
         reopenedCandidate,
-        candidateSha256);
+        candidateSha256,
+        m_options.operationControl,
+        stageHook);
 }
 
 bool PDFRepairTransaction::postflightRequired() const
@@ -782,6 +1009,15 @@ PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const
         result = mergePDFSavePolicies(result, entry.operation->savePolicy());
     }
     return result;
+}
+
+QString PDFRepairTransaction::sourceSha256() const
+{
+    if (!m_source)
+    {
+        return QString();
+    }
+    return QString::fromLatin1(m_source->getSourceDataHash().toHex()).toLower();
 }
 
 PDFOperationResult PDFRepairTransaction::refuseWeakenedSavePolicy() const
@@ -857,10 +1093,41 @@ PDFOperationResult PDFRepairTransaction::compareCandidate(const QString& candida
                                                           PDFRepairDiffOptions options,
                                                           PDFRepairDiffReport* report)
 {
+    // The transaction's own control is authoritative: a caller that forgets to
+    // set it on the diff options must not make the preview cancel-blind.
+    if (m_options.operationControl)
+    {
+        options.operationControl = m_options.operationControl;
+    }
+
+    if (PDFOperationControl::isOperationCancelled(options.operationControl))
+    {
+        if (report)
+        {
+            *report = PDFRepairDiffReport();
+            report->fidelity = options.fidelity;
+            report->status = PDFRepairDiffStatus::Incomplete;
+            report->incompleteReasons.append(QStringLiteral("cancelled"));
+        }
+        m_status = PDFRepairStatus::Incomplete;
+        return PDFOperationResult(true);
+    }
     PDFDocument reopenedCandidate;
-    const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate);
+    const PDFOperationResult serializeResult = serializeCandidate(candidatePath, &reopenedCandidate, nullptr, options.previewStageHook);
     if (!serializeResult)
     {
+        if (report && PDFOperationControl::isOperationCancelled(options.operationControl))
+        {
+            // A cancelled serialization is an incomplete preview, not a hard
+            // failure: it carries the same Incomplete/"cancelled" status the
+            // render loop reports.
+            *report = PDFRepairDiffReport();
+            report->fidelity = options.fidelity;
+            report->status = PDFRepairDiffStatus::Incomplete;
+            report->incompleteReasons.append(QStringLiteral("cancelled"));
+            m_status = PDFRepairStatus::Incomplete;
+            return PDFOperationResult(true);
+        }
         return serializeResult;
     }
     options.expected = expectedChanges();

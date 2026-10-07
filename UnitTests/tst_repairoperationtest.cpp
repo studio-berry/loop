@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfpreflightverdict.h"
 #include "pdfrepairoperation.h"
@@ -30,14 +31,20 @@
 #include <QPainter>
 
 #include <algorithm>
+#include <cstdlib>
+#include <memory>
 
 #include <QBuffer>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonDocument>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <QJsonValue>
 #include <QtTest>
@@ -62,6 +69,25 @@ public:
     pdf::PDFOperationResult apply(pdf::PDFDocument*, const pdf::PDFRepairPlan&, pdf::PDFRepairResult*) const override
     {
         return pdf::PDFOperationResult(QStringLiteral("intentional test failure"));
+    }
+};
+
+/// A registration-contract violator: an operation without an id.
+class UnnamedRepair final : public pdf::PDFRepairOperation
+{
+public:
+    QString id() const override { return QString(); }
+    pdf::PDFRepairRisk risk() const override { return pdf::PDFRepairRisk::Low; }
+    pdf::PDFRepairDomains domains() const override { return pdf::PDFRepairDomain::Metadata; }
+
+    pdf::PDFOperationResult analyze(const pdf::PDFDocument&, const QJsonObject&, pdf::PDFRepairPlan*) const override
+    {
+        return pdf::PDFOperationResult(true);
+    }
+
+    pdf::PDFOperationResult apply(pdf::PDFDocument*, const pdf::PDFRepairPlan&, pdf::PDFRepairResult*) const override
+    {
+        return pdf::PDFOperationResult(true);
     }
 };
 
@@ -90,6 +116,67 @@ pdf::PDFDocument buildPreflightCleanDocument()
         pageContentStreamBuilder.end(painter);
     }
     return builder.build();
+}
+
+bool readsAsValidPdf(const QString& path)
+{
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false);
+    reader.readFromFile(path);
+    return reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK;
+}
+
+/// Issue #35 crash/cancel harness. Arms the preview stage seam to a hard
+/// process exit without unwinding (PageMaster convention): exit 91 is the
+/// in-window kill, 92 a bad invocation, and 93 a seam that was armed but never
+/// fired. The parent asserts 91 exactly and proves 93 is reachable, so the
+/// scenario cannot pass vacuously.
+int runPreviewCrashHarness(const QStringList& arguments)
+{
+    if (arguments.size() != 5)
+    {
+        return 92;
+    }
+    const QString stage = arguments.at(2);
+    const QString candidatePath = arguments.at(3);
+    const QString renderDirectory = arguments.at(4);
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    if (!transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } }) ||
+        !transaction.analyze() || !transaction.apply())
+    {
+        return 92;
+    }
+
+    QDir().mkpath(renderDirectory);
+    pdf::PDFRepairDiffOptions options;
+    options.renderVisualDiff = stage == QStringLiteral("visual-page");
+    options.renderDirectory = renderDirectory;
+    options.previewStageHook = [stage](const QString& fired)
+    {
+        if (fired != stage)
+        {
+            return;
+        }
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+        ::_exit(91);
+#else
+        std::quick_exit(91);
+#endif
+    };
+
+    pdf::PDFRepairDiffReport report;
+    const pdf::PDFOperationResult compared = transaction.compareCandidate(candidatePath, options, &report);
+    Q_UNUSED(compared);
+    // Reaching here means the seam never fired for this stage: report that
+    // loudly instead of exiting like a successful kill.
+    return 93;
 }
 
 }   // namespace
@@ -125,6 +212,13 @@ private slots:
     void declaredStructuralAndSpecializedValidatorsRequireActualProof();
     void declaredValidators_rejectMalformedProfileBeforePublish();
     void declaredValidators_failClosedOnIncompleteInspection();
+    void duplicateRegistration_isRefused();
+    void unknownOperation_isRefusedBeforeCandidate();
+    void ambiguousParameters_areRefusedBeforeAnalyze();
+    void staleRevision_isRefusedBeforeAnalyze();
+    void validateJsonSchemaFragment_reportsStructuralViolations();
+    void validateJsonSchemaFragment_rejectsValuesOutsideTheAllowedSet();
+    void previewCrashLeavesNoPartialArtifactAndNoApproval();
 };
 
 void RepairOperationTest::standardsConversionRejectsLegacyContract()
@@ -362,7 +456,8 @@ void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
 
     // Stricter than declared is accepted and does not change the declared policy.
     pdf::PDFRepairTransaction stricter(source);
-    QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")), QJsonObject{}));
+    QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")),
+                         QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } }));
     QVERIFY(stricter.setRequestedSavePolicy(pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller wants a rewrite"))));
     QCOMPARE(stricter.savePolicy().mode, pdf::PDFSaveMode::IncrementalAppend);
 
@@ -531,12 +626,14 @@ void RepairOperationTest::sourceBytesSurviveSuccessCancelAndFailure()
     }
 
     // failure: an operation whose precondition is unsupported (rgb-to-cmyk
-    // needs a document with color images) is refused before any mutation. A
-    // failing operation is reported as Unsupported rather than as a failed
-    // analyze(), so the failure leg pins the status as well as the bytes.
+    // cannot proceed without a valid CMYK target profile) is refused before
+    // any mutation. A failing operation is reported as Unsupported rather than
+    // as a failed analyze(), so the failure leg pins the status as well as the
+    // bytes.
     {
         pdf::PDFRepairTransaction transaction(source, options);
-        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")), QJsonObject()));
+        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")),
+                                QJsonObject{ { QStringLiteral("target_icc_base64"), QStringLiteral("AA==") } }));
         QVERIFY(transaction.analyze());
         QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Unsupported);
         QVERIFY(!transaction.apply());
@@ -577,7 +674,8 @@ void RepairOperationTest::unsupportedPrecondition_preventsApply()
     const pdf::PDFDocument source = builder.build();
 
     pdf::PDFRepairTransaction transaction(source);
-    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")), QJsonObject()));
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")),
+                            QJsonObject{ { QStringLiteral("target_icc_base64"), QStringLiteral("AA==") } }));
     QVERIFY(transaction.analyze());
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Unsupported);
     QVERIFY(!transaction.apply());
@@ -1018,7 +1116,312 @@ void RepairOperationTest::declaredValidators_failClosedOnIncompleteInspection()
     QVERIFY(result.validations.first().status != pdf::PDFRepairStatus::Passed);
 }
 
-QTEST_GUILESS_MAIN(RepairOperationTest)
+void RepairOperationTest::duplicateRegistration_isRefused()
+{
+    pdf::PDFRepairRegistry registry;
+    auto firstOperation = std::make_unique<FailingRepair>();
+    const pdf::PDFRepairOperation* firstPointer = firstOperation.get();
+    QVERIFY(registry.registerOperation(std::move(firstOperation)));
+
+    const pdf::PDFOperationResult duplicate = registry.registerOperation(std::make_unique<FailingRepair>());
+    QVERIFY(!duplicate);
+    QVERIFY(duplicate.getErrorMessage().contains(QStringLiteral("already registered")));
+    QCOMPARE(registry.operationIds().size(), 1);
+    // A refused duplicate must not shadow the first registration.
+    QCOMPARE(registry.find(QStringLiteral("test-failing")), firstPointer);
+
+    // Null and unnamed registrations are refused by the same gate.
+    QVERIFY(!registry.registerOperation(std::unique_ptr<pdf::PDFRepairOperation>()));
+    QVERIFY(!registry.registerOperation(std::make_unique<UnnamedRepair>()));
+    QCOMPARE(registry.operationIds().size(), 1);
+}
+
+void RepairOperationTest::unknownOperation_isRefusedBeforeCandidate()
+{
+    QVERIFY(pdf::PDFRepairRegistry::instance().find(QStringLiteral("no-such-operation")) == nullptr);
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    const pdf::PDFOperationResult refused = transaction.add(nullptr, QJsonObject());
+    QVERIFY(!refused);
+    QVERIFY(!refused.getErrorMessage().isEmpty());
+    QVERIFY(transaction.plans().isEmpty());
+    QVERIFY(transaction.candidate() == nullptr);
+}
+
+void RepairOperationTest::ambiguousParameters_areRefusedBeforeAnalyze()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const pdf::PDFRepairOperation* addBleed = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    QVERIFY(addBleed);
+
+    pdf::PDFRepairTransaction transaction(source);
+    const pdf::PDFOperationResult unknownParameter =
+        transaction.add(addBleed, QJsonObject{ { QStringLiteral("not_a_param"), 1 } });
+    QVERIFY(!unknownParameter);
+    QVERIFY(unknownParameter.getErrorMessage().contains(QStringLiteral("not_a_param")));
+
+    const pdf::PDFOperationResult wrongType =
+        transaction.add(addBleed, QJsonObject{ { QStringLiteral("bleed_mm"), QStringLiteral("three") } });
+    QVERIFY(!wrongType);
+    QVERIFY(wrongType.getErrorMessage().contains(QStringLiteral("bleed_mm")));
+
+    QVERIFY(transaction.plans().isEmpty());
+    QVERIFY(transaction.candidate() == nullptr);
+
+    // Refused parameters must not consume a transaction entry: the legitimate
+    // parameter set still plans.
+    QVERIFY(transaction.add(addBleed, QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(transaction.analyze());
+    QCOMPARE(transaction.plans().size(), 1);
+}
+
+void RepairOperationTest::staleRevision_isRefusedBeforeAnalyze()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument built = builder.build();
+    const QByteArray bytes = writeSerializedBytes(built);
+    QVERIFY(!bytes.isEmpty());
+
+    // Only a byte-backed document has a source revision to bind against.
+    auto noPassword = [](bool*)
+    { return QString(); };
+    pdf::PDFDocumentReader reader(nullptr, noPassword, false, false);
+    const pdf::PDFDocument source = reader.readFromBuffer(bytes);
+    QCOMPARE(int(reader.getReadingResult()), int(pdf::PDFDocumentReader::Result::OK));
+    const QString sourceSha256 = QString::fromLatin1(source.getSourceDataHash().toHex());
+    QVERIFY(!sourceSha256.isEmpty());
+
+    pdf::PDFRepairTransactionOptions staleOptions;
+    staleOptions.expectedSourceSha256 = QString(64, QLatin1Char('f'));
+    pdf::PDFRepairTransaction stale(source, staleOptions);
+    QVERIFY(stale.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                      QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    const pdf::PDFOperationResult refused = stale.analyze();
+    QVERIFY(!refused);
+    QCOMPARE(refused.getErrorMessage(), QStringLiteral("Repair plan is bound to a stale source revision."));
+    QCOMPARE(stale.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(stale.plans().isEmpty());
+    QVERIFY(stale.candidate() == nullptr);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = directory.filePath(QStringLiteral("source.pdf"));
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    QCOMPARE(sourceFile.write(bytes), qint64(bytes.size()));
+    sourceFile.close();
+
+    // The matching revision is accepted and plans normally.
+    pdf::PDFRepairTransactionOptions boundOptions;
+    boundOptions.expectedSourceSha256 = sourceSha256;
+    boundOptions.sourcePath = sourcePath;
+    pdf::PDFRepairTransaction bound(source, boundOptions);
+    QVERIFY(bound.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                      QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(bound.analyze());
+    QCOMPARE(bound.status(), pdf::PDFRepairStatus::Planned);
+    QCOMPARE(bound.plans().size(), 1);
+
+    pdf::PDFRepairTransaction accepted(source, boundOptions);
+    QVERIFY(accepted.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(accepted.apply());
+    QVERIFY(accepted.candidate() != nullptr);
+
+    pdf::PDFRepairTransactionOptions missingPathOptions = boundOptions;
+    missingPathOptions.sourcePath.clear();
+    pdf::PDFRepairTransaction missingPath(source, missingPathOptions);
+    QVERIFY(!missingPath.analyze());
+    QVERIFY(missingPath.candidate() == nullptr);
+
+    pdf::PDFRepairTransactionOptions unreadableOptions = boundOptions;
+    unreadableOptions.sourcePath = directory.filePath(QStringLiteral("missing.pdf"));
+    pdf::PDFRepairTransaction unreadable(source, unreadableOptions);
+    QVERIFY(!unreadable.analyze());
+    QVERIFY(unreadable.candidate() == nullptr);
+
+    // Image optimization also constructs changed storage with the original hash.
+    pdf::PDFDocumentBuilder modifiedBuilder;
+    modifiedBuilder.setDocument(&source);
+    modifiedBuilder.setDocumentTitle(QStringLiteral("Changed after planning"));
+    const pdf::PDFDocument builtModified = modifiedBuilder.build();
+    pdf::PDFDocument changed(pdf::PDFObjectStorage(builtModified.getStorage()),
+                             source.getInfo()->version, source.getSourceDataHash());
+    QCOMPARE(changed.getSourceDataHash(), source.getSourceDataHash());
+    QVERIFY(changed != source);
+    pdf::PDFRepairTransaction modified(changed, boundOptions);
+    QVERIFY(modified.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                         QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(!modified.analyze());
+    QCOMPARE(modified.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(modified.plans().isEmpty());
+    QVERIFY(modified.candidate() == nullptr);
+
+    pdf::PDFDocument mutableSource = source;
+    pdf::PDFRepairTransaction changedAfterPlanning(mutableSource, boundOptions);
+    QVERIFY(changedAfterPlanning.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                                     QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 } }));
+    QVERIFY(changedAfterPlanning.analyze());
+    mutableSource = changed;
+    QVERIFY(!changedAfterPlanning.apply());
+    QCOMPARE(changedAfterPlanning.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(changedAfterPlanning.candidate() == nullptr);
+
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    const QByteArray changedBytes = writeSerializedBytes(changed);
+    QVERIFY(!changedBytes.isEmpty());
+    QCOMPARE(sourceFile.write(changedBytes), qint64(changedBytes.size()));
+    sourceFile.close();
+    QVERIFY(!bound.apply());
+    QVERIFY(bound.candidate() == nullptr);
+}
+
+void RepairOperationTest::validateJsonSchemaFragment_reportsStructuralViolations()
+{
+    const QJsonObject schema{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("geometry") } },
+        { QStringLiteral("properties"), QJsonObject{ { QStringLiteral("geometry"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("object") } } } } }
+    };
+
+    // A recorded violation always fails the validator, so callers that only
+    // consume the bool (the Action List planner) refuse it too.
+    QStringList errors;
+    QVERIFY(!pdf::validateJsonSchemaFragment(QJsonValue(QJsonObject()), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("geometry is required")));
+
+    errors.clear();
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("geometry"), QJsonObject() }, { QStringLiteral("extra"), 1 } }),
+        schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("extra is not a supported parameter")));
+
+    errors.clear();
+    QVERIFY(pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("geometry"), QJsonObject() } }), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.isEmpty());
+
+    QVERIFY(!pdf::validateJsonSchemaFragment(QJsonValue(QJsonObject()), schema, QStringLiteral("params"), nullptr));
+}
+
+void RepairOperationTest::validateJsonSchemaFragment_rejectsValuesOutsideTheAllowedSet()
+{
+    const QJsonObject schema{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("properties"),
+          QJsonObject{
+              { QStringLiteral("mode"),
+                QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") },
+                             { QStringLiteral("enum"),
+                               QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat") } } } },
+              { QStringLiteral("contract"),
+                QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") },
+                             { QStringLiteral("enum"), QJsonArray{ 2 } } } } } }
+    };
+
+    // A correctly-typed value outside the allowed set is refused: comparing two scalars
+    // through their serialised objects would accept any string and any number.
+    QStringList errors;
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("mode"), QStringLiteral("stretch") } }), schema,
+        QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n'))
+                .contains(QStringLiteral("params.mode contains a value outside the allowed set")));
+
+    errors.clear();
+    QVERIFY(!pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("contract"), 3 } }), schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.join(QLatin1Char('\n'))
+                .contains(QStringLiteral("params.contract contains a value outside the allowed set")));
+
+    errors.clear();
+    QVERIFY(pdf::validateJsonSchemaFragment(
+        QJsonValue(QJsonObject{ { QStringLiteral("mode"), QStringLiteral("mirror") },
+                                { QStringLiteral("contract"), 2 } }),
+        schema, QStringLiteral("params"), &errors));
+    QVERIFY(errors.isEmpty());
+}
+
+void RepairOperationTest::previewCrashLeavesNoPartialArtifactAndNoApproval()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString killCandidate = directory.filePath(QStringLiteral("kill/candidate.pdf"));
+    const QString killRenders = directory.filePath(QStringLiteral("kill/renders"));
+    const QString unfireableCandidate = directory.filePath(QStringLiteral("unfireable/candidate.pdf"));
+    const QString unfireableRenders = directory.filePath(QStringLiteral("unfireable/renders"));
+
+    // 93 leg: the seam is armed for a stage that never fires, proving the 91
+    // legs measure an actual seam trip rather than a vacuous pass.
+    {
+        QProcess unfireable;
+        unfireable.start(QCoreApplication::applicationFilePath(),
+                         { QStringLiteral("--preview-crash-harness"), QStringLiteral("never-fired"),
+                           unfireableCandidate, unfireableRenders });
+        QVERIFY2(unfireable.waitForFinished(30000), qPrintable(unfireable.errorString()));
+        QCOMPARE(unfireable.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(unfireable.exitCode(), 93);
+    }
+
+    for (const QString& stage : { QStringLiteral("candidate-committed"), QStringLiteral("visual-page") })
+    {
+        QProcess killed;
+        killed.start(QCoreApplication::applicationFilePath(),
+                     { QStringLiteral("--preview-crash-harness"), stage, killCandidate, killRenders });
+        QVERIFY2(killed.waitForFinished(30000), qPrintable(killed.errorString()));
+        QCOMPARE(killed.exitStatus(), QProcess::NormalExit);
+        // 91 is the in-window kill; 92/93 mean the seam was armed and never
+        // fired, so the scenario measured nothing and must not read as a pass.
+        QCOMPARE(killed.exitCode(), 91);
+
+        // The atomic candidate write never leaves a partial file at the final
+        // path: after the crash it is a complete, reopenable PDF, never a
+        // truncated one.
+        QVERIFY(QFile::exists(killCandidate));
+        QVERIFY2(readsAsValidPdf(killCandidate), qPrintable(stage));
+
+        // A QSaveFile staging temp is never left at a final-path name; report
+        // any residue pattern as a diagnostic only.
+        const QFileInfo candidateInfo(killCandidate);
+        for (const QString& entry : QDir(candidateInfo.absolutePath()).entryList(QDir::Files | QDir::Hidden))
+        {
+            if (entry != candidateInfo.fileName())
+            {
+                qInfo().noquote() << "preview crash residue:" << entry;
+            }
+            QVERIFY(!entry.startsWith(candidateInfo.fileName() + QLatin1Char('.')));
+        }
+    }
+
+    // A preview has no publication authority: the crash never wrote an approval
+    // record anywhere under the work tree.
+    QDirIterator entries(directory.path(), QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+    while (entries.hasNext())
+    {
+        QVERIFY(!entries.next().contains(QStringLiteral("approval")));
+    }
+}
+
+int main(int argc, char** argv)
+{
+    QCoreApplication application(argc, argv);
+    const QStringList arguments = application.arguments();
+    if (arguments.value(1) == QStringLiteral("--preview-crash-harness"))
+    {
+        return runPreviewCrashHarness(arguments);
+    }
+
+    RepairOperationTest test;
+    return QTest::qExec(&test, argc, argv);
+}
 
 #if __has_include("tst_repairoperationtest.moc")
 #include "tst_repairoperationtest.moc"

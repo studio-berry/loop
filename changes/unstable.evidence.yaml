@@ -4,5 +4,11 @@ claims:
   - id: quick-finding-navigation-replacement
     evidence:
       - unit:agent-policy:quick
+  - id: native-product-smoke-platform-selection
+    evidence:
+      - unit:scripts/ci/test_workflow_contracts.py
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
 unresolved:
   - Native build and focused Qt tests require a configured build for this checkout.

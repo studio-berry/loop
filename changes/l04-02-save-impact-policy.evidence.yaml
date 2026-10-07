@@ -1,0 +1,226 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: action-list-save-policy
+    evidence:
+      - unit:UnitTests/tst_actionlisttest.cpp
+      - unit:UnitTests/tst_operationimpacttest.cpp
+      - unit:UnitTests/tst_repairoperationtest.cpp
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - unit:agent-policy:core
+      - unit:agent-policy:interaction
+  - id: write-boundary-enforcement
+    evidence:
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+  - id: governed-execution-lanes
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: preview-fidelity-and-isolation
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_repairoperationtest.cpp
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: plan-digest-binding
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:pdftool
+  - id: cancel-and-crash-residue
+    evidence:
+      - unit:UnitTests/tst_repairoperationtest.cpp
+      - unit:UnitTestsGovernedExecution
+  - id: approval-authorization-resolver
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:agent-policy:core
+  - id: approval-expiry
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - fixture:regression:canonical-json-golden
+  - id: approval-revocation
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - fixture:regression:canonical-json-golden
+  - id: profile-binding
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:agent-policy:pdftool
+  - id: pdftool-lane
+    evidence:
+      - unit:agent-policy:pdftool
+  - id: pagemaster-lane
+    evidence:
+      - unit:agent-policy:pagemaster
+  - id: interaction-lane
+    evidence:
+      - unit:agent-policy:interaction
+  - id: mutation-gateway
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: per-surface-parity
+    evidence:
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:UnitTests/tst_pagemasterexporttest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:quick
+  - id: published-byte-revalidation
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: revalidation-state-and-reason
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - unit:agent-policy:core
+  - id: impact-scope-and-finding-delta
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: audit-publication-selection-and-signoff-binding
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - architecture:agent-policy:core
+  - id: audit-reconstruction-reader
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - architecture:agent-policy:core
+  - id: chain-verify-gate-and-tamper-refusal
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - security:scripts/ci/check_source_integrity.py
+      - architecture:agent-policy:core
+  - id: sign-off-round-trip-and-stale-artifact
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - unit:agent-policy:core
+  - id: evidence-bundle-stale-sign-off-refusal
+    evidence:
+      - unit:UnitTestsPreflightVerdict
+      - unit:UnitTests/tst_preflightverdicttest.cpp
+      - unit:agent-policy:core
+  - id: producer-identity-completeness
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:UnitTests/tst_actionlisttest.cpp
+      - unit:agent-policy:core
+      - unit:agent-policy:pdftool
+  - id: preflight-lanes
+    evidence:
+      - unit:agent-policy:preflight
+      - unit:UnitTestsPreflightChecks
+      - unit:UnitTestsPreflightEngine
+      - unit:UnitTestsPreflightInteraction
+      - unit:UnitTestsPreflightVerdict
+      - unit:UnitTestsPreflightProfileResolver
+      - unit:UnitTestsProfileIdentity
+      - unit:UnitTestsOperatorAcceptance
+      - integration:UnitTestsPreflightCorpus
+      - integration:UnitTestsPreflightWorkflowAcceptance
+      - differential:UnitTestsStandardOracle
+      - architecture:loop-preflight/testdata/fixtures
+      - architecture:docs/generated/preflight-check-catalog.json
+      - architecture:docs/generated/preflight-corpus-coverage.json
+  - id: rollback-destination-preservation-and-report-failure
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - architecture:agent-policy:core
+  - id: rollback-revalidation-and-receipt
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - architecture:agent-policy:core
+  - id: rollback-verify-before-append-and-fail-closed
+    evidence:
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - security:scripts/ci/check_source_integrity.py
+      - architecture:agent-policy:core
+  - id: pdftool-rollback-command
+    evidence:
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:pdftool
+  - id: editor-rollback-profile
+    evidence:
+      - unit:agent-policy:quick
+  - id: cross-surface-parity-fixture
+    evidence:
+      - unit:UnitTestsProductOperatorLoop
+      - unit:UnitTests/tst_productoperatorloop.cpp
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+  - id: build-policy-lane
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: packaging-lane
+    evidence:
+      - security:codeql
+  - id: merged-l04-proof-lanes
+    evidence:
+      - unit:agent-policy:build_policy
+      - unit:UnitTestsProductOperatorLoop
+      - security:codeql
+      - unit:agent-policy:quick
+      - unit:agent-policy:preflight
+      - unit:UnitTestsPreflightChecks
+      - unit:UnitTestsPreflightEngine
+      - unit:UnitTestsPreflightInteraction
+      - unit:UnitTestsPreflightVerdict
+      - unit:UnitTestsPreflightProfileResolver
+      - unit:UnitTestsProfileIdentity
+      - unit:UnitTestsOperatorAcceptance
+      - integration:UnitTestsPreflightCorpus
+      - integration:UnitTestsPreflightWorkflowAcceptance
+      - differential:UnitTestsStandardOracle
+      - architecture:loop-preflight/testdata/fixtures
+      - architecture:docs/generated/preflight-check-catalog.json
+      - architecture:docs/generated/preflight-corpus-coverage.json
+  - id: ci-governed-history-fixtures
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTests/tst_governedexecutiontest.cpp
+      - unit:UnitTests/tst_operationhistorytest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - Sealed holdout validation and Linux/Windows packaging are hosted proof lanes; local focused tests do not establish those results.
+  - The audit reconstruction reader has no CLI entry point; the deferral is recorded in docs/OPERATION_HISTORY.md.
+  - Action List and PageMaster rollback surfaces are deferred; the deferral is recorded in docs/GOVERNED_EXECUTION.md.
+  - The cross-surface fixture is bound through governed-execution lane paths, UnitTestsProductOperatorLoop, and check_governed_parity.py; it is not registered in fixtures.yaml.
+  - PageMaster publishes a derived source-identity digest and its own resolved-profile digest; the parity test binds the shared fixture through its manifest document identity.
+  - The existing source-integrity second-store guard does not detect a differently named store.

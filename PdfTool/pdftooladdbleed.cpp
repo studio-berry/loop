@@ -159,6 +159,11 @@ pdf::PDFOperationResult appendAddBleedProvenance(const QString& outputPath,
     accepted.approval.decision = QStringLiteral("approve");
     accepted.approval.policyId = QStringLiteral("add-bleed");
     accepted.approval.rationale = QStringLiteral("Add-bleed output was written by the explicit save policy.");
+    // P4: a bare approval with no evidence or reference cannot be attributed to
+    // an output. Bind the decision to the exact published bytes. This is a
+    // targeted identity fix, not governed convergence (that stays #37).
+    accepted.approval.evidenceSha256 = output.artifact.sha256;
+    accepted.approval.decisionReference = QStringLiteral("add-bleed:%1").arg(output.artifact.sha256);
     accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
     if (!history.appendEvent(accepted))
     {

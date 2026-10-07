@@ -35,7 +35,7 @@ class ShellWorkspaceTest : public QObject
 private slots:
     void workspaceTransitionsPreserveClosedDocumentState();
     void workspaceTransitionsPreserveOpenDocumentAndPreflightState();
-    void disabledCompareWorkspaceCannotBeSelected();
+    void compareWorkspaceIsReachable();
     void menuPolicyRoutesVisibleActions();
     void developerDiagnosticsFollowReleaseProfile();
 };
@@ -52,10 +52,6 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveClosedDocumentState()
         host.setWorkspace(from);
         for (const EditorHost::LoopWorkspace to : kWorkspaces)
         {
-            if (to == EditorHost::Compare)
-            {
-                continue;
-            }
             QSignalSpy workspaceSpy(&host, &EditorHost::workspaceChanged);
             host.setWorkspace(to);
             if (from != to)
@@ -93,17 +89,9 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
 
     for (const EditorHost::LoopWorkspace from : kWorkspaces)
     {
-        if (from == EditorHost::Compare)
-        {
-            continue;
-        }
         host.setWorkspace(from);
         for (const EditorHost::LoopWorkspace to : kWorkspaces)
         {
-            if (to == EditorHost::Compare)
-            {
-                continue;
-            }
             host.setWorkspace(to);
             QVERIFY(host.hasDocument());
             QCOMPARE(host.pageCount(), pageCountBefore);
@@ -115,19 +103,20 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
     }
 }
 
-void ShellWorkspaceTest::disabledCompareWorkspaceCannotBeSelected()
+void ShellWorkspaceTest::compareWorkspaceIsReachable()
 {
     EditorHost host;
     QCOMPARE(host.workspace(), EditorHost::Document);
-    QVERIFY(!host.isWorkspaceEnabled(EditorHost::Compare));
+    QVERIFY(host.isWorkspaceEnabled(EditorHost::Compare));
 
     QSignalSpy workspaceSpy(&host, &EditorHost::workspaceChanged);
     host.setWorkspace(EditorHost::Compare);
 
-    QCOMPARE(host.workspace(), EditorHost::Document);
-    QCOMPARE(workspaceSpy.size(), 0);
+    QCOMPARE(host.workspace(), EditorHost::Compare);
+    QCOMPARE(workspaceSpy.size(), 1);
     QVERIFY(host.isWorkspaceEnabled(EditorHost::Document));
     QVERIFY(host.isWorkspaceEnabled(EditorHost::Inspect));
+    QVERIFY(host.isWorkspaceEnabled(EditorHost::Fix));
 }
 
 void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()

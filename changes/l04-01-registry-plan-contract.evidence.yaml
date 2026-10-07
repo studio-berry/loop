@@ -1,0 +1,41 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: registry-and-plan-identity
+    evidence:
+      - unit:UnitTests/tst_repairoperationtest.cpp
+      - unit:UnitTestsGovernedExecution
+      - fixture:regression:canonical-json-golden
+      - budget:canonical-json-digest-stability
+      - architecture:agent-policy:core
+  - id: transaction-and-cli-gates
+    evidence:
+      - unit:UnitTests/tst_repairoperationtest.cpp
+      - unit:UnitTests/tst_pdftoolcontract.cpp
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+  - id: governed-execution-lanes
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: core-module-lanes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+unresolved:
+  - scripts/ci/check_independent_validation_gate.py
+  - sealed-eval stub lane check_independent_validation_gate.py runs only in the sealed holdout, not in this slice
+  - packaging:linux-build and packaging:windows-build are hosted CI lanes; this slice ran focused local builds and tests only
+  - canonical-json-digest-stability harness remains pending (enforcement declared)
+  - PR 208 revision fix passes source and contract checks plus MSVC syntax checks; focused runtime tests remain unrun because the available build belongs to the later L04 stack.
