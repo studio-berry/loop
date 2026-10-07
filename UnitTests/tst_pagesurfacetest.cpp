@@ -349,6 +349,7 @@ private slots:
     void prefetchIsSubmittedAtTheNearViewportPriority();
     void repeatedRequestsAreCoalesced();
     void supersededDemandIsCancelledBeforeNewWorkIsSubmitted();
+    void sameKeySupersededDemandGetsReplacementPixels();
     void completionForASupersededRequestIsRejected();
     void completionAgainstAnOldRevisionIsRejected();
     void workerSuccessWithWrongRequestIdentityIsRejected();
@@ -627,6 +628,36 @@ void PageSurfaceTest::supersededDemandIsCancelledBeforeNewWorkIsSubmitted()
 
     // The new demand was submitted, and it carries the new generation.
     QVERIFY(fixture.submitter.submittedSpecs.size() > 3);
+}
+
+void PageSurfaceTest::sameKeySupersededDemandGetsReplacementPixels()
+{
+    Fixture fixture;
+    fixture.submitter.runInline = false;
+    fixture.coordinator->requestSurfaces();
+    const QStringList firstRound = fixture.submitter.deferredJobIds();
+    QCOMPARE(firstRound.size(), 3);
+    fixture.viewport.invalidateLayout();
+    Fixture::drain();
+    QCOMPARE(fixture.submitter.submittedSpecs.size(), 3);
+
+    for (const QString& jobId : firstRound)
+    {
+        QVERIFY(fixture.submitter.runDeferred(jobId));
+    }
+    Fixture::drain();
+    QCOMPARE(fixture.coordinator->counters().admitted, 0);
+    QCOMPARE(fixture.coordinator->counters().rejectedSuperseded, 3);
+
+    const QStringList replacements = fixture.submitter.deferredJobIds();
+    QCOMPARE(replacements.size(), 3);
+    for (const QString& jobId : replacements)
+    {
+        QVERIFY(fixture.submitter.runDeferred(jobId));
+    }
+    Fixture::drain();
+    QCOMPARE(fixture.coordinator->counters().admitted, 3);
+    QCOMPARE(fixture.coordinator->snapshot().tiles.size(), 3);
 }
 
 void PageSurfaceTest::completionForASupersededRequestIsRejected()

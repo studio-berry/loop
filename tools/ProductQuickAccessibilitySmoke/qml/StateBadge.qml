@@ -49,5 +49,6 @@ RowLayout {
         Accessible.name: root.visual && root.visual.accessibleName
             ? root.visual.accessibleName
             : root.labelText
+        Accessible.description: text
     }
 }
