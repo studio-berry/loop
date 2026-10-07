@@ -1,0 +1,9 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: worker-cpu-fault-timeout-headroom
+    evidence:
+      - unit:UnitTestsPdfWorkerIsolation
+      - security:scripts/ci/check_pdf_worker_isolation.py
+      - architecture:agent-policy:pdftool
+unresolved: []
