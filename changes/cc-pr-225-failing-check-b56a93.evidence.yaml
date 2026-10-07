@@ -4,6 +4,6 @@ claims:
   - id: rollback-listed-in-cli-inventory
     evidence:
       - unit:agent-policy:plugins
-      - unit:agent-policy:documentation
+      - architecture:scripts/generate-architecture-catalogs.py
 unresolved:
   - Focused Qt builds and tests require a configured build directory; this worktree has none.
