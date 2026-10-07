@@ -281,6 +281,6 @@
     }
   },
   "snapshot_dir": "loop-preflight/testdata/snapshots",
-  "source_fixtures": 85,
+  "source_fixtures": 90,
   "unattributed_findings": 1
 }
