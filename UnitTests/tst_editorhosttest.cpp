@@ -1206,7 +1206,7 @@ bool writeTrimmedPageDocument(const QString& path)
     builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
     const pdf::PDFDocument document = builder.build();
     pdf::PDFDocumentWriter writer(nullptr);
-    return writer.write(path, &document, true);
+    return static_cast<bool>(writer.write(path, &document, true));
 }
 
 void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
