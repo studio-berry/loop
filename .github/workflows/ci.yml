@@ -49,6 +49,8 @@ jobs:
         run: python -m unittest scripts.ci.test_verify_release_assets -v
       - name: Test Core qualification provenance
         run: python -m unittest scripts.qualification.test_check_core_qualification scripts.ci.test_compare_package_boundary_evidence -v
+      - name: Test native accessibility qualification boundaries
+        run: python -m unittest scripts.ci.test_verify_quick_accessibility_evidence scripts.ci.test_quick_a11y_kit scripts.ci.test_native_atspi_probe -v
       - name: Test package lifecycle scripts with fake packages
         run: python -m unittest scripts.ci.test_run_qt_relink_test -v
       - name: Test Linux AppImage Qt relink script with fake AppImage

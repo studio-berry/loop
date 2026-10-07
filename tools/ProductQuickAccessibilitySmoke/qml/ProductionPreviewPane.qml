@@ -94,6 +94,8 @@ Pane {
                             .arg(root.host.previewFidelityStateName)
                             .arg(root.host.previewFidelityOriginName)
                     Accessible.name: qsTr("Page render fidelity and origin")
+                    Accessible.description: text
+                    activeFocusOnTab: true
                 }
 
                 // The same fidelity-and-origin fact the ordinary canvas banner shows, on the

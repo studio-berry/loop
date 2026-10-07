@@ -185,6 +185,71 @@ class QuickAccessibilityEvidenceTests(unittest.TestCase):
         errors = self._verify(native, software)
         self.assertTrue(any("did not report the software rasterizer" in e for e in errors))
 
+    def _package_records(self):
+        records = [_record("native"), _record("software"), _native_accessibility_record()]
+        for record in records:
+            record["artifact"]["package_sha256"] = "d" * 64
+            record["artifact"]["executable_sha256"] = "a" * 64
+        boundary = {
+            "kind": "loop-package-boundary-evidence", "status": "passed", "source_sha": SHA, "platform": "windows",
+            "package": {"sha256": "d" * 64}, "forbidden_findings": [],
+            "checks": {key: True for key in (
+                "all_payload_files_hashed", "all_binary_files_inspected", "target_architecture_matches",
+                "qt6widgets_absent", "qt6widgets_surface_absent", "unresolved_non_system_dependencies_absent")},
+        }
+        return records, boundary
+
+    def _verify_package(self, records, boundary):
+        native, software, accessibility = [self._write(f"lane-{index}.json", record)
+                                           for index, record in enumerate(records)]
+        graph = self._write("boundary.json", boundary)
+        return self._verify(native, software, native_accessibility_path=accessibility,
+                            require_native_accessibility=True, package_boundary_path=graph)
+
+    def test_linux_atspi_record_is_a_native_accessibility_claim(self):
+        records, boundary = self._package_records()
+        records[2]["observed"].update(platform="Linux AT-SPI", graphics_api="opengl")
+        boundary["platform"] = "linux"
+        self.assertEqual(self._verify_package(records, boundary), [])
+
+    def test_other_package_cannot_supply_accessibility_evidence(self):
+        records, boundary = self._package_records()
+        for index in range(3):
+            with self.subTest(lane=index):
+                records[index]["artifact"]["package_sha256"] = "e" * 64
+                self.assertTrue(any("inspected package digest" in e for e in self._verify_package(records, boundary)))
+                records[index]["artifact"]["package_sha256"] = "d" * 64
+
+    def test_widgets_or_uninspected_graph_cannot_qualify(self):
+        records, boundary = self._package_records()
+        for key in tuple(boundary["checks"]):
+            with self.subTest(check=key):
+                boundary["checks"][key] = False
+                self.assertTrue(any("graph check" in e for e in self._verify_package(records, boundary)))
+                del boundary["checks"][key]
+                self.assertTrue(any("graph check" in e for e in self._verify_package(records, boundary)))
+                boundary["checks"][key] = True
+
+    def test_package_graph_from_another_source_cannot_qualify(self):
+        records, boundary = self._package_records()
+        boundary["source_sha"] = "f" * 40
+        self.assertTrue(any("package boundary source SHA" in e for e in self._verify_package(records, boundary)))
+
+    def test_other_native_client_cannot_qualify_the_package(self):
+        records, boundary = self._package_records()
+        records[2]["observed"]["platform"] = "Linux AT-SPI"
+        self.assertTrue(any("package platform" in e for e in self._verify_package(records, boundary)))
+
+    def test_replaced_probe_between_lanes_is_rejected(self):
+        records, boundary = self._package_records()
+        records[2]["artifact"]["executable_sha256"] = "b" * 64
+        self.assertTrue(any("same qualification executable" in e for e in self._verify_package(records, boundary)))
+
+    def test_malformed_native_observation_returns_an_error(self):
+        records, boundary = self._package_records()
+        records[2]["observed"] = None
+        self.assertTrue(any("observed backend record" in e for e in self._verify_package(records, boundary)))
+
 
 if __name__ == "__main__":
     unittest.main()

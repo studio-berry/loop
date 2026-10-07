@@ -313,9 +313,8 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("quick-a11y-native.json", workflow)
             self.assertIn("quick-a11y-software.json", workflow)
         # Windows drives the native OS accessibility backend and requires it;
-        # Linux records the lane unavailable because a headless runner has no
-        # AT-SPI accessibility bus. Either way a software-only smoke cannot
-        # satisfy the native claim.
+        # Fresh package runners drive the OS accessibility clients; software
+        # records remain separate from either native claim.
         self.assertIn("run-installed-quick-a11y-uia.ps1", windows)
         self.assertIn("--require-native-accessibility", windows)
         self.assertNotIn("run-installed-quick-a11y-uia.ps1", linux)
@@ -328,6 +327,22 @@ class WorkflowContractTests(unittest.TestCase):
             verify_index = names.index("Verify installed-tree accessibility qualification evidence")
             self.assertLess(native_index, software_index)
             self.assertLess(software_index, verify_index)
+
+    def test_native_qualification_consumes_final_packages_on_fresh_runners(self):
+        for platform, builder in (("linux", "build_ubuntu"), ("windows", "build_windows")):
+            workflow = (ROOT / f".github/workflows/{'Linux' if platform == 'linux' else 'Windows'}Install.yml").read_text(encoding="utf-8")
+            qualification = workflow.split(f"  qualify_{platform}:", 1)[1]
+            self.assertIn(f"needs: {builder}", qualification)
+            self.assertIn("actions/download-artifact@", qualification)
+            self.assertIn(f"needs.{builder}.outputs.package_name", qualification)
+            self.assertIn(f"quick-a11y-kit-{platform}", qualification)
+            self.assertNotIn("Install Qt", qualification)
+            self.assertNotIn("cmake --build", qualification)
+            self.assertIn("inputs.source_sha", qualification)
+            driver = (ROOT / f"scripts/qualification/qualify-{platform}-accessibility.{ 'sh' if platform == 'linux' else 'ps1'}").read_text(encoding="utf-8")
+            self.assertIn("--require-native-accessibility", driver)
+            self.assertIn("--package-boundary", driver)
+            self.assertIn("run-installed-quick-a11y-atspi.ps1" if platform == 'linux' else "run-installed-quick-a11y-uia.ps1", driver)
 
 
 if __name__ == "__main__":
