@@ -75,7 +75,7 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("optimize")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+            options.executionContext->setData(QJsonObject{ { QStringLiteral("operation"), QStringLiteral("optimize") }, { QStringLiteral("dry_run"), options.destructiveDryRun } });
         }
     }
     else if (options.destructiveReport)
@@ -87,7 +87,7 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+            options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned") });
         }
         return PDFToolExitCode::Success;
     }
@@ -106,12 +106,14 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     if (options.optimizeFlags)
     {
         pdf::PDFOptimizer optimizer(options.optimizeFlags, nullptr);
-        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [this, &options](QString text) { reportDiagnostic(options, PDFToolDiagnosticSeverity::Info, QStringLiteral("operation.progress"), text); }, Qt::DirectConnection);
+        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [this, &options](QString text)
+                         { reportDiagnostic(options, PDFToolDiagnosticSeverity::Info, QStringLiteral("operation.progress"), text); }, Qt::DirectConnection);
         optimizer.setDocument(&document);
         optimizer.optimize();
         document = optimizer.takeOptimizedDocument();
     }
 
+    documentPreparedForWrite(document);
     if (isCancelRequested())
     {
         // Nothing has been written yet (writer.write() below uses QSaveFile and
@@ -125,18 +127,16 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     pdf::PDFOperationResult result = writer.write(options.document, &document, true);
     if (!result)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.document}});
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), QJsonObject{ { QStringLiteral("path"), options.document } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("primary"),
-            options.document,
-            QStringLiteral("written")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("primary"),
+                                              options.document,
+                                              QStringLiteral("written") });
     }
 
     return PDFToolExitCode::Success;

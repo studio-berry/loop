@@ -1,4 +1,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Increase the PDF worker CPU fault test backstop to 240 seconds so sandbox CPU-limit termination has wall-clock headroom under contention.
+Summary: Give PDF worker CPU-limit termination a 240-second test backstop and add deterministic decrypt, encrypt, and optimize cancellation regressions that preserve the original input.
