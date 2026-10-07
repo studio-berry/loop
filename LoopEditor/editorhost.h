@@ -381,7 +381,11 @@ public:
     /// the exact plan digest for the current revision and arms execution; a plan whose
     /// revision or digest moved is never armed. Rejecting records the decision and leaves
     /// the plan visible for inspection; replanning clears both.
-    Q_INVOKABLE bool approveActionListPlan();
+    /// QML must supply the displayed identities; the no-argument helper is C++ only.
+    bool approveActionListPlan();
+    Q_INVOKABLE bool approveActionListPlan(const QString& planDigest,
+                                           const QString& sourceSha256,
+                                           const QString& documentRevision);
     Q_INVOKABLE bool rejectActionListPlan();
     Q_INVOKABLE bool executeApprovedActionListPlan();
     Q_INVOKABLE void replanActionList();

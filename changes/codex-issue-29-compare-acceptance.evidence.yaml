@@ -5,6 +5,11 @@ claims:
     evidence:
       - unit:agent-policy:quick
       - fixture:regression:compare-review-golden
+  - id: plan-and-approval-journey
+    evidence:
+      - unit:agent-policy:quick
+      - unit:UnitTestsProductOperatorLoop
+      - unit:UnitTestsEditorHost
   - id: governed-comparison-host-regression
     evidence:
       - unit:UnitTestsGovernedExecution
