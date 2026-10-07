@@ -1314,7 +1314,7 @@ void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
 
 void ProductOperatorLoopTest::planApprovalJourneyBindsDisplayedIdentityAndBlocksBypasses()
 {
-    QTest::failOnWarning(QRegularExpression(QStringLiteral(".*ActionListPane\.qml.*")));
+    QTest::failOnWarning(QRegularExpression(QStringLiteral(R"(.*ActionListPane\.qml.*)")));
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     const QString recipePath = writeBleedRecipe(directory.path());
