@@ -83,7 +83,7 @@ QVariantMap OperatorHelp::findingHelp(const QString& checkId, const QString& fin
     QVariantMap help = check.toVariantMap();
     help.insert(QStringLiteral("checkId"), checkId);
     help.insert(QStringLiteral("findingType"), findingType);
-    for (const QJsonValue& entry : check.value(QStringLiteral("severity")).toArray())
+    for (const auto& entry : check.value(QStringLiteral("severity")).toArray())
     {
         const QJsonObject finding = entry.toObject();
         if (finding.value(QStringLiteral("finding_type")).toString() == findingType)
@@ -106,7 +106,7 @@ QVariantMap OperatorHelp::prepareSample(const QString& id) const
         return fail(tr("The sample corpus is unavailable."));
     }
     QJsonObject selected;
-    for (const QJsonValue& entry : m_samples.value(QStringLiteral("jobs")).toArray())
+    for (const auto& entry : m_samples.value(QStringLiteral("jobs")).toArray())
     {
         if (entry.toObject().value(QStringLiteral("id")).toString() == id)
         {

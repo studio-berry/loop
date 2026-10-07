@@ -9,11 +9,11 @@
     {"name": "Compare", "help": "Compare before and after evidence for the same reviewed plan and document revision. Read resolved, unchanged, introduced and incomplete findings separately. Navigating a delta helps inspect it but does not approve it. A stale comparison must be planned and inspected again. The receipt, not similarity of the pictures, establishes publication identity."}
   ],
   "getting_started": [
-    "1. Install the reviewed Windows MSI, or unpack the reviewed Linux AppImage and launch LoopEditor from that package. Keep the package and job originals for handoff.",
-    "2. Open the correction sample below. It installs only a local sample PDF, profile and recipe; the original bundled files remain unchanged.",
+    "1. Install the reviewed Windows MSI, or launch the reviewed Linux AppImage. Keep the package and original PDF for handoff.",
+    "2. Open the correction sample from Sample jobs. Loop creates a local PDF, profile and recipe for the exercise.",
     "3. Switch to Preflight, Run preflight and select the bleed finding. Use its Help button to read measures and limitations, then inspect the page evidence.",
     "4. Switch to Fix. Validate the imported sample recipe and Plan. Review the candidate and plan; use Production Preview and Compare to inspect the available evidence and its limits.",
     "5. Approve the exact reviewed plan and Execute. Read Core's recheck and sign-off. If anything is refused, stale or incomplete, stop and retain that result.",
-    "6. Keep the original PDF. A later Save As is a separate write: this candidate does not yet provide a durable delivery receipt for that saved file. Full delivery sign-off remains pending the publication boundary work in #32."
+    "6. Keep the original PDF. Sign-off currently covers a temporary copy. Save As creates a separate file whose bytes are not covered by that receipt. Retain this limitation with any delivery handoff."
   ]
 }
