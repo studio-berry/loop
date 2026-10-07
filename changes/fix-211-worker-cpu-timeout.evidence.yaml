@@ -31,4 +31,7 @@ claims:
       - packaging:windows-build
       - security:codeql
       - unit:scripts/ci/test_package_source_identity.py
+      - unit:scripts/qualification/test_check_core_qualification.py
+      - unit:scripts/ci/test_compare_package_boundary_evidence.py
+      - unit:core-qualification-ci
 unresolved: []
