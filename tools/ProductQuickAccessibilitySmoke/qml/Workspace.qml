@@ -12,6 +12,7 @@ Item {
     property var window: null
     property var openDialog: null
     property var saveAsDialog: null
+    signal helpRequested(string checkId, string findingType)
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     function workspaceIndex(workspaceValue) {
@@ -137,6 +138,14 @@ Item {
                     }
 
                     Item { Layout.fillHeight: true }
+
+                    ToolButton {
+                        objectName: "workspaceHelpButton"
+                        Layout.fillWidth: true
+                        text: qsTr("Help (F1)")
+                        Accessible.name: qsTr("Help for this workspace")
+                        onClicked: root.helpRequested("", "")
+                    }
                 }
             }
 
@@ -156,6 +165,7 @@ Item {
 
                 PreflightPane {
                     host: root.host
+                    onHelpRequested: function(checkId, findingType) { root.helpRequested(checkId, findingType) }
                 }
 
                 ProductionPreviewPane {

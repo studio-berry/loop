@@ -330,6 +330,9 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
         add_executable(UnitTestsShellWorkspace
             tst_shellworkspacetest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/operatorhelp.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/operatorhelp.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
@@ -343,6 +346,10 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         target_link_libraries(UnitTestsShellWorkspace PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_include_directories(UnitTestsShellWorkspace PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
+        add_dependencies(UnitTestsShellWorkspace PdfTool loop-pdf-worker)
+        target_compile_definitions(UnitTestsShellWorkspace PRIVATE
+            LOOP_OPERATOR_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+        )
 
         set_target_properties(UnitTestsShellWorkspace PROPERTIES
             WIN32_EXECUTABLE OFF
