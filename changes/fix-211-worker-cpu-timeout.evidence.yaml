@@ -15,4 +15,14 @@ claims:
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
       - architecture:scripts/generate-architecture-catalogs.py
+  - id: single-approval-gated-action-list-execution-control
+    evidence:
+      - unit:agent-policy:quick
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
 unresolved: []

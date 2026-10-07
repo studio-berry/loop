@@ -1,4 +1,4 @@
-Category: internal
-Audience: developers
+Category: fixed
+Audience: operators and developers
 Breaking-Change: no
-Summary: Give PDF worker CPU-limit termination a 240-second test backstop and add deterministic decrypt, encrypt, and optimize cancellation regressions that preserve the original input.
+Summary: Keep one approval-gated Action List execution control, preserve inputs when decrypt, encrypt, or optimize is cancelled, and allow worker CPU-limit tests 240 seconds to terminate.
