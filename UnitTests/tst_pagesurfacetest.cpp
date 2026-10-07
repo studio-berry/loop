@@ -649,6 +649,7 @@ void PageSurfaceTest::sameKeySupersededDemandGetsReplacementPixels()
     QCOMPARE(fixture.coordinator->counters().admitted, 0);
     QCOMPARE(fixture.coordinator->counters().rejectedSuperseded, 3);
 
+    QTRY_COMPARE(fixture.submitter.deferredJobCount(), 3);
     const QStringList replacements = fixture.submitter.deferredJobIds();
     QCOMPARE(replacements.size(), 3);
     for (const QString& jobId : replacements)
@@ -657,7 +658,8 @@ void PageSurfaceTest::sameKeySupersededDemandGetsReplacementPixels()
     }
     Fixture::drain();
     QCOMPARE(fixture.coordinator->counters().admitted, 3);
-    QCOMPARE(fixture.coordinator->snapshot().tiles.size(), 3);
+    const auto* visibleTile = fixture.coordinator->snapshot().tileForPage(fixture.viewport.currentPage());
+    QVERIFY(visibleTile && visibleTile->exact && visibleTile->pixels);
 }
 
 void PageSurfaceTest::completionForASupersededRequestIsRejected()
