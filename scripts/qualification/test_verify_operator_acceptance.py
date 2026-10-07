@@ -250,6 +250,99 @@ class OperatorPacketTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "escapes"):
             checker.member(self.packet, "../outside.json")
 
+    def run_report(self, packets: list[Path], source_sha: str | None = None) -> tuple[int, dict]:
+        path = self.root / "reports" / "acceptance.json"
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = checker.main(["--source-sha", source_sha or self.source_sha, "--report", str(path),
+                                 *(str(packet) for packet in packets)])
+        return code, checker.read_object(path)
+
+    def test_report_binds_verified_pair_and_preserves_packets(self) -> None:
+        windows = self.make_packet("windows")
+        before = {path: path.read_bytes() for packet in (self.packet, windows) for path in packet.iterdir()}
+        code, report = self.run_report([self.packet, windows])
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "verified")
+        self.assertEqual(report["source_sha"], self.source_sha)
+        self.assertEqual(report["errors"], [])
+        for record, packet in zip(report["packets"], (self.packet, windows)):
+            self.assertEqual(record["status"], "verified")
+            self.assertEqual(record["platform"], packet.name)
+            self.assertEqual(record["packet_sha256"], checker.digest(packet / "packet.json"))
+            self.assertEqual(record["review_sha256"], checker.digest(packet / "review.json"))
+            self.assertEqual(record["receipt_identity"]["source_sha256"], checker.digest(packet / "source.pdf"))
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_report_records_both_missing_packets(self) -> None:
+        code, report = self.run_report([self.root / "missing-linux", self.root / "missing-windows"])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "incomplete")
+        self.assertEqual([record["status"] for record in report["packets"]], ["unavailable", "unavailable"])
+
+    def test_report_records_verified_packet_and_missing_review(self) -> None:
+        windows = self.make_packet("windows")
+        (windows / "review.json").unlink()
+        code, report = self.run_report([self.packet, windows])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "incomplete")
+        self.assertEqual([record["status"] for record in report["packets"]], ["verified", "unavailable"])
+        self.assertIn("review.json", report["packets"][1]["reason"])
+
+    def test_report_checks_second_packet_after_first_rejection(self) -> None:
+        windows = self.make_packet("windows")
+        self.mutate("packet.json", lambda value: value["steps"][1].update(implementation="mock-core"))
+        (windows / "review.json").unlink()
+        code, report = self.run_report([self.packet, windows])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "rejected")
+        self.assertEqual([record["status"] for record in report["packets"]], ["rejected", "unavailable"])
+        self.assertIn("mocked", report["packets"][0]["reason"])
+
+    def test_report_rejects_invalid_candidate_sha(self) -> None:
+        code, report = self.run_report([self.packet, self.packet], "HEAD")
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "rejected")
+        self.assertEqual(report["packets"], [])
+        self.assertIn("source SHA", report["errors"][0])
+
+    def test_report_rejects_duplicate_platform_pair(self) -> None:
+        code, report = self.run_report([self.packet, self.packet])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "rejected")
+        self.assertIn("one Linux and one Windows", report["errors"][0])
+
+    def test_report_rejects_different_receipt_identities(self) -> None:
+        windows = self.make_packet("windows")
+        inspection = checker.read_object(windows / "inspection.json")
+        inspection["effective_profile_digest"] = "f" * 64
+        self.write(windows / "inspection.json", inspection)
+        receipt = checker.read_object(windows / "receipt.json")
+        for key in ("sign_off", "revalidation"):
+            receipt["governed"][key]["effective_profile_digest"] = "f" * 64
+        self.write(windows / "receipt.json", receipt)
+        self.seal(windows)
+        code, report = self.run_report([self.packet, windows])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "rejected")
+        self.assertIn("receipt identities differ", report["errors"][0])
+
+    def test_report_cannot_overwrite_packet_or_add_unbound_member(self) -> None:
+        windows = self.make_packet("windows")
+        before = {path: path.read_bytes() for path in self.packet.iterdir()}
+        for name in ("packet.json", "review.json", "journey.log", "new-report.json"):
+            with self.subTest(name=name), contextlib.redirect_stderr(io.StringIO()):
+                code = checker.main(["--source-sha", self.source_sha, "--report", str(self.packet / name),
+                                     str(self.packet), str(windows)])
+                self.assertEqual(code, 1)
+        self.assertEqual(before, {path: path.read_bytes() for path in self.packet.iterdir()})
+
+    def test_unwritable_report_cannot_return_success(self) -> None:
+        windows = self.make_packet("windows")
+        with contextlib.redirect_stderr(io.StringIO()):
+            code = checker.main(["--source-sha", self.source_sha, "--report", str(self.root),
+                                 str(self.packet), str(windows)])
+        self.assertEqual(code, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
