@@ -25,4 +25,10 @@ claims:
       - architecture:agent-policy:core
       - packaging:linux-build
       - packaging:windows-build
+  - id: packaging-dispatch-source-trust-and-exact-package-identity
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+      - unit:scripts/ci/test_package_source_identity.py
 unresolved: []

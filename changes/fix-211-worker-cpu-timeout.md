@@ -1,4 +1,4 @@
-Category: fixed
+Category: security
 Audience: operators and developers
-Breaking-Change: no
-Summary: Keep one approval-gated Action List execution control, preserve inputs when decrypt, encrypt, or optimize is cancelled, and allow worker CPU-limit tests 240 seconds to terminate.
+Breaking-Change: yes
+Summary: Bind packaging checkout to the workflow commit and require source_sha to match its ref. Keep one approved-plan run control, preserve cancellation inputs, and give worker CPU-limit tests a 240-second backstop.

@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test packaging workflow source identity guards
+        run: python -m unittest scripts.ci.test_package_source_identity -v
       - name: Test release assets against paired package evidence
         run: python -m unittest scripts.ci.test_verify_release_assets -v
       - name: Test Core qualification provenance
