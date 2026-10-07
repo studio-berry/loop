@@ -612,6 +612,7 @@
         "repair",
         "repair-diff",
         "rgb-to-cmyk",
+        "rollback",
         "schema",
         "separate",
         "sentry-verify",
