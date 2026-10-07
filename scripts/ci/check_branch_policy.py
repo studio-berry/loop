@@ -369,7 +369,6 @@ def validate_packaging_workflows(root: Path, policy: DocumentedPolicy) -> list[s
     expected = {
         ".github/workflows/LinuxInstall.yml",
         ".github/workflows/WindowsInstall.yml",
-        ".github/workflows/NativeAccessibilityQualification.yml",
     }
     if set(policy.packaging_workflows) != expected:
         violations.append(

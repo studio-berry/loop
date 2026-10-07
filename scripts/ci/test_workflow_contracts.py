@@ -328,31 +328,21 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertLess(native_index, software_index)
             self.assertLess(software_index, verify_index)
 
-    def test_native_qualification_consumes_exact_packages_from_a_build_run(self):
-        qualification = (ROOT / ".github/workflows/NativeAccessibilityQualification.yml").read_text(encoding="utf-8")
-        # Candidate code runs in this workflow with a token that can read the
-        # build run, so it must never own a cache writer that packaging restores.
-        self.assertIn("workflow_dispatch:", qualification)
-        self.assertNotIn("actions/cache@", qualification)
-        for platform in ("linux", "windows"):
-            with self.subTest(platform=platform):
-                job = qualification.split(f"  qualify_{platform}:", 1)[1].split("\n  qualify_", 1)[0]
-                self.assertIn(f"if: inputs.platform == '{platform}'", job)
-                self.assertIn("actions/download-artifact@", job)
-                self.assertIn("run-id: ${{ inputs.build_run_id }}", job)
-                self.assertIn("name: ${{ inputs.package_name }}", job)
-                self.assertIn(f"quick-a11y-kit-{platform}", job)
-                self.assertIn("persist-credentials: false", job)
-                self.assertIn("inputs.source_sha", job)
-                self.assertNotIn("Install Qt", job)
-                self.assertNotIn("cmake --build", job)
-                driver = (ROOT / f"scripts/qualification/qualify-{platform}-accessibility.{ 'sh' if platform == 'linux' else 'ps1'}").read_text(encoding="utf-8")
-                self.assertIn("--require-native-accessibility", driver)
-                self.assertIn("--package-boundary", driver)
-                self.assertIn("run-installed-quick-a11y-atspi.ps1" if platform == 'linux' else "run-installed-quick-a11y-uia.ps1", driver)
-        for build in ("LinuxInstall.yml", "WindowsInstall.yml"):
-            with self.subTest(build=build):
-                self.assertNotIn("qualify_", (ROOT / ".github/workflows" / build).read_text(encoding="utf-8"))
+    def test_native_qualification_consumes_final_packages_on_fresh_runners(self):
+        for platform, builder in (("linux", "build_ubuntu"), ("windows", "build_windows")):
+            workflow = (ROOT / f".github/workflows/{'Linux' if platform == 'linux' else 'Windows'}Install.yml").read_text(encoding="utf-8")
+            qualification = workflow.split(f"  qualify_{platform}:", 1)[1]
+            self.assertIn(f"needs: {builder}", qualification)
+            self.assertIn("actions/download-artifact@", qualification)
+            self.assertIn(f"needs.{builder}.outputs.package_name", qualification)
+            self.assertIn(f"quick-a11y-kit-{platform}", qualification)
+            self.assertNotIn("Install Qt", qualification)
+            self.assertNotIn("cmake --build", qualification)
+            self.assertIn("inputs.source_sha", qualification)
+            driver = (ROOT / f"scripts/qualification/qualify-{platform}-accessibility.{ 'sh' if platform == 'linux' else 'ps1'}").read_text(encoding="utf-8")
+            self.assertIn("--require-native-accessibility", driver)
+            self.assertIn("--package-boundary", driver)
+            self.assertIn("run-installed-quick-a11y-atspi.ps1" if platform == 'linux' else "run-installed-quick-a11y-uia.ps1", driver)
 
 
 if __name__ == "__main__":

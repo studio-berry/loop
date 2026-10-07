@@ -17,4 +17,4 @@ claims:
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
 unresolved:
-  - Exact-head clean-machine native runtime and package evidence is required from NativeAccessibilityQualification runs dispatched against the LinuxInstall and WindowsInstall builds of the same source; software-only records cannot close this lane.
+  - Exact-head clean-machine native runtime and package evidence is required from the dispatched LinuxInstall and WindowsInstall runs; software-only records cannot close this lane.

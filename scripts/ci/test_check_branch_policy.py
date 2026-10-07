@@ -49,7 +49,6 @@ class BranchPolicyTests(unittest.TestCase):
             (
                 ".github/workflows/LinuxInstall.yml",
                 ".github/workflows/WindowsInstall.yml",
-                ".github/workflows/NativeAccessibilityQualification.yml",
             ),
         )
         self.assertEqual(policy.packaging_events, ("workflow_dispatch",))
@@ -243,11 +242,6 @@ jobs:
                 encoding="utf-8",
             )
             windows.write_text(
-                "on:\n  workflow_dispatch:\n    inputs:\n      source_sha:\n",
-                encoding="utf-8",
-            )
-            qualification = root / ".github/workflows/NativeAccessibilityQualification.yml"
-            qualification.write_text(
                 "on:\n  workflow_dispatch:\n    inputs:\n      source_sha:\n",
                 encoding="utf-8",
             )
