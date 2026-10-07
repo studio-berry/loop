@@ -238,7 +238,7 @@
       "state": "landed"
     },
     {
-      "closed_by": "#113",
+      "closed_by": "color-mode",
       "deferral": null,
       "families": [
         "sheetfed-offset",
@@ -247,10 +247,10 @@
         "newspaper",
         "digital"
       ],
-      "gap": "an ICC-based color space is classified by its alternate, so a page whose ICC space resolves to an allowed alternate can pass while the painted space is disallowed",
+      "gap": "color-mode classified every ICC-based space as DeviceRGB regardless of its profile, so a CMYK-profile page passed an RGB-only profile; it now classifies by the embedded profile header and reports an unreadable or conflicting profile (filed as #113)",
       "id": "color-mode-icc-alternate",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "font-integrity",
@@ -335,16 +335,16 @@
       "state": "landed"
     },
     {
-      "closed_by": "#117",
+      "closed_by": "invisible-content",
       "deferral": null,
       "families": [
         "sheetfed-offset",
         "packaging"
       ],
-      "gap": "invisible-content covers text render mode 3 and zero-alpha graphics state only, so other invisible classes pass clean (the wider detector is filed as legacy#124)",
+      "gap": "invisible-content covered text render mode 3 and zero-alpha graphics state only, so zero-size text and clipped-away paint passed clean; it now also reports zero font size, zero-area clips and paint outside the clip, while empty clip paths (ignored by the content processor), zero horizontal scaling (clamped to 1% by the content processor) and content hidden by a fully transparent soft mask are still not detected (filed as #117, provenance legacy#124)",
       "id": "invisible-content-breadth",
       "priority": "P2",
-      "state": "open"
+      "state": "landed"
     },
     {
       "closed_by": "embedded-fonts",
