@@ -255,8 +255,10 @@ private slots:
     void fixWorkspacePresentsIdleLifecycleAndRefusesToArm();
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
+    void completedDragOfARefusedKindIsReportedAndChangesNothing();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
-    void confirmActionListPlanRefusesAnUnreviewedPlan();
+    void translatePageBoxRefusesAMoveThatIntroducesABlockingFinding();
+    void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
 };
@@ -1152,6 +1154,69 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
     }
 }
 
+void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const QString documentPath = directory.filePath(QStringLiteral("refused-drag.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    QVERIFY(session->interaction() != nullptr);
+
+    host.setWorkspace(EditorHost::Document);
+    const auto revisionBefore = session->facade().currentRevision();
+    QSignalSpy refusedSpy(&host, &EditorHost::dragRefused);
+
+    const struct
+    {
+        pdfinteraction::InteractionTargetKind kind;
+        const char* name;
+    } refusedKinds[] = { { pdfinteraction::InteractionTargetKind::Finding, "finding" },
+                         { pdfinteraction::InteractionTargetKind::Guide, "guide" },
+                         { pdfinteraction::InteractionTargetKind::DragHandle, "drag-handle" } };
+    for (const auto& refused : refusedKinds)
+    {
+        pdfinteraction::DragSession dragged;
+        dragged.target.kind = refused.kind;
+        dragged.target.pageIndex = 0;
+        dragged.target.id = QStringLiteral("subject");
+        dragged.pageDelta = QPointF(4.0, 5.0);
+        dragged.exceededThreshold = true;
+
+        const int before = refusedSpy.count();
+        Q_EMIT session->interaction()->dragCompleted(dragged);
+
+        QCOMPARE(refusedSpy.count(), before + 1);
+        QCOMPARE(refusedSpy.last().at(0).toString(), QString::fromLatin1(refused.name));
+        QCOMPARE(refusedSpy.last().at(1).toString(), QStringLiteral("subject"));
+        QCOMPARE(host.workspace(), EditorHost::Document);
+        QCOMPARE(session->facade().currentRevision(), revisionBefore);
+    }
+
+    // A page box is admitted, so it is never reported as refused.
+    pdfinteraction::DragSession boxDrag;
+    boxDrag.target.kind = pdfinteraction::InteractionTargetKind::PageBox;
+    boxDrag.target.pageIndex = 0;
+    boxDrag.target.id = QStringLiteral("trim");
+    boxDrag.pageDelta = QPointF(4.0, 5.0);
+    boxDrag.exceededThreshold = true;
+    const int refusalsBeforeBox = refusedSpy.count();
+    Q_EMIT session->interaction()->dragCompleted(boxDrag);
+    QCOMPARE(refusedSpy.count(), refusalsBeforeBox);
+}
+
 void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity()
 {
     QTemporaryDir directory;
@@ -1310,6 +1375,61 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
 
     // The as-received input is never the publication target.
     QCOMPARE(fileDigest(documentPath), sourceDigest);
+}
+
+void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    // A 10 pt trim inset leaves 8 pt on the right and top edges after the +2/+3 pt move. The default
+    // profile requires 9 pt of bleed, and with no BleedBox that bleed is the media box.
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
+    const QString documentPath = directory.filePath(QStringLiteral("tight-margin.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("tight-margin-move.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("tight-margin-move") },
+                                       { QStringLiteral("name"), QStringLiteral("Tight margin move") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("move") },
+                                             { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                            { QStringLiteral("page_index"), 0 },
+                                                            { QStringLiteral("dx"), 2 },
+                                                            { QStringLiteral("dy"), 3 } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    QVERIFY(host.selectActionListRecipe(QStringLiteral("tight-margin-move")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
+
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("failed"));
+    QVERIFY(host.actionList()->property("operatorSummary").toString().contains(QStringLiteral("blocking findings")));
 }
 
 void EditorHostTest::fixRollbackReturnsToARecordedRevision()
@@ -1722,7 +1842,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     QVERIFY(!overprintHost.ensureAuthoritativePreview());
 }
 
-void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
+void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -1777,17 +1897,14 @@ void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
     QVERIFY(host.planActionList());
     QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
 
-    // "Approve and run" must not execute an unreviewed plan: without the armed review
-    // the call is refused and nothing is published.
     QVERIFY(!host.fixExecutionArmed());
-    QVERIFY(!host.confirmActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
     QCOMPARE(host.actionListStateName(), QStringLiteral("planned"));
     QCOMPARE(fileDigest(documentPath), sourceDigest);
 
-    // The gate is the review, not the plan: the same call is admitted once armed.
     QVERIFY(host.approveActionListPlan());
     QVERIFY(host.fixExecutionArmed());
-    QVERIFY(host.confirmActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

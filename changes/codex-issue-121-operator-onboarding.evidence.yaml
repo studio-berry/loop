@@ -1,0 +1,19 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: operator-help-onboarding-and-corpus
+    evidence:
+      - unit:UnitTestsShellWorkspace
+      - unit:scripts/ci/test_check_operator_help.py
+      - architecture:scripts/ci/check_operator_help.py
+      - unit:agent-policy:quick
+      - unit:agent-policy:build_policy
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - Clean-machine installed-candidate onboarding on Linux and Windows remains unavailable until the package prerequisite and durable Editor publication contract are accepted; a test-host sign-off is not a delivered PDF receipt.

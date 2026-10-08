@@ -1,0 +1,13 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: drag-commit-disposition
+    evidence:
+      - unit:UnitTests/tst_interactioncontrollertest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+      - architecture:docs/generated/architecture-catalog.json
+unresolved:
+  - no local build exists, so the new unit tests were written but not compiled or run; hosted CI must run UnitTestsInteractionController and UnitTestsEditorHost
+  - packaging:linux-build and packaging:windows-build are hosted CI lanes

@@ -207,6 +207,7 @@ private Q_SLOTS:
     void focusLossCancelsDrag();
     void toolChangeCancelsDrag();
     void toolVocabularyNamesRoundTrip();
+    void onlyAPageBoxDragIsAdmittedForCommit();
     void handToolPansLeftDragAndSuppressesSelection();
     void selectToolRetainsSelectionAndDrag();
     void selectionChangeCancelsDrag();
@@ -485,6 +486,22 @@ void InteractionControllerTest::toolChangeCancelsDrag()
     // cancel anything a second time.
     m_controller->setActiveTool(pdfinteraction::InteractionTool::Hand);
     QCOMPARE(cancelSpy.size(), 1);
+}
+
+void InteractionControllerTest::onlyAPageBoxDragIsAdmittedForCommit()
+{
+    using pdfinteraction::DragCommitDisposition;
+    using pdfinteraction::InteractionTargetKind;
+
+    QCOMPARE(pdfinteraction::getDragCommitDisposition(InteractionTargetKind::PageBox), DragCommitDisposition::Commit);
+    for (const InteractionTargetKind kind : { InteractionTargetKind::DragHandle,
+                                              InteractionTargetKind::Finding,
+                                              InteractionTargetKind::Guide,
+                                              InteractionTargetKind::Page,
+                                              InteractionTargetKind::None })
+    {
+        QCOMPARE(pdfinteraction::getDragCommitDisposition(kind), DragCommitDisposition::Refused);
+    }
 }
 
 void InteractionControllerTest::toolVocabularyNamesRoundTrip()

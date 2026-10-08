@@ -2,6 +2,7 @@
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 
+#include "actionlistcontroller.h"
 #include "editorhost.h"
 #include "inspectormodel.h"
 #include "loopcanvasitem.h"
@@ -24,6 +25,14 @@
 #include "looptokens.h"
 #include "preflightprofileresolver.h"
 
+#include <QAccessible>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QQuickItem>
+#include <QRegularExpression>
+#include <memory>
+
 #include <QCryptographicHash>
 #include <QCoreApplication>
 #include <QDir>
@@ -42,12 +51,57 @@
 #include <QUrl>
 #include <QtTest>
 
+class CompareReviewProjection : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QVariantMap compareReview MEMBER review NOTIFY reviewChanged)
+
+public:
+    QVariantMap review;
+
+Q_SIGNALS:
+    void reviewChanged();
+};
+
 using pdfinteraction::InspectorModel;
 using pdfinteraction::PreflightController;
 using pdfinteraction::PreviewStateModel;
 
 namespace
 {
+
+QQuickItem* findWorkspaceItem(QQuickItem* parent, const QString& name)
+{
+    if (parent->objectName() == name)
+    {
+        return parent;
+    }
+    for (QQuickItem* child : parent->childItems())
+    {
+        if (QQuickItem* found = findWorkspaceItem(child, name))
+        {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+std::unique_ptr<QQuickItem> createWorkspacePane(QQmlEngine& engine, QObject& host, QQuickWindow& window,
+                                                const QString& name = QStringLiteral("ComparePane.qml"))
+{
+    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
+    QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) +
+                                                         QStringLiteral("/../LoopEditor/qml/") + name));
+    std::unique_ptr<QQuickItem> pane(qobject_cast<QQuickItem*>(component.create()));
+    if (!pane)
+    {
+        qWarning() << component.errors();
+        return pane;
+    }
+    pane->setParentItem(window.contentItem());
+    pane->setSize(window.size());
+    return pane;
+}
 
 pdf::PreflightFinding makeFinding(int page = 1)
 {
@@ -475,6 +529,7 @@ private slots:
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
     void governedPublicationParityAcrossSurfaces();
+    void planApprovalJourneyBindsDisplayedIdentityAndBlocksBypasses();
     void compareReviewGoldenFixtureMatchesCoreFindingDelta();
     void compareWorkspaceBlocksAStaleComparison();
     void compareWorkspaceNavigatesMaterialDeltasAfterARun();
@@ -482,6 +537,7 @@ private slots:
 
 void ProductOperatorLoopTest::initTestCase()
 {
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Fusion");
     // The product target intentionally stays free of application resources;
     // install the shipped profile into Qt's isolated test config so EditorHost
     // exercises its production profile discovery path without changing CMake.
@@ -1256,6 +1312,111 @@ void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
     QCOMPARE(editorPlan, actionListPlan);
 }
 
+void ProductOperatorLoopTest::planApprovalJourneyBindsDisplayedIdentityAndBlocksBypasses()
+{
+    QTest::failOnWarning(QRegularExpression(QStringLiteral(R"(.*ActionListPane\.qml.*)")));
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString recipePath = writeBleedRecipe(directory.path());
+    QVERIFY(!recipePath.isEmpty());
+    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QByteArray sourceDigest = operatoracceptance::fileSha256(source);
+    QVERIFY(!sourceDigest.isEmpty());
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    host.setWorkspace(EditorHost::Fix);
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(1000, 1600);
+    auto pane = createWorkspacePane(engine, host, window, QStringLiteral("ActionListPane.qml"));
+    QVERIFY(pane);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    const auto activate = [&pane, &window](const char* name)
+    {
+        QQuickItem* button = findWorkspaceItem(pane.get(), QLatin1String(name));
+        if (!button || !button->isEnabled())
+        {
+            return false;
+        }
+        button->forceActiveFocus();
+        QTest::keyClick(&window, Qt::Key_Space);
+        return true;
+    };
+    const auto text = [&pane](const char* name)
+    {
+        QQuickItem* item = findWorkspaceItem(pane.get(), QLatin1String(name));
+        return item ? item->property("text").toString() : QString();
+    };
+    QVERIFY(activate("validateActionListButton"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(activate("planActionListButton"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    const QVariantMap displayed = host.fixPlanIdentity();
+    const QString planDigest = displayed.value(QStringLiteral("planDigest")).toString();
+    const QString inputIdentity = displayed.value(QStringLiteral("sourceSha256")).toString();
+    QCOMPARE(inputIdentity.size(), 64);
+    QCOMPARE(inputIdentity, QString::fromLatin1(sourceDigest.toHex()));
+    const QString revision = displayed.value(QStringLiteral("plannedRevision")).toString();
+    QVERIFY(text("fixPlanIdentityLabel").contains(planDigest));
+    QVERIFY(text("fixPlanIdentityLabel").contains(inputIdentity));
+    QTRY_VERIFY(text("fixPlannedStep_0").contains(QStringLiteral("add-bleed")));
+    const QVariantMap plannedStep = host.fixPreview().value(QStringLiteral("plannedSteps")).toList().front().toMap();
+    QVERIFY(text("fixPlannedStep_0").contains(QString::fromUtf8(QJsonDocument::fromVariant(plannedStep.value(QStringLiteral("parameters"))).toJson(QJsonDocument::Compact))));
+    QVERIFY(text("fixPlannedStep_0").contains(QString::fromUtf8(QJsonDocument::fromVariant(plannedStep.value(QStringLiteral("impact"))).toJson(QJsonDocument::Compact))));
+    QVERIFY(text("fixPlannedStep_0").contains(QString::fromUtf8(QJsonDocument::fromVariant(plannedStep.value(QStringLiteral("scope"))).toJson(QJsonDocument::Compact))));
+
+    QJSValue qmlHost = engine.newQObject(&host);
+    QQmlEngine::setObjectOwnership(&host, QQmlEngine::CppOwnership);
+    QVERIFY(!qmlHost.property(QStringLiteral("runActionList")).call().toBool());
+    QVERIFY(qmlHost.property(QStringLiteral("approveActionListPlan")).call().isError());
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!findWorkspaceItem(pane.get(), QLatin1String("confirmActionListButton")));
+    QVERIFY(qmlHost.property(QStringLiteral("confirmActionListPlan")).isUndefined());
+    QVERIFY(!activate("fixExecutePlanButton"));
+    QVERIFY(activate("fixRejectPlanButton"));
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("rejected"));
+    QVERIFY(!qmlHost.property(QStringLiteral("runActionList")).call().toBool());
+    QCOMPARE(operatoracceptance::fileSha256(source), sourceDigest);
+
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("stale"));
+    QVERIFY(!activate("fixApprovePlanButton"));
+    QVERIFY(!qmlHost.property(QStringLiteral("approveActionListPlan")).call({ QJSValue(planDigest), QJSValue(inputIdentity), QJSValue(revision) }).toBool());
+    QVERIFY(!qmlHost.property(QStringLiteral("runActionList")).call().toBool());
+
+    QVERIFY(host.setActionListStepParameter(0, QStringLiteral("bleed_mm"), 4));
+    QVERIFY(activate("saveActionListRecipeButton"));
+    QVERIFY(activate("validateActionListButton"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(activate("planActionListButton"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(!qmlHost.property(QStringLiteral("approveActionListPlan")).call({ QJSValue(planDigest), QJSValue(inputIdentity), QJSValue(revision) }).toBool());
+    const QVariantMap current = host.fixPlanIdentity();
+    QVERIFY(current.value(QStringLiteral("planDigest")).toString() != planDigest);
+    QVERIFY(!qmlHost.property(QStringLiteral("approveActionListPlan")).call({ QJSValue(planDigest), QJSValue(inputIdentity), QJSValue(current.value(QStringLiteral("plannedRevision")).toString()) }).toBool());
+    QVERIFY(!qmlHost.property(QStringLiteral("approveActionListPlan")).call({ QJSValue(current.value(QStringLiteral("planDigest")).toString()), QJSValue(QString(64, QLatin1Char('0'))), QJSValue(current.value(QStringLiteral("plannedRevision")).toString()) }).toBool());
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(activate("fixApprovePlanButton"));
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("approved"));
+    QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("reviewedPlanDigest")), current.value(QStringLiteral("planDigest")));
+    QVERIFY(activate("fixExecutePlanButton"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 120000);
+    const QVariantMap signOff = host.fixSignOff();
+    const QString publishedDigest = signOff.value(QStringLiteral("publishedSha256")).toString();
+    QCOMPARE(publishedDigest.size(), 64);
+    QVERIFY(text("fixSignOffSummary").contains(publishedDigest));
+    QVERIFY(text("fixSignOffSummary").contains(current.value(QStringLiteral("planDigest")).toString()));
+    const QVariantMap recheck = host.fixRecheck();
+    QVERIFY(recheck.value(QStringLiteral("available")).toBool());
+    QVERIFY(text("fixRecheckSummary").contains(recheck.value(QStringLiteral("verdictState")).toString()));
+    QVERIFY(!activate("fixExecutePlanButton"));
+    QCOMPARE(operatoracceptance::fileSha256(source), sourceDigest);
+}
+
 void ProductOperatorLoopTest::compareReviewGoldenFixtureMatchesCoreFindingDelta()
 {
     const QString path = QStringLiteral(LOOP_UNITTEST_SOURCE_DIR) +
@@ -1293,12 +1454,66 @@ void ProductOperatorLoopTest::compareReviewGoldenFixtureMatchesCoreFindingDelta(
     QCOMPARE(sortedLabels(delta.incompleteFindingIds, labelById),
              sortedStrings(expected.value(QStringLiteral("incomplete")).toArray()));
 
-    // The same pair classifies the same way on a re-run; the Compare workspace never shows a
-    // delta Core would derive differently the second time.
     const pdf::PDFRepairFindingDelta again = pdf::computeFindingDelta(before, after);
     QCOMPARE(again.resolvedFindingIds, delta.resolvedFindingIds);
     QCOMPARE(again.unchangedFindingIds, delta.unchangedFindingIds);
     QCOMPARE(again.introducedFindingIds, delta.introducedFindingIds);
+
+    const QString sourceDigest = QString(63, QLatin1Char('a')) + QLatin1Char('1');
+    const QString candidateDigest = QString(63, QLatin1Char('a')) + QLatin1Char('2');
+    const QString publishedDigest = QString(63, QLatin1Char('a')) + QLatin1Char('3');
+    const QString planDigest = QString(64, QLatin1Char('b'));
+    const QString rationale = QStringLiteral("Retain the exact source bytes");
+    const QString riskMessage = QStringLiteral("Font embedding remains unresolved");
+    CompareReviewProjection projection;
+    projection.review = {
+        { QStringLiteral("available"), true },
+        { QStringLiteral("blocked"), false },
+        { QStringLiteral("blockedReason"), QString() },
+        { QStringLiteral("before"), QVariantMap{
+                                        { QStringLiteral("sourceSha256"), sourceDigest },
+                                        { QStringLiteral("plannedRevision"), planDigest } } },
+        { QStringLiteral("after"), QVariantMap{ { QStringLiteral("candidateSha256"), candidateDigest }, { QStringLiteral("publishedSha256"), publishedDigest }, { QStringLiteral("reviewDecision"), QStringLiteral("approved") } } },
+        { QStringLiteral("plan"), QVariantMap{ { QStringLiteral("planDigest"), planDigest }, { QStringLiteral("reviewedPlanDigest"), planDigest }, { QStringLiteral("publishedPlanDigest"), planDigest }, { QStringLiteral("recipeId"), QStringLiteral("compare-review") }, { QStringLiteral("planIsCurrent"), true } } },
+        { QStringLiteral("findingDelta"), QVariantMap{ { QStringLiteral("compared"), delta.compared }, { QStringLiteral("resolved"), delta.resolvedFindingIds }, { QStringLiteral("unchanged"), delta.unchangedFindingIds }, { QStringLiteral("introduced"), delta.introducedFindingIds }, { QStringLiteral("incomplete"), delta.incompleteFindingIds } } },
+        { QStringLiteral("preserved"), QVariantMap{ { QStringLiteral("declaredChangeAttributes"), QStringList{ QStringLiteral("bleed") } }, { QStringLiteral("unchangedFindings"), delta.unchangedFindingIds }, { QStringLiteral("carriedForwardFindings"), delta.unchangedFindingIds }, { QStringLiteral("savePolicyMode"), QStringLiteral("save-as") }, { QStringLiteral("savePolicyRationale"), rationale } } },
+        { QStringLiteral("unresolvedRisk"), QVariantMap{ { QStringLiteral("level"), QStringLiteral("high") }, { QStringLiteral("introducedFindings"), delta.introducedFindingIds }, { QStringLiteral("incompleteFindings"), delta.incompleteFindingIds }, { QStringLiteral("messages"), QStringList{ riskMessage } } } },
+        { QStringLiteral("materialDeltas"), QVariantList{ QVariantMap{ { QStringLiteral("kind"), QStringLiteral("resolved") }, { QStringLiteral("findingId"), delta.resolvedFindingIds.front() }, { QStringLiteral("stepIndex"), 0 } } } }
+    };
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(360, 480);
+    auto pane = createWorkspacePane(engine, projection, window);
+    QVERIFY(pane);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    const auto text = [&pane](const char* name)
+    {
+        QQuickItem* item = findWorkspaceItem(pane.get(), QLatin1String(name));
+        return item ? item->property("text").toString() : QString();
+    };
+    QVERIFY(text("compareArtifacts").contains(sourceDigest));
+    QVERIFY(text("compareArtifacts").contains(candidateDigest));
+    QVERIFY(text("compareArtifacts").contains(publishedDigest));
+    auto* artifacts = pane->findChild<QQuickItem*>(QStringLiteral("compareArtifacts"));
+    QVERIFY(artifacts);
+    QTRY_VERIFY(artifacts->property("contentWidth").toReal() <= artifacts->width());
+    QVERIFY(text("comparePlanIdentity").contains(planDigest));
+    QCOMPARE(text("compareReviewIdentity").count(planDigest), 2);
+    QVERIFY(text("compareDeltaSummary").contains(QStringLiteral("cleared 1")));
+    QVERIFY(text("compareDeltaSummary").contains(QStringLiteral("remaining 1")));
+    QVERIFY(text("compareDeltaSummary").contains(QStringLiteral("introduced 1")));
+    QVERIFY(text("compareDeltaIdentity_0").contains(delta.resolvedFindingIds.front()));
+    QVERIFY(text("comparePreservedDetails").contains(delta.unchangedFindingIds.front()));
+    QVERIFY(text("comparePreservedDetails").contains(rationale));
+    QVERIFY(text("compareRiskDetails").contains(delta.introducedFindingIds.front()));
+    QVERIFY(text("compareRiskDetails").contains(riskMessage));
+    auto* scroll = pane->findChild<QQuickItem*>(QStringLiteral("compareDetailsScroll"));
+    QVERIFY(scroll);
+    QTRY_VERIFY(scroll->property("contentHeight").toReal() > scroll->height());
+    auto* navigate = findWorkspaceItem(pane.get(), QStringLiteral("compareNavigateDelta_0"));
+    QVERIFY(navigate);
+    QVERIFY(navigate->isEnabled());
 }
 
 void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
@@ -1325,7 +1540,6 @@ void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
     QVERIFY(!review.value(QStringLiteral("blocked")).toBool());
     QCOMPARE(review.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("preview-ready"));
 
-    // The comparison is bound to the exact input the plan was produced from.
     const QVariantMap before = review.value(QStringLiteral("before")).toMap();
     QVERIFY(!before.value(QStringLiteral("sourceSha256")).toString().isEmpty());
     QCOMPARE(before.value(QStringLiteral("sourceSha256")).toString(),
@@ -1333,8 +1547,23 @@ void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
     QCOMPARE(review.value(QStringLiteral("plan")).toMap().value(QStringLiteral("planDigest")).toString(),
              host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString());
 
-    // A revision change makes the plan and preview stale. The comparison blocks instead of
-    // silently refreshing, and its material deltas stay unnavigable.
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(640, 480);
+    auto pane = createWorkspacePane(engine, host, window);
+    QVERIFY(pane);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto* guard = pane->findChild<QQuickItem*>(QStringLiteral("compareStaleGuard"));
+    auto* reason = pane->findChild<QQuickItem*>(QStringLiteral("compareBlockedReason"));
+    auto* artifacts = pane->findChild<QQuickItem*>(QStringLiteral("compareArtifacts"));
+    QVERIFY(guard);
+    QVERIFY(reason);
+    QVERIFY(artifacts);
+    QVERIFY(!guard->isVisible());
+    const QString displayedArtifacts = artifacts->property("text").toString();
+    QVERIFY(displayedArtifacts.contains(before.value(QStringLiteral("sourceSha256")).toString()));
+
     host.reopenDocument();
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
     const QVariantMap stale = host.compareReview();
@@ -1344,6 +1573,15 @@ void ProductOperatorLoopTest::compareWorkspaceBlocksAStaleComparison()
     QCOMPARE(stale.value(QStringLiteral("lifecycleStateName")).toString(), QStringLiteral("stale"));
     QVERIFY(!stale.value(QStringLiteral("blockedReason")).toString().trimmed().isEmpty());
     QVERIFY(!host.navigateCompareDelta(0));
+    QTRY_VERIFY(guard->isVisible());
+    QCOMPARE(reason->property("text").toString(), stale.value(QStringLiteral("blockedReason")).toString());
+    QAccessibleInterface* accessibleReason = QAccessible::queryAccessibleInterface(reason);
+    QVERIFY(accessibleReason);
+    QCOMPARE(accessibleReason->text(QAccessible::Description), reason->property("text").toString());
+    const QString staleSource = stale.value(QStringLiteral("before")).toMap().value(QStringLiteral("sourceSha256")).toString();
+    QVERIFY(artifacts->property("text").toString().contains(staleSource.isEmpty() ? QStringLiteral("not available") : staleSource));
+    QCOMPARE(stale.value(QStringLiteral("plan")).toMap().value(QStringLiteral("planDigest")),
+             review.value(QStringLiteral("plan")).toMap().value(QStringLiteral("planDigest")));
 }
 
 void ProductOperatorLoopTest::compareWorkspaceNavigatesMaterialDeltasAfterARun()
@@ -1375,10 +1613,63 @@ void ProductOperatorLoopTest::compareWorkspaceNavigatesMaterialDeltasAfterARun()
              true);
     QVERIFY(review.value(QStringLiteral("hasMaterialDeltas")).toBool());
 
-    // Navigating a material delta routes to the step that produced it; it never mutates a
-    // document or reruns the comparison.
-    QVERIFY(host.navigateCompareDelta(0));
-    QCOMPARE(host.workspace(), EditorHost::Inspect);
+    host.setWorkspace(EditorHost::Compare);
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(960, 900);
+    auto pane = createWorkspacePane(engine, host, window);
+    QVERIFY(pane);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto* navigate = findWorkspaceItem(pane.get(), QStringLiteral("compareNavigateDelta_0"));
+    QVERIFY(navigate);
+    QVERIFY(navigate->isEnabled());
+    navigate->forceActiveFocus();
+    QTRY_VERIFY(navigate->hasActiveFocus());
+    QTest::keyClick(&window, Qt::Key_Space);
+    QTRY_COMPARE(host.workspace(), EditorHost::Inspect);
+
+    auto* controller = qobject_cast<pdfinteraction::ActionListController*>(host.actionList());
+    QVERIFY(controller);
+    pdf::PDFActionListExecutionResult replacement = controller->result();
+    replacement.status = QStringLiteral("planned");
+    replacement.planDigest = QString(64, QLatin1Char('c'));
+    const QString revision = controller->documentRevision();
+    const QString replacementJob = QStringLiteral("compare-replacement-plan");
+    controller->beginRun(pdfinteraction::ActionListController::State::Planning,
+                         controller->documentKey(), revision, controller->recipeId(),
+                         controller->recipeHash(), QString(), replacementJob);
+    QVERIFY(controller->acceptPlan(replacementJob, revision, replacement));
+    const QVariantMap mismatched = host.compareReview();
+    QVERIFY(mismatched.value(QStringLiteral("blocked")).toBool());
+    QVERIFY(!host.approveActionListPlan(replacement.planDigest, replacement.sourceSha256, revision));
+    QVERIFY(!host.approveActionListPlan());
+    QVERIFY(!host.runActionList());
+    const QVariantMap mismatchedPlan = mismatched.value(QStringLiteral("plan")).toMap();
+    QCOMPARE(mismatchedPlan.value(QStringLiteral("planDigest")).toString(), replacement.planDigest);
+    QCOMPARE(mismatchedPlan.value(QStringLiteral("reviewedPlanDigest")),
+             review.value(QStringLiteral("plan")).toMap().value(QStringLiteral("reviewedPlanDigest")));
+    auto* reason = pane->findChild<QQuickItem*>(QStringLiteral("compareBlockedReason"));
+    QVERIFY(reason);
+    QTRY_COMPARE(reason->property("text").toString(), mismatched.value(QStringLiteral("blockedReason")).toString());
+    QTRY_VERIFY(findWorkspaceItem(pane.get(), QStringLiteral("compareNavigateDelta_0")));
+    navigate = findWorkspaceItem(pane.get(), QStringLiteral("compareNavigateDelta_0"));
+    QVERIFY(!navigate->isEnabled());
+    QVERIFY(!host.navigateCompareDelta(0));
+    host.setWorkspace(EditorHost::Compare);
+    navigate->forceActiveFocus();
+    QTest::keyClick(&window, Qt::Key_Space);
+    QCOMPARE(host.workspace(), EditorHost::Compare);
+
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    QTRY_VERIFY(host.compareReview().value(QStringLiteral("blocked")).toBool());
+    navigate = findWorkspaceItem(pane.get(), QStringLiteral("compareNavigateDelta_0"));
+    QVERIFY(!navigate || !navigate->isEnabled());
+    QVERIFY(!host.navigateCompareDelta(0));
+    host.setWorkspace(EditorHost::Compare);
+    QTest::keyClick(&window, Qt::Key_Space);
+    QCOMPARE(host.workspace(), EditorHost::Compare);
 }
 
 QTEST_MAIN(ProductOperatorLoopTest)

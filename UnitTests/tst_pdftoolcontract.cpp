@@ -26,6 +26,12 @@
 #include <QDir>
 #include <QFile>
 #include "pdfoperationhistorystore.h"
+#include "pdftoolcancel.h"
+#include "pdftooldecrypt.h"
+#include "pdftoolencrypt.h"
+#include "pdftooloptimize.h"
+#include "pdfdocumentreader.h"
+#include <QScopeGuard>
 
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -107,6 +113,8 @@ class PdfToolContractTest : public QObject
     Q_OBJECT
 
 private slots:
+    void inPlaceCommandPreservesInputOnCancellation_data();
+    void inPlaceCommandPreservesInputOnCancellation();
     void helpIsWrapped();
     void equalsFormIsDetected();
     void capabilitiesIsWrapped();
@@ -166,6 +174,125 @@ QJsonObject runBenchmarkEnvelope(const QStringList& extraArguments)
 }
 
 }   // namespace
+
+template <typename Command>
+class PreparedInPlaceCommand : public Command
+{
+public:
+    bool cancelBeforeWrite = false;
+    bool prepared = false;
+    size_t pageCount = 0;
+    pdf::EncryptionMode preparedEncryptionMode = pdf::EncryptionMode::None;
+
+protected:
+    void documentPreparedForWrite(const pdf::PDFDocument& document) override
+    {
+        prepared = true;
+        pageCount = document.getCatalog()->getPageCount();
+        preparedEncryptionMode = document.getStorage().getSecurityHandler()->getMode();
+        if (cancelBeforeWrite)
+        {
+            pdftool::requestCancellation();
+        }
+    }
+};
+
+void PdfToolContractTest::inPlaceCommandPreservesInputOnCancellation_data()
+{
+    QTest::addColumn<QString>("command");
+    QTest::addColumn<bool>("cancelBeforeWrite");
+    for (const QString& command : { QStringLiteral("decrypt"), QStringLiteral("encrypt"), QStringLiteral("optimize") })
+    {
+        QTest::newRow(qPrintable(command + QStringLiteral("-cancel"))) << command << true;
+        QTest::newRow(qPrintable(command + QStringLiteral("-complete"))) << command << false;
+    }
+}
+
+void PdfToolContractTest::inPlaceCommandPreservesInputOnCancellation()
+{
+    QFETCH(QString, command);
+    QFETCH(bool, cancelBeforeWrite);
+    pdftool::resetCancelRequested();
+    const auto resetCancellation = qScopeGuard([]
+                                               { pdftool::resetCancelRequested(); });
+
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString path = temporary.filePath(QStringLiteral("input.pdf"));
+    QVERIFY(QFile::copy(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf"), path));
+
+    pdftool::PDFToolOptions options;
+    options.document = path;
+    options.destructiveOverwrite = true;
+    options.outputStyle = pdftool::PDFOutputFormatter::Style::Json;
+    options.encryptionOwnerPassword = QStringLiteral("owner-password");
+    options.encryptionUserPassword = QStringLiteral("user-password");
+    options.optimizeFlags = pdf::PDFOptimizer::All;
+
+    if (command == QLatin1String("decrypt"))
+    {
+        static pdftool::PDFToolEncryptApplication encrypt;
+        QCOMPARE(encrypt.execute(options), pdftool::PDFToolExitCode::Success);
+        options.password = options.encryptionOwnerPassword;
+    }
+
+    QFile input(path);
+    QVERIFY(input.open(QIODevice::ReadOnly));
+    const QByteArray original = input.readAll();
+    input.close();
+    QVERIFY(!original.isEmpty());
+    const QByteArray originalHash = QCryptographicHash::hash(original, QCryptographicHash::Sha256);
+    pdftool::PDFToolExecutionContext context(command);
+    options.executionContext = &context;
+
+    const auto verifyCommand = [&]<typename Command>()
+    {
+        // Command instances register themselves, so keep them alive for the registry's lifetime.
+        static PreparedInPlaceCommand<Command> application;
+        application.cancelBeforeWrite = cancelBeforeWrite;
+        application.prepared = false;
+        const auto result = application.execute(options);
+        QVERIFY(application.prepared);
+        QVERIFY(application.pageCount > 0);
+        QCOMPARE(application.preparedEncryptionMode, command == QLatin1String("encrypt") ? pdf::EncryptionMode::Standard : pdf::EncryptionMode::None);
+        QCOMPARE(result, cancelBeforeWrite ? pdftool::PDFToolExitCode::Cancelled : pdftool::PDFToolExitCode::Success);
+        QCOMPARE(pdftool::isCancelRequested(), cancelBeforeWrite);
+
+        QVERIFY2(input.open(QIODevice::ReadOnly), qPrintable(input.errorString()));
+        const QByteArray after = input.readAll();
+        input.close();
+        const QByteArray afterHash = QCryptographicHash::hash(after, QCryptographicHash::Sha256);
+        const QJsonArray outputs = context.toJson(result).value(QStringLiteral("outputs")).toArray();
+        if (cancelBeforeWrite)
+        {
+            QCOMPARE(afterHash, originalHash);
+            QCOMPARE(after, original);
+            QVERIFY(outputs.isEmpty());
+        }
+        else
+        {
+            QVERIFY(afterHash != originalHash);
+            QCOMPARE(outputs.size(), 1);
+            QCOMPARE(outputs.first().toObject().value(QStringLiteral("state")).toString(), QStringLiteral("written"));
+            bool firstPasswordAttempt = true;
+            pdf::PDFDocumentReader reader(nullptr, [&options, &firstPasswordAttempt](bool* ok)
+                                          {
+                *ok = firstPasswordAttempt;
+                firstPasswordAttempt = false;
+                return options.encryptionOwnerPassword; }, false, false);
+            const auto writtenDocument = reader.readFromBuffer(after);
+            QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+            QCOMPARE(writtenDocument.getStorage().getSecurityHandler()->getMode(), application.preparedEncryptionMode);
+        }
+    };
+
+    if (command == QLatin1String("decrypt"))
+        verifyCommand.template operator()<pdftool::PDFToolDecryptApplication>();
+    else if (command == QLatin1String("encrypt"))
+        verifyCommand.template operator()<pdftool::PDFToolEncryptApplication>();
+    else
+        verifyCommand.template operator()<pdftool::PDFToolOptimize>();
+}
 
 void PdfToolContractTest::benchmarkWithoutPreflightProfileIsIncomplete()
 {

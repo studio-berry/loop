@@ -10,9 +10,13 @@ signing is not an acceptance requirement.
 
 ## Source and workflow contract
 
-The package workflows require a full 40-character `source_sha`. They check out that
-commit, verify `git rev-parse HEAD`, and write the verified value into the evidence
-and smoke transcript. Dispatch both workflows with the same accepted Session 06 SHA:
+The package workflows check out the immutable commit selected by their workflow
+run (`github.sha`). Dispatch a branch or tag pinned to the accepted Session 06
+commit and supply that same full 40-character SHA as `source_sha`. Before running
+repository scripts or accessing caches, both workflows require checkout, workflow
+identity, and input to agree. A mismatched input fails instead of selecting another
+source tree. The verified checkout SHA and final package digest remain bound in
+evidence and smoke transcripts. Dispatch both workflows with the same candidate:
 
 ```text
 source_sha=<accepted-session-06-output-sha>

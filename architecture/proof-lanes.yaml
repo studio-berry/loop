@@ -312,6 +312,50 @@ subsystems:
         ref: .github/workflows/ci.yml
         contains: scripts.qualification.test_check_core_qualification
         executes: binding
+  - id: operator-onboarding
+    summary: Catalog-backed operator help, welcome preference and original licensed sample jobs.
+    paths:
+      - LoopEditor/operatorhelp.cpp
+      - LoopEditor/operatorhelp.h
+      - LoopEditor/operator/**
+      - LoopEditor/qml/OperatorHelpDialog.qml
+      - LoopEditor/app.qrc
+      - scripts/ci/generate_operator_samples.py
+      - scripts/ci/check_operator_help.py
+      - scripts/ci/test_check_operator_help.py
+      - UnitTests/tst_shellworkspacetest.cpp
+      - docs/OPERATOR_ONBOARDING.md
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsShellWorkspace
+        policy_module: quick
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_check_operator_help.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/ci/check_operator_help.py
+        executes: binding
+  - id: operator-acceptance-packets
+    summary: Internal L03-06 packet integrity and recorded human review; installed journey admission remains blocked until observed.
+    paths:
+      - scripts/qualification/verify_operator_acceptance.py
+      - scripts/qualification/test_verify_operator_acceptance.py
+      - docs/OPERATOR_ACCEPTANCE.md
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_verify_operator_acceptance.py
+        executes: binding
+      - kind: unit
+        bind: workflow
+        id: operator-acceptance-packet-ci
+        ref: .github/workflows/ci.yml
+        contains: scripts.qualification.test_verify_operator_acceptance
+        executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
     paths:

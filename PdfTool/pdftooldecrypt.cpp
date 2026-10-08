@@ -79,7 +79,7 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
     {
         if (options.executionContext)
         {
-            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("decrypt")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+            options.executionContext->setData(QJsonObject{ { QStringLiteral("operation"), QStringLiteral("decrypt") }, { QStringLiteral("dry_run"), options.destructiveDryRun } });
         }
     }
     else if (options.destructiveReport)
@@ -91,7 +91,7 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
     {
         if (options.executionContext)
         {
-            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+            options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned") });
         }
         return PDFToolExitCode::Success;
     }
@@ -106,6 +106,7 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
     builder.setSecurityHandler(pdf::PDFSecurityHandlerPointer(new pdf::PDFNoneSecurityHandler()));
     document = builder.build();
 
+    documentPreparedForWrite(document);
     if (isCancelRequested())
     {
         // Nothing has been written yet (writer.write() below uses QSaveFile and
@@ -120,18 +121,16 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
 
     if (!result)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), options.document}});
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{ { QStringLiteral("path"), options.document } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("primary"),
-            options.document,
-            QStringLiteral("written")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("primary"),
+                                              options.document,
+                                              QStringLiteral("written") });
     }
 
     return PDFToolExitCode::Success;
