@@ -58,19 +58,6 @@
 namespace
 {
 
-bool argvContainsQuickSmoke(int argc, char* argv[])
-{
-    for (int i = 1; i < argc; ++i)
-    {
-        if (std::strcmp(argv[i], "--quick-smoke") == 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 QString executableDirectory(const char* argv0)
 {
 #if defined(Q_OS_WIN)

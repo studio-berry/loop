@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -11,6 +12,7 @@ from scripts.ci.reduce_release_gate import REQUIRED_JOBS, reduce_needs
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ci" / "reduce_release_gate.py"
+RELEASE_GATE_WORKFLOW = ROOT / ".github" / "workflows" / "release-gate.yml"
 
 
 def _needs(**results: str) -> dict[str, dict[str, str]]:
@@ -21,7 +23,23 @@ def _all_success() -> dict[str, dict[str, str]]:
     return _needs(**{name: "success" for name in REQUIRED_JOBS})
 
 
+def _workflow_release_ok_needs() -> list[str]:
+    lines = RELEASE_GATE_WORKFLOW.read_text(encoding="utf-8").splitlines()
+    start = lines.index("  release_ok:")
+    needs: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("    runs-on:"):
+            break
+        match = re.match(r"^      - (\w+)$", line)
+        if match:
+            needs.append(match.group(1))
+    return needs
+
+
 class ReduceReleaseGateTests(unittest.TestCase):
+    def test_required_jobs_match_release_ok_needs(self):
+        self.assertEqual(sorted(REQUIRED_JOBS), sorted(_workflow_release_ok_needs()))
+
     def test_all_success_is_clean(self):
         self.assertEqual(reduce_needs(_all_success()), [])
 

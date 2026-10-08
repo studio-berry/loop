@@ -218,6 +218,12 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual([item.result for item in evidence], ["not-run", "not-run"])
         self.assertEqual([item.reason for item in evidence], ["dry-run", "dry-run"])
 
+    def test_architecture_contracts_honor_dry_run(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        call = source[source.index('"architecture_contracts"') :]
+        call = call[: call.index(")\n") + 2]
+        self.assertIn("args.dry_run", call)
+
     def test_real_source_checks_keep_missing_prerequisites_incomplete(self) -> None:
         evidence = []
         with patch.object(MODULE.shutil, "which", return_value=None):

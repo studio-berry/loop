@@ -115,8 +115,8 @@ public:
     /// Writes error to the console
     static void writeError(QString text, QStringConverter::Encoding encoding);
 
-    /// Writes binary data to the console
-    static void writeData(const QByteArray& data);
+    /// Writes binary data to the console; returns false when the write did not complete
+    static bool writeData(const QByteArray& data);
 
     /// Captures legacy direct error writes as structured diagnostics while a
     /// JSON result envelope is being assembled.

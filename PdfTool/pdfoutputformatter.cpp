@@ -880,13 +880,14 @@ void PDFConsole::setDiagnosticSink(PDFToolExecutionContext* context)
     s_diagnosticSink = context;
 }
 
-void PDFConsole::writeData(const QByteArray& data)
+bool PDFConsole::writeData(const QByteArray& data)
 {
-    if (!data.isEmpty())
+    if (data.isEmpty())
     {
-        QTextStream stream(stdout);
-        stream.device()->write(data);
+        return true;
     }
+    QTextStream stream(stdout);
+    return stream.device()->write(data) == data.size();
 }
 
 }   // pdftool
