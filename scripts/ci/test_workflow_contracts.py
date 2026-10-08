@@ -302,6 +302,25 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('(Join-Path $InstallDir "share\\loop")', smoke)
         self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loop")', smoke)
 
+    def test_native_product_smokes_use_a_native_platform(self):
+        for filename, platform in (
+            ("reusable-linux.yml", "xcb"),
+            ("LinuxInstall.yml", "xcb"),
+            ("reusable-windows.yml", "windows"),
+            ("WindowsInstall.yml", "windows"),
+        ):
+            workflow = (ROOT / ".github/workflows" / filename).read_text(encoding="utf-8")
+            calls = [
+                line for line in workflow.splitlines()
+                if "run-product-quick-a11y-smoke.ps1" in line and "-Backend native" in line
+            ]
+            self.assertTrue(calls, filename)
+            for call in calls:
+                with self.subTest(workflow=filename, call=call):
+                    self.assertIn(f"-Platform {platform}", call)
+                    if platform == "xcb":
+                        self.assertIn("xvfb-run -a", call)
+
     def test_package_workflows_qualify_accessibility_against_the_installed_tree(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")

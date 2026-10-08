@@ -242,7 +242,7 @@ jobs:
         working-directory: loop
         shell: pwsh
         run: |
-          .\scripts\run-product-quick-a11y-smoke.ps1 -BuildDir $env:LOOP_WIDGETS_FREE_BUILD_DIR -Backend native
+          .\scripts\run-product-quick-a11y-smoke.ps1 -BuildDir $env:LOOP_WIDGETS_FREE_BUILD_DIR -Backend native -Platform windows
           .\scripts\run-product-quick-a11y-smoke.ps1 -BuildDir $env:LOOP_WIDGETS_FREE_BUILD_DIR -Backend software
 
       - name: Test Widgets-absent release profile
@@ -381,7 +381,7 @@ jobs:
       - name: Run product Quick accessibility smoke (native)
         working-directory: loop
         shell: pwsh
-        run: .\scripts\run-product-quick-a11y-smoke.ps1 -Backend native
+        run: .\scripts\run-product-quick-a11y-smoke.ps1 -Backend native -Platform windows
 
       - name: Run product Quick accessibility smoke (software)
         working-directory: loop
