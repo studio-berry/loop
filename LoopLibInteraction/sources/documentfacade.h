@@ -167,7 +167,7 @@ struct DocumentPermissions
     bool copy = false;
     bool assemble = false;
 
-    bool allowsCorrection() const { return modify && assemble; }
+    bool allowsCorrection() const { return print && modify && copy && assemble; }
 };
 
 /// One presentation-facing document lifecycle.

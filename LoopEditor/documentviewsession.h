@@ -92,6 +92,7 @@ private:
         QWaitCondition answered;
         bool complete = false;
         bool accepted = false;
+        const pdf::PDFOperationControl* control = nullptr;
         QString password;
     };
     QString queryPassword(bool* ok, const pdf::PDFOperationControl* control);

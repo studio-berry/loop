@@ -20,7 +20,7 @@ slice is intentionally model-driven:
   waiting worker, and replies to retired request IDs are refused.
 - The facade projects Core's print, modify, copy, and assemble permissions.
   Restricted print/copy commands remain unavailable. Correction planning,
-  approval, rollback, and saving require both modify and assemble permission;
+  approval, rollback, and saving require all four permissions;
   this conservative gate offers no restriction override. The worker and writer
   also refuse restricted corrections before producing a candidate or output.
 - Inspection receipts retain encryption state in their existing limitation

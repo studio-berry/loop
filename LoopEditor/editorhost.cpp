@@ -458,6 +458,11 @@ bool EditorHost::cancelPassword(quint64 requestId)
     return m_session->answerPassword(requestId, {}, false);
 }
 
+bool EditorHost::correctionsAllowed() const
+{
+    return m_session->facade().permissions().allowsCorrection();
+}
+
 bool EditorHost::hasDocument() const
 {
     return m_session->facade().state() == pdfinteraction::DocumentState::Ready;
@@ -2573,10 +2578,6 @@ void EditorHost::clearFixReview()
 
 bool EditorHost::approveActionListPlan()
 {
-    if (!m_session->facade().permissions().allowsCorrection())
-    {
-        return false;
-    }
     return approveActionListPlan(fixCurrentPlanDigest(), fixRunResult().sourceSha256,
                                  m_fixPlannedDocumentRevision);
 }
@@ -2585,6 +2586,10 @@ bool EditorHost::approveActionListPlan(const QString& planDigest,
                                        const QString& sourceSha256,
                                        const QString& documentRevision)
 {
+    if (!correctionsAllowed())
+    {
+        return false;
+    }
     if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
         !fixPlanIsCurrent() || planDigest.isEmpty() || sourceSha256.isEmpty() ||
         planDigest != m_fixPlannedPlanDigest || planDigest != fixCurrentPlanDigest() ||

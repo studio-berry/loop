@@ -130,7 +130,10 @@ DocumentWriteResult PDFDocumentFileWriter::write(const DocumentSource& target,
         return result;
     }
     const auto* security = document->getStorage().getSecurityHandler();
-    if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
+    if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent) ||
+        !(security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintLowResolution) ||
+          security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintHighResolution)) ||
+        !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
         !security->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
     {
         result.typedError = QStringLiteral("document/correction-permission-denied");

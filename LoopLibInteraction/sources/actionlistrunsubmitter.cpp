@@ -98,7 +98,10 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
 
         outcome->phase = phase;
         const auto* security = document->getStorage().getSecurityHandler();
-        if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
+        if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent) ||
+            !(security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintLowResolution) ||
+              security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintHighResolution)) ||
+            !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
             !security->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
         {
             outcome->ok = false;

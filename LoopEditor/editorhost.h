@@ -86,6 +86,7 @@ class EditorHost final : public QObject
 
     Q_PROPERTY(QString documentState READ documentState NOTIFY presentationChanged)
     Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY presentationChanged)
+    Q_PROPERTY(bool correctionsAllowed READ correctionsAllowed NOTIFY presentationChanged)
     Q_PROPERTY(QString displayTitle READ displayTitle NOTIFY presentationChanged)
     Q_PROPERTY(QString typedError READ typedError NOTIFY presentationChanged)
     Q_PROPERTY(quint64 passwordRequestId READ passwordRequestId NOTIFY passwordRequestChanged)
@@ -192,6 +193,7 @@ public:
 
     QString documentState() const;
     bool hasDocument() const;
+    bool correctionsAllowed() const;
     QString displayTitle() const;
     QString typedError() const;
     quint64 passwordRequestId() const;

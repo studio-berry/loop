@@ -142,7 +142,7 @@ bool DocumentViewSession::answerPassword(quint64 requestId, QString password, bo
     }
     {
         QMutexLocker lock(&request->mutex);
-        if (request->complete)
+        if (request->complete || m_stopping || pdf::PDFOperationControl::isOperationCancelled(request->control))
         {
             return false;
         }
@@ -161,10 +161,12 @@ QString DocumentViewSession::queryPassword(bool* ok, const pdf::PDFOperationCont
     *ok = false;
     auto request = std::make_shared<PasswordRequest>();
     request->id = ++m_nextPasswordRequest;
+    request->control = control;
     QMetaObject::invokeMethod(this, [this, request]
                               {
         QMutexLocker lock(&request->mutex);
-        if (request->complete || m_stopping)
+        // An incomplete request keeps the worker and its cancellation control alive.
+        if (request->complete || m_stopping || pdf::PDFOperationControl::isOperationCancelled(request->control))
         {
             return;
         }

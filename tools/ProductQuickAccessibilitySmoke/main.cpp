@@ -144,6 +144,16 @@ void runEncryptedOpenFixture(QGuiApplication& application, EditorHost& host, QQu
                              {
                                  return;
                              }
+                             host.setWorkspace(EditorHost::Fix);
+                             const auto* validate = window->findChild<QQuickItem*>(QStringLiteral("validateActionListButton"));
+                             const auto* plan = window->findChild<QQuickItem*>(QStringLiteral("planActionListButton"));
+                             const auto* restriction = window->findChild<QQuickItem*>(QStringLiteral("correctionPermissionLabel"));
+                             if (!validate || validate->isEnabled() || !plan || plan->isEnabled() ||
+                                 !restriction || !restriction->isVisible())
+                             {
+                                 fail("restricted-correction-controls");
+                                 return;
+                             }
                              if (!field->property("text").toString().isEmpty() || host.passwordRequestId() ||
                                  host.sessionForTest()->facade().permissions().allowsCorrection() || host.planActionList())
                              {
