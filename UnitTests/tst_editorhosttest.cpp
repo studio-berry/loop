@@ -1198,12 +1198,14 @@ bool writeTranslatePageBoxRecipe(const QString& path, const QString& id, const Q
     return recipe.write(document.toJson(QJsonDocument::Compact)) >= 0;
 }
 
-// A page whose trim box sits inside its media box, so a 2/3 point move stays in bounds.
+// A page whose trim box sits inside its media box. The default profile requires 9 pt of bleed
+// around the trim, and with no BleedBox that bleed is the media box, so the 20 pt inset keeps
+// 9 pt on every edge after the 2/3 point move.
 bool writeTrimmedPageDocument(const QString& path)
 {
     pdf::PDFDocumentBuilder builder;
     const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
-    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
+    builder.setPageTrimBox(page, QRectF(20, 20, 160, 160));
     const pdf::PDFDocument document = builder.build();
     pdf::PDFDocumentWriter writer(nullptr);
     return static_cast<bool>(writer.write(path, &document, true));
