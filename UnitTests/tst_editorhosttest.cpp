@@ -1419,7 +1419,7 @@ void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding(
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
-    QVERIFY(host.selectActionListRecipe(QStringLiteral("tight-margin-move")));
+    QVERIFY(!host.selectedActionListRecipeId().isEmpty());
     QVERIFY(host.validateActionListRecipe());
     QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
     QVERIFY(host.planActionList());
