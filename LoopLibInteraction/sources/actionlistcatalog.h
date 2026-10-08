@@ -27,6 +27,7 @@
 
 #include "pdfactionlist.h"
 
+#include <QJsonObject>
 #include <QList>
 #include <QObject>
 #include <QStringList>
@@ -42,6 +43,7 @@ struct ActionListRecipeEntry
     QString diagnostic;
     QString recipeHash;
     bool valid = false;
+    bool builtIn = false;
     pdf::PDFActionList actionList;
     QStringList validationErrors;
 };
@@ -67,7 +69,7 @@ signals:
 
 private:
     bool ensureRecipesDirectory(QString* error = nullptr) const;
-    bool loadRecipeFile(const QString& sourcePath, ActionListRecipeEntry* entry);
+    bool loadRecipeFile(const QString& sourcePath, const QJsonObject& bindings, ActionListRecipeEntry* entry);
 
     QList<ActionListRecipeEntry> m_recipes;
 };

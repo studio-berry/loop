@@ -7,6 +7,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "pdfsecurityhandler.h"
+#include "pagesurfacecoordinator.h"
 #include "preflightprofileresolver.h"
 
 #include <QAccessible>
@@ -868,6 +869,155 @@ void runIncompleteInspectionFixture(QGuiApplication& application, EditorHost& ho
     timer->start(25);
 }
 
+bool verifyPreviewText(QQuickWindow* window, const QString& name, const QString& expected)
+{
+    auto* item = window->findChild<QQuickItem*>(name);
+    auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+    return item && item->isVisible() && item->width() > 0 && item->height() > 0 &&
+           !expected.isEmpty() && item->property("text").toString() == expected &&
+           accessible && accessible->text(QAccessible::Description) == expected;
+}
+
+void runPreviewFidelityFixtures(QGuiApplication& application, EditorHost& host,
+                                QQuickWindow* window, const QString& fixtureDirectory)
+{
+    const QStringList fixtures{ QStringLiteral("overprint-cmyk-mode1-on.pdf"),
+                                QStringLiteral("transparency-normal-cmyk.pdf") };
+    host.setWorkspace(EditorHost::Document);
+    host.openFileUrl(QUrl::fromLocalFile(QDir(fixtureDirectory).filePath(fixtures.first())));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, window, timer, fixtureDirectory, fixtures,
+                      fixtureIndex = 0, phase = 0, ticks = 0, previousRevision = QString()]() mutable
+                     {
+                         auto* canvas = window->findChild<pdfquick::LoopCanvasItem*>();
+                         auto* surfaces = canvas ? canvas->surfaces() : nullptr;
+                         const QString revision = host.previewIdentity().value(QStringLiteral("documentRevision")).toString();
+                         if (++ticks >= 400)
+                         {
+                             fprintf(stderr, "preview-fidelity-fixture timeout fixture=%s phase=%d document=%s fidelity=%s canvas=%d surfaces=%d admitted=%d failed=%d budget=%d\n",
+                                     qPrintable(fixtures.at(fixtureIndex)), phase, qPrintable(host.documentState()), qPrintable(host.previewFidelityStateName()),
+                                     canvas ? 1 : 0, surfaces ? 1 : 0, surfaces ? surfaces->counters().admitted : 0,
+                                     surfaces ? surfaces->counters().failed : 0, surfaces ? surfaces->counters().budgetExhausted : 0);
+                             if (canvas && canvas->viewport() && surfaces)
+                             {
+                                 const QRect viewport = canvas->viewport()->viewportRect();
+                                 fprintf(stderr, "preview-fidelity-fixture geometry canvas=%g,%g viewport=%d,%d requests=%d in_flight=%d\n",
+                                         canvas->width(), canvas->height(), viewport.width(), viewport.height(), surfaces->counters().requested, surfaces->counters().inFlight);
+                                 const auto& counts = surfaces->counters();
+                                 fprintf(stderr, "preview-fidelity-fixture rejected superseded=%d revision=%d demand=%d oversize=%d stale=%d cancelled=%d\n",
+                                         counts.rejectedSuperseded, counts.rejectedStaleRevision, counts.rejectedDemand, counts.rejectedOversize, counts.stale, counts.cancelled);
+                             }
+                             timer->stop();
+                             application.exit(6);
+                             return;
+                         }
+                         if (!host.hasDocument() || !surfaces || revision == previousRevision)
+                         {
+                             return;
+                         }
+                         const QString expectedFastState = fixtureIndex == 0 ? QStringLiteral("approximate") : QStringLiteral("exact");
+                         if (phase == 0)
+                         {
+                             if (host.previewFidelityStateName() == QStringLiteral("unavailable"))
+                             {
+                                 return;
+                             }
+                             const auto* tile = surfaces->snapshot().tileForPage(0);
+                             if (host.previewFidelityStateName() != expectedFastState ||
+                                 host.previewFidelityOriginName() != QStringLiteral("fast-canvas") ||
+                                 !tile || !tile->pixels || tile->pixels->image.isNull() ||
+                                 pdfinteraction::hasAuthoritativeOverprintMarker(tile->key.colorOutputIdentity) ||
+                                 !verifyPreviewText(window, QStringLiteral("renderFidelityMessage"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture fast_canvas_failed fixture=%s state=%s\n",
+                                         qPrintable(fixtures.at(fixtureIndex)), qPrintable(host.previewFidelityStateName()));
+                                 application.exit(6);
+                                 return;
+                             }
+                             host.setWorkspace(EditorHost::ProductionPreview);
+                             phase = 1;
+                             ticks = 0;
+                             return;
+                         }
+                         if (phase == 1)
+                         {
+                             const QString fidelityText = QStringLiteral("Fidelity %1, origin %2.")
+                                                              .arg(host.previewFidelityStateName(), host.previewFidelityOriginName());
+                             auto* button = window->findChild<QQuickItem*>(fixtureIndex == 0
+                                                                               ? QStringLiteral("productionPreviewProveButton")
+                                                                               : QStringLiteral("productionPreviewFidelityToggle"));
+                             if (!verifyPreviewText(window, QStringLiteral("productionPreviewFidelity"), fidelityText) ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()) ||
+                                 (fixtureIndex == 0 && !host.previewFidelitySummary().contains(QStringLiteral("cannot stand as proof"))) ||
+                                 !button || !button->isVisible() || !button->isEnabled())
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture production_preview_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             button->forceActiveFocus(Qt::TabFocusReason);
+                             QKeyEvent press(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+                             QKeyEvent release(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+                             QCoreApplication::sendEvent(window, &press);
+                             QCoreApplication::sendEvent(window, &release);
+                             if (!host.pageFidelityIsAuthoritative() || host.previewFidelityStateName() != QStringLiteral("unavailable") ||
+                                 host.previewFidelityOriginName() != QStringLiteral("none") ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture pending_render_claimed_evidence\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             phase = 2;
+                             ticks = 0;
+                             return;
+                         }
+                         if (phase == 2)
+                         {
+                             if (host.previewFidelityStateName() == QStringLiteral("unavailable"))
+                             {
+                                 return;
+                             }
+                             const auto* tile = surfaces->snapshot().tileForPage(0);
+                             if (host.previewFidelityStateName() != QStringLiteral("authoritative") ||
+                                 host.previewFidelityOriginName() != QStringLiteral("output-preview") ||
+                                 !tile || !tile->exact || !tile->pixels || tile->pixels->image.isNull() ||
+                                 !pdfinteraction::hasAuthoritativeOverprintMarker(tile->key.colorOutputIdentity) ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture authoritative_render_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             host.setWorkspace(EditorHost::Document);
+                             phase = 3;
+                             ticks = 0;
+                             return;
+                         }
+                         if (!verifyPreviewText(window, QStringLiteral("renderFidelityMessage"), host.previewFidelitySummary()))
+                         {
+                             fprintf(stderr, "preview-fidelity-fixture authoritative_canvas_failed\n");
+                             application.exit(6);
+                             return;
+                         }
+                         fprintf(stdout, "preview-fidelity-fixture id=%s fast=%s explicit_switch=1 pending_unavailable=1 authoritative_pixels=1 qml_presented=1\n",
+                                 qPrintable(fixtures.at(fixtureIndex)), qPrintable(expectedFastState));
+                         fflush(stdout);
+                         if (++fixtureIndex == fixtures.size())
+                         {
+                             timer->stop();
+                             application.exit(0);
+                             return;
+                         }
+                         previousRevision = revision;
+                         phase = 0;
+                         ticks = 0;
+                         host.openFileUrl(QUrl::fromLocalFile(QDir(fixtureDirectory).filePath(fixtures.at(fixtureIndex))));
+                     });
+    timer->start(25);
+}
+
 }   // namespace
 
 namespace
@@ -1033,6 +1183,29 @@ int main(int argc, char** argv)
     const bool encryptedFixture = arguments.contains(QStringLiteral("--encrypted-fixture"));
     const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
     const bool nativeProbe = probeArgument >= 0;
+    const int previewArgument = arguments.indexOf(QStringLiteral("--preview-fixtures"));
+    QString previewFixtures;
+    if (previewArgument >= 0)
+    {
+        if (nativeProbe || previewArgument + 1 >= arguments.size())
+        {
+            return 6;
+        }
+        previewFixtures = QDir(arguments.at(previewArgument + 1)).absolutePath();
+        for (const QString& fixture : { QStringLiteral("overprint-cmyk-mode1-on.pdf"), QStringLiteral("transparency-normal-cmyk.pdf") })
+        {
+            if (!QFile::exists(QDir(previewFixtures).filePath(fixture)))
+            {
+                fprintf(stderr, "preview-fidelity-fixture missing_fixture=%s\n", qPrintable(fixture));
+                return 6;
+            }
+        }
+        if (qEnvironmentVariable("QT_QUICK_BACKEND") != QStringLiteral("software"))
+        {
+            fprintf(stderr, "preview-fidelity-fixture requires_software_backend\n");
+            return 6;
+        }
+    }
     if (!nativeProbe)
     {
         QStandardPaths::setTestModeEnabled(true);
@@ -1078,7 +1251,7 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture, previewFixtures](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
@@ -1102,7 +1275,7 @@ int main(int argc, char** argv)
 
                          QObject::connect(
                              window, &QQuickWindow::sceneGraphInitialized, &application,
-                             [window, &application, &host]()
+                             [window, &application, &host, previewFixtures]()
                              {
                                  const auto* renderer = window->rendererInterface();
                                  const auto api = renderer ? renderer->graphicsApi() : QSGRendererInterface::Unknown;
@@ -1164,6 +1337,11 @@ int main(int argc, char** argv)
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);
+                                 if (passed && !previewFixtures.isEmpty())
+                                 {
+                                     runPreviewFidelityFixtures(application, host, window, previewFixtures);
+                                     return;
+                                 }
                                  if (passed && qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software"))
                                  {
                                      runFindingNavigationFixture(application, host, window,

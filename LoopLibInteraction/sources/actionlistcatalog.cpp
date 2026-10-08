@@ -35,6 +35,32 @@
 namespace pdfinteraction
 {
 
+namespace
+{
+
+// A shipped recipe is validated at load with these probe bindings. Its
+// placeholders are resolved from the drag at plan time; the probe only proves
+// that the placeholders type-check against the operation's parameter schema.
+struct BuiltInRecipe
+{
+    QString resource;
+    QJsonObject probeBindings;
+};
+
+const QList<BuiltInRecipe>& builtInRecipes()
+{
+    static const QList<BuiltInRecipe> recipes = {
+        { QStringLiteral(":/loop/builtin-recipe-translate-page-box.json"),
+          QJsonObject{ { QStringLiteral("box"), QStringLiteral("media") },
+                       { QStringLiteral("page_index"), 0 },
+                       { QStringLiteral("dx"), 0 },
+                       { QStringLiteral("dy"), 0 } } }
+    };
+    return recipes;
+}
+
+}   // namespace
+
 ActionListCatalog::ActionListCatalog(QObject* parent) :
     QObject(parent)
 {
@@ -60,7 +86,7 @@ bool ActionListCatalog::ensureRecipesDirectory(QString* error) const
     return false;
 }
 
-bool ActionListCatalog::loadRecipeFile(const QString& sourcePath, ActionListRecipeEntry* entry)
+bool ActionListCatalog::loadRecipeFile(const QString& sourcePath, const QJsonObject& bindings, ActionListRecipeEntry* entry)
 {
     if (!entry)
     {
@@ -99,6 +125,7 @@ bool ActionListCatalog::loadRecipeFile(const QString& sourcePath, ActionListReci
 
     entry->name = entry->actionList.name;
     pdf::PDFActionListExecutionOptions options;
+    options.bindings = bindings;
     QStringList validationErrors;
     entry->valid = static_cast<bool>(pdf::PDFActionListExecutor().validate(entry->actionList, options, &validationErrors));
     entry->validationErrors = validationErrors;
@@ -129,9 +156,17 @@ bool ActionListCatalog::reload()
         for (const QFileInfo& file : local.entryInfoList({ QStringLiteral("*.json") }, QDir::Files, QDir::Name))
         {
             ActionListRecipeEntry entry;
-            loadRecipeFile(file.absoluteFilePath(), &entry);
+            loadRecipeFile(file.absoluteFilePath(), QJsonObject(), &entry);
             recipes.append(std::move(entry));
         }
+    }
+
+    for (const BuiltInRecipe& shipped : builtInRecipes())
+    {
+        ActionListRecipeEntry entry;
+        loadRecipeFile(shipped.resource, shipped.probeBindings, &entry);
+        entry.builtIn = true;
+        recipes.append(std::move(entry));
     }
 
     m_recipes = std::move(recipes);
@@ -232,6 +267,14 @@ bool ActionListCatalog::saveRecipe(const QString& recipeId, const pdf::PDFAction
         if (error)
         {
             *error = QStringLiteral("Action List recipe '%1' was not found.").arg(recipeId);
+        }
+        return false;
+    }
+    if (entry->builtIn)
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Built-in Action List recipe '%1' is read-only; export it and import an edited copy.").arg(recipeId);
         }
         return false;
     }

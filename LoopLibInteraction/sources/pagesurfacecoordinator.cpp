@@ -695,6 +695,9 @@ void PageSurfaceCoordinator::admit(quint64 requestId,
         // finished.
         ++m_counters.rejectedSuperseded;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Stale);
+        // Same-key demand was coalesced behind this request; it still needs pixels.
+        m_retrySurfaceRequest = true;
+        scheduleSurfaceRetry();
         return;
     }
 
