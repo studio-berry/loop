@@ -411,8 +411,6 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ inputs.source_sha }}
       - name: Install OS accessibility client
         run: |
           sudo apt-get update
