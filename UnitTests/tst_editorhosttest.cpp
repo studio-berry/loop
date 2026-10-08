@@ -55,6 +55,7 @@
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsecurityhandler.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
@@ -68,6 +69,39 @@
 
 namespace
 {
+
+bool writeEncryptedFixture(const QString& path, pdf::PDFSecurityHandlerFactory::Algorithm algorithm,
+                           const QString& userPassword = QStringLiteral("fixture-user"), quint32 permissions = 0)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+    settings.algorithm = algorithm;
+    settings.permissions = permissions;
+    settings.userPassword = userPassword;
+    settings.ownerPassword = QStringLiteral("fixture-owner");
+    settings.id = builder.build().getIdPart(0);
+    const auto security = pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings);
+    if (!security)
+    {
+        return false;
+    }
+    builder.setSecurityHandler(security);
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    if (!writer.write(path, &document, true))
+    {
+        return false;
+    }
+    QFile fixture(path);
+    if (!fixture.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+    qInfo().noquote() << "encrypted-fixture" << QFileInfo(path).fileName()
+                      << "sha256=" << QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex();
+    return true;
+}
 
 /// Minimal scripted source for fencing proof, mirroring tst_interactioncontrollertest.
 /// Returns targets the test wrote down so hover transitions are deterministic
@@ -235,6 +269,13 @@ class EditorHostTest : public QObject
     Q_OBJECT
 
 private slots:
+    void encryptedOpen_data();
+    void encryptedOpen();
+    void passwordFailureIsTypedAndRetryable();
+    void passwordCancelCloseAndSupersessionAreTerminal();
+    void teardownWhilePasswordPromptIsPending();
+    void restrictedDocumentCannotPlanOrPublish();
+    void encryptedInspectionReceiptContainsNoPassword();
     void teardownClearsTheInteractiveThreadRegistration();
     void startsWithNoDocument();
     void exposesCatalogDescriptorsWithoutMutating();
@@ -267,6 +308,223 @@ private slots:
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
 };
+
+void EditorHostTest::encryptedOpen_data()
+{
+    QTest::addColumn<int>("algorithm");
+    QTest::addColumn<bool>("owner");
+    QTest::addColumn<quint32>("userPermissions");
+    QTest::newRow("AES-128-user") << int(pdf::PDFSecurityHandlerFactory::AES_128) << false << quint32(0);
+    QTest::newRow("AES-128-owner") << int(pdf::PDFSecurityHandlerFactory::AES_128) << true << quint32(0);
+    QTest::newRow("AES-256-user") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << quint32(0);
+    QTest::newRow("AES-256-owner") << int(pdf::PDFSecurityHandlerFactory::AES_256) << true << quint32(0);
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    const quint32 editing = quint32(Permission::Modify) | quint32(Permission::Assemble);
+    QTest::newRow("AES-256-edit-allowed-copy-print-restricted") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << editing;
+    const quint32 all = editing | quint32(Permission::CopyContent) | quint32(Permission::PrintLowResolution);
+    QTest::newRow("AES-256-unrestricted-user") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << all;
+}
+
+void EditorHostTest::encryptedOpen()
+{
+    QFETCH(int, algorithm);
+    QFETCH(bool, owner);
+    QFETCH(quint32, userPermissions);
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("encrypted.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::Algorithm(algorithm), QStringLiteral("fixture-user"), userPermissions));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 request = host.passwordRequestId();
+    QVERIFY(!host.submitPassword(request + 1, QStringLiteral("fixture-owner")));
+    QVERIFY(host.submitPassword(request, owner ? QStringLiteral("fixture-owner") : QStringLiteral("fixture-user")));
+    QVERIFY(!host.submitPassword(request, QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QCOMPARE(host.pageCount(), 1);
+    QCOMPARE(host.passwordRequestId(), quint64(0));
+    const auto permissions = host.sessionForTest()->facade().permissions();
+    QVERIFY(permissions.encrypted);
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    const bool print = owner || (userPermissions & quint32(Permission::PrintLowResolution));
+    const bool modify = owner || (userPermissions & quint32(Permission::Modify));
+    const bool copy = owner || (userPermissions & quint32(Permission::CopyContent));
+    const bool assemble = owner || (userPermissions & quint32(Permission::Assemble));
+    QCOMPARE(permissions.print, print);
+    QCOMPARE(permissions.modify, modify);
+    QCOMPARE(permissions.copy, copy);
+    QCOMPARE(permissions.assemble, assemble);
+    QCOMPARE(host.correctionsAllowed(), print && modify && copy && assemble);
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(model->encrypted());
+    QCOMPARE(model->canPrint(), print);
+    QCOMPARE(model->canModify(), modify);
+    QCOMPARE(model->canCopy(), copy);
+    QCOMPARE(model->canAssemble(), assemble);
+    QCOMPARE(host.isCommandEnabled(QStringLiteral("actionSave_As")), host.correctionsAllowed());
+}
+
+void EditorHostTest::passwordFailureIsTypedAndRetryable()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("wrong-password-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("incorrect-fixture-password")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.documentState(), QStringLiteral("error"), 10000);
+    QCOMPARE(host.typedError(), QStringLiteral("document/password-incorrect"));
+    QCOMPARE(host.sessionForTest()->facade().operation().result.state, pdfinteraction::CommandTerminalState::Failed);
+    QVERIFY(!host.hasDocument());
+    QVERIFY(host.sessionForTest()->facade().retry() != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+}
+
+void EditorHostTest::passwordCancelCloseAndSupersessionAreTerminal()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("cancelled-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.cancelPassword(host.passwordRequestId()));
+    QTRY_COMPARE_WITH_TIMEOUT(host.documentState(), QStringLiteral("empty"), 10000);
+    QCOMPARE(host.typedError(), QStringLiteral("document/password-cancelled"));
+    QVERIFY(host.cancelled());
+    QVERIFY(!host.hasDocument());
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 closedRequest = host.passwordRequestId();
+    host.invokeCommand(QStringLiteral("actionClose"));
+    QVERIFY(!host.submitPassword(closedRequest, QStringLiteral("fixture-owner")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.passwordRequestId(), quint64(0), 10000);
+    QVERIFY(!host.submitPassword(closedRequest, QStringLiteral("fixture-owner")));
+    QVERIFY(!host.hasDocument());
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 supersededRequest = host.passwordRequestId();
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QVERIFY(!host.submitPassword(supersededRequest, QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0 && host.passwordRequestId() != supersededRequest, 10000);
+    QVERIFY(!host.submitPassword(supersededRequest, QStringLiteral("fixture-owner")));
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+}
+
+void EditorHostTest::teardownWhilePasswordPromptIsPending()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("teardown-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    auto host = std::make_unique<EditorHost>();
+    host->openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host->passwordRequestId() != 0, 10000);
+    QElapsedTimer timer;
+    timer.start();
+    host.reset();
+    QVERIFY(timer.elapsed() < 5000);
+}
+
+void EditorHostTest::restrictedDocumentCannotPlanOrPublish()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("owner-only-AES-256.pdf"));
+    const QString output = directory.filePath(QStringLiteral("refused.pdf"));
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256, {},
+                                  quint32(Permission::Modify) | quint32(Permission::Assemble)));
+    QFile source(path);
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    const QByteArray original = source.readAll();
+    source.close();
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QCOMPARE(host.passwordRequestId(), quint64(0));
+    QVERIFY(!host.validateActionListRecipe());
+    QVERIFY(!host.planActionList());
+    QVERIFY(!host.approveActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.fixRollbackAvailable());
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionPrint")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionCopyText")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionSave_As")));
+    host.saveAsFileUrl(QUrl::fromLocalFile(output));
+    QVERIFY(!QFileInfo::exists(output));
+
+    auto cancellation = std::make_shared<pdf::PDFJobCancellationToken>();
+    pdf::PDFJobContext context(cancellation, pdf::PDFProcessingLimits::conservativeDefaults(), {});
+    pdfinteraction::PDFDocumentFileWriter writer;
+    const auto writeResult = writer.write({ output }, host.sessionForTest()->context().getDocument(), context);
+    QCOMPARE(writeResult.outcome, pdfinteraction::DocumentWriteOutcome::Failed);
+    QCOMPARE(writeResult.typedError, QStringLiteral("document/correction-permission-denied"));
+    pdf::PDFActionList recipe;
+    recipe.id = QStringLiteral("restricted-bleed");
+    pdf::PDFActionListStep step;
+    step.id = QStringLiteral("bleed");
+    step.operationId = QStringLiteral("add-bleed");
+    step.parameters = { { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } };
+    recipe.steps.append(step);
+    for (const auto phase : { pdfinteraction::ActionListRunPhase::Plan, pdfinteraction::ActionListRunPhase::Execute })
+    {
+        const auto outcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
+        const auto worker = pdfinteraction::makeActionListRunWorker(phase, recipe,
+                                                                    host.sessionForTest()->context().getDocumentPointer(), {}, outcome);
+        worker(context);
+        QVERIFY(!outcome->ok);
+        QVERIFY(!outcome->candidate);
+        QCOMPARE(outcome->executionResult.status, QStringLiteral("failed"));
+        QCOMPARE(outcome->executionResult.diagnostics.first().toObject().value(QStringLiteral("code")).toString(),
+                 QStringLiteral("document/correction-permission-denied"));
+    }
+    QVERIFY(!QFileInfo::exists(output));
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QVERIFY(source.readAll() == original);
+}
+
+void EditorHostTest::encryptedInspectionReceiptContainsNoPassword()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("inspection-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
+    QVERIFY2(host.hasPreflightReport(), qPrintable(host.preflightOperatorSummary()));
+    pdf::PDFOperationHistoryStore history(path + QStringLiteral(".loop-history/history.sqlite3"));
+    QString error;
+    QVERIFY(history.open(&error));
+    const auto events = history.events(&error);
+    QVERIFY(error.isEmpty());
+    bool receiptFound = false;
+    for (const auto& event : events)
+    {
+        const auto object = event.resultSummary.value(QStringLiteral("inspection_receipt")).toObject();
+        if (object.isEmpty())
+        {
+            continue;
+        }
+        pdf::PreflightInspectionReceipt receipt;
+        QVERIFY2(pdf::preflightInspectionReceiptFromJson(object, receipt, error), qPrintable(error));
+        QVERIFY(receipt.limitations.contains(QStringLiteral("Document is encrypted; authenticated document permissions apply.")));
+        const QByteArray json = QJsonDocument(object).toJson();
+        QVERIFY(!json.contains("fixture-user"));
+        QVERIFY(!json.contains("fixture-owner"));
+        receiptFound = true;
+    }
+    QVERIFY(receiptFound);
+}
 
 void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 {

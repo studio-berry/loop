@@ -74,6 +74,16 @@ Pane {
             }
 
             Label {
+                objectName: "correctionPermissionLabel"
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                visible: root.host && root.host.hasDocument && !root.host.correctionsAllowed
+                text: qsTr("Document permissions restrict corrections. No correction can be planned or published.")
+                Accessible.name: qsTr("Document correction restriction")
+                Accessible.description: text
+            }
+
+            Label {
                 objectName: "fixPlanIdentityLabel"
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
@@ -95,7 +105,7 @@ Pane {
                 Button {
                     objectName: "fixApprovePlanButton"
                     text: qsTr("Approve plan")
-                    enabled: root.host !== null && root.lifecycleState === "preview-ready"
+                    enabled: root.host !== null && root.host.correctionsAllowed && root.lifecycleState === "preview-ready"
                     onClicked: if (root.host && root.planIdentity)
                         root.host.approveActionListPlan(root.planIdentity.planDigest,
                                                        root.planIdentity.sourceSha256,
@@ -485,7 +495,7 @@ Pane {
                 Button {
                     objectName: "validateActionListButton"
                     text: qsTr("Validate")
-                    enabled: root.host && root.host.hasDocument && !root.busy
+                    enabled: root.host && root.host.correctionsAllowed && !root.busy
                     onClicked: root.host.validateActionListRecipe()
                     Accessible.name: qsTr("Validate Action List recipe")
                 }
@@ -493,7 +503,7 @@ Pane {
                 Button {
                     objectName: "planActionListButton"
                     text: qsTr("Plan")
-                    enabled: root.host && root.host.hasDocument && root.host.actionList.validationReady && !root.busy
+                    enabled: root.host && root.host.correctionsAllowed && root.host.actionList.validationReady && !root.busy
                     onClicked: root.host.planActionList()
                     Accessible.name: qsTr("Plan Action List")
                 }
