@@ -1,0 +1,17 @@
+{
+  "schema": "loop-action-list/2",
+  "id": "translate-page-box",
+  "name": "Move a page box",
+  "steps": [
+    {
+      "id": "move",
+      "operation": "translate-page-box",
+      "params": {
+        "box": "${box}",
+        "page_index": "${page_index}",
+        "dx": "${dx}",
+        "dy": "${dy}"
+      }
+    }
+  ]
+}
