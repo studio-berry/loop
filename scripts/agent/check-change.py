@@ -457,7 +457,7 @@ def main() -> int:
         "architecture_contracts",
         architecture_command,
         ROOT,
-        False,
+        args.dry_run,
     )
 
     # The Windows Qt test-runtime wiring is one include line in a file every new

@@ -16,6 +16,7 @@ from typing import Any
 
 REQUIRED_JOBS = (
     "source_integrity",
+    "agent_contract",
     "linux",
     "windows",
     "documentation",

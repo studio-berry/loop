@@ -1,0 +1,28 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: agent-policy-tooling
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: core-source-and-catalog
+    evidence:
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: documentation-catalogs
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: module-policy-lanes
+    evidence:
+      - unit:agent-policy:core
+      - unit:agent-policy:pdftool
+      - unit:agent-policy:pagemaster
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+unresolved:
+  - "core:scripts/ci/check_independent_validation_gate.py"
+  - "Focused ctest run under QT_QPA_PLATFORM=offscreen failed 12 of 74 tests: UnitTestsEditorHost, UnitTestsProductOperatorLoop, UnitTestsShellWorkspace, UnitTestsGovernedExecution, UnitTestsActionList, UnitTestsOperationHistory, UnitTestsPreflightVerdict, UnitTestsLifecycle, UnitTestsPdfToolContract, UnitTestsOverprintRender (segfault), UnitTestsBleedStress, UnitTestsRepairOperatorAcceptance. None of these is a binding proof lane of a touched subsystem in this manifest; they remain open for the owning PR review."
+  - "clang-tidy lane not run: the existing build tree has no compile_commands.json and no clang-tidy on PATH."
+  - "build:ProductQuickAccessibilitySmoke not built: target absent from the configured build tree (LOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE is OFF); reconfiguring requires approval."

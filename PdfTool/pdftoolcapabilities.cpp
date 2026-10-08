@@ -59,24 +59,14 @@ QString valueTypeName(PDFToolValueType valueType)
     return QStringLiteral("string");
 }
 
-QJsonArray stringArray(const QStringList& values)
-{
-    QJsonArray result;
-    for (const QString& value : values)
-    {
-        result.append(value);
-    }
-    return result;
-}
-
 QJsonObject optionToJson(const PDFToolOptionDescriptor& option)
 {
     return {
         { QStringLiteral("id"), option.id },
-        { QStringLiteral("names"), stringArray(option.names) },
+        { QStringLiteral("names"), QJsonArray::fromStringList(option.names) },
         { QStringLiteral("value_name"), option.valueName },
         { QStringLiteral("value_type"), valueTypeName(option.valueType) },
-        { QStringLiteral("allowed_values"), stringArray(option.allowedValues) },
+        { QStringLiteral("allowed_values"), QJsonArray::fromStringList(option.allowedValues) },
         { QStringLiteral("default_value"), option.defaultValue },
         { QStringLiteral("required"), option.required },
         { QStringLiteral("repeatable"), option.repeatable },
@@ -112,8 +102,8 @@ QJsonObject commandToJson(const PDFToolCommandDescriptor& command)
         { QStringLiteral("id"), command.id },
         { QStringLiteral("name"), command.name },
         { QStringLiteral("description"), command.description },
-        { QStringLiteral("capabilities"), stringArray(command.capabilities) },
-        { QStringLiteral("output_formats"), stringArray(command.outputFormats) },
+        { QStringLiteral("capabilities"), QJsonArray::fromStringList(command.capabilities) },
+        { QStringLiteral("output_formats"), QJsonArray::fromStringList(command.outputFormats) },
         { QStringLiteral("options"), options },
         { QStringLiteral("positionals"), positionals }
     };
@@ -138,7 +128,7 @@ QJsonArray buildCapabilities()
         capabilities.append(QStringLiteral("ocr.client"));
     }
     capabilities.sort();
-    return stringArray(capabilities);
+    return QJsonArray::fromStringList(capabilities);
 }
 
 QJsonArray fixupCapabilities()
