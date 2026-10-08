@@ -51,14 +51,14 @@ public:
 
     enum class Element
     {
-        Root,               ///< Root element, this must be used only once at start/end of writing
-        Header,             ///< Header
-        Text,               ///< Ordinary text
-        Table,              ///< Table of rows/columns (2D grid)
-        TableHeaderRow,     ///< Table header row (consists of columns)
-        TableHeaderColumn,  ///< Table header column
-        TableRow,           ///< Table row (consists of columns)
-        TableColumn         ///< Table column
+        Root,   ///< Root element, this must be used only once at start/end of writing
+        Header,   ///< Header
+        Text,   ///< Ordinary text
+        Table,   ///< Table of rows/columns (2D grid)
+        TableHeaderRow,   ///< Table header row (consists of columns)
+        TableHeaderColumn,   ///< Table header column
+        TableRow,   ///< Table row (consists of columns)
+        TableColumn   ///< Table column
     };
 
     /// Starts a new element in structure tree. Each call of this function must be
@@ -85,9 +85,21 @@ public:
     inline void beginTableRow(QString name) { beginElement(Element::TableRow, name); }
     inline void beginTableRow(QString name, int reference) { beginElement(Element::TableRow, name, QString(), Qt::AlignLeft, reference); }
     inline void endTableRow() { endElement(); }
-    inline void writeTableHeaderColumn(QString name, QString description, Qt::Alignment alignment = Qt::AlignLeft) { beginElement(Element::TableHeaderColumn, name, description, alignment); endElement(); }
-    inline void writeTableColumn(QString name, QString description, Qt::Alignment alignment = Qt::AlignLeft) { beginElement(Element::TableColumn, name, description, alignment); endElement(); }
-    inline void writeText(QString name, QString description, int reference = 0) { beginElement(Element::Text, name, description, Qt::AlignLeft, reference); endElement(); }
+    inline void writeTableHeaderColumn(QString name, QString description, Qt::Alignment alignment = Qt::AlignLeft)
+    {
+        beginElement(Element::TableHeaderColumn, name, description, alignment);
+        endElement();
+    }
+    inline void writeTableColumn(QString name, QString description, Qt::Alignment alignment = Qt::AlignLeft)
+    {
+        beginElement(Element::TableColumn, name, description, alignment);
+        endElement();
+    }
+    inline void writeText(QString name, QString description, int reference = 0)
+    {
+        beginElement(Element::Text, name, description, Qt::AlignLeft, reference);
+        endElement();
+    }
     inline void beginHeader(QString name, QString description, int reference = 0) { beginElement(Element::Header, name, description, Qt::AlignLeft, reference); }
     inline void endHeader() { endElement(); }
 
@@ -108,7 +120,6 @@ private:
 class PDFConsole
 {
 public:
-
     /// Writes text to the console
     static void writeText(QString text, QStringConverter::Encoding encoding);
 
@@ -128,4 +139,4 @@ private:
 
 }   // namespace pdftool
 
-#endif // PDFOUTPUTFORMATTER_H
+#endif   // PDFOUTPUTFORMATTER_H
