@@ -22,19 +22,14 @@
 
 set(_loop_pdftool_sources
     main.cpp
-    pdfoutputformatter.cpp
-    pdftoolabstractapplication.cpp
     pdftoolcapabilities.cpp
     pdftoolcapabilities.h
-    pdftoolresult.cpp
     pdftoolschema.cpp
     pdftoolschema.h
     pdftoolattachments.cpp
     pdftoolcertstore.cpp
     pdftoolcolorprofiles.cpp
-    pdftooldecrypt.cpp
     pdftooldiff.cpp
-    pdftoolencrypt.cpp
     pdftoolfetchimages.cpp
     pdftoolfetchtext.cpp
     pdftoolinfo.cpp
@@ -47,7 +42,6 @@ set(_loop_pdftool_sources
     pdftooldumpgeometry.cpp
     pdftoolinfostructuretree.cpp
     pdftoolinkcoverage.cpp
-    pdftooloptimize.cpp
     pdftoolrender.cpp
     pdftoolrenderpage.cpp
     pdftoolrenderpage.h
@@ -110,9 +104,20 @@ if(NOT LOOP_LOOP_DISTRIBUTION)
     list(APPEND _loop_pdftool_sources pdftoolaudiobook.cpp)
 endif()
 
+add_library(PdfToolInPlaceCommands OBJECT
+    pdfoutputformatter.cpp
+    pdftoolabstractapplication.cpp
+    pdftoolresult.cpp
+    pdftooldecrypt.cpp
+    pdftoolencrypt.cpp
+    pdftooloptimize.cpp
+)
+target_include_directories(PdfToolInPlaceCommands PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(PdfToolInPlaceCommands PUBLIC LoopLibCore Qt6::Core Qt6::Gui Qt6::Xml)
+
 add_executable(PdfTool ${_loop_pdftool_sources})
 
-target_link_libraries(PdfTool PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Xml)
+target_link_libraries(PdfTool PRIVATE PdfToolInPlaceCommands LoopLibCore Qt6::Core Qt6::Gui Qt6::Xml)
 
 if(MINGW AND NOT LOOP_LOOP_DISTRIBUTION)
     target_link_libraries(PdfTool PRIVATE ole32 sapi)

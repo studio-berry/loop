@@ -11,8 +11,9 @@ packages built from the same candidate SHA, followed by human review.
 publication destinations in `QTemporaryDir`. Core signs off the exact temporary
 publication, then the worker returns the reopened document and deletes those
 directories. `EditorHost::fixSignOff()` exposes that receipt in memory. The Fix
-pane displays shortened digests, but offers no complete receipt export. A later
-Save As is a separate write; the current receipt does not establish its identity.
+pane displays plan and published-byte identities, but offers no complete receipt
+export. A later Save As is a separate write; the current receipt does not
+establish its identity.
 
 Do not copy the CLI receipt, drive a test host, or relabel the accessibility smoke
 probe as the installed Editor journey. Those are different evidence. In
@@ -26,10 +27,30 @@ This PR does not invent that contract or change Core. Until the decision and its
 implementation are accepted, stop the journey at publication and record the
 unavailable lane rather than producing a passing packet.
 
-The preview, compare/Fix and native qualification work in PRs #227, #228 and #244
-also needs integration and exact-candidate qualification. Package inspection on
-the current base is separately blocked by the manifest prerequisite in PR #230.
-Merging any of those PRs requires the user's approval.
+The earlier packet-tooling PR #245 and compare/Fix PR #228 are already integrated
+on `dev`. Their integration does not resolve this publication boundary or provide
+installed-candidate qualification. Recheck package prerequisites on the selected
+candidate rather than carrying forward earlier PR dependency claims.
+
+## Reverified availability (2026-10-07)
+
+The publication boundary above remains present on `dev` source
+`e013af675e8fc6916fa407ad087531461341099a`: the Action List submitter still creates
+`QTemporaryDir` staging and publication destinations, and `fixSignOff()` returns
+the in-memory governed record. No durable destination or complete receipt export
+was added by the intervening compare/Fix work.
+
+| Required lane | Observed availability |
+| --- | --- |
+| Linux x86_64 installed AppImage journey | Unavailable; no packet for this source SHA was supplied. The managed Linux workspace contains Qt, a checkout and build dependencies, so it is not a clean-machine run. |
+| Windows x64 installed MSI journey | Unavailable; no Windows clean machine or packet for this source SHA was supplied. |
+| Package digests and platform metadata | Unavailable for this candidate's acceptance pair. Historical Session 07 smoke evidence targets a different SHA and cannot qualify this candidate. |
+| Representative production PDF, video/log and retained publication receipt | Unavailable; repository fixtures and synthetic verifier tests do not supply installed-product evidence. |
+| Matching platform receipt identities and human review | Unavailable until both real packets and reviews are retained. |
+
+The issue remains blocked. Local checker proof covers evidence handling only.
+The report option below records both unavailable inputs in one invocation and
+returns exit code 1; it does not generate packages, receipts or reviewer approval.
 
 ## Capture after the blockers are resolved
 
@@ -61,13 +82,25 @@ Merging any of those PRs requires the user's approval.
 6. Run the pair checker from this checkout, keeping packets outside it:
 
    ```text
-   python -m scripts.qualification.verify_operator_acceptance --source-sha <full-sha> <linux-packet> <windows-packet>
+   python -m scripts.qualification.verify_operator_acceptance --source-sha <full-sha> --report <evidence-root>/operator-acceptance.json <linux-packet> <windows-packet>
    ```
 
    Attach the resulting command/output, immutable packet locations, package
    digests, candidate SHA and review to the issue/PR. Failed, skipped or
    unavailable lanes keep #32 open. **Closes #32** is appropriate only after the
    acceptance evidence and human review are complete.
+
+The optional `--report` writes a JSON verification summary outside both packet
+directories. It checks both inputs even when the first fails. Missing packet or
+review files yield `incomplete`; invalid evidence or a mismatched pair yields
+`rejected`; only two verified, matching platform packets yield `verified` and
+exit code 0. A rejection takes precedence when the other input is unavailable.
+Each verified record includes its packet and review SHA-256 plus the shared
+plan/source/profile receipt identity. These digests link the summary back to the
+retained package, recording and receipt members without changing reviewed bytes.
+Writing the report inside either packet is refused, as it would invalidate the
+review. A report write failure also returns nonzero. JSON verification still
+depends on the human's recorded attestations about the actual journey.
 
 ## Internal packet layout
 

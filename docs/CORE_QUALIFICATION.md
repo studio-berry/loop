@@ -62,6 +62,8 @@ fixture may correctly yield Fail/Incomplete while its behavioral test passes;
 an incomplete inspection must never be relabelled as a passing PDF.
 
 Dispatch `Linux_AppImage` and `Windows_MSI` with `source_sha=C` on the pinned ref.
+The workflow ref must resolve to `C`: checkout uses the workflow run's immutable
+commit, and `source_sha` is an identity assertion rather than a checkout selector.
 Inspect their exact-checkout guards, installed/relocated PdfTool preflight and
 runtime smokes, dependency inspection, and package lifecycle results. Capture
 package run IDs and input/check-out SHA, artifact IDs, names, hashes, and expiry
@@ -76,6 +78,12 @@ gh workflow run LinuxInstall.yml --repo studio-berry/loop \
 gh workflow run WindowsInstall.yml --repo studio-berry/loop \
   --ref "$QUALIFICATION_REF" --field source_sha="$C"
 ```
+
+For the `package-release` repository-dispatch proxy, pass
+`client_payload.source_ref=QUALIFICATION_REF` together with `source_sha=C`.
+The proxy defaults to `stable` when `source_ref` is absent; in that case `C` must
+be the stable workflow commit. Keep the chosen branch or tag pinned throughout
+both dispatches. A moved ref is rejected by the SHA guard and requires new runs.
 
 ## Check the collected provenance
 

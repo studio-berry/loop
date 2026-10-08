@@ -507,14 +507,6 @@ Pane {
                 }
 
                 Button {
-                    objectName: "confirmActionListButton"
-                    text: qsTr("Run approved plan")
-                    enabled: root.host && root.host.fixExecutionArmed
-                    onClicked: root.host.confirmActionListPlan()
-                    Accessible.name: qsTr("Run the approved Action List plan")
-                }
-
-                Button {
                     objectName: "discardActionListPlanButton"
                     text: qsTr("Discard Plan")
                     enabled: root.host && host.actionListStateName === "planned" && !root.busy

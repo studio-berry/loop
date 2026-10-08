@@ -25,6 +25,7 @@ qt_add_qml_module(ProductQuickAccessibilitySmoke
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/OperatorHelpDialog.qml
         qml/Workspace.qml
         qml/PreflightPane.qml
         qml/ActionListPane.qml

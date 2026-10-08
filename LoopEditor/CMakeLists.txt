@@ -24,6 +24,8 @@ qt_policy(SET QTP0001 NEW)
 
 qt_add_executable(LoopEditor
     main.cpp
+    operatorhelp.cpp
+    operatorhelp.h
     icon.rc
     app.qrc
     documentviewsession.cpp
@@ -42,6 +44,7 @@ qt_add_qml_module(LoopEditor
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loop/Quick"
     QML_FILES
         qml/Main.qml
+        qml/OperatorHelpDialog.qml
         qml/Workspace.qml
         qml/DocumentPane.qml
         qml/CanvasPane.qml

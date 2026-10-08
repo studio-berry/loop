@@ -23,6 +23,7 @@
       "LoopLibQuick/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
+      "PdfTool/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
@@ -399,6 +400,7 @@
         "LoopLibQuick",
         "PdfExampleGenerator",
         "PdfTool",
+        "PdfToolInPlaceCommands",
         "ProductQuickAccessibilitySmoke",
         "QuickShellSmoke",
         "UnitTests",
@@ -643,6 +645,7 @@
       "build_only_in_profile": false,
       "direct_links": [
         "LoopLibCore",
+        "PdfToolInPlaceCommands",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Xml",
@@ -650,6 +653,45 @@
         "ole32",
         "sapi",
         "userenv"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Xml"
+      ],
+      "transitive_targets": [
+        "LoopLibCore",
+        "PdfToolInPlaceCommands"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "PdfToolInPlaceCommands",
+      "kind": "library",
+      "cmake": "PdfTool/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "target is reachable from the maintained product graph",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Xml"
       ],
       "direct_qt_modules": [
         "Core",
@@ -672,7 +714,10 @@
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
-      "consumers": []
+      "consumers": [
+        "PdfTool",
+        "UnitTestsPdfToolContract"
+      ]
     },
     {
       "id": "ProductQuickAccessibilitySmoke",
@@ -2472,6 +2517,7 @@
       "build_only_in_profile": false,
       "direct_links": [
         "LoopLibCore",
+        "PdfToolInPlaceCommands",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2482,11 +2528,13 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoopLibCore"
+        "LoopLibCore",
+        "PdfToolInPlaceCommands"
       ],
       "transitive_qt_modules": [
         "Sql",
         "Svg",
+        "Xml",
         "Xml"
       ],
       "qt_modules": [
@@ -3643,9 +3691,9 @@
     }
   ],
   "counts": {
-    "targets": 83,
+    "targets": 84,
     "installed_in_profile": 5,
-    "build_only_in_profile": 2,
+    "build_only_in_profile": 3,
     "widgets_surfaces": 4,
     "legacy_executables": 4,
     "plugin_ui_groups": 0,
