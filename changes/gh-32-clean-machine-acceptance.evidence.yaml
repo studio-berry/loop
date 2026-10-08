@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: operator-acceptance-reporting
+    evidence:
+      - unit:scripts/qualification/test_verify_operator_acceptance.py
+      - unit:operator-acceptance-packet-ci
+unresolved:
+  - The Editor still publishes to a temporary destination. Durable publication and complete receipt export require the accepted Core destination contract.
+  - No exact-source Linux AppImage or Windows MSI installed-product packet, representative production PDF recording, matching receipt pair or human review was available. Issue 32 remains blocked.

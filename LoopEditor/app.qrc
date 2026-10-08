@@ -2,5 +2,16 @@
     <qresource prefix="/">
         <file>app-icon.svg</file>
         <file alias="profiles/loop-default.json">../loop-preflight/profiles/loop-default.json</file>
+        <file alias="operator/check-catalog.json">../docs/generated/preflight-check-catalog.json</file>
+        <file alias="operator/guide.json">operator/guide.json</file>
+        <file alias="operator/samples/manifest.json">operator/samples/manifest.json</file>
+        <file alias="operator/samples/pass.pdf">operator/samples/pass.pdf</file>
+        <file alias="operator/samples/fail.pdf">operator/samples/fail.pdf</file>
+        <file alias="operator/samples/incomplete.pdf">operator/samples/incomplete.pdf</file>
+        <file alias="operator/samples/correction.pdf">operator/samples/correction.pdf</file>
+        <file alias="operator/samples/profile.json">operator/samples/profile.json</file>
+        <file alias="operator/samples/incomplete-profile.json">operator/samples/incomplete-profile.json</file>
+        <file alias="operator/samples/correction-recipe.json">operator/samples/correction-recipe.json</file>
+        <file alias="operator/samples/LICENSE.txt">operator/samples/LICENSE.txt</file>
     </qresource>
 </RCC>

@@ -28,10 +28,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+          SOURCE_REF: ${{ github.event.client_payload.source_ref || 'stable' }}
         run: |
-          gh workflow run LinuxInstall.yml --repo studio-berry/loop --ref stable \
+          gh workflow run LinuxInstall.yml --repo studio-berry/loop --ref "$SOURCE_REF" \
             -f "source_sha=${SOURCE_SHA}"
-          gh workflow run WindowsInstall.yml --repo studio-berry/loop --ref stable \
+          gh workflow run WindowsInstall.yml --repo studio-berry/loop --ref "$SOURCE_REF" \
             -f "source_sha=${SOURCE_SHA}"
 
   dispatch-release-draft:

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "editorhost.h"
+#include "operatorhelp.h"
 
 #include "pdfapplicationidentity.h"
 #include "pdfapplicationtranslator.h"
@@ -40,6 +41,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QSGRendererInterface>
 #include <QStyleHints>
 #include <QTimer>
@@ -249,12 +251,16 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
 
 int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString& exeDir)
 {
+    QSettings helpSettings;
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    OperatorHelp help(helpSettings, appData.isEmpty() ? QString() : QDir(appData).filePath(QStringLiteral("samples")));
     QQmlApplicationEngine engine;
     for (const QString& importPath : packagedQmlImportPaths(exeDir))
     {
         engine.addImportPath(importPath);
     }
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
+    engine.rootContext()->setContextProperty(QStringLiteral("operatorHelpController"), &help);
     qmlRegisterUncreatableType<EditorHost>("Loop.Quick",
                                            1,
                                            0,
@@ -382,8 +388,12 @@ int main(int argc, char* argv[])
         return runQuickSmoke(application, host, exeDir);
     }
 
+    QSettings helpSettings;
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    OperatorHelp help(helpSettings, appData.isEmpty() ? QString() : QDir(appData).filePath(QStringLiteral("samples")));
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
+    engine.rootContext()->setContextProperty(QStringLiteral("operatorHelpController"), &help);
     qmlRegisterUncreatableType<EditorHost>("Loop.Quick",
                                            1,
                                            0,

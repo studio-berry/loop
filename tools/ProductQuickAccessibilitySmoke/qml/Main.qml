@@ -14,6 +14,7 @@ ApplicationWindow {
     Accessible.name: qsTr("Loop PDF editor")
 
     property var host: editorHost
+    property var helpController: typeof operatorHelpController !== "undefined" ? operatorHelpController : null
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     visible: true
@@ -21,6 +22,26 @@ ApplicationWindow {
     height: 768
     minimumWidth: 800
     minimumHeight: 600
+
+    OperatorHelpDialog {
+        id: operatorHelp
+        parent: Overlay.overlay
+        helpController: window.helpController
+        host: window.host
+    }
+
+    Shortcut {
+        sequence: "F1"
+        onActivated: {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            operatorHelp.showWorkspace()
+        }
+    }
+
+    Component.onCompleted: {
+        if (helpController && helpController.welcomeNeeded)
+            operatorHelp.open()
+    }
     title: host && host.displayTitle.length > 0 ? host.displayTitle : qsTr("Loop")
 
     Connections {
@@ -223,6 +244,13 @@ ApplicationWindow {
             window: window
             openDialog: openDialog
             saveAsDialog: saveAsDialog
+            onHelpRequested: function(checkId, findingType) {
+                if (window.host && window.host.focusRestoration) window.host.focusRestoration.remember(window.activeFocusItem)
+                if (checkId.length > 0)
+                    operatorHelp.showFinding(checkId, findingType)
+                else
+                    operatorHelp.showWorkspace()
+            }
         }
 
         Pane {

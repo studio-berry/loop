@@ -448,7 +448,18 @@ bool verifyFixLifecyclePresentation(QQuickWindow* window, EditorHost& host)
         }
     }
 
-    return lifecycleNamed && summaryCarriesState && controlsReachable;
+    const bool singleExecutionControl =
+        window->findChildren<QQuickItem*>(QStringLiteral("fixExecutePlanButton")).size() == 1 &&
+        !window->findChild<QQuickItem*>(QStringLiteral("confirmActionListButton"));
+    if (!singleExecutionControl)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke fix_execution_control_not_unique\n");
+    }
+    const bool executionAccessible = verifyNamedAccessibility(
+        window, QStringLiteral("fixExecutePlanButton"), QAccessible::PushButton, false);
+
+    return lifecycleNamed && summaryCarriesState && controlsReachable &&
+           singleExecutionControl && executionAccessible;
 }
 
 bool verifyNamedAccessibility(QQuickWindow* window,

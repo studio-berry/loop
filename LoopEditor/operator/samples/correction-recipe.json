@@ -1,0 +1,16 @@
+{
+  "schema": "loop-action-list/2",
+  "id": "loop-learning-bleed",
+  "name": "Learning: add bleed",
+  "steps": [
+    {
+      "id": "bleed",
+      "operation": "add-bleed",
+      "params": {
+        "bleed_mm": 3,
+        "mode": "mirror",
+        "force": true
+      }
+    }
+  ]
+}

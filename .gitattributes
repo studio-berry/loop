@@ -5,6 +5,8 @@ docs/generated/phase5-widgets-inventory.json text eol=lf
 docs/generated/phase5-widgets-disposition.json text eol=lf
 UnitTests/testdata/interaction-traces/** text eol=lf
 *.pdf binary
+LoopEditor/operator/samples/*.json text eol=lf
+LoopEditor/operator/samples/LICENSE.txt text eol=lf
 *.icc binary
 Fuzz/corpus/regression/** binary
 Fuzz/corpus/regression/README.md text

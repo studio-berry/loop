@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "id": "loop-learning-limits",
+  "version": "1.0.0",
+  "name": "Learning: unsupported claim",
+  "description": "Learning profile: inspect the sample's unsupported PDF/X-5n declaration. This sample does not conform to PDF/X.",
+  "job_types": [
+    "Venue Poster",
+    "Handbill",
+    "Signage"
+  ],
+  "checks": [
+    {
+      "id": "embedded-fonts",
+      "severity": "error"
+    },
+    {
+      "id": "image-resolution",
+      "min_dpi": 300,
+      "severity": "warning"
+    },
+    {
+      "id": "bleed",
+      "required": true,
+      "amount_pt": 9,
+      "severity": "error"
+    },
+    {
+      "id": "trim",
+      "severity": "warning",
+      "tolerance_pt": 1
+    },
+    {
+      "id": "page-size",
+      "severity": "warning",
+      "tolerance_pt": 1
+    },
+    {
+      "id": "color-mode",
+      "allowed": [
+        "CMYK",
+        "Grayscale"
+      ],
+      "severity": "error"
+    },
+    {
+      "id": "transparency-risk",
+      "severity": "warning"
+    },
+    {
+      "id": "color-inventory",
+      "probe_dpi": 150,
+      "rich_black_k_percent": 10,
+      "severity": "info"
+    },
+    {
+      "id": "white-overprint",
+      "severity": "warning"
+    },
+    {
+      "id": "conformance-claims",
+      "severity": "warning"
+    }
+  ],
+  "fixups": [
+    {
+      "id": "rgb-to-cmyk",
+      "confirm": true
+    },
+    {
+      "id": "add-bleed",
+      "amount_pt": 9,
+      "confirm": true
+    },
+    {
+      "id": "downsample-images",
+      "target_dpi": 300,
+      "confirm": true
+    }
+  ]
+}
