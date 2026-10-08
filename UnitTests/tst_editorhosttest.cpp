@@ -257,6 +257,7 @@ private slots:
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void completedDragOfARefusedKindIsReportedAndChangesNothing();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
+    void translatePageBoxRefusesAMoveThatIntroducesABlockingFinding();
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
@@ -1374,6 +1375,61 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
 
     // The as-received input is never the publication target.
     QCOMPARE(fileDigest(documentPath), sourceDigest);
+}
+
+void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    // A 10 pt trim inset leaves 8 pt on the right and top edges after the +2/+3 pt move. The default
+    // profile requires 9 pt of bleed, and with no BleedBox that bleed is the media box.
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
+    const QString documentPath = directory.filePath(QStringLiteral("tight-margin.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(documentPath, &document, true));
+    }
+
+    const QString recipePath = directory.filePath(QStringLiteral("tight-margin-move.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("tight-margin-move") },
+                                       { QStringLiteral("name"), QStringLiteral("Tight margin move") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("move") },
+                                             { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                            { QStringLiteral("page_index"), 0 },
+                                                            { QStringLiteral("dx"), 2 },
+                                                            { QStringLiteral("dy"), 3 } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    QVERIFY(host.selectActionListRecipe(QStringLiteral("tight-margin-move")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
+
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("failed"));
+    QVERIFY(host.actionList()->property("operatorSummary").toString().contains(QStringLiteral("blocking findings")));
 }
 
 void EditorHostTest::fixRollbackReturnsToARecordedRevision()

@@ -3815,8 +3815,32 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
             {
                 if (!outcome->candidate)
                 {
+                    QStringList reasons;
+                    const auto appendDiagnostics = [&reasons](const QJsonArray& diagnostics)
+                    {
+                        for (const QJsonValue& diagnostic : diagnostics)
+                        {
+                            reasons.append(diagnostic.toObject().value(QStringLiteral("message")).toString());
+                        }
+                    };
+                    appendDiagnostics(outcome->executionResult.diagnostics);
+                    for (const pdf::PDFActionListStepResult& step : outcome->executionResult.steps)
+                    {
+                        if (step.status != pdf::PDFActionListStepStatus::Failed)
+                        {
+                            continue;
+                        }
+                        appendDiagnostics(step.diagnostics);
+                        for (const QJsonValue& failure : step.repairResult.value(QStringLiteral("validation_failures")).toArray())
+                        {
+                            reasons.append(failure.toString());
+                        }
+                    }
+                    reasons.removeAll(QString());
+                    reasons.removeDuplicates();
                     m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
-                                                   tr("Action List produced no document."));
+                                                   reasons.isEmpty() ? tr("Action List produced no document.")
+                                                                     : reasons.join(QLatin1Char(' ')));
                     break;
                 }
                 if (m_acceptActionListResults &&
