@@ -1,0 +1,10 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: encrypted-quick-open-and-permission-gates
+    evidence:
+      - unit:agent-policy:quick
+      - unit:agent-policy:interaction
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - integration:tools/ProductQuickAccessibilitySmoke/main.cpp
+unresolved: []

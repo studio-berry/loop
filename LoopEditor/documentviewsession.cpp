@@ -68,6 +68,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     // constructed DocumentViewSession parent.
     m_context(nullptr, nullptr, DefaultCacheLimit),
     m_logContextEnd("context_end"),
+    m_loader([this](bool* ok, const pdf::PDFOperationControl* control)
+             { return queryPassword(ok, control); }),
     m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
     m_logSubmitter("submitter"),
     m_submitter(*m_scheduler),
@@ -112,6 +114,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
 
 DocumentViewSession::~DocumentViewSession()
 {
+    m_stopping = true;
     // Coordinators detach their completion relays and cancel admitted work.
     // Destroy them before joining the scheduler so no completion can address a
     // session object during teardown. The captured adapters remain alive until
@@ -123,6 +126,75 @@ DocumentViewSession::~DocumentViewSession()
     m_facade.reset();
     m_scheduler.reset();
     m_renderer.detach();
+}
+
+quint64 DocumentViewSession::passwordRequestId() const
+{
+    return m_passwordRequest ? m_passwordRequest->id : 0;
+}
+
+bool DocumentViewSession::answerPassword(quint64 requestId, QString password, bool accepted)
+{
+    const auto request = m_passwordRequest;
+    if (!request || request->id != requestId)
+    {
+        return false;
+    }
+    {
+        QMutexLocker lock(&request->mutex);
+        if (request->complete)
+        {
+            return false;
+        }
+        request->password = accepted ? std::move(password) : QString();
+        request->accepted = accepted;
+        request->complete = true;
+        request->answered.wakeAll();
+    }
+    m_passwordRequest.reset();
+    Q_EMIT passwordRequestChanged();
+    return true;
+}
+
+QString DocumentViewSession::queryPassword(bool* ok, const pdf::PDFOperationControl* control)
+{
+    *ok = false;
+    auto request = std::make_shared<PasswordRequest>();
+    request->id = ++m_nextPasswordRequest;
+    QMetaObject::invokeMethod(this, [this, request]
+                              {
+        QMutexLocker lock(&request->mutex);
+        if (request->complete || m_stopping)
+        {
+            return;
+        }
+        m_passwordRequest = request;
+        lock.unlock();
+        Q_EMIT passwordRequestChanged(); }, Qt::QueuedConnection);
+
+    QString password;
+    {
+        QMutexLocker lock(&request->mutex);
+        while (!request->complete && !m_stopping && !pdf::PDFOperationControl::isOperationCancelled(control))
+        {
+            request->answered.wait(&request->mutex, 50);
+        }
+        if (!m_stopping && !pdf::PDFOperationControl::isOperationCancelled(control) && request->accepted)
+        {
+            *ok = true;
+            password = std::move(request->password);
+        }
+        request->password.clear();
+        request->complete = true;
+    }
+    QMetaObject::invokeMethod(this, [this, request]
+                              {
+        if (m_passwordRequest == request)
+        {
+            m_passwordRequest.reset();
+            Q_EMIT passwordRequestChanged();
+        } }, Qt::QueuedConnection);
+    return password;
 }
 
 void DocumentViewSession::prepareDocumentView()

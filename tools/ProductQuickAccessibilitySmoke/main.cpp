@@ -6,9 +6,11 @@
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsecurityhandler.h"
 #include "preflightprofileresolver.h"
 
 #include <QAccessible>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -51,6 +53,140 @@ void sendKey(QQuickWindow* window, QQuickItem* item, Qt::Key key)
     QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
     QCoreApplication::sendEvent(window, &press);
     QCoreApplication::sendEvent(window, &release);
+}
+
+void runEncryptedOpenFixture(QGuiApplication& application, EditorHost& host, QQuickWindow* window)
+{
+    auto directory = std::make_shared<QTemporaryDir>();
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+    settings.algorithm = pdf::PDFSecurityHandlerFactory::AES_256;
+    settings.userPassword = QStringLiteral("fixture-user");
+    settings.ownerPassword = QStringLiteral("fixture-owner");
+    settings.id = builder.build().getIdPart(0);
+    builder.setSecurityHandler(pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings));
+    const auto document = builder.build();
+    const QString path = directory->filePath(QStringLiteral("quick-password-AES-256.pdf"));
+    pdf::PDFDocumentWriter writer(nullptr);
+    if (!directory->isValid() || !writer.write(path, &document, true))
+    {
+        application.exit(6);
+        return;
+    }
+    QFile fixture(path);
+    if (!fixture.open(QIODevice::ReadOnly))
+    {
+        application.exit(6);
+        return;
+    }
+    fprintf(stdout, "encrypted-open-fixture AES-256 sha256=%s\n",
+            QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex().constData());
+    auto* focusTarget = window->findChild<QQuickItem*>(QStringLiteral("openDocumentButton"));
+    if (!focusTarget)
+    {
+        application.exit(6);
+        return;
+    }
+    focusTarget->forceActiveFocus();
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, window, directory, path, focusTarget, timer, phase = 0]() mutable
+                     {
+                         auto* field = window->findChild<QQuickItem*>(QStringLiteral("documentPasswordField"));
+                         if (!field)
+                         {
+                             application.exit(6);
+                             return;
+                         }
+                         const auto fail = [&application](const char* reason)
+                         {
+                             fprintf(stderr, "encrypted-open-fixture failed=%s\n", reason);
+                             application.exit(6);
+                         };
+                         if (phase == 0 || phase == 2 || phase == 4)
+                         {
+                             if (!host.passwordRequestId() || !field->isVisible() || !field->hasActiveFocus())
+                             {
+                                 return;
+                             }
+                             auto* accessible = QAccessible::queryAccessibleInterface(field);
+                             if (!accessible || accessible->role() != QAccessible::EditableText ||
+                                 accessible->text(QAccessible::Name) != QStringLiteral("Document password") ||
+                                 !accessible->state().passwordEdit)
+                             {
+                                 fail("password-accessibility");
+                                 return;
+                             }
+                             if (phase == 4)
+                             {
+                                 field->setProperty("text", QStringLiteral("discarded-fixture-password"));
+                                 sendKey(window, field, Qt::Key_Escape);
+                             }
+                             else
+                             {
+                                 const QString password = phase == 0 ? QStringLiteral("fixture-user") : QStringLiteral("wrong-fixture-password");
+                                 field->setProperty("text", password);
+                                 if (accessible->text(QAccessible::Value).contains(password))
+                                 {
+                                     fail("accessible-password-disclosure");
+                                     return;
+                                 }
+                                 sendKey(window, field, Qt::Key_Return);
+                             }
+                             ++phase;
+                             return;
+                         }
+                         if (phase == 1)
+                         {
+                             if (!host.hasDocument())
+                             {
+                                 return;
+                             }
+                             if (!field->property("text").toString().isEmpty() || host.passwordRequestId() ||
+                                 host.sessionForTest()->facade().permissions().allowsCorrection() || host.planActionList())
+                             {
+                                 fail("restricted-user-open");
+                                 return;
+                             }
+                         }
+                         if (phase == 3)
+                         {
+                             if (host.documentState() != QLatin1String("error"))
+                             {
+                                 return;
+                             }
+                             if (host.typedError() != QLatin1String("document/password-incorrect") ||
+                                 !field->property("text").toString().isEmpty())
+                             {
+                                 fail("wrong-password-terminal");
+                                 return;
+                             }
+                         }
+                         if (phase == 5)
+                         {
+                             if (host.documentState() != QLatin1String("empty") || host.passwordRequestId())
+                             {
+                                 return;
+                             }
+                             if (host.typedError() != QLatin1String("document/password-cancelled") ||
+                                 !field->property("text").toString().isEmpty() || !focusTarget->hasActiveFocus())
+                             {
+                                 fail("cancel-or-focus-restoration");
+                                 return;
+                             }
+                             timer->stop();
+                             fprintf(stdout, "encrypted-open-fixture status=pass user-open=1 wrong-password=1 escape-cancel=1 protected-accessible-field=1 focus-restored=1\n");
+                             fflush(stdout);
+                             application.exit(0);
+                             return;
+                         }
+                         focusTarget->forceActiveFocus();
+                         host.openFileUrl(QUrl::fromLocalFile(path));
+                         ++phase;
+                     });
+    timer->start(30);
 }
 
 void runFindingNavigationFixture(QGuiApplication& application,
@@ -884,6 +1020,7 @@ int main(int argc, char** argv)
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     const QStringList arguments = application.arguments();
+    const bool encryptedFixture = arguments.contains(QStringLiteral("--encrypted-fixture"));
     const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
     const bool nativeProbe = probeArgument >= 0;
     if (!nativeProbe)
@@ -931,11 +1068,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host, nativeProbe, probeDirectory](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (encryptedFixture)
+                         {
+                             QTimer::singleShot(0, &application, [&application, &host, window]()
+                                                { runEncryptedOpenFixture(application, host, window); });
                              return;
                          }
 

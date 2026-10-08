@@ -24,6 +24,7 @@
 
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsecurityhandler.h"
 
 #include <QFileInfo>
 
@@ -37,7 +38,7 @@ QString DocumentSource::displayLabel() const
     return QFileInfo(path).fileName();
 }
 
-PDFReaderDocumentLoader::PDFReaderDocumentLoader(std::function<QString(bool*)> queryPassword,
+PDFReaderDocumentLoader::PDFReaderDocumentLoader(std::function<QString(bool*, const pdf::PDFOperationControl*)> queryPassword,
                                                  pdf::PDFProcessingLimits processingLimits) :
     m_queryPassword(std::move(queryPassword)),
     m_processingLimits(std::move(processingLimits))
@@ -62,21 +63,24 @@ DocumentLoadResult PDFReaderDocumentLoader::load(const DocumentSource& source,
         return result;
     }
 
-    // A host that cannot prompt must still produce a definite answer. Reporting
-    // "not ok" makes the reader treat an encrypted document as cancelled rather
-    // than retrying with an empty password.
-    std::function<QString(bool*)> queryPassword = m_queryPassword;
-    if (!queryPassword)
+    bool prompted = false;
+    bool incorrectPassword = false;
+    const auto queryPassword = [&](bool* ok)
     {
-        queryPassword = [](bool* ok)
+        *ok = false;
+        if (context.isCancellationRequested())
         {
-            if (ok)
-            {
-                *ok = false;
-            }
             return QString();
-        };
-    }
+        }
+        // Core asks again only after rejecting the submitted password.
+        if (prompted)
+        {
+            incorrectPassword = true;
+            return QString();
+        }
+        prompted = true;
+        return m_queryPassword ? m_queryPassword(ok, context.operationControl()) : QString();
+    };
 
     pdf::PDFDocumentReader reader(nullptr, queryPassword, true, false, m_processingLimits);
     reader.setOperationControl(context.operationControl());
@@ -98,8 +102,9 @@ DocumentLoadResult PDFReaderDocumentLoader::load(const DocumentSource& source,
             break;
 
         case pdf::PDFDocumentReader::Result::Cancelled:
-            result.outcome = DocumentLoadOutcome::Cancelled;
-            result.typedError = QStringLiteral("document/cancelled");
+            result.outcome = incorrectPassword ? DocumentLoadOutcome::Failed : DocumentLoadOutcome::Cancelled;
+            result.typedError = incorrectPassword ? QStringLiteral("document/password-incorrect")
+                                                  : QStringLiteral("document/password-cancelled");
             break;
 
         case pdf::PDFDocumentReader::Result::Failed:
@@ -122,6 +127,13 @@ DocumentWriteResult PDFDocumentFileWriter::write(const DocumentSource& target,
     if (!target.isValid() || !document)
     {
         result.typedError = QStringLiteral("document/invalid-target");
+        return result;
+    }
+    const auto* security = document->getStorage().getSecurityHandler();
+    if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
+        !security->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
+    {
+        result.typedError = QStringLiteral("document/correction-permission-denied");
         return result;
     }
 

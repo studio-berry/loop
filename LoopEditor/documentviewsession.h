@@ -15,8 +15,12 @@
 #include "pdfjobscheduler.h"
 #include "pdfrenderer.h"
 
+#include <QMutex>
 #include <QObject>
+#include <QWaitCondition>
 #include <QtGlobal>
+
+#include <atomic>
 #include <memory>
 
 namespace pdfinteraction
@@ -74,7 +78,27 @@ public:
     void clearDocumentView();
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
+    quint64 passwordRequestId() const;
+    bool answerPassword(quint64 requestId, QString password, bool accepted);
+
+signals:
+    void passwordRequestChanged();
+
 private:
+    struct PasswordRequest
+    {
+        quint64 id = 0;
+        QMutex mutex;
+        QWaitCondition answered;
+        bool complete = false;
+        bool accepted = false;
+        QString password;
+    };
+    QString queryPassword(bool* ok, const pdf::PDFOperationControl* control);
+    std::atomic_bool m_stopping = false;
+    std::atomic<quint64> m_nextPasswordRequest = 0;
+    std::shared_ptr<PasswordRequest> m_passwordRequest;
+
     // Forces DocumentViewSession member-init order without copy-constructing
     // non-copyable QObject members (MSVC C2280).
     struct InitStage

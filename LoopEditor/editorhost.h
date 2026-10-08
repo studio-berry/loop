@@ -88,6 +88,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY presentationChanged)
     Q_PROPERTY(QString displayTitle READ displayTitle NOTIFY presentationChanged)
     Q_PROPERTY(QString typedError READ typedError NOTIFY presentationChanged)
+    Q_PROPERTY(quint64 passwordRequestId READ passwordRequestId NOTIFY passwordRequestChanged)
     Q_PROPERTY(int pageCount READ pageCount NOTIFY presentationChanged)
     Q_PROPERTY(int currentPage READ currentPage NOTIFY presentationChanged)
     Q_PROPERTY(qreal zoom READ zoom NOTIFY presentationChanged)
@@ -193,6 +194,9 @@ public:
     bool hasDocument() const;
     QString displayTitle() const;
     QString typedError() const;
+    quint64 passwordRequestId() const;
+    Q_INVOKABLE bool submitPassword(quint64 requestId, const QString& password);
+    Q_INVOKABLE bool cancelPassword(quint64 requestId);
     int pageCount() const;
     int currentPage() const;
     qreal zoom() const;
@@ -467,6 +471,7 @@ public:
     const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
 
 signals:
+    void passwordRequestChanged();
     /// A completed drag was refused rather than committed (#206). Both values are the
     /// target's stable names so a surface can explain the refusal.
     void dragRefused(const QString& targetKind, const QString& targetId);
@@ -491,6 +496,7 @@ private:
     void registerShellHandlers();
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
+    bool commandPermissionAllowed(const QString& commandId) const;
     bool requestMoveSelection(const QVariantMap& parameters);
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);

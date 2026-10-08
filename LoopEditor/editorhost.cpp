@@ -43,6 +43,7 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationhistorystore.h"
@@ -335,6 +336,7 @@ EditorHost::EditorHost(QObject* parent) :
     reloadActionListRecipes();
 
     connectFacade();
+    connect(m_session.get(), &DocumentViewSession::passwordRequestChanged, this, &EditorHost::passwordRequestChanged);
     connectViewport();
     connectCatalog();
     connectInteraction();
@@ -439,6 +441,21 @@ EditorHost::~EditorHost()
 QString EditorHost::documentState() const
 {
     return QString::fromLatin1(pdfinteraction::getDocumentStateName(m_session->facade().state()));
+}
+
+quint64 EditorHost::passwordRequestId() const
+{
+    return m_session->passwordRequestId();
+}
+
+bool EditorHost::submitPassword(quint64 requestId, const QString& password)
+{
+    return m_session->answerPassword(requestId, password, true);
+}
+
+bool EditorHost::cancelPassword(quint64 requestId)
+{
+    return m_session->answerPassword(requestId, {}, false);
 }
 
 bool EditorHost::hasDocument() const
@@ -681,7 +698,8 @@ pdf::PDFActionListExecutionResult EditorHost::fixRunResult() const
 
 bool EditorHost::fixExecutionArmed() const
 {
-    return fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
+    return m_session->facade().permissions().allowsCorrection() &&
+           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
 }
 
 QString EditorHost::fixLifecycleStateName() const
@@ -1004,7 +1022,7 @@ QVariantMap EditorHost::fixSignOff() const
 
 bool EditorHost::fixRollbackAvailable() const
 {
-    return hasDocument() && !m_fixRollbackPoints.isEmpty() &&
+    return m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
            documentShellStatus() != QLatin1String("MODIFIED");
 }
 
@@ -1888,6 +1906,18 @@ bool EditorHost::runPreflight()
             outcome->documentPath = documentPath;
             outcome->auditBytes = std::move(auditBytes);
             outcome->auditSummary = pdf::preflightAuditReportSummary(outcome->result, documentPath);
+            pdf::PreflightInspectionReceipt receipt;
+            QString receiptError;
+            if (!pdf::buildPreflightInspectionReceipt(outcome->result, profile, session->getRevision(),
+                                                      engine.lastEvidenceGraph(), receipt, receiptError))
+            {
+                throw std::runtime_error(receiptError.toStdString());
+            }
+            const auto* security = document->getStorage().getSecurityHandler();
+            receipt.limitations.append(security && security->getMode() != pdf::EncryptionMode::None
+                                           ? QStringLiteral("Document is encrypted; authenticated document permissions apply.")
+                                           : QStringLiteral("Document is not encrypted."));
+            outcome->auditSummary.insert(QStringLiteral("inspection_receipt"), receipt.toJson());
 
             if (context.isCancellationRequested())
                 return;
@@ -2395,6 +2425,11 @@ bool EditorHost::saveActionListRecipe()
 bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                      pdfinteraction::ActionListController::State controllerState)
 {
+    if (!m_session->facade().permissions().allowsCorrection())
+    {
+        announceDocumentState(tr("Document permissions restrict corrections. No plan or output was created."));
+        return false;
+    }
     if (!hasDocument() || m_selectedActionListRecipeId.isEmpty() || !m_session->revisionSource())
     {
         return false;
@@ -2538,6 +2573,10 @@ void EditorHost::clearFixReview()
 
 bool EditorHost::approveActionListPlan()
 {
+    if (!m_session->facade().permissions().allowsCorrection())
+    {
+        return false;
+    }
     return approveActionListPlan(fixCurrentPlanDigest(), fixRunResult().sourceSha256,
                                  m_fixPlannedDocumentRevision);
 }
@@ -3178,18 +3217,41 @@ QVariantList EditorHost::commandDescriptors() const
     descriptors.reserve(m_session->catalog().descriptors().size());
     for (const pdfinteraction::CommandDescriptor& descriptor : m_session->catalog().descriptors())
     {
-        descriptors.append(descriptorToVariant(descriptor, m_session->catalog().isEnabled(descriptor.id)));
+        descriptors.append(descriptorToVariant(descriptor, isCommandEnabled(descriptor.id)));
     }
     return descriptors;
 }
 
 bool EditorHost::isCommandEnabled(const QString& commandId) const
 {
-    return m_session->catalog().isEnabled(commandId);
+    return commandPermissionAllowed(commandId) && m_session->catalog().isEnabled(commandId);
+}
+
+bool EditorHost::commandPermissionAllowed(const QString& commandId) const
+{
+    const auto permissions = m_session->facade().permissions();
+    if (commandId == QLatin1String("actionPrint"))
+    {
+        return permissions.print;
+    }
+    if (commandId == QLatin1String("actionCopyText"))
+    {
+        return permissions.copy;
+    }
+    if (commandId == MoveSelectionCommandId || commandId == QLatin1String("actionPageGeometry") ||
+        commandId == QLatin1String("actionInsertPageNumbers") || commandId == QLatin1String("actionStickyNoteInsert"))
+    {
+        return permissions.allowsCorrection();
+    }
+    return true;
 }
 
 quint64 EditorHost::invokeCommand(const QString& commandId, const QVariantMap& parameters)
 {
+    if (!commandPermissionAllowed(commandId))
+    {
+        return pdfinteraction::InvalidCommandInvocation;
+    }
     const pdfinteraction::CommandInvocationId invocation = m_session->catalog().invoke(commandId, parameters);
     if (invocation != pdfinteraction::InvalidCommandInvocation)
     {
@@ -3502,6 +3564,7 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindNext"), hasSearchResults);
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
+    availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
     m_session->catalog().setEnabledBatch(availability);
 }
 
@@ -4091,7 +4154,7 @@ void EditorHost::setInspectionMode(QString mode)
 
 bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
 {
-    if (!hasDocument())
+    if (!m_session->facade().permissions().allowsCorrection())
     {
         return false;
     }
