@@ -372,7 +372,6 @@ public:
     Q_INVOKABLE bool planActionList();
     Q_INVOKABLE bool runActionList();
     Q_INVOKABLE bool cancelActionList();
-    Q_INVOKABLE bool confirmActionListPlan();
     Q_INVOKABLE void discardActionListPlan();
     Q_INVOKABLE QVariantMap repairParameterSchemaForOperation(const QString& operationId) const;
 

@@ -206,7 +206,8 @@ void PdfWorkerIsolationTest::supervisorFaults()
     pdftool::PdfWorkerClient client;
     QString error;
     QVERIFY2(client.start(QStringLiteral(PDFWORKER_PROBE_PATH), temp.path(), temp.path(), output.path(), &error), qPrintable(error));
-    const int timeout = mode == QLatin1String("cpu") ? 135000 : mode == QLatin1String("hang") ? 150
+    // Allow wall-clock slack for the 120 s CPU limit under contention and delayed enforcement.
+    const int timeout = mode == QLatin1String("cpu") ? 240000 : mode == QLatin1String("hang") ? 150
                                                                                               : 20000;
     const auto result = client.preflight(fixturePdf(), defaultProfile(), output.path(), mode, false, timeout);
     QCOMPARE(result.outcome, pdftool::WorkerClientOutcome::Incomplete);

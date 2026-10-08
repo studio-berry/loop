@@ -1373,7 +1373,9 @@ void ProductOperatorLoopTest::planApprovalJourneyBindsDisplayedIdentityAndBlocks
     QVERIFY(!qmlHost.property(QStringLiteral("runActionList")).call().toBool());
     QVERIFY(qmlHost.property(QStringLiteral("approveActionListPlan")).call().isError());
     QVERIFY(!host.fixExecutionArmed());
-    QVERIFY(!activate("confirmActionListButton"));
+    QVERIFY(!findWorkspaceItem(pane.get(), QLatin1String("confirmActionListButton")));
+    QVERIFY(qmlHost.property(QStringLiteral("confirmActionListPlan")).isUndefined());
+    QVERIFY(!activate("fixExecutePlanButton"));
     QVERIFY(activate("fixRejectPlanButton"));
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("rejected"));
     QVERIFY(!qmlHost.property(QStringLiteral("runActionList")).call().toBool());

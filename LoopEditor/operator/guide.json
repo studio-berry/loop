@@ -1,0 +1,19 @@
+{
+  "workspaces": [
+    {"name": "Document", "help": "Open a PDF from File > Open, or start with a sample below. Navigate pages and zoom to read the job. The canvas is for inspection; its pixels are not a publication certificate. Save As writes a separate copy. Keep the original job unchanged."},
+    {"name": "Preflight", "help": "Choose the job's profile, then Run preflight. Select a finding to locate its evidence on the page. Open its Help button to see exactly what its check measures and cannot cover. Pass applies only to enabled checks. Incomplete means some checks could not establish a result; never treat it as clear. After editing, run a fresh inspection. Export the report for handoff."},
+    {"name": "Production Preview", "help": "Read the fidelity message before using the preview. Inspect plates, separations and overprint with the available preview controls. An approximate, pending or failed render is not production proof. Even an authoritative render cannot replace Core's preflight and publication evidence."},
+    {"name": "Pages", "help": "Inspect page boxes and production geometry. Confirm units, scope and affected pages before applying a change. Page box correction does not create missing artwork. Reinspect any changed job and retain the original."},
+    {"name": "Inspect", "help": "Select an object or finding to read its evidence, location, profile and limitations. The inspector describes the current document revision. A stale or unsupported selection cannot authorize a correction. Return to Preflight to locate a current finding."},
+    {"name": "Fix", "help": "Select the sample or job's Action List recipe, validate it and create a plan. Review the plan, candidate identity, affected pages, save policy and findings before approval. Approval applies to that exact reviewed plan. Execute only when the host enables it. Read the full recheck and sign-off; refused or incomplete publication is not success. On this candidate the Editor sign-off covers a temporary publication, not a later Save As. Durable delivery qualification is pending; do not describe a separately saved PDF as certified by that receipt."},
+    {"name": "Compare", "help": "Compare before and after evidence for the same reviewed plan and document revision. Read resolved, unchanged, introduced and incomplete findings separately. Navigating a delta helps inspect it but does not approve it. A stale comparison must be planned and inspected again. The receipt, not similarity of the pictures, establishes publication identity."}
+  ],
+  "getting_started": [
+    "1. Install the reviewed Windows MSI, or launch the reviewed Linux AppImage. Keep the package and original PDF for handoff.",
+    "2. Open the correction sample from Sample jobs. Loop creates a local PDF, profile and recipe for the exercise.",
+    "3. Switch to Preflight, Run preflight and select the bleed finding. Use its Help button to read measures and limitations, then inspect the page evidence.",
+    "4. Switch to Fix. Validate the imported sample recipe and Plan. Review the candidate and plan; use Production Preview and Compare to inspect the available evidence and its limits.",
+    "5. Approve the exact reviewed plan and Execute. Read Core's recheck and sign-off. If anything is refused, stale or incomplete, stop and retain that result.",
+    "6. Keep the original PDF. Sign-off currently covers a temporary copy. Save As creates a separate file whose bytes are not covered by that receipt. Retain this limitation with any delivery handoff."
+  ]
+}

@@ -178,21 +178,64 @@ def verify(directory: Path, source_sha: str) -> tuple[str, tuple[str, ...]]:
     return platform, identity
 
 
+def assess_packets(directories: list[Path], source_sha: str) -> dict:
+    report = {"source_sha": source_sha, "status": "rejected", "packets": [], "errors": []}
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        report["errors"].append("source SHA must be 40 lowercase hexadecimal characters")
+        return report
+    for directory in directories:
+        record = {"path": str(directory.resolve())}
+        try:
+            platform, identity = verify(directory, source_sha)
+            record.update(
+                status="verified", platform=platform,
+                packet_sha256=digest(directory / "packet.json"),
+                review_sha256=digest(directory / "review.json"),
+                receipt_identity=dict(zip(("plan_digest", "source_sha256", "effective_profile_digest"), identity)),
+            )
+        except FileNotFoundError as error:
+            record.update(status="unavailable", reason=str(error))
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            record.update(status="rejected", reason=str(error))
+        report["packets"].append(record)
+
+    if any(record["status"] == "rejected" for record in report["packets"]):
+        return report
+    if any(record["status"] == "unavailable" for record in report["packets"]):
+        report["status"] = "incomplete"
+        return report
+    if {record["platform"] for record in report["packets"]} != {"linux", "windows"}:
+        report["errors"].append("one Linux and one Windows packet are required")
+    elif report["packets"][0]["receipt_identity"] != report["packets"][1]["receipt_identity"]:
+        report["errors"].append("platform plan/source/profile receipt identities differ")
+    else:
+        report["status"] = "verified"
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--report", type=Path, help="write verification results outside the packet directories")
     parser.add_argument("packets", nargs=2, type=Path)
     args = parser.parse_args(argv)
     try:
-        if not re.fullmatch(r"[0-9a-f]{40}", args.source_sha):
-            raise ValueError("source SHA must be 40 lowercase hexadecimal characters")
-        results = [verify(path, args.source_sha) for path in args.packets]
-        if {platform for platform, _ in results} != {"linux", "windows"}:
-            raise ValueError("one Linux and one Windows packet are required")
-        if results[0][1] != results[1][1]:
-            raise ValueError("platform plan/source/profile receipt identities differ")
-    except (OSError, ValueError, TypeError, KeyError) as error:
+        if args.report and any(args.report.resolve().is_relative_to(path.resolve()) for path in args.packets):
+            raise ValueError("report must be outside the packet directories to preserve reviewed bytes")
+        report = assess_packets(args.packets, args.source_sha)
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    except (OSError, ValueError) as error:
         print(f"Operator acceptance rejected: {error}", file=sys.stderr)
+        return 1
+    if report["status"] != "verified":
+        print(f"Operator acceptance {report['status']}:", file=sys.stderr)
+        for record in report["packets"]:
+            if record["status"] != "verified":
+                print(f"- {record['path']}: {record['status']}: {record['reason']}", file=sys.stderr)
+        for error in report["errors"]:
+            print(f"- {error}", file=sys.stderr)
         return 1
     print(f"Operator packet integrity and recorded human approvals verified for {args.source_sha}.")
     return 0

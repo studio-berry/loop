@@ -257,7 +257,7 @@ private slots:
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void completedDragOfARefusedKindIsReportedAndChangesNothing();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
-    void confirmActionListPlanRefusesAnUnreviewedPlan();
+    void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
@@ -1805,7 +1805,7 @@ void EditorHostTest::refusedRenderCannotBecomeAuthoritativeEvidence()
     QVERIFY(!host.ensureAuthoritativePreview());
 }
 
-void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
+void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -1860,17 +1860,14 @@ void EditorHostTest::confirmActionListPlanRefusesAnUnreviewedPlan()
     QVERIFY(host.planActionList());
     QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
 
-    // "Approve and run" must not execute an unreviewed plan: without the armed review
-    // the call is refused and nothing is published.
     QVERIFY(!host.fixExecutionArmed());
-    QVERIFY(!host.confirmActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
     QCOMPARE(host.actionListStateName(), QStringLiteral("planned"));
     QCOMPARE(fileDigest(documentPath), sourceDigest);
 
-    // The gate is the review, not the plan: the same call is admitted once armed.
     QVERIFY(host.approveActionListPlan());
     QVERIFY(host.fixExecutionArmed());
-    QVERIFY(host.confirmActionListPlan());
+    QVERIFY(host.executeApprovedActionListPlan());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)
