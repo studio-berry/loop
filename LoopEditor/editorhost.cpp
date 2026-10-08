@@ -2179,6 +2179,7 @@ QVariantList EditorHost::actionListRecipes() const
         item.insert(QStringLiteral("name"), recipe.name);
         item.insert(QStringLiteral("source"), recipe.source);
         item.insert(QStringLiteral("valid"), recipe.valid);
+        item.insert(QStringLiteral("builtIn"), recipe.builtIn);
         item.insert(QStringLiteral("diagnostic"), recipe.diagnostic);
         item.insert(QStringLiteral("recipeHash"), recipe.recipeHash);
         item.insert(QStringLiteral("stepCount"), recipe.actionList.steps.size());
@@ -2598,6 +2599,12 @@ bool EditorHost::selectActionListRecipeForOperation(const QString& operationId)
         return false;
     }
 
+    // Precedence: a valid recipe the operator imported wins. The shipped recipe is a fallback
+    // only. An operator recipe that offers the operation but is invalid stops the change with
+    // its diagnostic rather than silently running the shipped one.
+    const pdfinteraction::ActionListRecipeEntry* operatorRecipe = nullptr;
+    const pdfinteraction::ActionListRecipeEntry* invalidOperatorRecipe = nullptr;
+    const pdfinteraction::ActionListRecipeEntry* shippedRecipe = nullptr;
     for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
     {
         const bool offersOperation = std::any_of(
@@ -2609,18 +2616,52 @@ bool EditorHost::selectActionListRecipeForOperation(const QString& operationId)
         {
             continue;
         }
-
-        m_selectedActionListRecipeId = recipe.id;
-        syncActionListDraft();
-        m_actionListController.markRecipeStale();
-        Q_EMIT actionListRecipesChanged();
-        bumpPresentation();
-        announceDocumentState(
-            tr("Recipe '%1' runs %2. Validate and plan it in the Fix workspace.").arg(recipe.name, operationId));
-        return true;
+        if (recipe.builtIn)
+        {
+            shippedRecipe = &recipe;
+        }
+        else if (recipe.valid && !operatorRecipe)
+        {
+            operatorRecipe = &recipe;
+        }
+        else if (!recipe.valid && !invalidOperatorRecipe)
+        {
+            invalidOperatorRecipe = &recipe;
+        }
     }
 
-    return false;
+    const pdfinteraction::ActionListRecipeEntry* selected = operatorRecipe;
+    if (!selected)
+    {
+        if (invalidOperatorRecipe)
+        {
+            announceDocumentState(tr("Recipe '%1' offers %2 but is invalid: %3")
+                                      .arg(invalidOperatorRecipe->name, operationId, invalidOperatorRecipe->diagnostic));
+            return false;
+        }
+        if (shippedRecipe && !shippedRecipe->valid)
+        {
+            announceDocumentState(tr("The shipped recipe for %1 is unavailable: %2")
+                                      .arg(operationId, shippedRecipe->diagnostic));
+            return false;
+        }
+        selected = shippedRecipe;
+    }
+    if (!selected)
+    {
+        announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the change.")
+                                  .arg(operationId));
+        return false;
+    }
+
+    m_selectedActionListRecipeId = selected->id;
+    syncActionListDraft();
+    m_actionListController.markRecipeStale();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    announceDocumentState(
+        tr("Recipe '%1' runs %2. Validate and plan it in the Fix workspace.").arg(selected->name, operationId));
+    return true;
 }
 
 void EditorHost::onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent)
@@ -2635,13 +2676,7 @@ void EditorHost::onCorrectiveOperationRequested(const pdfinteraction::InspectorC
     // The finding's parameters become the recipe's bindings; everything else - validate, plan,
     // review, approve - stays with the operator in the Fix workspace.
     m_actionListBindings = intent.parameters;
-    if (selectActionListRecipeForOperation(intent.operationId))
-    {
-        return;
-    }
-
-    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the correction.")
-                              .arg(intent.operationId));
+    selectActionListRecipeForOperation(intent.operationId);
 }
 
 void EditorHost::replanActionList()
@@ -2977,10 +3012,11 @@ void EditorHost::reloadActionListRecipes()
         !m_actionListCatalog.recipe(m_selectedActionListRecipeId) ||
         !m_actionListCatalog.recipe(m_selectedActionListRecipeId)->valid)
     {
+        // The shipped recipe is never the default: it is selected only when an operation needs it.
         const QList<pdfinteraction::ActionListRecipeEntry>& recipes = m_actionListCatalog.recipes();
         const auto valid = std::find_if(recipes.cbegin(), recipes.cend(),
                                         [](const pdfinteraction::ActionListRecipeEntry& recipe)
-                                        { return recipe.valid; });
+                                        { return recipe.valid && !recipe.builtIn; });
         m_selectedActionListRecipeId = valid == recipes.cend() ? QString() : valid->id;
         m_actionListBindings = QJsonObject();
     }
@@ -3024,7 +3060,7 @@ void EditorHost::updateActionListRecipeWatch()
     }
     for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
     {
-        if (QFileInfo::exists(recipe.source))
+        if (!recipe.builtIn && QFileInfo::exists(recipe.source))
         {
             m_actionListRecipeWatcher->addPath(recipe.source);
         }
@@ -4151,13 +4187,7 @@ bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
                                         { QStringLiteral("page_index"), page },
                                         { QStringLiteral("dx"), dx },
                                         { QStringLiteral("dy"), dy } };
-    if (selectActionListRecipeForOperation(TranslatePageBoxOperationId))
-    {
-        return true;
-    }
-    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the move.")
-                              .arg(TranslatePageBoxOperationId));
-    return false;
+    return selectActionListRecipeForOperation(TranslatePageBoxOperationId);
 }
 
 QString EditorHost::dragRefusalMessage(pdfinteraction::InteractionTargetKind kind)

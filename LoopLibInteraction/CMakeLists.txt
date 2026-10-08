@@ -143,9 +143,19 @@ set_source_files_properties(${LOOP_INTERACTION_COMMAND_CONTRACT}
     PROPERTIES QT_RESOURCE_ALIAS "loop-shell-actions.json"
 )
 
+# The shipped page-box recipe is embedded beside the command contract so an
+# installed package carries it without a file on disk. The catalog validates it
+# at load and names the resource if it is missing, so a broken build fails
+# closed in the Fix workspace rather than silently offering no recipe.
+set(LOOP_INTERACTION_BUILTIN_RECIPE "${CMAKE_CURRENT_SOURCE_DIR}/builtin-recipe-translate-page-box.json")
+
+set_source_files_properties(${LOOP_INTERACTION_BUILTIN_RECIPE}
+    PROPERTIES QT_RESOURCE_ALIAS "builtin-recipe-translate-page-box.json"
+)
+
 qt_add_resources(LoopLibInteraction "commandcatalog"
     PREFIX "/loop"
-    FILES ${LOOP_INTERACTION_COMMAND_CONTRACT}
+    FILES ${LOOP_INTERACTION_COMMAND_CONTRACT} ${LOOP_INTERACTION_BUILTIN_RECIPE}
 )
 
 # qt_add_resources keeps the qInitResources_* TU in a sibling target. For this
