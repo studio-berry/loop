@@ -53,14 +53,7 @@ Item {
         Accessible.description: qsTr("The selected finding's registered evidence mode.")
     }
 
-    // Persistent, non-modal render-fidelity indicator (issue #49, #28). Unlike a
-    // toast, this stays up for as long as the page is not an exact fast render so an operator
-    // cannot miss overprinted artwork that will drop out on press. It names
-    // both the fidelity and the render origin (fast canvas path vs the
-    // authoritative output-preview path) via EditorHost's projection, and lets
-    // the operator escalate the current page. The words come from
-    // previewFidelitySummary; QML derives nothing. Mirrors Main.qml's
-    // stateBanner: a Pane + Label status bar.
+    // Fidelity and origin stay visible even for exact fast-canvas pixels.
     Pane {
         id: fidelityBanner
         objectName: "renderFidelityBanner"
@@ -68,13 +61,11 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         padding: 8
-        visible: root.host && root.host.hasDocument && root.host.previewFidelityStateName !== "exact"
+        visible: root.host && root.host.hasDocument
 
         Accessible.role: Accessible.StatusBar
         Accessible.name: qsTr("Render fidelity status")
-        Accessible.description: root.host && root.host.previewFidelityOriginName === "output-preview"
-                                ? qsTr("Authoritative output-preview render")
-                                : qsTr("Fast canvas render")
+        Accessible.description: root.host ? root.host.previewFidelitySummary : ""
 
         RowLayout {
             anchors.fill: parent
@@ -82,10 +73,12 @@ Item {
 
             Label {
                 id: fidelityLabel
+                objectName: "renderFidelityMessage"
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 text: root.host ? root.host.previewFidelitySummary : ""
                 Accessible.name: qsTr("Render fidelity message")
+                Accessible.description: text
             }
 
             Button {

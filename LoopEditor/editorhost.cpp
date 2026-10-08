@@ -1076,8 +1076,13 @@ QString EditorHost::previewStaleReason() const
 
 QString EditorHost::previewFidelityStateName() const
 {
+    const bool stale = !previewStaleReason().isEmpty();
+    if (hasDocument() && !stale && !m_session->surfaces()->diagnosticsForPage(currentPage()).has_value())
+    {
+        return QStringLiteral("unavailable");
+    }
     return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
-                                                          !previewStaleReason().isEmpty(),
+                                                          stale,
                                                           pageFidelityIsAuthoritative(),
                                                           pageFidelityIsExact());
 }
@@ -1120,6 +1125,11 @@ QString EditorHost::previewFidelitySummary() const
 
     if (state == QLatin1String("unavailable"))
     {
+        if (hasDocument())
+        {
+            return tr("Render fidelity is unavailable until the current page's requested render completes. "
+                      "No rendered evidence is available for a print claim.");
+        }
         return tr("No document is open, so there is no preview to describe.");
     }
     if (state == QLatin1String("stale"))

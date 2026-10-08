@@ -261,6 +261,7 @@ private slots:
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
+    void refusedRenderCannotBecomeAuthoritativeEvidence();
 };
 
 void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
@@ -1777,14 +1778,6 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
 
 void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
 {
-    // #28 acceptance: the preview names render fidelity AND origin on the ordinary canvas
-    // and in the Production Preview, an overprint-sensitive page switches to the
-    // authoritative render explicitly, and approximate canvas pixels are never presented
-    // as print-safe evidence.
-
-    // A synthetic document with no overprint content: the fast canvas path renders it
-    // exactly, and the host still refuses to certify it - the interactive preview proves a
-    // render path, never publication safety.
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
 
@@ -1800,24 +1793,24 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     EditorHost host;
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("No rendered evidence")));
     host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
 
-    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("exact"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
     QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
     QVERIFY(!host.previewRequiresAuthoritative());
     QVERIFY(!host.ensureAuthoritativePreview());
     QVERIFY(!host.previewFidelitySummary().trimmed().isEmpty());
 
-    // The explicit configuration switch moves this page to the output-preview origin; the
-    // projected state and origin follow the coordinator immediately.
     host.toggleCurrentPageFidelity();
-    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("authoritative"), 30000);
     QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!host.previewRequiresAuthoritative());
 
-    // A real overprint fixture: the fast canvas path is the overprint-sensitive
-    // approximation. The host must say so, must name the fast canvas origin, must expose the
-    // explicit switch, and must never dress the approximation as a pass.
     const QString overprintPath =
         preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
     QVERIFY2(QFileInfo::exists(overprintPath), qPrintable(overprintPath));
@@ -1836,10 +1829,36 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     QVERIFY(approximate.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
 
     QVERIFY(overprintHost.ensureAuthoritativePreview());
-    QCOMPARE(overprintHost.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(overprintHost.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(!overprintHost.ensureAuthoritativePreview());
+    QTRY_COMPARE_WITH_TIMEOUT(overprintHost.previewFidelityStateName(), QStringLiteral("authoritative"), 30000);
     QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!overprintHost.previewRequiresAuthoritative());
     QVERIFY(!overprintHost.ensureAuthoritativePreview());
+}
+
+void EditorHostTest::refusedRenderCannotBecomeAuthoritativeEvidence()
+{
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    auto* surfaces = host.sessionForTest()->surfaces();
+    pdf::PDFResourceBudgetConfig budget;
+    budget.setLimit(pdf::PDFResourcePool::RasterTileCache, 1024);
+    surfaces->setResourceBudget(std::make_shared<pdf::PDFResourceBudget>(budget));
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_VERIFY_WITH_TIMEOUT(surfaces->counters().budgetExhausted > 0 || surfaces->counters().rejectedOversize > 0, 30000);
+    QVERIFY(!surfaces->diagnosticsForPage(0).has_value());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+
+    host.toggleCurrentPageFidelity();
+    QVERIFY(host.pageFidelityIsAuthoritative());
+    QVERIFY(!surfaces->diagnosticsForPage(0).has_value());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("No rendered evidence")));
+    QVERIFY(!host.ensureAuthoritativePreview());
 }
 
 void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
