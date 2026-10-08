@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: "Accepted Session 06 source commit to package"
+        description: "Accepted source commit; must match the selected workflow ref"
         required: true
         type: string
 
@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loop
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -47,11 +47,15 @@ jobs:
         shell: pwsh
         env:
           EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          WORKFLOW_SOURCE_SHA: ${{ github.sha }}
         run: |
           if ($env:EXPECTED_SOURCE_SHA -notmatch "^[0-9a-fA-F]{40}$") {
             throw "source_sha must be a full 40-character Git SHA"
           }
           $actualSha = (git rev-parse HEAD).Trim()
+          if ($actualSha.ToLowerInvariant() -ne $env:WORKFLOW_SOURCE_SHA.ToLowerInvariant()) {
+            throw "Checkout SHA $actualSha does not match workflow source $env:WORKFLOW_SOURCE_SHA"
+          }
           $expectedSha = ([string]$env:EXPECTED_SOURCE_SHA).ToLowerInvariant()
           if ($actualSha.ToLowerInvariant() -ne $expectedSha) {
             throw "Checkout SHA $actualSha does not match source_sha $env:EXPECTED_SOURCE_SHA"
