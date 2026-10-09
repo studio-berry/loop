@@ -103,6 +103,20 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
         self.assertIn('"-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR"', workflow)
 
+    def test_native_accessibility_smokes_use_a_native_platform(self):
+        for runner, platform in (("linux", "xcb"), ("windows", "windows")):
+            workflow = (ROOT / f".github/workflows/reusable-{runner}.yml").read_text(encoding="utf-8")
+            native_commands = [
+                line for line in workflow.splitlines()
+                if "run-product-quick-a11y-smoke.ps1" in line and "-Backend native" in line
+            ]
+            self.assertTrue(native_commands, runner)
+            for command in native_commands:
+                with self.subTest(runner=runner, command=command):
+                    self.assertRegex(command, rf"\s-Platform\s+{platform}(?:\s|$)")
+                    if runner == "linux":
+                        self.assertRegex(command, r"\bxvfb-run\b")
+
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
