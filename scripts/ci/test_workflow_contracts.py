@@ -117,6 +117,16 @@ class WorkflowContractTests(unittest.TestCase):
                     if runner == "linux":
                         self.assertRegex(command, r"\bxvfb-run\b")
 
+    def test_windows_operator_diagnostics_use_step_context(self):
+        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
+        job_env = workflow.split("\n    env:\n", 1)[1].split("\n    steps:\n", 1)[0]
+        self.assertNotIn("${{ runner.", job_env)
+        steps = workflow.split("      - name: ")[1:]
+        for name in ("Test Widgets-absent release profile", "Run unit tests"):
+            step = next(step for step in steps if step.splitlines()[0] == name)
+            self.assertIn("LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\\loop-operator-loop", step)
+        self.assertIn("Retain Windows test failure diagnostics", workflow)
+
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")

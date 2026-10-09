@@ -28,7 +28,6 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
       QT_QPA_PLATFORM: offscreen
-      LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\loop-operator-loop
       SENTRY_DSN: off
 
     steps:
@@ -248,6 +247,8 @@ jobs:
 
       - name: Test Widgets-absent release profile
         shell: pwsh
+        env:
+          LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\loop-operator-loop
         run: |
           ctest --test-dir $env:LOOP_WIDGETS_FREE_BUILD_DIR -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release tests failed with exit code $LASTEXITCODE" }
@@ -402,6 +403,8 @@ jobs:
       - name: Run unit tests
         working-directory: loop/build
         shell: pwsh
+        env:
+          LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\loop-operator-loop
         run: |
           ctest -C Release --output-on-failure
 
