@@ -18,5 +18,9 @@ claims:
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
+  - id: windows-test-failure-diagnostics
+    evidence:
+      - unit:scripts/ci/test_workflow_contracts.py
+      - unit:scripts/ci/test_check_windows_qt_test_runtime.py
 unresolved:
   - Exact-head clean-machine native runtime and package evidence is required from the dispatched LinuxInstall and WindowsInstall runs; software-only records cannot close this lane.
