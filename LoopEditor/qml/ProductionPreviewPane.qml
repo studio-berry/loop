@@ -94,11 +94,10 @@ Pane {
                             .arg(root.host.previewFidelityStateName)
                             .arg(root.host.previewFidelityOriginName)
                     Accessible.name: qsTr("Page render fidelity and origin")
+                    Accessible.description: text
+                    activeFocusOnTab: true
                 }
 
-                // The same fidelity-and-origin fact the ordinary canvas banner shows, on the
-                // surface where a production/print claim is read. An approximate overprint
-                // render states that its pixels are not proof of print-safe output.
                 StateBadge {
                     objectName: "productionPreviewFidelityBadge"
                     Layout.fillWidth: true
@@ -119,9 +118,6 @@ Pane {
                 RowLayout {
                     Layout.fillWidth: true
 
-                    // The explicit switch to the authoritative render the acceptance requires
-                    // before a print claim. Enabled only while the page is still the
-                    // overprint-sensitive fast render.
                     Button {
                         objectName: "productionPreviewProveButton"
                         text: qsTr("Proof this page (authoritative render)")

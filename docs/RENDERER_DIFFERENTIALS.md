@@ -61,6 +61,29 @@ surfaces call before a page is presented as proof; it moves the current page to
 the output-preview render and returns false when the page is already
 authoritative or exact.
 
+Fidelity is unavailable until Core admits diagnostics for the current page's
+requested render key. Selecting the authoritative path does not establish
+rendered evidence: while its pixels are pending, refused, or failed, fidelity
+is `unavailable` and origin is `none`. A stale preview retains its stale
+treatment. The canvas keeps the fidelity-and-origin message visible for every
+open document, including exact fast-canvas pages.
+
+The software Quick interaction smoke can exercise the shipped controls with
+both visual fixtures:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+$env:QT_QUICK_BACKEND = 'software'
+ProductQuickAccessibilitySmoke.exe --preview-fixtures loop-preflight/testdata/fixtures
+```
+
+It checks the fast-canvas message, the explicit keyboard switch in Production
+Preview, unavailable evidence while the output render is pending, and admitted
+authoritative pixels with their output-preview cache identity. It then checks
+the authoritative message on the ordinary canvas. The cases are
+`overprint-cmyk-mode1-on.pdf` and `transparency-normal-cmyk.pdf`; pixel
+differentials remain the committed renderer suites described above.
+
 `UnitTestsPageSurface::fastCanvasOverprintRenderIsNotTheAuthoritativeGolden`
 proves the distinction against the same committed baseline: for
 `overprint-cmyk-mode1-on.pdf` the marked (authoritative) render matches

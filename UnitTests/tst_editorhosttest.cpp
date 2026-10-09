@@ -55,6 +55,7 @@
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsecurityhandler.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
@@ -68,6 +69,39 @@
 
 namespace
 {
+
+bool writeEncryptedFixture(const QString& path, pdf::PDFSecurityHandlerFactory::Algorithm algorithm,
+                           const QString& userPassword = QStringLiteral("fixture-user"), quint32 permissions = 0)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+    settings.algorithm = algorithm;
+    settings.permissions = permissions;
+    settings.userPassword = userPassword;
+    settings.ownerPassword = QStringLiteral("fixture-owner");
+    settings.id = builder.build().getIdPart(0);
+    const auto security = pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings);
+    if (!security)
+    {
+        return false;
+    }
+    builder.setSecurityHandler(security);
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    if (!writer.write(path, &document, true))
+    {
+        return false;
+    }
+    QFile fixture(path);
+    if (!fixture.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+    qInfo().noquote() << "encrypted-fixture" << QFileInfo(path).fileName()
+                      << "sha256=" << QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex();
+    return true;
+}
 
 /// Minimal scripted source for fencing proof, mirroring tst_interactioncontrollertest.
 /// Returns targets the test wrote down so hover transitions are deterministic
@@ -235,6 +269,13 @@ class EditorHostTest : public QObject
     Q_OBJECT
 
 private slots:
+    void encryptedOpen_data();
+    void encryptedOpen();
+    void passwordFailureIsTypedAndRetryable();
+    void passwordCancelCloseAndSupersessionAreTerminal();
+    void teardownWhilePasswordPromptIsPending();
+    void restrictedDocumentCannotPlanOrPublish();
+    void encryptedInspectionReceiptContainsNoPassword();
     void teardownClearsTheInteractiveThreadRegistration();
     void startsWithNoDocument();
     void exposesCatalogDescriptorsWithoutMutating();
@@ -256,12 +297,234 @@ private slots:
     void fixReviewBindsToThePlannedDigestAndTheCurrentRevision();
     void moveSelectionProposesAPageBoxMoveInTheFixWorkspace();
     void completedDragOfARefusedKindIsReportedAndChangesNothing();
+    void shippedRecipeIsListedButNeverSelectedByDefault();
+    void shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRevalidation();
+    void operatorRecipeWinsOverShippedRecipe();
+    void invalidOperatorRecipeStopsMoveWithoutShippedFallback();
     void fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIdentity();
     void translatePageBoxRefusesAMoveThatIntroducesABlockingFinding();
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
+    void refusedRenderCannotBecomeAuthoritativeEvidence();
 };
+
+void EditorHostTest::encryptedOpen_data()
+{
+    QTest::addColumn<int>("algorithm");
+    QTest::addColumn<bool>("owner");
+    QTest::addColumn<quint32>("userPermissions");
+    QTest::newRow("AES-128-user") << int(pdf::PDFSecurityHandlerFactory::AES_128) << false << quint32(0);
+    QTest::newRow("AES-128-owner") << int(pdf::PDFSecurityHandlerFactory::AES_128) << true << quint32(0);
+    QTest::newRow("AES-256-user") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << quint32(0);
+    QTest::newRow("AES-256-owner") << int(pdf::PDFSecurityHandlerFactory::AES_256) << true << quint32(0);
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    const quint32 editing = quint32(Permission::Modify) | quint32(Permission::Assemble);
+    QTest::newRow("AES-256-edit-allowed-copy-print-restricted") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << editing;
+    const quint32 all = editing | quint32(Permission::CopyContent) | quint32(Permission::PrintLowResolution);
+    QTest::newRow("AES-256-unrestricted-user") << int(pdf::PDFSecurityHandlerFactory::AES_256) << false << all;
+}
+
+void EditorHostTest::encryptedOpen()
+{
+    QFETCH(int, algorithm);
+    QFETCH(bool, owner);
+    QFETCH(quint32, userPermissions);
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("encrypted.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::Algorithm(algorithm), QStringLiteral("fixture-user"), userPermissions));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 request = host.passwordRequestId();
+    QVERIFY(!host.submitPassword(request + 1, QStringLiteral("fixture-owner")));
+    QVERIFY(host.submitPassword(request, owner ? QStringLiteral("fixture-owner") : QStringLiteral("fixture-user")));
+    QVERIFY(!host.submitPassword(request, QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QCOMPARE(host.pageCount(), 1);
+    QCOMPARE(host.passwordRequestId(), quint64(0));
+    const auto permissions = host.sessionForTest()->facade().permissions();
+    QVERIFY(permissions.encrypted);
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    const bool print = owner || (userPermissions & quint32(Permission::PrintLowResolution));
+    const bool modify = owner || (userPermissions & quint32(Permission::Modify));
+    const bool copy = owner || (userPermissions & quint32(Permission::CopyContent));
+    const bool assemble = owner || (userPermissions & quint32(Permission::Assemble));
+    QCOMPARE(permissions.print, print);
+    QCOMPARE(permissions.modify, modify);
+    QCOMPARE(permissions.copy, copy);
+    QCOMPARE(permissions.assemble, assemble);
+    QCOMPARE(host.correctionsAllowed(), print && modify && copy && assemble);
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(model->encrypted());
+    QCOMPARE(model->canPrint(), print);
+    QCOMPARE(model->canModify(), modify);
+    QCOMPARE(model->canCopy(), copy);
+    QCOMPARE(model->canAssemble(), assemble);
+    QCOMPARE(host.isCommandEnabled(QStringLiteral("actionSave_As")), host.correctionsAllowed());
+}
+
+void EditorHostTest::passwordFailureIsTypedAndRetryable()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("wrong-password-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("incorrect-fixture-password")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.documentState(), QStringLiteral("error"), 10000);
+    QCOMPARE(host.typedError(), QStringLiteral("document/password-incorrect"));
+    QCOMPARE(host.sessionForTest()->facade().operation().result.state, pdfinteraction::CommandTerminalState::Failed);
+    QVERIFY(!host.hasDocument());
+    QVERIFY(host.sessionForTest()->facade().retry() != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+}
+
+void EditorHostTest::passwordCancelCloseAndSupersessionAreTerminal()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("cancelled-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.cancelPassword(host.passwordRequestId()));
+    QTRY_COMPARE_WITH_TIMEOUT(host.documentState(), QStringLiteral("empty"), 10000);
+    QCOMPARE(host.typedError(), QStringLiteral("document/password-cancelled"));
+    QVERIFY(host.cancelled());
+    QVERIFY(!host.hasDocument());
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 closedRequest = host.passwordRequestId();
+    host.invokeCommand(QStringLiteral("actionClose"));
+    QVERIFY(!host.submitPassword(closedRequest, QStringLiteral("fixture-owner")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.passwordRequestId(), quint64(0), 10000);
+    QVERIFY(!host.submitPassword(closedRequest, QStringLiteral("fixture-owner")));
+    QVERIFY(!host.hasDocument());
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    const quint64 supersededRequest = host.passwordRequestId();
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QVERIFY(!host.submitPassword(supersededRequest, QStringLiteral("fixture-owner")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0 && host.passwordRequestId() != supersededRequest, 10000);
+    QVERIFY(!host.submitPassword(supersededRequest, QStringLiteral("fixture-owner")));
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+}
+
+void EditorHostTest::teardownWhilePasswordPromptIsPending()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("teardown-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    auto host = std::make_unique<EditorHost>();
+    host->openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host->passwordRequestId() != 0, 10000);
+    QElapsedTimer timer;
+    timer.start();
+    host.reset();
+    QVERIFY(timer.elapsed() < 5000);
+}
+
+void EditorHostTest::restrictedDocumentCannotPlanOrPublish()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("owner-only-AES-256.pdf"));
+    const QString output = directory.filePath(QStringLiteral("refused.pdf"));
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256, {},
+                                  quint32(Permission::Modify) | quint32(Permission::Assemble)));
+    QFile source(path);
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    const QByteArray original = source.readAll();
+    source.close();
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QCOMPARE(host.passwordRequestId(), quint64(0));
+    QVERIFY(!host.validateActionListRecipe());
+    QVERIFY(!host.planActionList());
+    QVERIFY(!host.approveActionListPlan());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QVERIFY(!host.fixRollbackAvailable());
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionPrint")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionCopyText")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionSave_As")));
+    host.saveAsFileUrl(QUrl::fromLocalFile(output));
+    QVERIFY(!QFileInfo::exists(output));
+
+    auto cancellation = std::make_shared<pdf::PDFJobCancellationToken>();
+    pdf::PDFJobContext context(cancellation, pdf::PDFProcessingLimits::conservativeDefaults(), {});
+    pdfinteraction::PDFDocumentFileWriter writer;
+    const auto writeResult = writer.write({ output }, host.sessionForTest()->context().getDocument(), context);
+    QCOMPARE(writeResult.outcome, pdfinteraction::DocumentWriteOutcome::Failed);
+    QCOMPARE(writeResult.typedError, QStringLiteral("document/correction-permission-denied"));
+    pdf::PDFActionList recipe;
+    recipe.id = QStringLiteral("restricted-bleed");
+    pdf::PDFActionListStep step;
+    step.id = QStringLiteral("bleed");
+    step.operationId = QStringLiteral("add-bleed");
+    step.parameters = { { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } };
+    recipe.steps.append(step);
+    for (const auto phase : { pdfinteraction::ActionListRunPhase::Plan, pdfinteraction::ActionListRunPhase::Execute })
+    {
+        const auto outcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
+        const auto worker = pdfinteraction::makeActionListRunWorker(phase, recipe,
+                                                                    host.sessionForTest()->context().getDocumentPointer(), {}, outcome);
+        worker(context);
+        QVERIFY(!outcome->ok);
+        QVERIFY(!outcome->candidate);
+        QCOMPARE(outcome->executionResult.status, QStringLiteral("failed"));
+        QCOMPARE(outcome->executionResult.diagnostics.first().toObject().value(QStringLiteral("code")).toString(),
+                 QStringLiteral("document/correction-permission-denied"));
+    }
+    QVERIFY(!QFileInfo::exists(output));
+    QVERIFY(source.open(QIODevice::ReadOnly));
+    QVERIFY(source.readAll() == original);
+}
+
+void EditorHostTest::encryptedInspectionReceiptContainsNoPassword()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("inspection-AES-256.pdf"));
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
+    QVERIFY2(host.hasPreflightReport(), qPrintable(host.preflightOperatorSummary()));
+    pdf::PDFOperationHistoryStore history(path + QStringLiteral(".loop-history/history.sqlite3"));
+    QString error;
+    QVERIFY(history.open(&error));
+    const auto events = history.events(&error);
+    QVERIFY(error.isEmpty());
+    bool receiptFound = false;
+    for (const auto& event : events)
+    {
+        const auto object = event.resultSummary.value(QStringLiteral("inspection_receipt")).toObject();
+        if (object.isEmpty())
+        {
+            continue;
+        }
+        pdf::PreflightInspectionReceipt receipt;
+        QVERIFY2(pdf::preflightInspectionReceiptFromJson(object, receipt, error), qPrintable(error));
+        QVERIFY(receipt.limitations.contains(QStringLiteral("Document is encrypted; authenticated document permissions apply.")));
+        const QByteArray json = QJsonDocument(object).toJson();
+        QVERIFY(!json.contains("fixture-user"));
+        QVERIFY(!json.contains("fixture-owner"));
+        receiptFound = true;
+    }
+    QVERIFY(receiptFound);
+}
 
 void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 {
@@ -1154,6 +1417,210 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
     }
 }
 
+QString shippedTranslatePageBoxRecipeId()
+{
+    return QStringLiteral(":/loop/builtin-recipe-translate-page-box.json");
+}
+
+// The operator recipe directory is shared by every test in the process, so each recipe test
+// starts from an empty one; the shipped recipe is compiled in and is unaffected.
+void clearOperatorActionListRecipes()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    QDir(QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes")))
+        .removeRecursively();
+}
+
+QString recipesDirectory()
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes"));
+}
+
+bool writeTranslatePageBoxRecipe(const QString& path, const QString& id, const QJsonValue& pageIndex)
+{
+    QFile recipe(path);
+    if (!recipe.open(QIODevice::WriteOnly))
+    {
+        return false;
+    }
+    const QJsonDocument document(QJsonObject{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+        { QStringLiteral("id"), id },
+        { QStringLiteral("name"), id },
+        { QStringLiteral("steps"),
+          QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("move") },
+                                   { QStringLiteral("operation"), QStringLiteral("translate-page-box") },
+                                   { QStringLiteral("params"),
+                                     QJsonObject{ { QStringLiteral("box"), QStringLiteral("trim") },
+                                                  { QStringLiteral("page_index"), pageIndex },
+                                                  { QStringLiteral("dx"), 2 },
+                                                  { QStringLiteral("dy"), 3 } } } } } } });
+    return recipe.write(document.toJson(QJsonDocument::Compact)) >= 0;
+}
+
+// A page whose trim box sits inside its media box. The default profile requires 9 pt of bleed
+// around the trim, and with no BleedBox that bleed is the media box, so the 20 pt inset keeps
+// 9 pt on every edge after the 2/3 point move.
+bool writeTrimmedPageDocument(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(page, QRectF(20, 20, 160, 160));
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return static_cast<bool>(writer.write(path, &document, true));
+}
+
+void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
+{
+    clearOperatorActionListRecipes();
+
+    EditorHost host;
+    bool listed = false;
+    for (const QVariant& entry : host.actionListRecipes())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")).toString() == shippedTranslatePageBoxRecipeId())
+        {
+            listed = true;
+            QVERIFY(item.value(QStringLiteral("valid")).toBool());
+            QVERIFY(item.value(QStringLiteral("builtIn")).toBool());
+        }
+    }
+    QVERIFY(listed);
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+}
+
+void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRevalidation()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("default-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // A drag proposes the move, and the shipped recipe binds to it with no import. Nothing is
+    // selected before the drag, so the shipped recipe is never a silent default.
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionMoveSelection"), move) != 0);
+    QCOMPARE(host.workspace(), EditorHost::Fix);
+    QCOMPARE(host.selectedActionListRecipeId(), shippedTranslatePageBoxRecipeId());
+    QCOMPARE(host.actionListBindings().size(), 4);
+
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+    const QString approvedDigest = host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!approvedDigest.isEmpty());
+
+    QVERIFY(host.approveActionListPlan());
+    QVERIFY(host.fixExecutionArmed());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("succeeded"));
+
+    // The published artifact is bound to the approved plan and is not the as-received input.
+    const QVariantMap signOff = host.fixSignOff();
+    QCOMPARE(signOff.value(QStringLiteral("planDigest")).toString(), approvedDigest);
+    const QString publishedSha256 = signOff.value(QStringLiteral("publishedSha256")).toString();
+    QCOMPARE(publishedSha256.size(), 64);
+    QVERIFY(publishedSha256 != QString::fromLatin1(sourceDigest));
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+}
+
+void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("operator-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    const QString recipePath = directory.filePath(QStringLiteral("operator-move.json"));
+    QVERIFY(writeTranslatePageBoxRecipe(recipePath, QStringLiteral("operator-move"), 0));
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // A valid operator recipe that offers the operation is selected ahead of the shipped one, and
+    // it is named on the surface so the operator can see which recipe the plan belongs to.
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionMoveSelection"), move) != 0);
+    QVERIFY(!host.selectedActionListRecipeId().isEmpty());
+    QVERIFY(host.selectedActionListRecipeId() != shippedTranslatePageBoxRecipeId());
+    QVERIFY(host.selectedActionListRecipeId().endsWith(QStringLiteral("operator-move.json")));
+}
+
+void EditorHostTest::invalidOperatorRecipeStopsMoveWithoutShippedFallback()
+{
+    clearOperatorActionListRecipes();
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString documentPath = directory.filePath(QStringLiteral("broken-move.pdf"));
+    QVERIFY(writeTrimmedPageDocument(documentPath));
+    // The operator recipe offers the operation with a page index the schema refuses, so it is
+    // invalid. It sits in the recipes directory before the host starts, as an imported copy would.
+    QVERIFY(QDir().mkpath(recipesDirectory()));
+    const QString brokenPath = QDir(recipesDirectory()).filePath(QStringLiteral("broken-move.json"));
+    QVERIFY(writeTranslatePageBoxRecipe(brokenPath, QStringLiteral("broken-move"), QStringLiteral("first")));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // The move is refused and nothing is selected: the shipped recipe must not run in place of
+    // the operator's invalid one.
+    const QVariantMap move{ { QStringLiteral("targetKind"), QStringLiteral("PageBox") },
+                            { QStringLiteral("targetId"), QStringLiteral("trim") },
+                            { QStringLiteral("page"), 0 },
+                            { QStringLiteral("dx"), 2.0 },
+                            { QStringLiteral("dy"), 3.0 } };
+    host.invokeCommand(QStringLiteral("actionMoveSelection"), move);
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+    QVERIFY(!host.selectActionListRecipeForOperation(QStringLiteral("translate-page-box")));
+    QVERIFY(host.selectedActionListRecipeId().isEmpty());
+
+    bool brokenIsInvalid = false;
+    for (const QVariant& entry : host.actionListRecipes())
+    {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("name")).toString() == QStringLiteral("broken-move"))
+        {
+            brokenIsInvalid = !item.value(QStringLiteral("valid")).toBool();
+        }
+    }
+    QVERIFY(brokenIsInvalid);
+}
+
 void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()
 {
     QTemporaryDir directory;
@@ -1419,7 +1886,7 @@ void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding(
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
-    QVERIFY(host.selectActionListRecipe(QStringLiteral("tight-margin-move")));
+    QVERIFY(!host.selectedActionListRecipeId().isEmpty());
     QVERIFY(host.validateActionListRecipe());
     QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
     QVERIFY(host.planActionList());
@@ -1777,14 +2244,6 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
 
 void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
 {
-    // #28 acceptance: the preview names render fidelity AND origin on the ordinary canvas
-    // and in the Production Preview, an overprint-sensitive page switches to the
-    // authoritative render explicitly, and approximate canvas pixels are never presented
-    // as print-safe evidence.
-
-    // A synthetic document with no overprint content: the fast canvas path renders it
-    // exactly, and the host still refuses to certify it - the interactive preview proves a
-    // render path, never publication safety.
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
 
@@ -1800,24 +2259,24 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     EditorHost host;
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("No rendered evidence")));
     host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
 
-    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("exact"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
     QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
     QVERIFY(!host.previewRequiresAuthoritative());
     QVERIFY(!host.ensureAuthoritativePreview());
     QVERIFY(!host.previewFidelitySummary().trimmed().isEmpty());
 
-    // The explicit configuration switch moves this page to the output-preview origin; the
-    // projected state and origin follow the coordinator immediately.
     host.toggleCurrentPageFidelity();
-    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("authoritative"), 30000);
     QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!host.previewRequiresAuthoritative());
 
-    // A real overprint fixture: the fast canvas path is the overprint-sensitive
-    // approximation. The host must say so, must name the fast canvas origin, must expose the
-    // explicit switch, and must never dress the approximation as a pass.
     const QString overprintPath =
         preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
     QVERIFY2(QFileInfo::exists(overprintPath), qPrintable(overprintPath));
@@ -1836,10 +2295,36 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
     QVERIFY(approximate.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
 
     QVERIFY(overprintHost.ensureAuthoritativePreview());
-    QCOMPARE(overprintHost.previewFidelityStateName(), QStringLiteral("authoritative"));
+    QCOMPARE(overprintHost.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(!overprintHost.ensureAuthoritativePreview());
+    QTRY_COMPARE_WITH_TIMEOUT(overprintHost.previewFidelityStateName(), QStringLiteral("authoritative"), 30000);
     QCOMPARE(overprintHost.previewFidelityOriginName(), QStringLiteral("output-preview"));
     QVERIFY(!overprintHost.previewRequiresAuthoritative());
     QVERIFY(!overprintHost.ensureAuthoritativePreview());
+}
+
+void EditorHostTest::refusedRenderCannotBecomeAuthoritativeEvidence()
+{
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    auto* surfaces = host.sessionForTest()->surfaces();
+    pdf::PDFResourceBudgetConfig budget;
+    budget.setLimit(pdf::PDFResourcePool::RasterTileCache, 1024);
+    surfaces->setResourceBudget(std::make_shared<pdf::PDFResourceBudget>(budget));
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_VERIFY_WITH_TIMEOUT(surfaces->counters().budgetExhausted > 0 || surfaces->counters().rejectedOversize > 0, 30000);
+    QVERIFY(!surfaces->diagnosticsForPage(0).has_value());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+
+    host.toggleCurrentPageFidelity();
+    QVERIFY(host.pageFidelityIsAuthoritative());
+    QVERIFY(!surfaces->diagnosticsForPage(0).has_value());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("none"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("No rendered evidence")));
+    QVERIFY(!host.ensureAuthoritativePreview());
 }
 
 void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()

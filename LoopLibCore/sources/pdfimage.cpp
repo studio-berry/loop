@@ -959,7 +959,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
         // Fix issue, that image doesn't start with FFD8 (start of image marker). If this
         // occurs, try to find sequence FFD8, and if we can find it, then advance the buffer.
         source.startByte = qMax(content.indexOf("\xFF\xD8"), 0);
-        if (source.startByte > 0)
+        if (source.startByte > 0 && errorReporter)
         {
             errorReporter->reportRenderError(RenderErrorType::Warning, PDFTranslationContext::tr("Malformed data while reading JPEG stream. %1 bytes skipped.").arg(source.startByte));
         }
@@ -1338,7 +1338,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                             {
                                 for (unsigned int componentIndex = 0; componentIndex < components; ++componentIndex)
                                 {
-                                    int index = stride * row + col * components + componentIndex;
+                                    qsizetype index = static_cast<qsizetype>(stride) * row + static_cast<qsizetype>(col) * components + componentIndex;
                                     Q_ASSERT(index < imageDataBuffer.size());
 
                                     imageDataBuffer[index] = transformValue(jpegImage->comps[ordinaryComponents[componentIndex]].data[w * row + col]);
@@ -1403,7 +1403,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                 {
                     throw PDFRendererException(error.type, message);
                 }
-                else
+                else if (errorReporter)
                 {
                     errorReporter->reportRenderError(error.type, message);
                 }

@@ -362,8 +362,8 @@ together with its contract, never the disposition alone.
 ## Local verification limit
 
 No build or test lane was run for this ADR. `build-local/` does not exist and
-`C:/.dev/repos/loop/.local-vcpkg/` (the `CMAKE_TOOLCHAIN_FILE` referenced by
-every cache under `C:/.dev/build/`) is absent; restoring vcpkg and configuring
+`<repo-root>/.local-vcpkg/` (the `CMAKE_TOOLCHAIN_FILE` referenced by
+every cache under `<build-root>/`) is absent; restoring vcpkg and configuring
 are approval-required under `agent-policy.json`. This is a documentation-only
 decision package: every claim cites the file and line it was read from. The
 documentation subsystem's binding lane is

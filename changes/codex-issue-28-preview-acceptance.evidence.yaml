@@ -1,0 +1,15 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: preview-fidelity-requires-admitted-render-diagnostics
+    evidence:
+      - unit:agent-policy:quick
+      - unit:UnitTests/tst_editorhosttest.cpp
+  - id: overprint-and-transparency-visual-fixtures
+    evidence:
+      - unit:agent-policy:quick
+      - differential:UnitTestsOverprintRender
+      - unit:UnitTests/tst_pagesurfacetest.cpp
+      - unit:agent-policy:interaction
+unresolved:
+  - Native Windows UIA, Linux runtime, and installed-product qualification are not exercised by the software Quick interaction smoke.

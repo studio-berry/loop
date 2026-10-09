@@ -386,6 +386,50 @@ subsystems:
         ref: .github/workflows/codeql.yml
         contains: CodeQL
         executes: binding
+  - id: native-accessibility-qualification
+    summary: Exact-source installed package accessibility and dependency qualification.
+    paths:
+      - tools/ProductQuickAccessibilitySmoke/main.cpp
+      - tools/ProductQuickAccessibilitySmoke/inspect-windows-uia.ps1
+      - tools/ProductQuickAccessibilitySmoke/inspect-linux-atspi.py
+      - scripts/run-installed-quick-a11y-uia.ps1
+      - scripts/run-installed-quick-a11y-atspi.ps1
+      - scripts/qualification/qualify-linux-accessibility.sh
+      - scripts/qualification/qualify-windows-accessibility.ps1
+      - scripts/ci/quick_a11y_kit.py
+      - scripts/ci/test_quick_a11y_kit.py
+      - scripts/ci/test_native_atspi_probe.py
+      - scripts/ci/verify_quick_accessibility_evidence.py
+      - scripts/ci/test_verify_quick_accessibility_evidence.py
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:quick
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_quick_a11y_kit.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_native_atspi_probe.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_verify_quick_accessibility_evidence.py
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: linux-native-accessibility
+        ref: .github/workflows/LinuxInstall.yml
+        contains: "qualify_linux:"
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-native-accessibility
+        ref: .github/workflows/WindowsInstall.yml
+        contains: "qualify_windows:"
+        executes: binding
   - id: agent-policy
     summary: Agent policy, architecture contracts, and the contract checker.
     paths:

@@ -14,6 +14,7 @@
 
 #include "documentfacade.h"
 #include "pdfartifactidentity.h"
+#include "pdfsecurityhandler.h"
 
 #include <QSet>
 
@@ -95,6 +96,23 @@ ShellDocumentStatus DocumentFacade::projectShellStatus(DocumentState state,
 pdf::PDFRevisionIdentity DocumentFacade::currentRevision() const
 {
     return m_revisionSource.currentRevision();
+}
+
+DocumentPermissions DocumentFacade::permissions() const
+{
+    const auto* documentContext = context();
+    const auto* document = m_state == DocumentState::Ready && documentContext ? documentContext->getDocument() : nullptr;
+    const auto* security = document ? document->getStorage().getSecurityHandler() : nullptr;
+    if (!security)
+    {
+        return {};
+    }
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    return { security->getMode() != pdf::EncryptionMode::None,
+             security->isAllowed(Permission::PrintLowResolution) || security->isAllowed(Permission::PrintHighResolution),
+             security->isAllowed(Permission::Modify),
+             security->isAllowed(Permission::CopyContent),
+             security->isAllowed(Permission::Assemble) };
 }
 
 bool DocumentOperatorState::canActOnInspection() const
@@ -206,6 +224,9 @@ bool DocumentFacade::completeInspection(const DocumentInspectionToken& token,
     {
         return false;
     }
+    receipt.limitations.append(permissions().encrypted
+                                   ? QStringLiteral("Document is encrypted; authenticated document permissions apply.")
+                                   : QStringLiteral("Document is not encrypted."));
     QStringList findingIds;
     QSet<QString> seen;
     for (const auto& findings : { result.errors, result.warnings })
@@ -282,6 +303,11 @@ bool DocumentFacade::selectFinding(const QString& findingId, QString& error)
 bool DocumentFacade::requestPlan(const QString& operationId, QString& error)
 {
     error.clear();
+    if (!permissions().allowsCorrection())
+    {
+        error = QStringLiteral("document/correction-permission-denied");
+        return false;
+    }
     if (!operatorState().canActOnInspection() || m_inspection.selectedFindingId.isEmpty())
     {
         error = QStringLiteral("inspection/no-actionable-selection");
@@ -365,8 +391,8 @@ void DocumentFacade::updateAvailability()
     m_catalog->setEnabledBatch({
         { OpenCommandId, true },
         { CloseCommandId, hasDocument || m_state == DocumentState::Opening || busy },
-        { SaveCommandId, hasDocument && !busy && m_source.isValid() },
-        { SaveAsCommandId, hasDocument && !busy },
+        { SaveCommandId, hasDocument && !busy && m_source.isValid() && permissions().allowsCorrection() },
+        { SaveAsCommandId, hasDocument && !busy && permissions().allowsCorrection() },
     });
 }
 

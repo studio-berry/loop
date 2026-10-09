@@ -179,8 +179,11 @@ QString requestedCommand(const QStringList& arguments)
 int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::PDFToolExitCode exitCode)
 {
     const QByteArray json = QJsonDocument(context.toJson(exitCode)).toJson(QJsonDocument::Compact);
-    pdftool::PDFConsole::writeData(json);
-    pdftool::PDFConsole::writeData(QByteArray("\n"));
+    if (!pdftool::PDFConsole::writeData(json) || !pdftool::PDFConsole::writeData(QByteArray("\n")))
+    {
+        // The envelope is the only output channel, so a failed write must not exit as success.
+        return static_cast<int>(pdftool::PDFToolExitCode::InternalError);
+    }
 
     return static_cast<int>(exitCode);
 }

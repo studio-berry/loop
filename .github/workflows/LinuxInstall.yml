@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   build_ubuntu:
+    outputs:
+      package_name: ${{ steps.get_version.outputs.package_name }}
     # The AppImage runtime is pinned for Ubuntu 22.04 compatibility.
     runs-on: ubuntu-22.04
     env:
@@ -31,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf autoconf-archive automake libtool libxcb-cursor0 libspeechd2 libfontconfig1-dev gnupg2 wget appstream libcups2 libcups2-dev
+          sudo apt-get install -y autoconf autoconf-archive automake libtool libxcb-cursor0 libspeechd2 libfontconfig1-dev gnupg2 wget appstream libcups2 libcups2-dev xvfb xauth
 
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -248,6 +250,7 @@ jobs:
           echo "appimagefilename=Loop-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
           echo "appimage_update_info=gh-releases-zsync|mberrys|Loop-pdf|latest|Loop-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
           echo "AppImage file name: Loop-pdf-$version-x86_64.AppImage"
+          echo "package_name=Loop-pdf-$version-x86_64.AppImage" >> "$GITHUB_OUTPUT"
 
       - name: Prepare AppDir for appimagetool
         working-directory: loop
@@ -371,6 +374,17 @@ jobs:
           retention-days: 30
           compression-level: 0
 
+      - name: Prepare exact-source accessibility kit
+        working-directory: loop
+        run: python3 scripts/ci/quick_a11y_kit.py --binary build/usr/bin/ProductQuickAccessibilitySmoke --source-sha "$LOOP_SOURCE_SHA" --output "$RUNNER_TEMP/quick-a11y-kit"
+
+      - name: Upload accessibility kit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quick-a11y-kit-linux
+          path: ${{ runner.temp }}/quick-a11y-kit
+          if-no-files-found: error
+
       - name: Upload AppImage Signature File
         if: vars.SIGN_APPIMAGE == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
@@ -396,3 +410,45 @@ jobs:
           rm -rf "$GNUPGHOME"
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
+
+  qualify_linux:
+    needs: build_ubuntu
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+      - name: Install OS accessibility client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core dbus-x11 xvfb xauth openbox x11-utils libxcb-cursor0 libspeechd2 libcups2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.build_ubuntu.outputs.package_name }}
+          path: package
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: quick-a11y-kit-linux
+          path: kit
+      - name: Qualify final AppImage on a fresh runner
+        env:
+          LOOP_SOURCE_SHA: ${{ inputs.source_sha }}
+          LOOP_PACKAGE_NAME: ${{ needs.build_ubuntu.outputs.package_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$LOOP_SOURCE_SHA"
+          python3 scripts/ci/quick_a11y_kit.py --source-sha "$LOOP_SOURCE_SHA" --output kit
+          chmod +x "package/$LOOP_PACKAGE_NAME" kit/ProductQuickAccessibilitySmoke
+          mkdir -p "$RUNNER_TEMP/native-qualification"
+          python3 scripts/ci/inspect_package_dependencies.py --platform linux --package "package/$LOOP_PACKAGE_NAME" --source-sha "$LOOP_SOURCE_SHA" --work-dir "$RUNNER_TEMP/package-inspection" --output "$RUNNER_TEMP/native-qualification/package-boundary.json"
+          export LOOP_INSTALL_TREE="$RUNNER_TEMP/package-inspection/appimage/squashfs-root"
+          export LOOP_PACKAGE="$GITHUB_WORKSPACE/package/$LOOP_PACKAGE_NAME"
+          unset QT_PLUGIN_PATH QML2_IMPORT_PATH QML_IMPORT_PATH LD_LIBRARY_PATH QT_ROOT_DIR LOOP_QT_ROOT
+          dbus-run-session -- xvfb-run -a bash scripts/qualification/qualify-linux-accessibility.sh "$LOOP_INSTALL_TREE" "$GITHUB_WORKSPACE/kit" "$LOOP_PACKAGE" "$LOOP_SOURCE_SHA" "$RUNNER_TEMP/native-qualification" 2>&1 | tee "$RUNNER_TEMP/native-qualification/transcript.txt"
+      - name: Upload clean-machine accessibility evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: loop-native-accessibility-linux-evidence
+          path: ${{ runner.temp }}/native-qualification
+          if-no-files-found: error

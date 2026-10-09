@@ -1424,6 +1424,7 @@ void DocumentFacadeTest::inspectionVerdictContract()
                                                   fixture.evidence, coreReceipt, error),
              qPrintable(error));
     QCOMPARE(int(coreReceipt.verdict.state), verdict);
+    coreReceipt.limitations.append(QStringLiteral("Document is not encrypted."));
     const auto token = harness.facade->beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error);
     QVERIFY(token);
     QVERIFY2(harness.facade->completeInspection(*token, fixture.result, fixture.evidence, error), qPrintable(error));

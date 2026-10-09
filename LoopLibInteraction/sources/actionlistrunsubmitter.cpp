@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "actionlistrunsubmitter.h"
+#include "pdfsecurityhandler.h"
 
 #include "pdfdocumentwriter.h"
 #include "pdfgovernedexecution.h"
@@ -96,6 +97,22 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         }
 
         outcome->phase = phase;
+        const auto* security = document->getStorage().getSecurityHandler();
+        if (!security || !security->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent) ||
+            !(security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintLowResolution) ||
+              security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintHighResolution)) ||
+            !security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify) ||
+            !security->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
+        {
+            outcome->ok = false;
+            outcome->errorMessage = QStringLiteral("Authenticated document permissions prohibit correction planning and publication.");
+            outcome->executionResult.status = QStringLiteral("failed");
+            outcome->executionResult.diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("document/correction-permission-denied") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), QStringLiteral("Authenticated document permissions prohibit correction planning and publication.") } });
+            return;
+        }
         QJsonObject effectivePreflightProfile = preflightProfile;
         if (effectivePreflightProfile.isEmpty() && !preflightProfilePath.trimmed().isEmpty())
         {

@@ -1,0 +1,8 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: action-list-refusal-names-blocking-diagnostic
+    evidence:
+      - unit:agent-policy:quick
+unresolved:
+  - Hosted build and run of translatePageBoxRefusesAMoveThatIntroducesABlockingFinding are required before this claim is accepted; this branch was not built in the authoring environment.

@@ -124,13 +124,13 @@ public:
     ///        encrypted. A host that cannot prompt returns an empty string with
     ///        *ok set to false, which the reader reports as cancellation.
     explicit PDFReaderDocumentLoader(
-        std::function<QString(bool*)> queryPassword = {},
+        std::function<QString(bool*, const pdf::PDFOperationControl*)> queryPassword = {},
         pdf::PDFProcessingLimits processingLimits = pdf::PDFProcessingLimits::conservativeDefaults());
 
     DocumentLoadResult load(const DocumentSource& source, pdf::PDFJobContext& context) override;
 
 private:
-    std::function<QString(bool*)> m_queryPassword;
+    std::function<QString(bool*, const pdf::PDFOperationControl*)> m_queryPassword;
     pdf::PDFProcessingLimits m_processingLimits;
 };
 

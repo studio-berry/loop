@@ -1,0 +1,13 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: default-page-box-recipe
+    evidence:
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+      - unit:agent-policy:build_policy
+      - architecture:scripts/agent/check-architecture.py
+      - unit:scripts/agent/test_architecture_contracts.py
+unresolved:
+  - Hosted build and quick-lane runs of the new editor-host tests are required before this claim is accepted; the authoring environment has no Qt installation.
+  - The installed-package end-to-end run on Linux and Windows, with recorded artifact identity, is required by issue #205 and has not been run.

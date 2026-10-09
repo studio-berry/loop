@@ -12,7 +12,7 @@ Fixtures remain outside the repository per #242.
 
 Partial manifest with digests for office-2mb, pathological-vector, transparency-spots.
 Requirement catalog documents all issue #242 IDs. External bytes under
-`C:\.dev\qualification\session-11\fixtures\`.
+`<external-fixtures-root>\`.
 
 ## Issue 35 — Measure envelopes
 

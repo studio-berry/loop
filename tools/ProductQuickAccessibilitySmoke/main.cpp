@@ -2,13 +2,17 @@
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
+#include "looptokens.h"
 #include "inspectormodel.h"
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsecurityhandler.h"
+#include "pagesurfacecoordinator.h"
 #include "preflightprofileresolver.h"
 
 #include <QAccessible>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -29,6 +33,8 @@
 #include <QStandardPaths>
 
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 #include <functional>
 #include <memory>
 
@@ -51,6 +57,150 @@ void sendKey(QQuickWindow* window, QQuickItem* item, Qt::Key key)
     QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
     QCoreApplication::sendEvent(window, &press);
     QCoreApplication::sendEvent(window, &release);
+}
+
+void runEncryptedOpenFixture(QGuiApplication& application, EditorHost& host, QQuickWindow* window)
+{
+    auto directory = std::make_shared<QTemporaryDir>();
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+    settings.algorithm = pdf::PDFSecurityHandlerFactory::AES_256;
+    settings.userPassword = QStringLiteral("fixture-user");
+    settings.ownerPassword = QStringLiteral("fixture-owner");
+    settings.id = builder.build().getIdPart(0);
+    builder.setSecurityHandler(pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings));
+    const auto document = builder.build();
+    const QString path = directory->filePath(QStringLiteral("quick-password-AES-256.pdf"));
+    pdf::PDFDocumentWriter writer(nullptr);
+    if (!directory->isValid() || !writer.write(path, &document, true))
+    {
+        application.exit(6);
+        return;
+    }
+    QFile fixture(path);
+    if (!fixture.open(QIODevice::ReadOnly))
+    {
+        application.exit(6);
+        return;
+    }
+    fprintf(stdout, "encrypted-open-fixture AES-256 sha256=%s\n",
+            QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex().constData());
+    auto* focusTarget = window->findChild<QQuickItem*>(QStringLiteral("openDocumentButton"));
+    if (!focusTarget)
+    {
+        application.exit(6);
+        return;
+    }
+    focusTarget->forceActiveFocus();
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, window, directory, path, focusTarget, timer, phase = 0]() mutable
+                     {
+                         auto* field = window->findChild<QQuickItem*>(QStringLiteral("documentPasswordField"));
+                         if (!field)
+                         {
+                             application.exit(6);
+                             return;
+                         }
+                         const auto fail = [&application](const char* reason)
+                         {
+                             fprintf(stderr, "encrypted-open-fixture failed=%s\n", reason);
+                             application.exit(6);
+                         };
+                         if (phase == 0 || phase == 2 || phase == 4)
+                         {
+                             if (!host.passwordRequestId() || !field->isVisible() || !field->hasActiveFocus())
+                             {
+                                 return;
+                             }
+                             auto* accessible = QAccessible::queryAccessibleInterface(field);
+                             if (!accessible || accessible->role() != QAccessible::EditableText ||
+                                 accessible->text(QAccessible::Name) != QStringLiteral("Document password") ||
+                                 !accessible->state().passwordEdit)
+                             {
+                                 fail("password-accessibility");
+                                 return;
+                             }
+                             if (phase == 4)
+                             {
+                                 field->setProperty("text", QStringLiteral("discarded-fixture-password"));
+                                 sendKey(window, field, Qt::Key_Escape);
+                             }
+                             else
+                             {
+                                 const QString password = phase == 0 ? QStringLiteral("fixture-user") : QStringLiteral("wrong-fixture-password");
+                                 field->setProperty("text", password);
+                                 if (accessible->text(QAccessible::Value).contains(password))
+                                 {
+                                     fail("accessible-password-disclosure");
+                                     return;
+                                 }
+                                 sendKey(window, field, Qt::Key_Return);
+                             }
+                             ++phase;
+                             return;
+                         }
+                         if (phase == 1)
+                         {
+                             if (!host.hasDocument())
+                             {
+                                 return;
+                             }
+                             host.setWorkspace(EditorHost::Fix);
+                             const auto* validate = window->findChild<QQuickItem*>(QStringLiteral("validateActionListButton"));
+                             const auto* plan = window->findChild<QQuickItem*>(QStringLiteral("planActionListButton"));
+                             const auto* restriction = window->findChild<QQuickItem*>(QStringLiteral("correctionPermissionLabel"));
+                             if (!validate || validate->isEnabled() || !plan || plan->isEnabled() ||
+                                 !restriction || !restriction->isVisible())
+                             {
+                                 fail("restricted-correction-controls");
+                                 return;
+                             }
+                             if (!field->property("text").toString().isEmpty() || host.passwordRequestId() ||
+                                 host.sessionForTest()->facade().permissions().allowsCorrection() || host.planActionList())
+                             {
+                                 fail("restricted-user-open");
+                                 return;
+                             }
+                         }
+                         if (phase == 3)
+                         {
+                             if (host.documentState() != QLatin1String("error"))
+                             {
+                                 return;
+                             }
+                             if (host.typedError() != QLatin1String("document/password-incorrect") ||
+                                 !field->property("text").toString().isEmpty())
+                             {
+                                 fail("wrong-password-terminal");
+                                 return;
+                             }
+                         }
+                         if (phase == 5)
+                         {
+                             if (host.documentState() != QLatin1String("empty") || host.passwordRequestId())
+                             {
+                                 return;
+                             }
+                             if (host.typedError() != QLatin1String("document/password-cancelled") ||
+                                 !field->property("text").toString().isEmpty() || !focusTarget->hasActiveFocus())
+                             {
+                                 fail("cancel-or-focus-restoration");
+                                 return;
+                             }
+                             timer->stop();
+                             fprintf(stdout, "encrypted-open-fixture status=pass user-open=1 wrong-password=1 escape-cancel=1 protected-accessible-field=1 focus-restored=1\n");
+                             fflush(stdout);
+                             application.exit(0);
+                             return;
+                         }
+                         focusTarget->forceActiveFocus();
+                         host.openFileUrl(QUrl::fromLocalFile(path));
+                         ++phase;
+                     });
+    timer->start(30);
 }
 
 void runFindingNavigationFixture(QGuiApplication& application,
@@ -722,10 +872,190 @@ void runIncompleteInspectionFixture(QGuiApplication& application, EditorHost& ho
     timer->start(25);
 }
 
+bool verifyPreviewText(QQuickWindow* window, const QString& name, const QString& expected)
+{
+    auto* item = window->findChild<QQuickItem*>(name);
+    auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+    return item && item->isVisible() && item->width() > 0 && item->height() > 0 &&
+           !expected.isEmpty() && item->property("text").toString() == expected &&
+           accessible && accessible->text(QAccessible::Description) == expected;
+}
+
+void runPreviewFidelityFixtures(QGuiApplication& application, EditorHost& host,
+                                QQuickWindow* window, const QString& fixtureDirectory)
+{
+    const QStringList fixtures{ QStringLiteral("overprint-cmyk-mode1-on.pdf"),
+                                QStringLiteral("transparency-normal-cmyk.pdf") };
+    host.setWorkspace(EditorHost::Document);
+    host.openFileUrl(QUrl::fromLocalFile(QDir(fixtureDirectory).filePath(fixtures.first())));
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, &host, window, timer, fixtureDirectory, fixtures,
+                      fixtureIndex = 0, phase = 0, ticks = 0, previousRevision = QString()]() mutable
+                     {
+                         auto* canvas = window->findChild<pdfquick::LoopCanvasItem*>();
+                         auto* surfaces = canvas ? canvas->surfaces() : nullptr;
+                         const QString revision = host.previewIdentity().value(QStringLiteral("documentRevision")).toString();
+                         if (++ticks >= 400)
+                         {
+                             fprintf(stderr, "preview-fidelity-fixture timeout fixture=%s phase=%d document=%s fidelity=%s canvas=%d surfaces=%d admitted=%d failed=%d budget=%d\n",
+                                     qPrintable(fixtures.at(fixtureIndex)), phase, qPrintable(host.documentState()), qPrintable(host.previewFidelityStateName()),
+                                     canvas ? 1 : 0, surfaces ? 1 : 0, surfaces ? surfaces->counters().admitted : 0,
+                                     surfaces ? surfaces->counters().failed : 0, surfaces ? surfaces->counters().budgetExhausted : 0);
+                             if (canvas && canvas->viewport() && surfaces)
+                             {
+                                 const QRect viewport = canvas->viewport()->viewportRect();
+                                 fprintf(stderr, "preview-fidelity-fixture geometry canvas=%g,%g viewport=%d,%d requests=%d in_flight=%d\n",
+                                         canvas->width(), canvas->height(), viewport.width(), viewport.height(), surfaces->counters().requested, surfaces->counters().inFlight);
+                                 const auto& counts = surfaces->counters();
+                                 fprintf(stderr, "preview-fidelity-fixture rejected superseded=%d revision=%d demand=%d oversize=%d stale=%d cancelled=%d\n",
+                                         counts.rejectedSuperseded, counts.rejectedStaleRevision, counts.rejectedDemand, counts.rejectedOversize, counts.stale, counts.cancelled);
+                             }
+                             timer->stop();
+                             application.exit(6);
+                             return;
+                         }
+                         if (!host.hasDocument() || !surfaces || revision == previousRevision)
+                         {
+                             return;
+                         }
+                         const QString expectedFastState = fixtureIndex == 0 ? QStringLiteral("approximate") : QStringLiteral("exact");
+                         if (phase == 0)
+                         {
+                             if (host.previewFidelityStateName() == QStringLiteral("unavailable"))
+                             {
+                                 return;
+                             }
+                             const auto* tile = surfaces->snapshot().tileForPage(0);
+                             if (host.previewFidelityStateName() != expectedFastState ||
+                                 host.previewFidelityOriginName() != QStringLiteral("fast-canvas") ||
+                                 !tile || !tile->pixels || tile->pixels->image.isNull() ||
+                                 pdfinteraction::hasAuthoritativeOverprintMarker(tile->key.colorOutputIdentity) ||
+                                 !verifyPreviewText(window, QStringLiteral("renderFidelityMessage"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture fast_canvas_failed fixture=%s state=%s\n",
+                                         qPrintable(fixtures.at(fixtureIndex)), qPrintable(host.previewFidelityStateName()));
+                                 application.exit(6);
+                                 return;
+                             }
+                             host.setWorkspace(EditorHost::ProductionPreview);
+                             phase = 1;
+                             ticks = 0;
+                             return;
+                         }
+                         if (phase == 1)
+                         {
+                             const QString fidelityText = QStringLiteral("Fidelity %1, origin %2.")
+                                                              .arg(host.previewFidelityStateName(), host.previewFidelityOriginName());
+                             auto* button = window->findChild<QQuickItem*>(fixtureIndex == 0
+                                                                               ? QStringLiteral("productionPreviewProveButton")
+                                                                               : QStringLiteral("productionPreviewFidelityToggle"));
+                             if (!verifyPreviewText(window, QStringLiteral("productionPreviewFidelity"), fidelityText) ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()) ||
+                                 (fixtureIndex == 0 && !host.previewFidelitySummary().contains(QStringLiteral("cannot stand as proof"))) ||
+                                 !button || !button->isVisible() || !button->isEnabled())
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture production_preview_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             button->forceActiveFocus(Qt::TabFocusReason);
+                             QKeyEvent press(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+                             QKeyEvent release(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+                             QCoreApplication::sendEvent(window, &press);
+                             QCoreApplication::sendEvent(window, &release);
+                             if (!host.pageFidelityIsAuthoritative() || host.previewFidelityStateName() != QStringLiteral("unavailable") ||
+                                 host.previewFidelityOriginName() != QStringLiteral("none") ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture pending_render_claimed_evidence\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             phase = 2;
+                             ticks = 0;
+                             return;
+                         }
+                         if (phase == 2)
+                         {
+                             if (host.previewFidelityStateName() == QStringLiteral("unavailable"))
+                             {
+                                 return;
+                             }
+                             const auto* tile = surfaces->snapshot().tileForPage(0);
+                             if (host.previewFidelityStateName() != QStringLiteral("authoritative") ||
+                                 host.previewFidelityOriginName() != QStringLiteral("output-preview") ||
+                                 !tile || !tile->exact || !tile->pixels || tile->pixels->image.isNull() ||
+                                 !pdfinteraction::hasAuthoritativeOverprintMarker(tile->key.colorOutputIdentity) ||
+                                 !verifyPreviewText(window, QStringLiteral("productionPreviewFidelityBadgeText"), host.previewFidelitySummary()))
+                             {
+                                 fprintf(stderr, "preview-fidelity-fixture authoritative_render_failed\n");
+                                 application.exit(6);
+                                 return;
+                             }
+                             host.setWorkspace(EditorHost::Document);
+                             phase = 3;
+                             ticks = 0;
+                             return;
+                         }
+                         if (!verifyPreviewText(window, QStringLiteral("renderFidelityMessage"), host.previewFidelitySummary()))
+                         {
+                             fprintf(stderr, "preview-fidelity-fixture authoritative_canvas_failed\n");
+                             application.exit(6);
+                             return;
+                         }
+                         fprintf(stdout, "preview-fidelity-fixture id=%s fast=%s explicit_switch=1 pending_unavailable=1 authoritative_pixels=1 qml_presented=1\n",
+                                 qPrintable(fixtures.at(fixtureIndex)), qPrintable(expectedFastState));
+                         fflush(stdout);
+                         if (++fixtureIndex == fixtures.size())
+                         {
+                             timer->stop();
+                             application.exit(0);
+                             return;
+                         }
+                         previousRevision = revision;
+                         phase = 0;
+                         ticks = 0;
+                         host.openFileUrl(QUrl::fromLocalFile(QDir(fixtureDirectory).filePath(fixtures.at(fixtureIndex))));
+                     });
+    timer->start(25);
+}
+
 }   // namespace
 
 namespace
 {
+
+bool verifyTokenContrast()
+{
+    using namespace pdfquick::tokens;
+    const auto luminance = [](const QColor& color)
+    {
+        const auto channel = [](qreal value)
+        {
+            return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * channel(color.redF()) + 0.7152 * channel(color.greenF()) + 0.0722 * channel(color.blueF());
+    };
+    for (const LoopTheme theme : { LoopTheme::Dark, LoopTheme::Light, LoopTheme::HighContrast })
+    {
+        for (const ColorRole role : { ColorRole::TextPrimary, ColorRole::TextSecondary, ColorRole::SeverityError,
+                                      ColorRole::SeverityWarning, ColorRole::SeverityInfo, ColorRole::Success,
+                                      ColorRole::StateIncomplete, ColorRole::StateNotChecked, ColorRole::FocusRing, ColorRole::DestructiveAction })
+        {
+            const qreal background = luminance(color(role == ColorRole::DestructiveAction ? role : ColorRole::SurfaceBase, theme));
+            const qreal foreground = luminance(role == ColorRole::DestructiveAction ? QColor(Qt::white) : color(role, theme));
+            const qreal ratio = (std::max(foreground, background) + 0.05) / (std::min(foreground, background) + 0.05);
+            const qreal minimum = role == ColorRole::TextPrimary || role == ColorRole::TextSecondary || role == ColorRole::DestructiveAction ? 4.5 : 3.0;
+            fprintf(stdout, "operator-contrast theme=%d role=%s ratio=%.4f minimum=%.1f\n", int(theme), qPrintable(colorRoleName(role)), ratio, minimum);
+            if (ratio < minimum)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* window,
                         EditorHost& host, pdfinteraction::PreflightController& controller)
@@ -737,7 +1067,22 @@ bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* windo
         { QStringLiteral("preflightJobStatus"), controller.jobDescription() }
     };
     QJsonArray nodes;
-    for (const auto& entry : descriptions)
+    if (stage == 6)
+    {
+        auto* item = window->findChild<QQuickItem*>(QStringLiteral("productionPreviewFidelity"));
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        const QString expected = QStringLiteral("Fidelity %1, origin %2.").arg(host.previewFidelityStateName(), host.previewFidelityOriginName());
+        if (!item || !item->isVisible() || !accessible || !accessible->state().focusable ||
+            item->property("text").toString() != expected || accessible->text(QAccessible::Description) != expected || !verifyTokenContrast())
+        {
+            fprintf(stderr, "operator-probe inaccessible_fidelity_or_contrast\n");
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), expected },
+                                  { QStringLiteral("focusable"), true } });
+    }
+    for (const auto& entry : stage == 6 ? QList<QPair<QString, QString>>{} : descriptions)
     {
         auto* item = window->findChild<QQuickItem*>(entry.first);
         auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
@@ -751,7 +1096,8 @@ bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* windo
                                   { QStringLiteral("description"), entry.second },
                                   { QStringLiteral("focusable"), true } });
     }
-    for (const QString& objectName : { QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") })
+    const QStringList buttons = stage == 6 ? QStringList{} : QStringList{ QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") };
+    for (const QString& objectName : buttons)
     {
         auto* item = window->findChild<QQuickItem*>(objectName);
         auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
@@ -792,7 +1138,7 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
                          }
                          bool valid = false;
                          const int stage = input.readAll().trimmed().toInt(&valid);
-                         if (!valid || stage < 0 || stage > 6 || stage > applied + 1)
+                         if (!valid || stage < 0 || stage > 7 || stage > applied + 1)
                          {
                              application.exit(6);
                              return;
@@ -859,12 +1205,18 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
                                  controller->markProfileStale();
                                  break;
                              case 6:
+                                 host.setWorkspace(EditorHost::ProductionPreview);
+                                 break;
+                             case 7:
                                  fprintf(stdout, "operator-probe status=pass native_accessibility_active=%d\n", QAccessible::isActive() ? 1 : 0);
                                  application.exit(0);
                                  return;
                          }
                          applied = stage;
-                         host.setWorkspace(EditorHost::Preflight);
+                         if (stage != 6)
+                         {
+                             host.setWorkspace(EditorHost::Preflight);
+                         }
                          QTimer::singleShot(100, &application, [&application, window, &host, controller, directory, stage]()
                                             {
                                                 if (!writeProbeSnapshot(directory, stage, window, host, *controller))
@@ -884,8 +1236,32 @@ int main(int argc, char** argv)
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     const QStringList arguments = application.arguments();
+    const bool encryptedFixture = arguments.contains(QStringLiteral("--encrypted-fixture"));
     const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
     const bool nativeProbe = probeArgument >= 0;
+    const int previewArgument = arguments.indexOf(QStringLiteral("--preview-fixtures"));
+    QString previewFixtures;
+    if (previewArgument >= 0)
+    {
+        if (nativeProbe || previewArgument + 1 >= arguments.size())
+        {
+            return 6;
+        }
+        previewFixtures = QDir(arguments.at(previewArgument + 1)).absolutePath();
+        for (const QString& fixture : { QStringLiteral("overprint-cmyk-mode1-on.pdf"), QStringLiteral("transparency-normal-cmyk.pdf") })
+        {
+            if (!QFile::exists(QDir(previewFixtures).filePath(fixture)))
+            {
+                fprintf(stderr, "preview-fidelity-fixture missing_fixture=%s\n", qPrintable(fixture));
+                return 6;
+            }
+        }
+        if (qEnvironmentVariable("QT_QUICK_BACKEND") != QStringLiteral("software"))
+        {
+            fprintf(stderr, "preview-fidelity-fixture requires_software_backend\n");
+            return 6;
+        }
+    }
     if (!nativeProbe)
     {
         QStandardPaths::setTestModeEnabled(true);
@@ -931,11 +1307,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host, nativeProbe, probeDirectory](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture, previewFixtures](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (encryptedFixture)
+                         {
+                             QTimer::singleShot(0, &application, [&application, &host, window]()
+                                                { runEncryptedOpenFixture(application, host, window); });
                              return;
                          }
 
@@ -948,7 +1331,7 @@ int main(int argc, char** argv)
 
                          QObject::connect(
                              window, &QQuickWindow::sceneGraphInitialized, &application,
-                             [window, &application, &host]()
+                             [window, &application, &host, previewFixtures]()
                              {
                                  const auto* renderer = window->rendererInterface();
                                  const auto api = renderer ? renderer->graphicsApi() : QSGRendererInterface::Unknown;
@@ -1010,6 +1393,11 @@ int main(int argc, char** argv)
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);
+                                 if (passed && !previewFixtures.isEmpty())
+                                 {
+                                     runPreviewFidelityFixtures(application, host, window, previewFixtures);
+                                     return;
+                                 }
                                  if (passed && qEnvironmentVariable("QT_QUICK_BACKEND") == QStringLiteral("software"))
                                  {
                                      runFindingNavigationFixture(application, host, window,

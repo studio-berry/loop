@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   build_windows:
+    outputs:
+      package_name: ${{ steps.get_version.outputs.package_name }}
     # Blacksmith is reserved for this ~50-minute packaging gate; other Windows CI
     # stays on GitHub-hosted windows-2022 to conserve Blacksmith minutes.
     runs-on: blacksmith-4vcpu-windows-2025
@@ -415,6 +417,7 @@ jobs:
           echo "loop_version=$version" >> $env:GITHUB_ENV
           echo "msipackagefilename=mberrys.Loop-pdf_${version}.msi" >> $env:GITHUB_ENV
           Write-Host "MSI package file name: mberrys.Loop-pdf_${version}.msi"
+          "package_name=mberrys.Loop-pdf_${version}.msi" >> $env:GITHUB_OUTPUT
 
       - name: Download verified WiX Toolset
         shell: pwsh
@@ -545,3 +548,48 @@ jobs:
           path: .\loop\build\install\${{ env.msipackagefilename }}
           retention-days: 30
           compression-level: 0
+
+      - name: Prepare exact-source accessibility kit
+        shell: pwsh
+        run: |
+          python .\loop\scripts\ci\quick_a11y_kit.py --binary .\loop\build\usr\bin\ProductQuickAccessibilitySmoke.exe --source-sha $env:LOOP_SOURCE_SHA --output (Join-Path $env:RUNNER_TEMP 'quick-a11y-kit')
+          if ($LASTEXITCODE -ne 0) { throw 'Accessibility kit preparation failed.' }
+      - name: Upload accessibility kit
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: quick-a11y-kit-windows
+          path: ${{ runner.temp }}/quick-a11y-kit
+          if-no-files-found: error
+
+  qualify_windows:
+    needs: build_windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.build_windows.outputs.package_name }}
+          path: package
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: quick-a11y-kit-windows
+          path: kit
+      - name: Qualify installed MSI on a fresh runner
+        shell: pwsh
+        env:
+          LOOP_SOURCE_SHA: ${{ inputs.source_sha }}
+          LOOP_PACKAGE_NAME: ${{ needs.build_windows.outputs.package_name }}
+        run: |
+          if ((git rev-parse HEAD) -ne $env:LOOP_SOURCE_SHA) { throw 'Checkout is not the qualification source SHA.' }
+          $evidence = Join-Path $env:RUNNER_TEMP 'native-qualification'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          ./scripts/qualification/qualify-windows-accessibility.ps1 -Package (Join-Path $env:GITHUB_WORKSPACE "package/$env:LOOP_PACKAGE_NAME") -Kit (Join-Path $env:GITHUB_WORKSPACE 'kit') -SourceSha $env:LOOP_SOURCE_SHA -EvidenceDirectory $evidence 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'transcript.txt')
+      - name: Upload clean-machine accessibility evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: loop-native-accessibility-windows-evidence
+          path: ${{ runner.temp }}/native-qualification
+          if-no-files-found: error
