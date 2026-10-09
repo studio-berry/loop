@@ -1,0 +1,11 @@
+# Native accessibility qualification
+
+Issue #31 is qualified by the final package, its inspected dependency graph, and a native accessibility client reading the operator path. An in-process accessible tree or software renderer run does not establish this claim.
+
+Dispatch `LinuxInstall.yml` and `WindowsInstall.yml` on the candidate branch with `source_sha` set to its full commit SHA. Each build uploads its package and a qualification kit containing the probe executable plus the source and executable digest. The dependent qualification job starts on a fresh hosted runner without installing Qt or a compiler. It verifies the kit, extracts the AppImage or installs the MSI, and runs the probe against a staging copy of that package's runtime closure.
+
+Linux uses an X11 display and session D-Bus with a real AT-SPI client. Windows uses UI Automation. The clients inspect six inspection lifecycle states and the Production Preview fidelity label, checking names, descriptions, native focus, and enabled state. The probe checks semantic text, status, and focus-ring contrast for Dark, Light, and HighContrast themes using the packaged LoopLibQuick tokens. These are token contrast checks, not a pixel-level audit of every QML control. PDF decisions remain Core-owned; the probe presents its controlled fixture states without defining a second verdict authority.
+
+The separate native-scene-graph and software runs keep distinct claims. The terminal gate requires native OS accessibility to be active and joins all three accessibility records to the source and package digest from the final dependency inspection. Widgets payloads, Widgets dependency edges, uninspected binaries, unresolved non-system dependencies, another source/package, and absent native evidence fail qualification.
+
+Download `loop-native-accessibility-linux-evidence` and `loop-native-accessibility-windows-evidence` from the two runs. They contain the package inspection, native/software records, native client observations and snapshots, generated PDF identity, contrast log, and command transcript. Record both run URLs, exact source SHA, package SHA-256, probe SHA-256, and observed native backend in the PR handoff. Missing, skipped, or failed runs keep issue #31 open; a merged implementation alone does not establish acceptance.

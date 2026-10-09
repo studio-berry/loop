@@ -2,6 +2,7 @@
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
+#include "looptokens.h"
 #include "inspectormodel.h"
 #include "preflightcontroller.h"
 #include "pdfdocumentbuilder.h"
@@ -32,6 +33,8 @@
 #include <QStandardPaths>
 
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 #include <functional>
 #include <memory>
 
@@ -1023,6 +1026,37 @@ void runPreviewFidelityFixtures(QGuiApplication& application, EditorHost& host,
 namespace
 {
 
+bool verifyTokenContrast()
+{
+    using namespace pdfquick::tokens;
+    const auto luminance = [](const QColor& color)
+    {
+        const auto channel = [](qreal value)
+        {
+            return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * channel(color.redF()) + 0.7152 * channel(color.greenF()) + 0.0722 * channel(color.blueF());
+    };
+    for (const LoopTheme theme : { LoopTheme::Dark, LoopTheme::Light, LoopTheme::HighContrast })
+    {
+        for (const ColorRole role : { ColorRole::TextPrimary, ColorRole::TextSecondary, ColorRole::SeverityError,
+                                      ColorRole::SeverityWarning, ColorRole::SeverityInfo, ColorRole::Success,
+                                      ColorRole::StateIncomplete, ColorRole::StateNotChecked, ColorRole::FocusRing, ColorRole::DestructiveAction })
+        {
+            const qreal background = luminance(color(role == ColorRole::DestructiveAction ? role : ColorRole::SurfaceBase, theme));
+            const qreal foreground = luminance(role == ColorRole::DestructiveAction ? QColor(Qt::white) : color(role, theme));
+            const qreal ratio = (std::max(foreground, background) + 0.05) / (std::min(foreground, background) + 0.05);
+            const qreal minimum = role == ColorRole::TextPrimary || role == ColorRole::TextSecondary || role == ColorRole::DestructiveAction ? 4.5 : 3.0;
+            fprintf(stdout, "operator-contrast theme=%d role=%s ratio=%.4f minimum=%.1f\n", int(theme), qPrintable(colorRoleName(role)), ratio, minimum);
+            if (ratio < minimum)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* window,
                         EditorHost& host, pdfinteraction::PreflightController& controller)
 {
@@ -1033,7 +1067,22 @@ bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* windo
         { QStringLiteral("preflightJobStatus"), controller.jobDescription() }
     };
     QJsonArray nodes;
-    for (const auto& entry : descriptions)
+    if (stage == 6)
+    {
+        auto* item = window->findChild<QQuickItem*>(QStringLiteral("productionPreviewFidelity"));
+        auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
+        const QString expected = QStringLiteral("Fidelity %1, origin %2.").arg(host.previewFidelityStateName(), host.previewFidelityOriginName());
+        if (!item || !item->isVisible() || !accessible || !accessible->state().focusable ||
+            item->property("text").toString() != expected || accessible->text(QAccessible::Description) != expected || !verifyTokenContrast())
+        {
+            fprintf(stderr, "operator-probe inaccessible_fidelity_or_contrast\n");
+            return false;
+        }
+        nodes.append(QJsonObject{ { QStringLiteral("name"), accessible->text(QAccessible::Name) },
+                                  { QStringLiteral("description"), expected },
+                                  { QStringLiteral("focusable"), true } });
+    }
+    for (const auto& entry : stage == 6 ? QList<QPair<QString, QString>>{} : descriptions)
     {
         auto* item = window->findChild<QQuickItem*>(entry.first);
         auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
@@ -1047,7 +1096,8 @@ bool writeProbeSnapshot(const QString& directory, int stage, QQuickWindow* windo
                                   { QStringLiteral("description"), entry.second },
                                   { QStringLiteral("focusable"), true } });
     }
-    for (const QString& objectName : { QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") })
+    const QStringList buttons = stage == 6 ? QStringList{} : QStringList{ QStringLiteral("runPreflightButton"), QStringLiteral("cancelPreflightButton"), QStringLiteral("exportPreflightReportButton") };
+    for (const QString& objectName : buttons)
     {
         auto* item = window->findChild<QQuickItem*>(objectName);
         auto* accessible = item ? QAccessible::queryAccessibleInterface(item) : nullptr;
@@ -1088,7 +1138,7 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
                          }
                          bool valid = false;
                          const int stage = input.readAll().trimmed().toInt(&valid);
-                         if (!valid || stage < 0 || stage > 6 || stage > applied + 1)
+                         if (!valid || stage < 0 || stage > 7 || stage > applied + 1)
                          {
                              application.exit(6);
                              return;
@@ -1155,12 +1205,18 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
                                  controller->markProfileStale();
                                  break;
                              case 6:
+                                 host.setWorkspace(EditorHost::ProductionPreview);
+                                 break;
+                             case 7:
                                  fprintf(stdout, "operator-probe status=pass native_accessibility_active=%d\n", QAccessible::isActive() ? 1 : 0);
                                  application.exit(0);
                                  return;
                          }
                          applied = stage;
-                         host.setWorkspace(EditorHost::Preflight);
+                         if (stage != 6)
+                         {
+                             host.setWorkspace(EditorHost::Preflight);
+                         }
                          QTimer::singleShot(100, &application, [&application, window, &host, controller, directory, stage]()
                                             {
                                                 if (!writeProbeSnapshot(directory, stage, window, host, *controller))

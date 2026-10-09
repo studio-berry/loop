@@ -95,6 +95,7 @@ Pane {
                             .arg(root.host.previewFidelityOriginName)
                     Accessible.name: qsTr("Page render fidelity and origin")
                     Accessible.description: text
+                    activeFocusOnTab: true
                 }
 
                 StateBadge {
