@@ -122,7 +122,7 @@ QTransform PDFDocumentPageGeometrySource::pagePointToDeviceMatrix(int pageIndex,
     // Core's overload takes the extra rotation directly and combines it with the
     // page rotation before deriving the media box. PDFDrawWidgetProxy predates
     // that parameter and hand-composes an equivalent device-space transform; the
-    // Core path is the maintained one and PDFThumbnailsRenderer already uses it.
+    // Core path is the maintained one.
     return pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, extraRotation);
 }
 

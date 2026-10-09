@@ -366,6 +366,12 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
 
 void DocumentFacade::beginSave(CommandInvocationId invocation, const CommandId& command, const DocumentSource& target)
 {
+    if (!permissions().allowsCorrection())
+    {
+        finishPending(invocation, CommandTerminalState::Unavailable,
+                      QStringLiteral("document/correction-permission-denied"));
+        return;
+    }
     pdf::PDFDocumentContext* documentContext = context();
     if (m_state != DocumentState::Ready || !documentContext || !documentContext->getDocument())
     {

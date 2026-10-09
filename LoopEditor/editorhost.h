@@ -86,8 +86,10 @@ class EditorHost final : public QObject
 
     Q_PROPERTY(QString documentState READ documentState NOTIFY presentationChanged)
     Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY presentationChanged)
+    Q_PROPERTY(bool correctionsAllowed READ correctionsAllowed NOTIFY presentationChanged)
     Q_PROPERTY(QString displayTitle READ displayTitle NOTIFY presentationChanged)
     Q_PROPERTY(QString typedError READ typedError NOTIFY presentationChanged)
+    Q_PROPERTY(quint64 passwordRequestId READ passwordRequestId NOTIFY passwordRequestChanged)
     Q_PROPERTY(int pageCount READ pageCount NOTIFY presentationChanged)
     Q_PROPERTY(int currentPage READ currentPage NOTIFY presentationChanged)
     Q_PROPERTY(qreal zoom READ zoom NOTIFY presentationChanged)
@@ -191,8 +193,12 @@ public:
 
     QString documentState() const;
     bool hasDocument() const;
+    bool correctionsAllowed() const;
     QString displayTitle() const;
     QString typedError() const;
+    quint64 passwordRequestId() const;
+    Q_INVOKABLE bool submitPassword(quint64 requestId, const QString& password);
+    Q_INVOKABLE bool cancelPassword(quint64 requestId);
     int pageCount() const;
     int currentPage() const;
     qreal zoom() const;
@@ -372,7 +378,6 @@ public:
     Q_INVOKABLE bool planActionList();
     Q_INVOKABLE bool runActionList();
     Q_INVOKABLE bool cancelActionList();
-    Q_INVOKABLE bool confirmActionListPlan();
     Q_INVOKABLE void discardActionListPlan();
     Q_INVOKABLE QVariantMap repairParameterSchemaForOperation(const QString& operationId) const;
 
@@ -381,7 +386,11 @@ public:
     /// the exact plan digest for the current revision and arms execution; a plan whose
     /// revision or digest moved is never armed. Rejecting records the decision and leaves
     /// the plan visible for inspection; replanning clears both.
-    Q_INVOKABLE bool approveActionListPlan();
+    /// QML must supply the displayed identities; the no-argument helper is C++ only.
+    bool approveActionListPlan();
+    Q_INVOKABLE bool approveActionListPlan(const QString& planDigest,
+                                           const QString& sourceSha256,
+                                           const QString& documentRevision);
     Q_INVOKABLE bool rejectActionListPlan();
     Q_INVOKABLE bool executeApprovedActionListPlan();
     Q_INVOKABLE void replanActionList();
@@ -464,6 +473,10 @@ public:
     const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
 
 signals:
+    void passwordRequestChanged();
+    /// A completed drag was refused rather than committed (#206). Both values are the
+    /// target's stable names so a surface can explain the refusal.
+    void dragRefused(const QString& targetKind, const QString& targetId);
     void presentationChanged();
     void commandEpochChanged();
     void activeToolChanged();
@@ -485,6 +498,7 @@ private:
     void registerShellHandlers();
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
+    bool commandPermissionAllowed(const QString& commandId) const;
     bool requestMoveSelection(const QVariantMap& parameters);
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
@@ -516,6 +530,7 @@ private:
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
+    static QString dragRefusalMessage(pdfinteraction::InteractionTargetKind kind);
     void onDragCompleted(pdfinteraction::DragSession session);
     void onInteractionSelectionChanged(pdfinteraction::InteractionTarget target);
     void syncProductionState();

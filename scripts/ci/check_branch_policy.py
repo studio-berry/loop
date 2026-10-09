@@ -389,7 +389,7 @@ def validate_packaging_workflows(root: Path, policy: DocumentedPolicy) -> list[s
             if event != "workflow_dispatch":
                 violations.append(f"{path}: packaging must not trigger on `{event}`")
         if "github.event.pull_request" in text:
-            violations.append(f"{path}: packaging checkout must use inputs.source_sha only")
+            violations.append(f"{path}: packaging checkout must use the workflow run's commit")
     return violations
 
 

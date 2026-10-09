@@ -103,6 +103,30 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
         self.assertIn('"-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR"', workflow)
 
+    def test_native_accessibility_smokes_use_a_native_platform(self):
+        for runner, platform in (("linux", "xcb"), ("windows", "windows")):
+            workflow = (ROOT / f".github/workflows/reusable-{runner}.yml").read_text(encoding="utf-8")
+            native_commands = [
+                line for line in workflow.splitlines()
+                if "run-product-quick-a11y-smoke.ps1" in line and "-Backend native" in line
+            ]
+            self.assertTrue(native_commands, runner)
+            for command in native_commands:
+                with self.subTest(runner=runner, command=command):
+                    self.assertRegex(command, rf"\s-Platform\s+{platform}(?:\s|$)")
+                    if runner == "linux":
+                        self.assertRegex(command, r"\bxvfb-run\b")
+
+    def test_windows_operator_diagnostics_use_step_context(self):
+        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
+        job_env = workflow.split("\n    env:\n", 1)[1].split("\n    steps:\n", 1)[0]
+        self.assertNotIn("${{ runner.", job_env)
+        steps = workflow.split("      - name: ")[1:]
+        for name in ("Test Widgets-absent release profile", "Run unit tests"):
+            step = next(step for step in steps if step.splitlines()[0] == name)
+            self.assertIn("LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\\loop-operator-loop", step)
+        self.assertIn("Retain Windows test failure diagnostics", workflow)
+
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
@@ -143,7 +167,8 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
             self.assertIn("inputs.source_sha", workflow)
-            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("ref: ${{ github.sha }}", workflow)
+            self.assertNotIn("ref: ${{ inputs.source_sha }}", workflow)
             self.assertIn("workflow_dispatch:", workflow)
             self.assertNotIn("pull_request:", workflow)
             self.assertNotIn("github.event.pull_request", workflow)
@@ -332,9 +357,8 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("quick-a11y-native.json", workflow)
             self.assertIn("quick-a11y-software.json", workflow)
         # Windows drives the native OS accessibility backend and requires it;
-        # Linux records the lane unavailable because a headless runner has no
-        # AT-SPI accessibility bus. Either way a software-only smoke cannot
-        # satisfy the native claim.
+        # Fresh package runners drive the OS accessibility clients; software
+        # records remain separate from either native claim.
         self.assertIn("run-installed-quick-a11y-uia.ps1", windows)
         self.assertIn("--require-native-accessibility", windows)
         self.assertNotIn("run-installed-quick-a11y-uia.ps1", linux)
@@ -347,6 +371,22 @@ class WorkflowContractTests(unittest.TestCase):
             verify_index = names.index("Verify installed-tree accessibility qualification evidence")
             self.assertLess(native_index, software_index)
             self.assertLess(software_index, verify_index)
+
+    def test_native_qualification_consumes_final_packages_on_fresh_runners(self):
+        for platform, builder in (("linux", "build_ubuntu"), ("windows", "build_windows")):
+            workflow = (ROOT / f".github/workflows/{'Linux' if platform == 'linux' else 'Windows'}Install.yml").read_text(encoding="utf-8")
+            qualification = workflow.split(f"  qualify_{platform}:", 1)[1]
+            self.assertIn(f"needs: {builder}", qualification)
+            self.assertIn("actions/download-artifact@", qualification)
+            self.assertIn(f"needs.{builder}.outputs.package_name", qualification)
+            self.assertIn(f"quick-a11y-kit-{platform}", qualification)
+            self.assertNotIn("Install Qt", qualification)
+            self.assertNotIn("cmake --build", qualification)
+            self.assertIn("inputs.source_sha", qualification)
+            driver = (ROOT / f"scripts/qualification/qualify-{platform}-accessibility.{ 'sh' if platform == 'linux' else 'ps1'}").read_text(encoding="utf-8")
+            self.assertIn("--require-native-accessibility", driver)
+            self.assertIn("--package-boundary", driver)
+            self.assertIn("run-installed-quick-a11y-atspi.ps1" if platform == 'linux' else "run-installed-quick-a11y-uia.ps1", driver)
 
 
 if __name__ == "__main__":

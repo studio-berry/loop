@@ -332,19 +332,6 @@ QString severityToString(PDFProductionDiagnosticSeverity severity)
     return QStringLiteral("warning");
 }
 
-PDFProductionDiagnosticSeverity severityFromString(const QString& value)
-{
-    if (value.trimmed().compare(QStringLiteral("error"), Qt::CaseInsensitive) == 0)
-    {
-        return PDFProductionDiagnosticSeverity::Error;
-    }
-    if (value.trimmed().compare(QStringLiteral("info"), Qt::CaseInsensitive) == 0)
-    {
-        return PDFProductionDiagnosticSeverity::Info;
-    }
-    return PDFProductionDiagnosticSeverity::Warning;
-}
-
 QJsonObject pathToJson(const QPainterPath& path)
 {
     QJsonArray elements;
@@ -539,6 +526,9 @@ void validateContour(const PDFProductionContour& contour,
         }
         contourSegments += polygonSegmentCount(polygon);
         const int segmentCount = polygon.size();
+        // Over budget the complexity diagnostic below already refuses the contour, and the quadratic
+        // intersection scan would spend the work the budget exists to bound.
+        const bool withinSegmentBudget = report->segmentCount + contourSegments <= options.maxSegments;
         for (int first = 0; first < segmentCount; ++first)
         {
             const QLineF firstSegment(polygon.at(first), polygon.at((first + 1) % segmentCount));
@@ -547,7 +537,7 @@ void validateContour(const PDFProductionContour& contour,
                 addDiagnostic(report->diagnostics, QStringLiteral("production.contour.zero_length_segment"),
                               PDFProductionDiagnosticSeverity::Error, QStringLiteral("Contour contains a zero-length segment."), contour.pageIndex, contour.id);
             }
-            for (int second = first + 1; second < segmentCount; ++second)
+            for (int second = first + 1; withinSegmentBudget && second < segmentCount; ++second)
             {
                 if (second == first + 1 || (first == 0 && second == segmentCount - 1))
                 {

@@ -89,6 +89,9 @@ private slots:
     void run_fontIntegrity_reportsShownGlyphsMissingFromSubset();
     void classifyShownGlyph_separatesDefectsFromAdvancesAndSpaces();
     void hiddenContent_checksAreRegistered();
+    void run_colorMode_classifiesIccBasedByProfileNotAlternate();
+    void run_colorMode_reportsIccProfileConflictingWithAlternate();
+    void run_invisibleContent_reportsZeroSizedAndClippedText();
     void run_hiddenLayers_reportsOcmdScreenPrintDivergence();
     void run_hiddenLayers_reportsUnevaluableMembershipAsIncomplete();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
@@ -1909,6 +1912,81 @@ pdf::PDFDocument readBleedFixture(const QString& name)
     return document;
 }
 }   // namespace
+
+namespace
+{
+pdf::PreflightResult runFixtureWithCheck(const QString& fixtureName, const QJsonObject& check)
+{
+    pdf::PDFDocument document = readBleedFixture(fixtureName);
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    return engine.run(QJsonObject{ { QStringLiteral("name"), fixtureName },
+                                   { QStringLiteral("checks"), QJsonArray{ check } } });
+}
+
+QJsonObject colorModeCheck(const QStringList& allowed)
+{
+    QJsonArray modes;
+    for (const QString& mode : allowed)
+    {
+        modes.append(mode);
+    }
+    return QJsonObject{ { QStringLiteral("id"), QStringLiteral("color-mode") },
+                        { QStringLiteral("allowed"), modes },
+                        { QStringLiteral("severity"), QStringLiteral("error") } };
+}
+}   // namespace
+
+void PreflightEngineTest::run_colorMode_classifiesIccBasedByProfileNotAlternate()
+{
+    // The embedded profile is CMYK, so an RGB-only profile must reject the page.
+    const pdf::PreflightResult rgbOnly = runFixtureWithCheck(QStringLiteral("color-icc-cmyk-profile.pdf"), colorModeCheck({ QStringLiteral("RGB") }));
+    QCOMPARE(rgbOnly.errors.size(), 1);
+    QCOMPARE(rgbOnly.errors.first().checkId, QStringLiteral("color-mode"));
+    QVERIFY(rgbOnly.errors.first().message.contains(QStringLiteral("DeviceCMYK")));
+    QVERIFY(!rgbOnly.pass);
+
+    const pdf::PreflightResult cmykAllowed = runFixtureWithCheck(QStringLiteral("color-icc-cmyk-profile.pdf"), colorModeCheck({ QStringLiteral("CMYK") }));
+    QVERIFY(cmykAllowed.errors.isEmpty());
+    QVERIFY(cmykAllowed.pass);
+}
+
+void PreflightEngineTest::run_colorMode_reportsIccProfileConflictingWithAlternate()
+{
+    // CMYK profile with an RGB alternate: passing on the alternate would clear an RGB-only profile.
+    for (const QString& mode : { QStringLiteral("RGB"), QStringLiteral("CMYK") })
+    {
+        const pdf::PreflightResult result = runFixtureWithCheck(QStringLiteral("color-icc-alternate-conflict.pdf"), colorModeCheck({ mode }));
+        QCOMPARE(result.errors.size(), 1);
+        QCOMPARE(result.errors.first().checkId, QStringLiteral("color-mode"));
+        QVERIFY(result.errors.first().message.contains(QStringLiteral("conflicts")));
+        QVERIFY(!result.pass);
+    }
+}
+
+void PreflightEngineTest::run_invisibleContent_reportsZeroSizedAndClippedText()
+{
+    const QJsonObject check{ { QStringLiteral("id"), QStringLiteral("invisible-content") },
+                             { QStringLiteral("severity"), QStringLiteral("warning") } };
+    const QList<QPair<QString, QString>> cases{
+        { QStringLiteral("invisible-content-zero-font-size.pdf"), QStringLiteral("font size is zero") },
+        { QStringLiteral("invisible-content-empty-clip.pdf"), QStringLiteral("zero-area clipping path") },
+        { QStringLiteral("invisible-content-outside-clip.pdf"), QStringLiteral("entirely outside the clipping path") },
+    };
+    for (const auto& [fixture, expectedMessage] : cases)
+    {
+        const pdf::PreflightResult result = runFixtureWithCheck(fixture, check);
+        QVERIFY2(!result.warnings.isEmpty(), qPrintable(fixture));
+        bool matched = false;
+        for (const pdf::PreflightFinding& finding : result.warnings)
+        {
+            QCOMPARE(finding.checkId, QStringLiteral("invisible-content"));
+            matched = matched || finding.message.contains(expectedMessage);
+        }
+        QVERIFY2(matched, qPrintable(fixture));
+    }
+}
+
 
 void PreflightEngineTest::run_contentBleedSparseMarks_reportsEmptyMarginInsteadOfPassing()
 {

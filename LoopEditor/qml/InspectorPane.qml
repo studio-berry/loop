@@ -137,7 +137,11 @@ Pane {
                     text: qsTr("Security: %1").arg(root.documentModel && root.documentModel.encrypted ? qsTr("encrypted") : qsTr("not encrypted"))
                 }
                 Label {
-                    text: qsTr("Permissions: %1").arg(root.documentModel && root.documentModel.canPrint ? qsTr("printing allowed") : qsTr("printing restricted"))
+                    text: qsTr("Permissions — print: %1; modify: %2; copy: %3; assemble: %4")
+                        .arg(root.documentModel && root.documentModel.canPrint ? qsTr("allowed") : qsTr("restricted"))
+                        .arg(root.documentModel && root.documentModel.canModify ? qsTr("allowed") : qsTr("restricted"))
+                        .arg(root.documentModel && root.documentModel.canCopy ? qsTr("allowed") : qsTr("restricted"))
+                        .arg(root.documentModel && root.documentModel.canAssemble ? qsTr("allowed") : qsTr("restricted"))
                 }
             }
         }

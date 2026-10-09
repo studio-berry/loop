@@ -312,6 +312,50 @@ subsystems:
         ref: .github/workflows/ci.yml
         contains: scripts.qualification.test_check_core_qualification
         executes: binding
+  - id: operator-onboarding
+    summary: Catalog-backed operator help, welcome preference and original licensed sample jobs.
+    paths:
+      - LoopEditor/operatorhelp.cpp
+      - LoopEditor/operatorhelp.h
+      - LoopEditor/operator/**
+      - LoopEditor/qml/OperatorHelpDialog.qml
+      - LoopEditor/app.qrc
+      - scripts/ci/generate_operator_samples.py
+      - scripts/ci/check_operator_help.py
+      - scripts/ci/test_check_operator_help.py
+      - UnitTests/tst_shellworkspacetest.cpp
+      - docs/OPERATOR_ONBOARDING.md
+    required:
+      - kind: unit
+        bind: ctest
+        id: UnitTestsShellWorkspace
+        policy_module: quick
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_check_operator_help.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/ci/check_operator_help.py
+        executes: binding
+  - id: operator-acceptance-packets
+    summary: Internal L03-06 packet integrity and recorded human review; installed journey admission remains blocked until observed.
+    paths:
+      - scripts/qualification/verify_operator_acceptance.py
+      - scripts/qualification/test_verify_operator_acceptance.py
+      - docs/OPERATOR_ACCEPTANCE.md
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/qualification/test_verify_operator_acceptance.py
+        executes: binding
+      - kind: unit
+        bind: workflow
+        id: operator-acceptance-packet-ci
+        ref: .github/workflows/ci.yml
+        contains: scripts.qualification.test_verify_operator_acceptance
+        executes: binding
   - id: packaging
     summary: Install and release-gate workflows.
     paths:
@@ -341,6 +385,50 @@ subsystems:
         id: codeql
         ref: .github/workflows/codeql.yml
         contains: CodeQL
+        executes: binding
+  - id: native-accessibility-qualification
+    summary: Exact-source installed package accessibility and dependency qualification.
+    paths:
+      - tools/ProductQuickAccessibilitySmoke/main.cpp
+      - tools/ProductQuickAccessibilitySmoke/inspect-windows-uia.ps1
+      - tools/ProductQuickAccessibilitySmoke/inspect-linux-atspi.py
+      - scripts/run-installed-quick-a11y-uia.ps1
+      - scripts/run-installed-quick-a11y-atspi.ps1
+      - scripts/qualification/qualify-linux-accessibility.sh
+      - scripts/qualification/qualify-windows-accessibility.ps1
+      - scripts/ci/quick_a11y_kit.py
+      - scripts/ci/test_quick_a11y_kit.py
+      - scripts/ci/test_native_atspi_probe.py
+      - scripts/ci/verify_quick_accessibility_evidence.py
+      - scripts/ci/test_verify_quick_accessibility_evidence.py
+    required:
+      - kind: unit
+        bind: policy
+        id: agent-policy:quick
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_quick_a11y_kit.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_native_atspi_probe.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_verify_quick_accessibility_evidence.py
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: linux-native-accessibility
+        ref: .github/workflows/LinuxInstall.yml
+        contains: "qualify_linux:"
+        executes: binding
+      - kind: packaging
+        bind: workflow
+        id: windows-native-accessibility
+        ref: .github/workflows/WindowsInstall.yml
+        contains: "qualify_windows:"
         executes: binding
   - id: agent-policy
     summary: Agent policy, architecture contracts, and the contract checker.

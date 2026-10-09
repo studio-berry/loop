@@ -74,7 +74,7 @@ public:
     }
 
     /// Ends current line (for formatters, that support it)
-    virtual void endl() { }
+    virtual void endl() {}
 };
 
 class PDFTextOutputFormatterImpl : public PDFOutputFormatterImpl
@@ -177,7 +177,6 @@ PDFTextOutputFormatterImpl::PDFTextOutputFormatterImpl() :
     m_indent(0),
     m_elementStack()
 {
-
 }
 
 void PDFTextOutputFormatterImpl::beginElement(PDFOutputFormatter::Element type, QString name, QString description, Qt::Alignment alignment, int reference)
@@ -252,7 +251,9 @@ void PDFTextOutputFormatterImpl::endElement()
         {
             // Print the table
             const size_t rows = m_table.size();
-            const size_t columns = (*std::max_element(m_table.cbegin(), m_table.cend(), [](const auto& l, const auto& r) { return l.size() < r.size(); })).size();
+            const size_t columns = (*std::max_element(m_table.cbegin(), m_table.cend(), [](const auto& l, const auto& r)
+                                                      { return l.size() < r.size(); }))
+                                       .size();
 
             // Detect maximal column size
             std::vector<int> columnSize(columns, 0);
@@ -362,7 +363,6 @@ PDFHtmlOutputFormatterImpl::PDFHtmlOutputFormatterImpl() :
     m_headerDepth(1),
     m_elementStack()
 {
-
 }
 
 void PDFHtmlOutputFormatterImpl::beginElement(PDFOutputFormatter::Element type, QString name, QString description, Qt::Alignment alignment, int reference)
@@ -845,12 +845,10 @@ void PDFConsole::writeError(QString text, QStringConverter::Encoding encoding)
 
     if (s_diagnosticSink)
     {
-        s_diagnosticSink->addDiagnostic({
-            PDFToolDiagnosticSeverity::Error,
-            QStringLiteral("cli.legacy-error"),
-            text,
-            {}
-        });
+        s_diagnosticSink->addDiagnostic({ PDFToolDiagnosticSeverity::Error,
+                                          QStringLiteral("cli.legacy-error"),
+                                          text,
+                                          {} });
         return;
     }
 
@@ -880,13 +878,14 @@ void PDFConsole::setDiagnosticSink(PDFToolExecutionContext* context)
     s_diagnosticSink = context;
 }
 
-void PDFConsole::writeData(const QByteArray& data)
+bool PDFConsole::writeData(const QByteArray& data)
 {
-    if (!data.isEmpty())
+    if (data.isEmpty())
     {
-        QTextStream stream(stdout);
-        stream.device()->write(data);
+        return true;
     }
+    QTextStream stream(stdout);
+    return stream.device()->write(data) == data.size();
 }
 
 }   // pdftool

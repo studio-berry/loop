@@ -43,6 +43,7 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
 #include "pdfoperationhistorystore.h"
@@ -335,6 +336,7 @@ EditorHost::EditorHost(QObject* parent) :
     reloadActionListRecipes();
 
     connectFacade();
+    connect(m_session.get(), &DocumentViewSession::passwordRequestChanged, this, &EditorHost::passwordRequestChanged);
     connectViewport();
     connectCatalog();
     connectInteraction();
@@ -439,6 +441,26 @@ EditorHost::~EditorHost()
 QString EditorHost::documentState() const
 {
     return QString::fromLatin1(pdfinteraction::getDocumentStateName(m_session->facade().state()));
+}
+
+quint64 EditorHost::passwordRequestId() const
+{
+    return m_session->passwordRequestId();
+}
+
+bool EditorHost::submitPassword(quint64 requestId, const QString& password)
+{
+    return m_session->answerPassword(requestId, password, true);
+}
+
+bool EditorHost::cancelPassword(quint64 requestId)
+{
+    return m_session->answerPassword(requestId, {}, false);
+}
+
+bool EditorHost::correctionsAllowed() const
+{
+    return m_session->facade().permissions().allowsCorrection();
 }
 
 bool EditorHost::hasDocument() const
@@ -681,7 +703,8 @@ pdf::PDFActionListExecutionResult EditorHost::fixRunResult() const
 
 bool EditorHost::fixExecutionArmed() const
 {
-    return fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
+    return m_session->facade().permissions().allowsCorrection() &&
+           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
 }
 
 QString EditorHost::fixLifecycleStateName() const
@@ -839,6 +862,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("pageFidelityIsAuthoritative"), pageFidelityIsAuthoritative());
 
     QVariantList steps;
+    QVariantList plannedSteps;
     QString candidateSha256;
     QString technicalStatus;
     QString visualStatus;
@@ -847,6 +871,13 @@ QVariantMap EditorHost::fixPreview() const
     QVariantList changedPageList;
     for (const pdf::PDFActionListStepResult& step : result.steps)
     {
+        plannedSteps.append(QVariantMap{
+            { QStringLiteral("stepId"), step.stepId },
+            { QStringLiteral("operation"), step.operationId },
+            { QStringLiteral("parameters"), step.resolvedParameters.toVariantMap() },
+            { QStringLiteral("scope"), step.affectedScope.toVariantList() },
+            { QStringLiteral("impact"), step.plan.value(QStringLiteral("expected_changes")).toObject().toVariantMap() },
+            { QStringLiteral("risk"), step.plan.value(QStringLiteral("risk")).toString() } });
         const QJsonObject technical = step.repairResult.value(QStringLiteral("technical_preview")).toObject();
         const QJsonObject visual = step.repairResult.value(QStringLiteral("visual_preview")).toObject();
         if (technical.isEmpty() && visual.isEmpty())
@@ -909,6 +940,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("changedPageCount"), changedPages);
     preview.insert(QStringLiteral("changedPages"), changedPageList);
     preview.insert(QStringLiteral("steps"), steps);
+    preview.insert(QStringLiteral("plannedSteps"), plannedSteps);
     return preview;
 }
 
@@ -995,7 +1027,7 @@ QVariantMap EditorHost::fixSignOff() const
 
 bool EditorHost::fixRollbackAvailable() const
 {
-    return hasDocument() && !m_fixRollbackPoints.isEmpty() &&
+    return m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
            documentShellStatus() != QLatin1String("MODIFIED");
 }
 
@@ -1067,8 +1099,13 @@ QString EditorHost::previewStaleReason() const
 
 QString EditorHost::previewFidelityStateName() const
 {
+    const bool stale = !previewStaleReason().isEmpty();
+    if (hasDocument() && !stale && !m_session->surfaces()->diagnosticsForPage(currentPage()).has_value())
+    {
+        return QStringLiteral("unavailable");
+    }
     return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
-                                                          !previewStaleReason().isEmpty(),
+                                                          stale,
                                                           pageFidelityIsAuthoritative(),
                                                           pageFidelityIsExact());
 }
@@ -1111,6 +1148,11 @@ QString EditorHost::previewFidelitySummary() const
 
     if (state == QLatin1String("unavailable"))
     {
+        if (hasDocument())
+        {
+            return tr("Render fidelity is unavailable until the current page's requested render completes. "
+                      "No rendered evidence is available for a print claim.");
+        }
         return tr("No document is open, so there is no preview to describe.");
     }
     if (state == QLatin1String("stale"))
@@ -1879,6 +1921,18 @@ bool EditorHost::runPreflight()
             outcome->documentPath = documentPath;
             outcome->auditBytes = std::move(auditBytes);
             outcome->auditSummary = pdf::preflightAuditReportSummary(outcome->result, documentPath);
+            pdf::PreflightInspectionReceipt receipt;
+            QString receiptError;
+            if (!pdf::buildPreflightInspectionReceipt(outcome->result, profile, session->getRevision(),
+                                                      engine.lastEvidenceGraph(), receipt, receiptError))
+            {
+                throw std::runtime_error(receiptError.toStdString());
+            }
+            const auto* security = document->getStorage().getSecurityHandler();
+            receipt.limitations.append(security && security->getMode() != pdf::EncryptionMode::None
+                                           ? QStringLiteral("Document is encrypted; authenticated document permissions apply.")
+                                           : QStringLiteral("Document is not encrypted."));
+            outcome->auditSummary.insert(QStringLiteral("inspection_receipt"), receipt.toJson());
 
             if (context.isCancellationRequested())
                 return;
@@ -2160,6 +2214,7 @@ QVariantList EditorHost::actionListRecipes() const
         item.insert(QStringLiteral("name"), recipe.name);
         item.insert(QStringLiteral("source"), recipe.source);
         item.insert(QStringLiteral("valid"), recipe.valid);
+        item.insert(QStringLiteral("builtIn"), recipe.builtIn);
         item.insert(QStringLiteral("diagnostic"), recipe.diagnostic);
         item.insert(QStringLiteral("recipeHash"), recipe.recipeHash);
         item.insert(QStringLiteral("stepCount"), recipe.actionList.steps.size());
@@ -2386,6 +2441,11 @@ bool EditorHost::saveActionListRecipe()
 bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                      pdfinteraction::ActionListController::State controllerState)
 {
+    if (!m_session->facade().permissions().allowsCorrection())
+    {
+        announceDocumentState(tr("Document permissions restrict corrections. No plan or output was created."));
+        return false;
+    }
     if (!hasDocument() || m_selectedActionListRecipeId.isEmpty() || !m_session->revisionSource())
     {
         return false;
@@ -2508,7 +2568,7 @@ bool EditorHost::planActionList()
 
 bool EditorHost::runActionList()
 {
-    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned)
+    if (!fixExecutionArmed())
     {
         return false;
     }
@@ -2521,19 +2581,6 @@ bool EditorHost::cancelActionList()
     return m_actionListController.cancelRun(m_actionListController.jobId());
 }
 
-bool EditorHost::confirmActionListPlan()
-{
-    // "Approve and run" must not execute a plan nobody reviewed: the armed path binds
-    // execution to the operator's approval of the exact plan digest on the current
-    // revision. An unreviewed plan is refused here.
-    if (!fixExecutionArmed())
-    {
-        announceDocumentState(tr("Approve the current correction plan before running it."));
-        return false;
-    }
-    return runActionList();
-}
-
 void EditorHost::clearFixReview()
 {
     m_fixReviewDecision = FixReviewDecision::None;
@@ -2542,8 +2589,22 @@ void EditorHost::clearFixReview()
 
 bool EditorHost::approveActionListPlan()
 {
+    return approveActionListPlan(fixCurrentPlanDigest(), fixRunResult().sourceSha256,
+                                 m_fixPlannedDocumentRevision);
+}
+
+bool EditorHost::approveActionListPlan(const QString& planDigest,
+                                       const QString& sourceSha256,
+                                       const QString& documentRevision)
+{
+    if (!correctionsAllowed())
+    {
+        return false;
+    }
     if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
-        !fixPlanIsCurrent())
+        !fixPlanIsCurrent() || planDigest.isEmpty() || sourceSha256.isEmpty() ||
+        planDigest != m_fixPlannedPlanDigest || planDigest != fixCurrentPlanDigest() ||
+        sourceSha256 != fixRunResult().sourceSha256 || documentRevision != m_fixPlannedDocumentRevision)
     {
         return false;
     }
@@ -2572,10 +2633,6 @@ bool EditorHost::rejectActionListPlan()
 
 bool EditorHost::executeApprovedActionListPlan()
 {
-    if (!fixExecutionArmed())
-    {
-        return false;
-    }
     return runActionList();
 }
 
@@ -2586,6 +2643,12 @@ bool EditorHost::selectActionListRecipeForOperation(const QString& operationId)
         return false;
     }
 
+    // Precedence: a valid recipe the operator imported wins. The shipped recipe is a fallback
+    // only. An operator recipe that offers the operation but is invalid stops the change with
+    // its diagnostic rather than silently running the shipped one.
+    const pdfinteraction::ActionListRecipeEntry* operatorRecipe = nullptr;
+    const pdfinteraction::ActionListRecipeEntry* invalidOperatorRecipe = nullptr;
+    const pdfinteraction::ActionListRecipeEntry* shippedRecipe = nullptr;
     for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
     {
         const bool offersOperation = std::any_of(
@@ -2597,18 +2660,52 @@ bool EditorHost::selectActionListRecipeForOperation(const QString& operationId)
         {
             continue;
         }
-
-        m_selectedActionListRecipeId = recipe.id;
-        syncActionListDraft();
-        m_actionListController.markRecipeStale();
-        Q_EMIT actionListRecipesChanged();
-        bumpPresentation();
-        announceDocumentState(
-            tr("Recipe '%1' runs %2. Validate and plan it in the Fix workspace.").arg(recipe.name, operationId));
-        return true;
+        if (recipe.builtIn)
+        {
+            shippedRecipe = &recipe;
+        }
+        else if (recipe.valid && !operatorRecipe)
+        {
+            operatorRecipe = &recipe;
+        }
+        else if (!recipe.valid && !invalidOperatorRecipe)
+        {
+            invalidOperatorRecipe = &recipe;
+        }
     }
 
-    return false;
+    const pdfinteraction::ActionListRecipeEntry* selected = operatorRecipe;
+    if (!selected)
+    {
+        if (invalidOperatorRecipe)
+        {
+            announceDocumentState(tr("Recipe '%1' offers %2 but is invalid: %3")
+                                      .arg(invalidOperatorRecipe->name, operationId, invalidOperatorRecipe->diagnostic));
+            return false;
+        }
+        if (shippedRecipe && !shippedRecipe->valid)
+        {
+            announceDocumentState(tr("The shipped recipe for %1 is unavailable: %2")
+                                      .arg(operationId, shippedRecipe->diagnostic));
+            return false;
+        }
+        selected = shippedRecipe;
+    }
+    if (!selected)
+    {
+        announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the change.")
+                                  .arg(operationId));
+        return false;
+    }
+
+    m_selectedActionListRecipeId = selected->id;
+    syncActionListDraft();
+    m_actionListController.markRecipeStale();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    announceDocumentState(
+        tr("Recipe '%1' runs %2. Validate and plan it in the Fix workspace.").arg(selected->name, operationId));
+    return true;
 }
 
 void EditorHost::onCorrectiveOperationRequested(const pdfinteraction::InspectorCorrectiveOperationIntent& intent)
@@ -2623,13 +2720,7 @@ void EditorHost::onCorrectiveOperationRequested(const pdfinteraction::InspectorC
     // The finding's parameters become the recipe's bindings; everything else - validate, plan,
     // review, approve - stays with the operator in the Fix workspace.
     m_actionListBindings = intent.parameters;
-    if (selectActionListRecipeForOperation(intent.operationId))
-    {
-        return;
-    }
-
-    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the correction.")
-                              .arg(intent.operationId));
+    selectActionListRecipeForOperation(intent.operationId);
 }
 
 void EditorHost::replanActionList()
@@ -2965,10 +3056,11 @@ void EditorHost::reloadActionListRecipes()
         !m_actionListCatalog.recipe(m_selectedActionListRecipeId) ||
         !m_actionListCatalog.recipe(m_selectedActionListRecipeId)->valid)
     {
+        // The shipped recipe is never the default: it is selected only when an operation needs it.
         const QList<pdfinteraction::ActionListRecipeEntry>& recipes = m_actionListCatalog.recipes();
         const auto valid = std::find_if(recipes.cbegin(), recipes.cend(),
                                         [](const pdfinteraction::ActionListRecipeEntry& recipe)
-                                        { return recipe.valid; });
+                                        { return recipe.valid && !recipe.builtIn; });
         m_selectedActionListRecipeId = valid == recipes.cend() ? QString() : valid->id;
         m_actionListBindings = QJsonObject();
     }
@@ -3012,7 +3104,7 @@ void EditorHost::updateActionListRecipeWatch()
     }
     for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
     {
-        if (QFileInfo::exists(recipe.source))
+        if (!recipe.builtIn && QFileInfo::exists(recipe.source))
         {
             m_actionListRecipeWatcher->addPath(recipe.source);
         }
@@ -3176,18 +3268,41 @@ QVariantList EditorHost::commandDescriptors() const
     descriptors.reserve(m_session->catalog().descriptors().size());
     for (const pdfinteraction::CommandDescriptor& descriptor : m_session->catalog().descriptors())
     {
-        descriptors.append(descriptorToVariant(descriptor, m_session->catalog().isEnabled(descriptor.id)));
+        descriptors.append(descriptorToVariant(descriptor, isCommandEnabled(descriptor.id)));
     }
     return descriptors;
 }
 
 bool EditorHost::isCommandEnabled(const QString& commandId) const
 {
-    return m_session->catalog().isEnabled(commandId);
+    return commandPermissionAllowed(commandId) && m_session->catalog().isEnabled(commandId);
+}
+
+bool EditorHost::commandPermissionAllowed(const QString& commandId) const
+{
+    const auto permissions = m_session->facade().permissions();
+    if (commandId == QLatin1String("actionPrint"))
+    {
+        return permissions.print;
+    }
+    if (commandId == QLatin1String("actionCopyText"))
+    {
+        return permissions.copy;
+    }
+    if (commandId == MoveSelectionCommandId || commandId == QLatin1String("actionPageGeometry") ||
+        commandId == QLatin1String("actionInsertPageNumbers") || commandId == QLatin1String("actionStickyNoteInsert"))
+    {
+        return permissions.allowsCorrection();
+    }
+    return true;
 }
 
 quint64 EditorHost::invokeCommand(const QString& commandId, const QVariantMap& parameters)
 {
+    if (!commandPermissionAllowed(commandId))
+    {
+        return pdfinteraction::InvalidCommandInvocation;
+    }
     const pdfinteraction::CommandInvocationId invocation = m_session->catalog().invoke(commandId, parameters);
     if (invocation != pdfinteraction::InvalidCommandInvocation)
     {
@@ -3500,6 +3615,7 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindNext"), hasSearchResults);
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
+    availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
     m_session->catalog().setEnabledBatch(availability);
 }
 
@@ -3813,8 +3929,32 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
             {
                 if (!outcome->candidate)
                 {
+                    QStringList reasons;
+                    const auto appendDiagnostics = [&reasons](const QJsonArray& diagnostics)
+                    {
+                        for (const QJsonValue& diagnostic : diagnostics)
+                        {
+                            reasons.append(diagnostic.toObject().value(QStringLiteral("message")).toString());
+                        }
+                    };
+                    appendDiagnostics(outcome->executionResult.diagnostics);
+                    for (const pdf::PDFActionListStepResult& step : outcome->executionResult.steps)
+                    {
+                        if (step.status != pdf::PDFActionListStepStatus::Failed)
+                        {
+                            continue;
+                        }
+                        appendDiagnostics(step.diagnostics);
+                        for (const QJsonValue& failure : step.repairResult.value(QStringLiteral("validation_failures")).toArray())
+                        {
+                            reasons.append(failure.toString());
+                        }
+                    }
+                    reasons.removeAll(QString());
+                    reasons.removeDuplicates();
                     m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
-                                                   tr("Action List produced no document."));
+                                                   reasons.isEmpty() ? tr("Action List produced no document.")
+                                                                     : reasons.join(QLatin1Char(' ')));
                     break;
                 }
                 if (m_acceptActionListResults &&
@@ -4089,7 +4229,7 @@ void EditorHost::setInspectionMode(QString mode)
 
 bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
 {
-    if (!hasDocument())
+    if (!m_session->facade().permissions().allowsCorrection())
     {
         return false;
     }
@@ -4115,18 +4255,35 @@ bool EditorHost::requestMoveSelection(const QVariantMap& parameters)
                                         { QStringLiteral("page_index"), page },
                                         { QStringLiteral("dx"), dx },
                                         { QStringLiteral("dy"), dy } };
-    if (selectActionListRecipeForOperation(TranslatePageBoxOperationId))
+    return selectActionListRecipeForOperation(TranslatePageBoxOperationId);
+}
+
+QString EditorHost::dragRefusalMessage(pdfinteraction::InteractionTargetKind kind)
+{
+    switch (kind)
     {
-        return true;
+        case pdfinteraction::InteractionTargetKind::Finding:
+            return tr("A finding can't be moved: its position comes from the document. Fix the cause in the Fix workspace.");
+        case pdfinteraction::InteractionTargetKind::Guide:
+            return tr("A guide can't be moved yet: guide editing has no approved contract.");
+        case pdfinteraction::InteractionTargetKind::DragHandle:
+            return tr("A handle can't be dragged yet: transforms have no approved contract.");
+        case pdfinteraction::InteractionTargetKind::PageBox:
+        case pdfinteraction::InteractionTargetKind::Page:
+        case pdfinteraction::InteractionTargetKind::None:
+            break;
     }
-    announceDocumentState(tr("No recipe runs %1 yet. Import a recipe that offers it, then plan the move.")
-                              .arg(TranslatePageBoxOperationId));
-    return false;
+    return tr("This can't be moved.");
 }
 
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 {
-    if (hasDocument() && session.target.kind == pdfinteraction::InteractionTargetKind::PageBox)
+    if (hasDocument() && pdfinteraction::getDragCommitDisposition(session.target.kind) == pdfinteraction::DragCommitDisposition::Refused)
+    {
+        announceDocumentState(dragRefusalMessage(session.target.kind));
+        Q_EMIT dragRefused(QString::fromLatin1(pdfinteraction::getInteractionTargetKindName(session.target.kind)), session.target.id);
+    }
+    else if (hasDocument())
     {
         if (session.fence.revision != m_session->facade().currentRevision())
         {

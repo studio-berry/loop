@@ -47,6 +47,8 @@
 #include <QVector>
 #include <QCryptographicHash>
 
+#include <lcms2.h>
+
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -303,6 +305,63 @@ void processAnnotationAppearanceStreams(PDFDocument* document,
     }
 }
 
+const QString ICC_UNVERIFIED_PROFILE = QStringLiteral("ICCBased (unreadable or non-device profile)");
+const QString ICC_PROFILE_CONFLICT = QStringLiteral("ICCBased (profile conflicts with /N or /Alternate)");
+
+QString deviceNameOfIccProfile(const QByteArray& profileData)
+{
+    if (profileData.isEmpty())
+    {
+        return QString();
+    }
+
+    cmsHPROFILE profile = cmsOpenProfileFromMem(profileData.constData(), cmsUInt32Number(profileData.size()));
+    if (!profile)
+    {
+        return QString();
+    }
+
+    QString name;
+    switch (cmsGetColorSpace(profile))
+    {
+        case cmsSigGrayData:
+            name = QStringLiteral("DeviceGray");
+            break;
+        case cmsSigRgbData:
+            name = QStringLiteral("DeviceRGB");
+            break;
+        case cmsSigCmykData:
+            name = QStringLiteral("DeviceCMYK");
+            break;
+        default:
+            break;
+    }
+    cmsCloseProfile(profile);
+    return name;
+}
+
+QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace);
+
+// The embedded profile decides what an ICCBased space paints. /N and /Alternate
+// only restate it, so a disagreement is surfaced as its own disallowed space
+// rather than resolved in favour of the alternate.
+QString classifyIccBasedColorSpace(const PDFICCBasedColorSpace* iccColorSpace)
+{
+    const QString profileSpace = deviceNameOfIccProfile(iccColorSpace->getIccProfileData());
+    if (profileSpace.isEmpty())
+    {
+        return ICC_UNVERIFIED_PROFILE;
+    }
+
+    const PDFAbstractColorSpace* alternate = iccColorSpace->getAlternateColorSpace();
+    const QString alternateSpace = classifyPaintedColorSpace(alternate);
+    if (alternateSpace != profileSpace)
+    {
+        return ICC_PROFILE_CONFLICT;
+    }
+    return profileSpace;
+}
+
 QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace)
 {
     if (!colorSpace)
@@ -329,9 +388,10 @@ QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace)
         case PDFAbstractColorSpace::ColorSpace::DeviceGray:
             return QStringLiteral("DeviceGray");
         case PDFAbstractColorSpace::ColorSpace::CalRGB:
-        case PDFAbstractColorSpace::ColorSpace::ICCBased:
         case PDFAbstractColorSpace::ColorSpace::Lab:
             return QStringLiteral("DeviceRGB");
+        case PDFAbstractColorSpace::ColorSpace::ICCBased:
+            return classifyIccBasedColorSpace(static_cast<const PDFICCBasedColorSpace*>(base));
         case PDFAbstractColorSpace::ColorSpace::CalGray:
             return QStringLiteral("DeviceGray");
         case PDFAbstractColorSpace::ColorSpace::DeviceN:

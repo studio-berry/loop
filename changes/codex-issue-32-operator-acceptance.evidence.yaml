@@ -1,0 +1,17 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: operator-acceptance-packet-integrity
+    evidence:
+      - unit:scripts/qualification/test_verify_operator_acceptance.py
+      - unit:operator-acceptance-packet-ci
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+      - architecture:scripts/generate-architecture-catalogs.py
+unresolved:
+  - The Editor currently signs off a temporary publication that is deleted; durable installed-product publication and receipt export require an accepted Core destination contract.
+  - Exact-source Linux and Windows clean-machine production PDF journeys, retained video and log packets, matching receipt identities and human review are unavailable. Unit tests use synthetic packets and cannot close issue 32.

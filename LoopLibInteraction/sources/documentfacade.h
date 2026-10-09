@@ -159,6 +159,17 @@ struct DocumentOperatorState
     bool canActOnInspection() const;
 };
 
+struct DocumentPermissions
+{
+    bool encrypted = false;
+    bool print = false;
+    bool modify = false;
+    bool copy = false;
+    bool assemble = false;
+
+    bool allowsCorrection() const { return print && modify && copy && assemble; }
+};
+
 /// One presentation-facing document lifecycle.
 ///
 /// The facade owns no PDF truth. pdf::PDFDocumentContext remains the document
@@ -213,6 +224,7 @@ public:
     pdf::PDFRevisionIdentity currentRevision() const;
 
     DocumentOperatorState operatorState() const;
+    DocumentPermissions permissions() const;
     std::optional<DocumentInspectionToken> beginInspection(const QString& inputDigest,
                                                            const pdf::PreflightProfileData& profile,
                                                            QString& error);

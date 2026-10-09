@@ -464,6 +464,9 @@ public:
     static QString convertDateTimeToString(const QDateTime& dateTime, PDFToolOptions::DateFormat dateFormat);
 
 protected:
+    /// Called after an in-place replacement document is prepared, before cancellation admission and writing.
+    virtual void documentPreparedForWrite(const pdf::PDFDocument& document) { Q_UNUSED(document); }
+
     /// Reports a structured diagnostic to the execution context (JSON mode) and,
     /// in human modes, keeps the existing stderr behavior. JSON mode does not
     /// duplicate handled diagnostics on stderr.

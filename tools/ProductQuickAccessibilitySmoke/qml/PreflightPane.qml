@@ -8,6 +8,7 @@ Pane {
     objectName: "preflightPane"
 
     property var host: editorHost
+    signal helpRequested(string checkId, string findingType)
     property var findingsModel: host ? host.preflight.findingsModel : null
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
@@ -414,6 +415,18 @@ Pane {
                 Accessible.name: model.message
                 Accessible.description: qsTr("Severity %1, scope %2, page %3, object %4, check %5, evidence %6")
                     .arg(model.severity).arg(model.scope).arg(model.page).arg(model.objectId).arg(model.checkId).arg(model.evidenceIds.join(", "))
+                contentItem: RowLayout {
+                    Label {
+                        Layout.fillWidth: true
+                        text: "%1 — %2".arg(model.severity).arg(model.message)
+                        wrapMode: Text.WordWrap
+                    }
+                    ToolButton {
+                        text: qsTr("Help")
+                        Accessible.name: qsTr("Help for %1 finding").arg(model.type)
+                        onClicked: root.helpRequested(model.checkId, model.type)
+                    }
+                }
                 onClicked: {
                     findingsView.currentIndex = index
                     if (host) {

@@ -800,6 +800,13 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
                             dataLength = dataLengthProduct;
                         }
 
+                        // A negative /Length cannot bound the data. Searching from before the stream start would
+                        // find an earlier "EI" and seek back to this same inline image, looping forever.
+                        if (dataLength < 0)
+                        {
+                            throw PDFException(PDFTranslationContext::tr("Invalid inline image stream."));
+                        }
+
                         // We will once more find the "EI" operator, due to recomputed dataLength.
                         operatorEIPosition = parser.findSubstring("EI", startDataPosition + dataLength);
                         if (operatorEIPosition == -1)

@@ -28,7 +28,8 @@ param(
     [Parameter(Mandatory = $true)] [string]$OutputDirectory,
     [string]$StagingRoot = "",
     [string]$SourceSha = "",
-    [string]$EvidenceJson = ""
+    [string]$EvidenceJson = "",
+    [string]$Package = ""
 )
 
 . (Join-Path $PSScriptRoot "lib\loop-qt-runtime.ps1")
@@ -53,10 +54,8 @@ if (-not $StagingRoot) {
 }
 $staged = New-LoopQuickA11yStagingTree -InstallTree $InstallTree -BuildDir $BuildDir -Stage (Join-Path $StagingRoot "uia-native")
 
-# The driver refuses an existing output directory so a stale snapshot can never
-# pass inspection; rebuild it from scratch on every run.
 if (Test-Path -LiteralPath $OutputDirectory) {
-    Remove-Item -LiteralPath $OutputDirectory -Recurse -Force
+    throw 'The native UI Automation output directory must be new.'
 }
 
 Write-Output "Running native UI Automation qualification executable=$($staged.Executable) staging_tree=$($staged.Stage)"
@@ -112,6 +111,8 @@ if ($EvidenceJson) {
             executable_sha256 = (Get-FileHash -LiteralPath $staged.Executable -Algorithm SHA256).Hash.ToLowerInvariant()
             fixture_sha256    = $report.fixture_sha256
             driver_report     = $reportPath
+            package           = if ($Package) { (Resolve-Path -LiteralPath $Package).Path } else { $null }
+            package_sha256    = if ($Package) { (Get-FileHash -LiteralPath $Package -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
         }
         observed       = [ordered]@{
             platform                        = [string]$report.platform

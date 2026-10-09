@@ -2,7 +2,7 @@
 
 Two gaps found while planning the canvas-editor GUI work. Gap 1 is fixed by
 the tool-vocabulary work for issue #103. Gap 2 is fixed for page boxes by issue
-#104 (ADR-012); findings, guides and text remain undraggable.
+#104 (ADR-012); findings, guides, handles and text are refused with a visible reason (#206).
 
 Verified against `origin/dev` at `e9953734`.
 
@@ -91,7 +91,8 @@ reported rather than invented.
 `PageBox` target. The command routes the move into the Fix workspace as a bound
 `translate-page-box` operation, so plan, approval and execute stay the governed
 flow. See `docs/adr/adr-012-drag-commit-command.md`, "Implementation notes".
-The move needs a recipe that offers `translate-page-box`; none ships built in.
+The move runs through a recipe that offers `translate-page-box`. A recipe ships built in
+(ADR-013); an operator recipe that offers the operation takes precedence over it.
 
 ## Why no code accompanied gap 2 at first
 

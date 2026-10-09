@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -83,7 +84,8 @@ def _check_common(record: dict, label: str, expected_sha: str, install_tree: str
         errors.append(f"{label} evidence does not record the installed tree path")
     elif install_tree and _normalized(recorded_tree) != _normalized(install_tree):
         errors.append(f"{label} evidence installed tree {recorded_tree} does not match {install_tree}")
-    if not artifact.get("executable_sha256"):
+    executable_digest = artifact.get("executable_sha256")
+    if not isinstance(executable_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", executable_digest):
         errors.append(f"{label} evidence does not record the harness executable digest")
     return errors
 
@@ -103,7 +105,7 @@ def _check_native_accessibility(record: dict, expected_sha: str, install_tree: s
         errors.append("native accessibility evidence has no observed backend record")
         observed = {}
     platform = observed.get("platform")
-    if not isinstance(platform, str) or "UI Automation" not in platform:
+    if platform not in {"Windows UI Automation", "Linux AT-SPI"}:
         errors.append(f"native accessibility evidence did not use an OS accessibility client: {platform!r}")
     if observed.get("native_accessibility_backend_active") is not True:
         errors.append("native accessibility evidence does not record the native accessibility backend active")
@@ -122,6 +124,7 @@ def verify(
     install_tree: str,
     native_accessibility_path: Path | None = None,
     require_native_accessibility: bool = False,
+    package_boundary_path: Path | None = None,
 ) -> list[str]:
     errors: list[str] = []
 
@@ -164,6 +167,7 @@ def verify(
                 f"software backend evidence did not report the software rasterizer: {observed.get('graphics_api')!r}"
             )
 
+    native_accessibility = None
     if native_accessibility_path is not None:
         native_accessibility, access_load_errors = _load(native_accessibility_path, "native accessibility")
         errors.extend(access_load_errors)
@@ -174,6 +178,47 @@ def verify(
             "native accessibility evidence is required but was not provided; "
             "the native accessibility backend lane is missing, skipped or failed"
         )
+
+    if package_boundary_path is not None:
+        boundary, boundary_errors = _load(package_boundary_path, "package boundary")
+        errors.extend(boundary_errors)
+        if boundary is not None:
+            checks = boundary.get("checks", {})
+            if (boundary.get("kind") != "loop-package-boundary-evidence"
+                    or boundary.get("status") != "passed"
+                    or boundary.get("forbidden_findings") != []
+                    or not isinstance(checks, dict)
+                    or any(checks.get(key) is not True for key in (
+                        "all_payload_files_hashed", "all_binary_files_inspected", "target_architecture_matches",
+                        "qt6widgets_absent", "qt6widgets_surface_absent", "unresolved_non_system_dependencies_absent"))):
+                errors.append("package dependency inspection did not pass every Widgets-free graph check")
+            if not re.fullmatch(r"[0-9a-fA-F]{40}", expected_sha) or boundary.get("source_sha") != expected_sha.lower():
+                errors.append("package boundary source SHA does not match the qualification SHA")
+            package = boundary.get("package", {})
+            package_digest = package.get("sha256") if isinstance(package, dict) else None
+            if not isinstance(package_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", package_digest):
+                errors.append("package boundary has no package SHA-256")
+            records = [(native, "native backend"), (software, "software backend")]
+            if native_accessibility_path:
+                records.append((native_accessibility, "native accessibility"))
+                expected_platform = {"linux": "Linux AT-SPI", "windows": "Windows UI Automation"}.get(boundary.get("platform"))
+                if native_accessibility is not None:
+                    observed = native_accessibility.get("observed")
+                    actual_platform = observed.get("platform") if isinstance(observed, dict) else None
+                    if not expected_platform or actual_platform != expected_platform:
+                        errors.append("native accessibility client does not match the inspected package platform")
+            else:
+                errors.append("package qualification requires the native accessibility backend record")
+            executable_digests = set()
+            for record, label in records:
+                if record is not None:
+                    artifact = record.get("artifact", {})
+                    if not isinstance(artifact, dict) or artifact.get("package_sha256") != package_digest:
+                        errors.append(f"{label} evidence does not match the inspected package digest")
+                    if isinstance(artifact, dict) and isinstance(artifact.get("executable_sha256"), str):
+                        executable_digests.add(artifact["executable_sha256"])
+            if len(executable_digests) != 1:
+                errors.append("accessibility lanes did not use the same qualification executable")
 
     return errors
 
@@ -195,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source-sha", default="", help="exact source SHA expected in the records")
     parser.add_argument("--install-tree", default="", help="installed tree the records must name")
+    parser.add_argument("--package-boundary", type=Path, help="final package dependency inspection record")
     args = parser.parse_args(argv)
 
     errors = verify(
@@ -204,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
         args.install_tree,
         native_accessibility_path=args.native_accessibility,
         require_native_accessibility=args.require_native_accessibility,
+        package_boundary_path=args.package_boundary,
     )
     if errors:
         print("Quick accessibility qualification FAILED:", file=sys.stderr)

@@ -66,7 +66,7 @@ $null = $probeProcess.Handle
 $observations = @()
 
 try {
-    for ($stage = 0; $stage -lt 6; $stage++) {
+    for ($stage = 0; $stage -lt 7; $stage++) {
         $commandPath = Join-Path $outputPath 'stage.command'
         $temporaryCommand = Join-Path $outputPath 'stage.command.tmp'
         [System.IO.File]::WriteAllText($temporaryCommand, [string]$stage)
@@ -120,7 +120,7 @@ try {
             }
         }
     }
-    [System.IO.File]::WriteAllText((Join-Path $outputPath 'stage.command'), '6')
+    [System.IO.File]::WriteAllText((Join-Path $outputPath 'stage.command'), '7')
     if (-not $probeProcess.WaitForExit(10000) -or $probeProcess.ExitCode -ne 0) {
         throw "The native accessibility probe did not finish successfully (exit $($probeProcess.ExitCode))."
     }
@@ -132,7 +132,7 @@ try {
         observations = $observations
     }
     $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $outputPath 'native-uia.json') -Encoding UTF8
-    Write-Output "Native UI Automation passed: $($observations.Count) observations across six operator states."
+    Write-Output "Native UI Automation passed: $($observations.Count) observations across seven operator states."
 } finally {
     $probeProcess.Refresh()
     if (-not $probeProcess.HasExited) { Stop-Process -Id $probeProcess.Id }

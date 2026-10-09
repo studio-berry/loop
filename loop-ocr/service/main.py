@@ -16,8 +16,12 @@ os.dup2(2, 1)
 
 
 def _write_response(response: dict) -> None:
-    payload = (json.dumps(response, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
-    os.write(_JSON_FD, payload)
+    pending = memoryview((json.dumps(response, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8"))
+    while pending:
+        written = os.write(_JSON_FD, pending)
+        if written == 0:
+            raise OSError("response channel accepted no bytes")
+        pending = pending[written:]
 
 
 def main() -> int:

@@ -84,6 +84,7 @@ layers:
     target: PdfTool
     sources: PdfTool
     may_link:
+      - PdfToolInPlaceCommands
       - LoopLibCore
       - Qt6::Core
       - Qt6::Gui

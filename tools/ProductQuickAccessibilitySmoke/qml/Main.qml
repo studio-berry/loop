@@ -14,6 +14,7 @@ ApplicationWindow {
     Accessible.name: qsTr("Loop PDF editor")
 
     property var host: editorHost
+    property var helpController: typeof operatorHelpController !== "undefined" ? operatorHelpController : null
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     visible: true
@@ -21,7 +22,88 @@ ApplicationWindow {
     height: 768
     minimumWidth: 800
     minimumHeight: 600
+
+    OperatorHelpDialog {
+        id: operatorHelp
+        parent: Overlay.overlay
+        helpController: window.helpController
+        host: window.host
+    }
+
+    Shortcut {
+        sequence: "F1"
+        onActivated: {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            operatorHelp.showWorkspace()
+        }
+    }
+
+    Component.onCompleted: {
+        if (helpController && helpController.welcomeNeeded)
+            operatorHelp.open()
+    }
     title: host && host.displayTitle.length > 0 ? host.displayTitle : qsTr("Loop")
+
+    Dialog {
+        id: passwordDialog
+        objectName: "documentPasswordDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("Open encrypted PDF")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property var requestId: 0
+        Accessible.role: Accessible.Dialog
+        Accessible.name: title
+        closePolicy: Popup.CloseOnEscape
+
+        contentItem: ColumnLayout {
+            Label {
+                text: qsTr("Enter the document's user or owner password.")
+                wrapMode: Text.WordWrap
+                Layout.preferredWidth: 340
+            }
+            TextField {
+                id: documentPassword
+                objectName: "documentPasswordField"
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                inputMethodHints: Qt.ImhHiddenText | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                Accessible.name: qsTr("Document password")
+                Accessible.description: qsTr("Used only to open this document. The password is not saved.")
+                onAccepted: passwordDialog.accept()
+            }
+        }
+        onOpened: documentPassword.forceActiveFocus()
+        onAccepted: {
+            if (host) host.submitPassword(requestId, documentPassword.text)
+            documentPassword.clear()
+        }
+        onRejected: {
+            documentPassword.clear()
+            if (host) host.cancelPassword(requestId)
+        }
+        onClosed: {
+            documentPassword.clear()
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+    }
+
+    Connections {
+        target: host
+        function onPasswordRequestChanged() {
+            const requestId = host ? host.passwordRequestId : 0
+            if (!requestId) {
+                passwordDialog.close()
+                documentPassword.clear()
+                return
+            }
+            documentPassword.clear()
+            passwordDialog.requestId = requestId
+            if (host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            passwordDialog.open()
+        }
+    }
 
     Connections {
         target: host
@@ -223,6 +305,13 @@ ApplicationWindow {
             window: window
             openDialog: openDialog
             saveAsDialog: saveAsDialog
+            onHelpRequested: function(checkId, findingType) {
+                if (window.host && window.host.focusRestoration) window.host.focusRestoration.remember(window.activeFocusItem)
+                if (checkId.length > 0)
+                    operatorHelp.showFinding(checkId, findingType)
+                else
+                    operatorHelp.showWorkspace()
+            }
         }
 
         Pane {
