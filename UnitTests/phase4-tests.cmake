@@ -127,7 +127,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsProductOperatorLoop "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsProductOperatorLoop")
+        add_test(UnitTestsProductOperatorLoop "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsProductOperatorLoop" -o -,txt)
         set_tests_properties(UnitTestsProductOperatorLoop PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
     endif()
 
@@ -357,7 +357,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsShellWorkspace "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellWorkspace")
+        add_test(UnitTestsShellWorkspace "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellWorkspace" -o -,txt)
 
         add_executable(UnitTestsShellInspectorDispatch
             tst_shellinspectordispatch.cpp

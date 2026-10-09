@@ -28,6 +28,7 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
       QT_QPA_PLATFORM: offscreen
+      LOOP_OPERATOR_ARTIFACT_DIR: ${{ runner.temp }}\loop-operator-loop
       SENTRY_DSN: off
 
     steps:
@@ -461,6 +462,17 @@ jobs:
           name: 'loop-${{ runner.os }}.zip'
           path: .\loop\build\install\usr\bin
           retention-days: 30
+
+      - name: Retain Windows test failure diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: windows-test-failure-diagnostics
+          path: |
+            ${{ runner.temp }}\loop-widgets-free-build\Testing\Temporary\*.log
+            ${{ github.workspace }}\loop\build\Testing\Temporary\*.log
+            ${{ runner.temp }}\loop-operator-loop\*.json
+          if-no-files-found: warn
 
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in

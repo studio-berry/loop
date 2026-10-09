@@ -8,6 +8,7 @@ claims:
       - unit:scripts/ci/test_native_atspi_probe.py
       - unit:scripts/ci/test_verify_quick_accessibility_evidence.py
       - unit:scripts/ci/test_workflow_contracts.py
+      - unit:scripts/ci/test_check_windows_qt_test_runtime.py
       - packaging:linux-native-accessibility
       - packaging:windows-native-accessibility
       - packaging:linux-build
