@@ -119,7 +119,7 @@ retired README/update links, and the active obsolete milestone writer.
 The after-audit resolves those findings.
 
 The mapped `UnitTestsPluginAbi` test passed in the existing
-`C:/\.dev/build/loop-milestone-1-gaps` build. Its build plan reports
+`C:/.dev/build/loop-milestone-1-gaps` build. Its build plan reports
 `ninja: no work to do`. The plugin implementation, header, and ABI test are
 byte-identical between that build's source checkout at
 `73ca7268f2dc1345b36568eea85d029ac0fcc232` and this PR.
