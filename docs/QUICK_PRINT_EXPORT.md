@@ -1,7 +1,7 @@
 # Quick print and export
 
 Issue [#123](https://github.com/studio-berry/loop/issues/123) adds File → Export
-document and Document → Print to PDF. The approved scope for this PR is
+document and File → Print to PDF. The approved scope for this PR is
 print-to-PDF and PDF/PNG/TIFF exports. Native printer spooling remains outside
 this slice; the product continues to exclude Qt PrintSupport and Widgets.
 

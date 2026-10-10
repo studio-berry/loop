@@ -174,10 +174,14 @@ ApplicationWindow {
                 Accessible.name: qsTr("Export format")
                 Layout.fillWidth: true
             }
+            Label {
+                text: qsTr("Resolution (dpi)")
+                visible: outputResolution.visible
+            }
             SpinBox {
                 id: outputResolution
                 from: 72
-                to: 600
+                to: outputDialog.printing && host && !host.documentModel.canHighResolutionPrint ? 150 : 600
                 value: 300
                 editable: true
                 visible: outputDialog.printing || outputFormat.currentIndex !== 0
