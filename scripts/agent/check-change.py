@@ -416,6 +416,13 @@ def main() -> int:
                [python, "-m", "unittest", "scripts.ci.test_check_governance_registers",
                 "scripts.ci.test_check_loop_identity", "scripts.github.test_sync_milestones", "-q"],
                ROOT, args.dry_run)
+    # The command catalog's handler-coverage ratchet (epic #231): the check is
+    # whole-tree, so it runs on every change like source_integrity does.
+    add_result(evidence, "command_catalog",
+               [python, "scripts/verify-command-catalog.py"], ROOT, args.dry_run)
+    add_result(evidence, "command_catalog_cases",
+               [python, "-m", "unittest", "scripts.ci.test_command_catalog", "-q"],
+               ROOT, args.dry_run)
     # Whole-tree contract guards: they audit invariants of the tree, not just the
     # diff, so they run on every change like source_integrity does.
     add_result(

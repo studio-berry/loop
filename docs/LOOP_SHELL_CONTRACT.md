@@ -197,9 +197,16 @@ so menus, shortcuts, and routing are complete, and invoking it returns the typed
 `implemented` requires a real capability and a registered handler; invoking an ID
 that is not in the contract is reported as a routing error rather than ignored.
 
-`scripts/verify-command-catalog.py` checks the block, and checks shortcut parity
-against `PDFActionManager::initActions` so the catalog cannot become a second
-command truth wearing the first one's ID set.
+A KEEP or ABSORB command, though, may not sit `declared` unrecorded: both
+dispositions reach the menus, and a menu entry that answers `not-implemented` is
+a gap (epic #231). `docs/shell-handler-coverage.json` records each remaining
+unbound KEEP or ABSORB command, and the list may only shrink. Binding a handler
+removes its entry with the descriptor flipped to `implemented`. ADVANCED
+commands are release-profile gated and owe no handler to the release shell.
+
+`scripts/verify-command-catalog.py` checks the block, the handler-coverage
+ratchet, and shortcut parity against `PDFActionManager::initActions` so the
+catalog cannot become a second command truth wearing the first one's ID set.
 
 The Quick shell policy is self-authoritative; the retired migration form is not a
 runtime or documentation dependency.
@@ -240,6 +247,11 @@ The command descriptors have their own check:
 ```bash
 python scripts/verify-command-catalog.py
 ```
+
+It also enforces the handler-coverage ratchet: every KEEP or ABSORB action is
+`implemented` or listed in `docs/shell-handler-coverage.json`, the recorded gaps
+have not moved in either direction, and the first run of the check records the
+current gap set (`--record-ratchet` rewrites the baseline).
 
 `UnitTestsDocumentFacade` covers the runtime side — catalog loading, invocation
 and cancellation, and the document lifecycle — with no `QWidget` and no QML
