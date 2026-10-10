@@ -21,9 +21,12 @@ The current line is **0.2.1-alpha**. Display strings, PdfTool's envelope
 `project(VERSION)` stays `0.2.1` because it only accepts numeric components;
 the `-alpha` label lives in `LOOP_VERSION_PRERELEASE`.
 
-## Milestone remap
+## Historical milestone remap
 
-Earlier 0.0.x planning numbers map onto the 0.1 line as follows:
+The retired repository used this historical release remap. Current capability
+milestones are L01-L14, R00, G00, and X00, as recorded in
+[the governance decision](REPOSITORY_GOVERNANCE.md). The table below does not
+name current GitHub milestone gates.
 
 | Former | Current |
 |--------|---------|

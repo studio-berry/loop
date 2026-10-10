@@ -78,6 +78,11 @@ jobs:
         run: python3 scripts/ci/test_check_loop_identity.py
       - name: Verify active Loop identity
         run: python3 scripts/ci/check_loop_identity.py
+      - name: Verify repository governance and retired milestone writes
+        run: |
+          python3 -m unittest scripts.ci.test_check_governance_registers scripts.github.test_sync_milestones -q
+          python3 scripts/ci/check_governance_registers.py
+          python3 scripts/github/sync_milestones.py
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
       - name: Verify authoritative product-surface contract

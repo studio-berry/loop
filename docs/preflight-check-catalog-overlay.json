@@ -68,86 +68,86 @@
   },
   "#113": {
    "number": 113,
-   "title": "L01-08 \u2014 Classify ICC-based color by its painted space",
-   "state": "OPEN",
+   "title": "L01-08 — Classify ICC-based color by its painted space",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#114": {
    "number": 114,
-   "title": "L01-09 \u2014 Audit glyph coverage in embedded fonts",
-   "state": "OPEN",
+   "title": "L01-09 — Audit glyph coverage in embedded fonts",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#115": {
    "number": 115,
-   "title": "L01-10 \u2014 Evaluate optional-content membership for hidden content",
-   "state": "OPEN",
+   "title": "L01-10 — Evaluate optional-content membership for hidden content",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#116": {
    "number": 116,
-   "title": "L01-11 \u2014 Stop isolated over-limit ink regions passing ink coverage",
-   "state": "OPEN",
+   "title": "L01-11 — Stop isolated over-limit ink regions passing ink coverage",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#117": {
    "number": 117,
-   "title": "L01-12 \u2014 Broaden invisible-content detection",
-   "state": "OPEN",
+   "title": "L01-12 — Broaden invisible-content detection",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#118": {
    "number": 118,
-   "title": "L01-13 \u2014 Make off-page and obscured-content geometry clip-aware",
-   "state": "OPEN",
+   "title": "L01-13 — Make off-page and obscured-content geometry clip-aware",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#119": {
    "number": 119,
-   "title": "L01-14 \u2014 Judge white overprint and transparency interaction on the authoritative renderer",
-   "state": "OPEN",
+   "title": "L01-14 — Judge white overprint and transparency interaction on the authoritative renderer",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#120": {
    "number": 120,
-   "title": "L01-15 \u2014 Close the sparse-mark bleed raster false pass",
-   "state": "OPEN",
+   "title": "L01-15 — Close the sparse-mark bleed raster false pass",
+   "state": "CLOSED",
    "milestone": "L01 - Evidence Core",
    "repository": "studio-berry/loop"
   },
   "#141": {
    "number": 141,
-   "title": "X00-02 \u2014 Re-file parked legacy expansion candidates with value cases",
+   "title": "X00-02 — Re-file parked legacy expansion candidates with value cases",
    "state": "OPEN",
-   "milestone": null,
+   "milestone": "X00 - Expansion Candidates",
    "repository": "studio-berry/loop"
   },
   "#142": {
    "number": 142,
-   "title": "X00-03 \u2014 Per-named-colorant ink limits for DeviceN and spot separations",
+   "title": "X00-03 — Per-named-colorant ink limits for DeviceN and spot separations",
    "state": "OPEN",
-   "milestone": null,
+   "milestone": "X00 - Expansion Candidates",
    "repository": "studio-berry/loop"
   },
   "#143": {
    "number": 143,
-   "title": "X00-04 \u2014 Barcode, slug, Braille, and dieline geometry validation",
+   "title": "X00-04 — Barcode, slug, Braille, and dieline geometry validation",
    "state": "OPEN",
-   "milestone": null,
+   "milestone": "X00 - Expansion Candidates",
    "repository": "studio-berry/loop"
   },
   "#144": {
    "number": 144,
-   "title": "X00-05 \u2014 Standards currency: PDF/X-6, PDF 2.0 output intents, and GWG 2022 check sets",
+   "title": "X00-05 — Standards currency: PDF/X-6, PDF 2.0 output intents, and GWG 2022 check sets",
    "state": "OPEN",
-   "milestone": null,
+   "milestone": "X00 - Expansion Candidates",
    "repository": "studio-berry/loop"
   }
  },

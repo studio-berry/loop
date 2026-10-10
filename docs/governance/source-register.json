@@ -1,0 +1,1997 @@
+{
+  "format_version": 1,
+  "repository": "studio-berry/loop",
+  "reviewed_sha": "9fea0095221911fa81dcfa816a49d090995bddbd",
+  "reviewed_on": "2026-10-10",
+  "roadmap": "https://app.notion.com/p/3bb9cb079ddb80c4a15feaa98f963f4c",
+  "sources": [
+    {
+      "id": "3bb9cb079ddb80c4a15feaa98f963f4c",
+      "title": "Loop",
+      "url": "https://app.notion.com/p/3bb9cb079ddb80c4a15feaa98f963f4c",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "Repository maintainers keep G00 and the publication index aligned with GitHub."
+    },
+    {
+      "id": "3c89cb079ddb8026b704e72ac9bec3ec",
+      "title": "Issues",
+      "url": "https://app.notion.com/p/3c89cb079ddb8026b704e72ac9bec3ec",
+      "availability": "Deleted database; schema readable; legacy item bodies unavailable.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "3c89cb079ddb8076b0b0e5ca8fa195a9",
+      "title": "Sessions",
+      "url": "https://app.notion.com/p/3c89cb079ddb8076b0b0e5ca8fa195a9",
+      "availability": "Deleted database; schema readable; legacy item bodies unavailable.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "3c09cb079ddb80cb9a31ee5dd083739d",
+      "title": "Orchestration",
+      "url": "https://app.notion.com/p/3c09cb079ddb80cb9a31ee5dd083739d",
+      "availability": "Deleted page; historical text snapshot readable; not current authority.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "38f9cb079ddb804a96dbe26b8d86e84f",
+      "title": "Roadmap",
+      "url": "https://app.notion.com/p/38f9cb079ddb804a96dbe26b8d86e84f",
+      "availability": "Deleted page; historical text snapshot readable; not current authority.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "3d39cb079ddb815796fdf41944edb452",
+      "title": "Loop — Architecture & Execution Plan v2 — 2026-09-05",
+      "url": "https://app.notion.com/p/3d39cb079ddb815796fdf41944edb452",
+      "availability": "Deleted page; historical text snapshot readable; not current authority.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "3b49cb079ddb81ab9208c3c55a6e26a9",
+      "title": "Loop — Product Vision & Strategic Positioning",
+      "url": "https://app.notion.com/p/3b49cb079ddb81ab9208c3c55a6e26a9",
+      "availability": "Deleted page; historical text snapshot readable; not current authority.",
+      "next_action": "Provenance maintainers retain the source identity under #111 and seek recovery without inventing missing requirements."
+    },
+    {
+      "id": "3c79cb079ddb8150ba69c833b1531048",
+      "title": "Medic — Product Architecture & End-State Design",
+      "url": "https://app.notion.com/p/3c79cb079ddb8150ba69c833b1531048",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "Medic owner reconciles evidence under #47 before admitting host behavior."
+    },
+    {
+      "id": "3d99cb079ddb81ce955fccd0968fecfe",
+      "title": "Medic V5 - Acceptance Experiment Execution Plan",
+      "url": "https://app.notion.com/p/3d99cb079ddb81ce955fccd0968fecfe",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "Medic owner reconciles evidence under #47 before admitting host behavior."
+    },
+    {
+      "id": "3db9cb079ddb81ecbd76ccdf7d227086",
+      "title": "V6-REV — adversarial review of the V6 architecture",
+      "url": "https://app.notion.com/p/3db9cb079ddb81ecbd76ccdf7d227086",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "Medic owner reconciles evidence under #47 before admitting host behavior."
+    },
+    {
+      "id": "3e59cb079ddb818b86ced3a34485d451",
+      "title": "Jev research epic — findings and provisional architecture decision (2026-09-23)",
+      "url": "https://app.notion.com/p/3e59cb079ddb818b86ced3a34485d451",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "L08 owner uses #61-#67 and #261 for task-specific qualification."
+    },
+    {
+      "id": "3e59cb079ddb81c5b712e2a71e21c7f4",
+      "title": "R4 — Jev-like empirical qualification and acceptance ledger (2026-09-23)",
+      "url": "https://app.notion.com/p/3e59cb079ddb81c5b712e2a71e21c7f4",
+      "availability": "Readable planning or research source; not Loop runtime or release proof.",
+      "next_action": "L08 owner uses #61-#67 and #261 for task-specific qualification."
+    }
+  ],
+  "modules": [
+    {
+      "id": "L01",
+      "owner": "LoopLibCore preflight and qualification",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#618",
+        "legacy#619"
+      ],
+      "parent": 2,
+      "evidence": [
+        "docs/EVIDENCE_CORE_RESET_INVENTORY.md",
+        "LoopLibCore/sources/preflightengine.cpp",
+        "UnitTests/tst_preflightverdicttest.cpp"
+      ],
+      "next_action": "Reuse #15's inventory and the existing #16-#21 and #113-#120 outcomes. Revalidate accepted claims on a chosen candidate.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "The reviewed P3 color-inventory-probe-depth and thin-parts-raster-budget deferrals remain in #15's inventory. No legacy status is current exact-SHA proof.",
+      "issues": [
+        2,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120
+      ]
+    },
+    {
+      "id": "L02",
+      "owner": "LoopLibInteraction",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#584"
+      ],
+      "parent": 3,
+      "evidence": [
+        "LoopLibInteraction/sources/documentfacade.cpp",
+        "UnitTests/tst_documentfacadetest.cpp"
+      ],
+      "next_action": "Keep interaction changes under the existing module children, including #206. No replacement facade is scheduled.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        3,
+        22,
+        23,
+        24,
+        25,
+        26,
+        103,
+        104,
+        206
+      ]
+    },
+    {
+      "id": "L03",
+      "owner": "LoopEditor and LoopLibQuick",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#477",
+        "legacy#586",
+        "legacy#193",
+        "legacy#195",
+        "legacy#66",
+        "legacy#30",
+        "legacy#41",
+        "legacy#126"
+      ],
+      "parent": 4,
+      "evidence": [
+        "docs/LOOP_WORKSPACES.md",
+        "LoopEditor/editorhost.cpp",
+        "UnitTests/tst_productoperatorloop.cpp"
+      ],
+      "next_action": "Reuse delivered workspace work and keep residual command and absorbed-GUI coverage under #231.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        4,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        205,
+        231
+      ]
+    },
+    {
+      "id": "L04",
+      "owner": "LoopLibCore governed execution",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#587",
+        "legacy#588",
+        "legacy#589"
+      ],
+      "parent": 5,
+      "evidence": [
+        "LoopLibCore/sources/pdfgovernedexecution.cpp",
+        "UnitTests/tst_governedexecutiontest.cpp",
+        "docs/CORRECTION_COVERAGE_MATRIX.md"
+      ],
+      "next_action": "Reuse #33-#40 and #221 provenance; retain the PDFFunction resource-contract deferral. New exported contracts require an architect checkpoint.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        5,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ]
+    },
+    {
+      "id": "L05",
+      "owner": "PdfTool and worker supervision",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#238",
+        "legacy#619"
+      ],
+      "parent": 6,
+      "evidence": [
+        "PdfTool/pdfworkerclient.cpp",
+        "UnitTests/tst_pdfworkerisolation.cpp",
+        "LoopLibCore/sources/pdfpagemasterexport.cpp"
+      ],
+      "next_action": "Audit consumer coverage and complete existing #41-#46 parity and worker gates.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        6,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+      ]
+    },
+    {
+      "id": "L06",
+      "owner": "Medic worker and Loop add-bleed adapter",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#47",
+        "notion:3c79cb079ddb8150ba69c833b1531048",
+        "notion:3d99cb079ddb81ce955fccd0968fecfe",
+        "notion:3db9cb079ddb81ecbd76ccdf7d227086"
+      ],
+      "parent": 7,
+      "evidence": [
+        "LoopLibCore/sources/pdfbleedfixup.cpp",
+        "UnitTests/tst_bleedfixuptest.cpp",
+        "docs/EVIDENCE_CORE_RESET_INVENTORY.md"
+      ],
+      "next_action": "Use #47's host/evidence reconciliation and #48-#54. V5 candidate measurements and the V6 deadlock review do not admit released composite behavior.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        7,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "L07",
+      "owner": "Proposed Job module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#34",
+        "legacy#128",
+        "legacy#404",
+        "legacy#405",
+        "legacy#406",
+        "legacy#407",
+        "legacy#408",
+        "legacy#409",
+        "legacy#410",
+        "legacy#411",
+        "legacy#412",
+        "legacy#413",
+        "legacy#414",
+        "legacy#415",
+        "legacy#416",
+        "legacy#591",
+        "legacy#592",
+        "legacy#593"
+      ],
+      "parent": 8,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "docs/generated/architecture-catalog.json",
+        "LoopLibCore/sources/pdfoperationhistorystore.cpp"
+      ],
+      "next_action": "Use #55-#60 for the accepted Job contract and qualification. The existing operation history is not a Job store.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        8,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "id": "L08",
+      "owner": "Proposed Decision module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#584",
+        "legacy#590",
+        "legacy#371",
+        "legacy#686",
+        "notion:3e59cb079ddb818b86ced3a34485d451",
+        "notion:3e59cb079ddb81c5b712e2a71e21c7f4"
+      ],
+      "parent": 9,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "docs/generated/architecture-catalog.json"
+      ],
+      "next_action": "Use #61-#67 and #261. Keep no-provider/manual parity and human qualification gates; do not import Jev model results as Loop production proof.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        9,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        261
+      ]
+    },
+    {
+      "id": "L09",
+      "owner": "Proposed Intake module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#418",
+        "legacy#419",
+        "legacy#420",
+        "legacy#421",
+        "legacy#422",
+        "legacy#423",
+        "legacy#424",
+        "legacy#425",
+        "legacy#426",
+        "legacy#427",
+        "legacy#428",
+        "legacy#429",
+        "legacy#594"
+      ],
+      "parent": 10,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "LoopLibCore/sources/pdfocrpagegate.cpp",
+        "UnitTests/tst_ocrpagegatetest.cpp"
+      ],
+      "next_action": "Use #68-#73. Existing page-gated OCR is a reusable input, not proof of reviewed JobSpec extraction.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        10,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73
+      ]
+    },
+    {
+      "id": "L10",
+      "owner": "Proposed Outcome module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#431",
+        "legacy#432",
+        "legacy#433",
+        "legacy#434",
+        "legacy#435",
+        "legacy#436",
+        "legacy#437",
+        "legacy#438",
+        "legacy#439",
+        "legacy#440",
+        "legacy#441"
+      ],
+      "parent": 11,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "LoopLibCore/sources/pdfoperationhistory.cpp"
+      ],
+      "next_action": "Use #74-#79. Artifact operation history does not imply human-confirmed press observations.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        11,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79
+      ]
+    },
+    {
+      "id": "L11",
+      "owner": "Proposed Workflow module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#443",
+        "legacy#444",
+        "legacy#445",
+        "legacy#446",
+        "legacy#447",
+        "legacy#448",
+        "legacy#449",
+        "legacy#450",
+        "legacy#451",
+        "legacy#452",
+        "legacy#453",
+        "legacy#595"
+      ],
+      "parent": 12,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "docs/generated/architecture-catalog.json"
+      ],
+      "next_action": "Use #80-#85. Confirmed outcomes, counterexamples and shadow proof precede promotion.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        12,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85
+      ]
+    },
+    {
+      "id": "L12",
+      "owner": "Proposed Automation module",
+      "disposition": "gap",
+      "inputs": [
+        "legacy#455",
+        "legacy#456",
+        "legacy#457",
+        "legacy#458",
+        "legacy#459",
+        "legacy#460",
+        "legacy#461",
+        "legacy#462",
+        "legacy#463",
+        "legacy#464",
+        "legacy#465",
+        "legacy#466",
+        "legacy#596",
+        "legacy#597"
+      ],
+      "parent": 13,
+      "evidence": [
+        "docs/ROADMAP_0.5.0-0.8.0.md",
+        "LoopLibCore/sources/pdfgovernedexecution.cpp"
+      ],
+      "next_action": "Use #86-#92. Existing publication authority does not grant trigger authority or autonomous workflow admission.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        13,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92
+      ]
+    },
+    {
+      "id": "L13",
+      "owner": "LoopLibCore correction catalog",
+      "disposition": "partially-present",
+      "inputs": [
+        "studio-berry/loop#109",
+        "studio-berry/loop#127",
+        "legacy#587",
+        "legacy#588",
+        "legacy#589"
+      ],
+      "parent": 109,
+      "evidence": [
+        "docs/CORRECTION_COVERAGE_MATRIX.md",
+        "UnitTests/tst_repairoperationtest.cpp",
+        "docs/generated/correction-operation-catalog.json"
+      ],
+      "next_action": "Use #127-#134 and their #165-#178 children. Research #177 precedes conditional implementation #178; safe declines remain part of admission.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        109,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178
+      ]
+    },
+    {
+      "id": "L14",
+      "owner": "LoopLibInteraction, LoopLibQuick and benchmark maintainers",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#54",
+        "legacy#55",
+        "legacy#56",
+        "legacy#57",
+        "studio-berry/loop#179"
+      ],
+      "parent": 179,
+      "evidence": [
+        "UnitTests/tst_benchmarkidentitytest.cpp",
+        "LoopLibCore/sources/pdfdocumentsearch.cpp",
+        "architecture/quality-budgets.yaml"
+      ],
+      "next_action": "Use #180-#187 and #136. Preserve benchmark and target-machine identity before admitting a performance result.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187
+      ]
+    },
+    {
+      "id": "R00",
+      "owner": "Release and qualification maintainers",
+      "disposition": "partially-present",
+      "inputs": [
+        "legacy#468",
+        "legacy#469",
+        "legacy#470",
+        "legacy#471",
+        "legacy#472",
+        "legacy#473",
+        "legacy#474",
+        "legacy#475",
+        "legacy#476",
+        "legacy#477",
+        "legacy#478",
+        "legacy#479",
+        "legacy#598"
+      ],
+      "parent": 14,
+      "evidence": [
+        "docs/CORE_QUALIFICATION.md",
+        "docs/RESOURCE_ENVELOPE_QUALIFICATION.md",
+        "docs/NATIVE_ACCESSIBILITY_QUALIFICATION.md"
+      ],
+      "next_action": "Use #93-#98 and #135-#139. #93 selects version, SHA, modules and deviations before a candidate-specific parent is instantiated.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "Code and test references show reuse or planned boundaries. This inventory does not execute native, independent, or installed-product proof.",
+      "issues": [
+        14,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        135,
+        136,
+        137,
+        138,
+        139
+      ]
+    },
+    {
+      "id": "X00",
+      "owner": "Expansion decision owners",
+      "disposition": "deferred",
+      "inputs": [
+        "legacy#58",
+        "legacy#654",
+        "legacy#599",
+        "legacy#600",
+        "legacy#601",
+        "legacy#602",
+        "legacy#603",
+        "legacy#604",
+        "legacy#605",
+        "legacy#606",
+        "legacy#607",
+        "legacy#608",
+        "legacy#609",
+        "legacy#610"
+      ],
+      "parent": 110,
+      "evidence": [
+        "docs/generated/preflight-coverage-backlog.json",
+        "docs/EVIDENCE_CORE_RESET_INVENTORY.md",
+        "docs/ROADMAP_0.5.0-0.8.0.md"
+      ],
+      "next_action": "Reuse #140-#148 and #141's value-case decisions. Keep ink, imposition, PDF/VT, marks, editing, collaboration and conditional extensions decision-first.",
+      "source_availability": "The roadmap and current reset issues are recoverable. Individual legacy issue bodies are unavailable because the original repository and ledger rows are not recoverable.",
+      "limitation": "The reviewed P3 color-inventory-probe-depth and thin-parts-raster-budget deferrals remain in #15's inventory. No legacy status is current exact-SHA proof.",
+      "issues": [
+        110,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148
+      ]
+    }
+  ],
+  "special_dispositions": [
+    {
+      "id": "legacy#61",
+      "owner": "Repository provenance maintainers",
+      "disposition": "partially-present",
+      "issues": [
+        209
+      ],
+      "evidence": [
+        "docs/LEGACY_ISSUE_PROVENANCE.md"
+      ],
+      "next_action": "Recover the implemented claim's source and verify it before migrating behavior.",
+      "limitation": "The original issue body and exact implementation identity remain unavailable; an old implemented status proves nothing on the review SHA."
+    },
+    {
+      "id": "legacy#123",
+      "owner": "Repository provenance maintainers",
+      "disposition": "obsolete",
+      "issues": [
+        209
+      ],
+      "evidence": [
+        "docs/LEGACY_ISSUE_PROVENANCE.md"
+      ],
+      "next_action": "Retain obsolete migration history as provenance. Schedule no replacement implementation.",
+      "limitation": "The roadmap classifies this migration history as obsolete; original issue text is unavailable."
+    }
+  ],
+  "product_follow_ups": {
+    "dimensions-plugin": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "object-inspector-plugin": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "output-preview-plugin": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "soft-proofing-plugin": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "redact-plugin": {
+      "legacy": 66,
+      "issue": 231
+    },
+    "editor-plugin": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "loop-preflight-plugin": {
+      "legacy": 195,
+      "issue": 231
+    },
+    "action-list-plugin": {
+      "legacy": 30,
+      "issue": 231
+    },
+    "ocr-plugin": {
+      "legacy": 41,
+      "issue": 231
+    },
+    "loop-document": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "loop-preflight": {
+      "legacy": 195,
+      "issue": 231
+    },
+    "loop-production-preview": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "loop-pages-production": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "loop-inspect": {
+      "legacy": 193,
+      "issue": 231
+    },
+    "loop-fix": {
+      "legacy": 126,
+      "issue": 231
+    },
+    "loop-compare": {
+      "legacy": 193,
+      "issue": 231
+    }
+  },
+  "issues": {
+    "2": {
+      "repository": "studio-berry/loop",
+      "number": 2,
+      "title": "L01 — Evidence Core module gate",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "3": {
+      "repository": "studio-berry/loop",
+      "number": 3,
+      "title": "L02 — Interaction Contract module gate",
+      "state": "OPEN",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "4": {
+      "repository": "studio-berry/loop",
+      "number": 4,
+      "title": "L03 — Quick Workspace module gate",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "5": {
+      "repository": "studio-berry/loop",
+      "number": 5,
+      "title": "L04 — Governed Operation Engine module gate",
+      "state": "OPEN",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "6": {
+      "repository": "studio-berry/loop",
+      "number": 6,
+      "title": "L05 — Production Orchestrator module gate",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "7": {
+      "repository": "studio-berry/loop",
+      "number": 7,
+      "title": "L06 — Medic Specialist module gate",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "8": {
+      "repository": "studio-berry/loop",
+      "number": 8,
+      "title": "L07 — Job Spine module gate",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "9": {
+      "repository": "studio-berry/loop",
+      "number": 9,
+      "title": "L08 — Bounded Decision Worker module gate",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "10": {
+      "repository": "studio-berry/loop",
+      "number": 10,
+      "title": "L09 — Intake module gate",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "11": {
+      "repository": "studio-berry/loop",
+      "number": 11,
+      "title": "L10 — Confirmed Outcomes module gate",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "12": {
+      "repository": "studio-berry/loop",
+      "number": 12,
+      "title": "L11 — Workflow Memory module gate",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "13": {
+      "repository": "studio-berry/loop",
+      "number": 13,
+      "title": "L12 — Automation Runtime module gate",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "14": {
+      "repository": "studio-berry/loop",
+      "number": 14,
+      "title": "R00 — Cross-module release qualification gate",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "15": {
+      "repository": "studio-berry/loop",
+      "number": 15,
+      "title": "L01-01 — Pin reset truth and evidence obligations",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "16": {
+      "repository": "studio-berry/loop",
+      "number": 16,
+      "title": "L01-02 — Define complete inspection receipt",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "17": {
+      "repository": "studio-berry/loop",
+      "number": 17,
+      "title": "L01-03 — Fence scheduled and worker results",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "18": {
+      "repository": "studio-berry/loop",
+      "number": 18,
+      "title": "L01-04 — Prove independent standards and rendering claims",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "19": {
+      "repository": "studio-berry/loop",
+      "number": 19,
+      "title": "L01-05 — Qualify hostile and production resource envelopes",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "20": {
+      "repository": "studio-berry/loop",
+      "number": 20,
+      "title": "L01-06 — Audit untrusted PDF process isolation",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "21": {
+      "repository": "studio-berry/loop",
+      "number": 21,
+      "title": "L01-07 — Admit exact-SHA Core qualification",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "22": {
+      "repository": "studio-berry/loop",
+      "number": 22,
+      "title": "L02-01 — Define typed DocumentFacade state",
+      "state": "CLOSED",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "23": {
+      "repository": "studio-berry/loop",
+      "number": 23,
+      "title": "L02-02 — Navigate stable findings to source region",
+      "state": "CLOSED",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "24": {
+      "repository": "studio-berry/loop",
+      "number": 24,
+      "title": "L02-03 — Model cancel, retry, and reopen transitions",
+      "state": "CLOSED",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "25": {
+      "repository": "studio-berry/loop",
+      "number": 25,
+      "title": "L02-04 — Expose accessible operator semantics",
+      "state": "CLOSED",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "26": {
+      "repository": "studio-berry/loop",
+      "number": 26,
+      "title": "L02-05 — Prove adapter parity over one receipt",
+      "state": "CLOSED",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "27": {
+      "repository": "studio-berry/loop",
+      "number": 27,
+      "title": "L03-01 — Build one-document Quick operator shell",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "28": {
+      "repository": "studio-berry/loop",
+      "number": 28,
+      "title": "L03-02 — Separate Production Preview from fast canvas",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "29": {
+      "repository": "studio-berry/loop",
+      "number": 29,
+      "title": "L03-03 — Add Compare and review workspace",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "30": {
+      "repository": "studio-berry/loop",
+      "number": 30,
+      "title": "L03-04 — Present plan and approval journey",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "31": {
+      "repository": "studio-berry/loop",
+      "number": 31,
+      "title": "L03-05 — Qualify native accessibility and Widgets-free graph",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "32": {
+      "repository": "studio-berry/loop",
+      "number": 32,
+      "title": "L03-06 — Run clean-machine operator acceptance",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "33": {
+      "repository": "studio-berry/loop",
+      "number": 33,
+      "title": "L04-01 — Reconcile registry and canonical plan contract",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "34": {
+      "repository": "studio-berry/loop",
+      "number": 34,
+      "title": "L04-02 — Enforce operation-owned save and impact policy",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "35": {
+      "repository": "studio-berry/loop",
+      "number": 35,
+      "title": "L04-03 — Compute isolated nonpublishing preview",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "36": {
+      "repository": "studio-berry/loop",
+      "number": 36,
+      "title": "L04-04 — Bind exact-plan approval and revocation",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "37": {
+      "repository": "studio-berry/loop",
+      "number": 37,
+      "title": "L04-05 — Centralize approved Core execution",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "38": {
+      "repository": "studio-berry/loop",
+      "number": 38,
+      "title": "L04-06 — Revalidate exact published bytes",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "39": {
+      "repository": "studio-berry/loop",
+      "number": 39,
+      "title": "L04-07 — Converge provenance and sign-off",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "40": {
+      "repository": "studio-berry/loop",
+      "number": 40,
+      "title": "L04-08 — Implement forward rollback and cross-surface parity",
+      "state": "CLOSED",
+      "milestone": "L04 - Governed Operation Engine"
+    },
+    "41": {
+      "repository": "studio-berry/loop",
+      "number": 41,
+      "title": "L05-01 — Define PdfTool supervisor-worker protocol",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "42": {
+      "repository": "studio-berry/loop",
+      "number": 42,
+      "title": "L05-02 — Survive worker crash, timeout, and breach",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "43": {
+      "repository": "studio-berry/loop",
+      "number": 43,
+      "title": "L05-03 — Preserve production stage order",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "44": {
+      "repository": "studio-berry/loop",
+      "number": 44,
+      "title": "L05-04 — Audit scheduler consumers and queue pressure",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "45": {
+      "repository": "studio-berry/loop",
+      "number": 45,
+      "title": "L05-05 — Prove CLI and Action List policy parity",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "46": {
+      "repository": "studio-berry/loop",
+      "number": 46,
+      "title": "L05-06 — Qualify restartable batch publication",
+      "state": "OPEN",
+      "milestone": "L05 - Production Orchestrator"
+    },
+    "47": {
+      "repository": "studio-berry/loop",
+      "number": 47,
+      "title": "L06-01 — Pin Medic host boundary and research evidence",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "48": {
+      "repository": "studio-berry/loop",
+      "number": 48,
+      "title": "L06-02 — Version capability handshake and no-worker D0",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "49": {
+      "repository": "studio-berry/loop",
+      "number": 49,
+      "title": "L06-03 — Recover authored exterior before synthesis",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "50": {
+      "repository": "studio-berry/loop",
+      "number": 50,
+      "title": "L06-04 — Evaluate deterministic and specialist candidates",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "51": {
+      "repository": "studio-berry/loop",
+      "number": 51,
+      "title": "L06-05 — Validate every candidate on print axes",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "52": {
+      "repository": "studio-berry/loop",
+      "number": 52,
+      "title": "L06-06 — Run held-out released-composite comparison",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "53": {
+      "repository": "studio-berry/loop",
+      "number": 53,
+      "title": "L06-07 — Connect Medic preview to add-bleed gateway",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "54": {
+      "repository": "studio-berry/loop",
+      "number": 54,
+      "title": "L06-08 — Shadow, canary, and rollback decision",
+      "state": "OPEN",
+      "milestone": "L06 - Medic Specialist"
+    },
+    "55": {
+      "repository": "studio-berry/loop",
+      "number": 55,
+      "title": "L07-01 — Define minimal Job identity and field provenance",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "56": {
+      "repository": "studio-berry/loop",
+      "number": 56,
+      "title": "L07-02 — Persist encrypted local job lifecycle",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "57": {
+      "repository": "studio-berry/loop",
+      "number": 57,
+      "title": "L07-03 — Resolve job-aware profiles and plans",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "58": {
+      "repository": "studio-berry/loop",
+      "number": 58,
+      "title": "L07-04 — Project queue and status over existing scheduler",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "59": {
+      "repository": "studio-berry/loop",
+      "number": 59,
+      "title": "L07-05 — Package job artifacts for client handoff",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "60": {
+      "repository": "studio-berry/loop",
+      "number": 60,
+      "title": "L07-06 — Qualify full job lifecycle and recovery",
+      "state": "OPEN",
+      "milestone": "L07 - Job Spine"
+    },
+    "61": {
+      "repository": "studio-berry/loop",
+      "number": 61,
+      "title": "L08-01 — Define indexed decision state and one-request question contract",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "62": {
+      "repository": "studio-berry/loop",
+      "number": 62,
+      "title": "L08-02 — Build deterministic no-provider policy over the same action space",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "63": {
+      "repository": "studio-berry/loop",
+      "number": 63,
+      "title": "L08-03 — Select and pin providers behind the one-request port",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "64": {
+      "repository": "studio-berry/loop",
+      "number": 64,
+      "title": "L08-04 — Contain private state, hostile documents, and model output",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "65": {
+      "repository": "studio-berry/loop",
+      "number": 65,
+      "title": "L08-05 — Calibrate task and stratum abstention",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "66": {
+      "repository": "studio-berry/loop",
+      "number": 66,
+      "title": "L08-06 — Consume observations once through Medic routing and plan-assist adapters",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "67": {
+      "repository": "studio-berry/loop",
+      "number": 67,
+      "title": "L08-07 — Qualify two clients, decision receipts, and the inspector",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    },
+    "68": {
+      "repository": "studio-berry/loop",
+      "number": 68,
+      "title": "L09-01 — Define source-attributed Intake contract",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "69": {
+      "repository": "studio-berry/loop",
+      "number": 69,
+      "title": "L09-02 — Page-gate OCR and sidecar lifecycle",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "70": {
+      "repository": "studio-berry/loop",
+      "number": 70,
+      "title": "L09-03 — Build deterministic spec-field parsers",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "71": {
+      "repository": "studio-berry/loop",
+      "number": 71,
+      "title": "L09-04 — Quarantine watch-folder imports",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "72": {
+      "repository": "studio-berry/loop",
+      "number": 72,
+      "title": "L09-05 — Review and confirm JobSpec candidates",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "73": {
+      "repository": "studio-berry/loop",
+      "number": 73,
+      "title": "L09-06 — Qualify intake under adversarial client data",
+      "state": "OPEN",
+      "milestone": "L09 - Intake"
+    },
+    "74": {
+      "repository": "studio-berry/loop",
+      "number": 74,
+      "title": "L10-01 — Version production event import schema",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "75": {
+      "repository": "studio-berry/loop",
+      "number": 75,
+      "title": "L10-02 — Implement idempotent file-based importers",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "76": {
+      "repository": "studio-berry/loop",
+      "number": 76,
+      "title": "L10-03 — Match events to exact Loop outputs",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "77": {
+      "repository": "studio-berry/loop",
+      "number": 77,
+      "title": "L10-04 — Add operator confirmation and rejection",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "78": {
+      "repository": "studio-berry/loop",
+      "number": 78,
+      "title": "L10-05 — Build append-only confirmed-result ledger",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "79": {
+      "repository": "studio-berry/loop",
+      "number": 79,
+      "title": "L10-06 — Qualify observe-mode history",
+      "state": "OPEN",
+      "milestone": "L10 - Confirmed Outcomes"
+    },
+    "80": {
+      "repository": "studio-berry/loop",
+      "number": 80,
+      "title": "L11-01 — Mine confirmed repeat-job patterns",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "81": {
+      "repository": "studio-berry/loop",
+      "number": 81,
+      "title": "L11-02 — Produce recommendation evidence cards",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "82": {
+      "repository": "studio-berry/loop",
+      "number": 82,
+      "title": "L11-03 — Evaluate optional ranking versus transparent rules",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "83": {
+      "repository": "studio-berry/loop",
+      "number": 83,
+      "title": "L11-04 — Replay candidates in shadow mode",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "84": {
+      "repository": "studio-berry/loop",
+      "number": 84,
+      "title": "L11-05 — Version edits and promotion request",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "85": {
+      "repository": "studio-berry/loop",
+      "number": 85,
+      "title": "L11-06 — Qualify support and no-recommendation behavior",
+      "state": "OPEN",
+      "milestone": "L11 - Workflow Memory"
+    },
+    "86": {
+      "repository": "studio-berry/loop",
+      "number": 86,
+      "title": "L12-01 — Define immutable promotion and authorization",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "87": {
+      "repository": "studio-berry/loop",
+      "number": 87,
+      "title": "L12-02 — Implement bounded trigger adapters",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "88": {
+      "repository": "studio-berry/loop",
+      "number": 88,
+      "title": "L12-03 — Enforce budgets, canaries, and kill switch",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "89": {
+      "repository": "studio-berry/loop",
+      "number": 89,
+      "title": "L12-04 — Recover idempotently after crash",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "90": {
+      "repository": "studio-berry/loop",
+      "number": 90,
+      "title": "L12-05 — Use Core gateway and revalidation for every run",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "91": {
+      "repository": "studio-berry/loop",
+      "number": 91,
+      "title": "L12-06 — Project client-visible status from receipts",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "92": {
+      "repository": "studio-berry/loop",
+      "number": 92,
+      "title": "L12-07 — Qualify bounded canary and rollback",
+      "state": "OPEN",
+      "milestone": "L12 - Automation Runtime"
+    },
+    "93": {
+      "repository": "studio-berry/loop",
+      "number": 93,
+      "title": "R00-01 — Select exact release candidate and module set",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "94": {
+      "repository": "studio-berry/loop",
+      "number": 94,
+      "title": "R00-02 — Build and inspect Linux/Windows artifacts",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "95": {
+      "repository": "studio-berry/loop",
+      "number": 95,
+      "title": "R00-03 — Prove independent standards and print acceptance",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "96": {
+      "repository": "studio-berry/loop",
+      "number": 96,
+      "title": "R00-04 — Prove security, privacy, and resource envelope",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "97": {
+      "repository": "studio-berry/loop",
+      "number": 97,
+      "title": "R00-05 — Close licensing, migration, and rollback dossier",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "98": {
+      "repository": "studio-berry/loop",
+      "number": 98,
+      "title": "R00-06 — Make release admission decision",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "103": {
+      "repository": "studio-berry/loop",
+      "number": 103,
+      "title": "Select and Hand toolbar buttons are checkable placeholders with no behavior",
+      "state": "CLOSED",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "104": {
+      "repository": "studio-berry/loop",
+      "number": 104,
+      "title": "Completed drags are discarded: EditorHost::onDragCompleted drops the DragSession",
+      "state": "CLOSED",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "108": {
+      "repository": "studio-berry/loop",
+      "number": 108,
+      "title": "G00 — Reset repository governance and provenance",
+      "state": "OPEN",
+      "milestone": "G00 - Repository Governance"
+    },
+    "109": {
+      "repository": "studio-berry/loop",
+      "number": 109,
+      "title": "L13 — Correction Catalog Breadth module gate",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "110": {
+      "repository": "studio-berry/loop",
+      "number": 110,
+      "title": "X00 — Expansion candidate register",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "111": {
+      "repository": "studio-berry/loop",
+      "number": 111,
+      "title": "G00-01 — Re-home legacy issue provenance after the repository rename",
+      "state": "CLOSED",
+      "milestone": "G00 - Repository Governance"
+    },
+    "112": {
+      "repository": "studio-berry/loop",
+      "number": 112,
+      "title": "G00-02 — Reconcile product identity, version, and branch references",
+      "state": "OPEN",
+      "milestone": "G00 - Repository Governance"
+    },
+    "113": {
+      "repository": "studio-berry/loop",
+      "number": 113,
+      "title": "L01-08 — Classify ICC-based color by its painted space",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "114": {
+      "repository": "studio-berry/loop",
+      "number": 114,
+      "title": "L01-09 — Audit glyph coverage in embedded fonts",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "115": {
+      "repository": "studio-berry/loop",
+      "number": 115,
+      "title": "L01-10 — Evaluate optional-content membership for hidden content",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "116": {
+      "repository": "studio-berry/loop",
+      "number": 116,
+      "title": "L01-11 — Stop isolated over-limit ink regions passing ink coverage",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "117": {
+      "repository": "studio-berry/loop",
+      "number": 117,
+      "title": "L01-12 — Broaden invisible-content detection",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "118": {
+      "repository": "studio-berry/loop",
+      "number": 118,
+      "title": "L01-13 — Make off-page and obscured-content geometry clip-aware",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "119": {
+      "repository": "studio-berry/loop",
+      "number": 119,
+      "title": "L01-14 — Judge white overprint and transparency interaction on the authoritative renderer",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "120": {
+      "repository": "studio-berry/loop",
+      "number": 120,
+      "title": "L01-15 — Close the sparse-mark bleed raster false pass",
+      "state": "CLOSED",
+      "milestone": "L01 - Evidence Core"
+    },
+    "121": {
+      "repository": "studio-berry/loop",
+      "number": 121,
+      "title": "L03-07 — Ship operator documentation, first-run onboarding, and a sample corpus",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "122": {
+      "repository": "studio-berry/loop",
+      "number": 122,
+      "title": "L03-08 — Open encrypted and password-protected documents in Quick",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "123": {
+      "repository": "studio-berry/loop",
+      "number": 123,
+      "title": "L03-09 — Print and export from the Quick workspace",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "124": {
+      "repository": "studio-berry/loop",
+      "number": 124,
+      "title": "L03-10 — Present undo and redo as governed revision history",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "125": {
+      "repository": "studio-berry/loop",
+      "number": 125,
+      "title": "L03-11 — Show annotations, proof comments, and signature status in review",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "126": {
+      "repository": "studio-berry/loop",
+      "number": 126,
+      "title": "L03-12 — Localize the Quick shell",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "127": {
+      "repository": "studio-berry/loop",
+      "number": 127,
+      "title": "L13-01 — Define fixup admission contract and check-to-fix matrix",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "128": {
+      "repository": "studio-berry/loop",
+      "number": 128,
+      "title": "L13-02 — Embed or outline fonts",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "129": {
+      "repository": "studio-berry/loop",
+      "number": 129,
+      "title": "L13-03 — Map spot colors, normalize rich black, assign output intent, and limit ink",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "130": {
+      "repository": "studio-berry/loop",
+      "number": 130,
+      "title": "L13-04 — Correct hairlines and white overprint",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "131": {
+      "repository": "studio-berry/loop",
+      "number": 131,
+      "title": "L13-05 — Remove hidden, invisible, off-page, and active content",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "132": {
+      "repository": "studio-berry/loop",
+      "number": 132,
+      "title": "L13-06 — Normalize page boxes, scale to trim, and rotation",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "133": {
+      "repository": "studio-berry/loop",
+      "number": 133,
+      "title": "L13-07 — Flatten transparency with fidelity proof",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "134": {
+      "repository": "studio-berry/loop",
+      "number": 134,
+      "title": "L13-08 — Qualify correction breadth across Editor, PdfTool, and Action List",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "135": {
+      "repository": "studio-berry/loop",
+      "number": 135,
+      "title": "R00-07 — Make the macOS go/no-go decision",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "136": {
+      "repository": "studio-berry/loop",
+      "number": 136,
+      "title": "R00-08 — Gate performance and scale on benchmark identities",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "137": {
+      "repository": "studio-berry/loop",
+      "number": 137,
+      "title": "R00-09 — Decide installer signing, update channel, and SmartScreen posture",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "138": {
+      "repository": "studio-berry/loop",
+      "number": 138,
+      "title": "R00-10 — Freeze public contracts and prove schema compatibility",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "139": {
+      "repository": "studio-berry/loop",
+      "number": 139,
+      "title": "R00-11 — Decide opt-in crash and diagnostics reporting",
+      "state": "OPEN",
+      "milestone": "R00 - Release Qualification"
+    },
+    "140": {
+      "repository": "studio-berry/loop",
+      "number": 140,
+      "title": "X00-01 — Decide the conditional Extensions module",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "141": {
+      "repository": "studio-berry/loop",
+      "number": 141,
+      "title": "X00-02 — Re-file parked legacy expansion candidates with value cases",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "142": {
+      "repository": "studio-berry/loop",
+      "number": 142,
+      "title": "X00-03 — Per-named-colorant ink limits for DeviceN and spot separations",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "143": {
+      "repository": "studio-berry/loop",
+      "number": 143,
+      "title": "X00-04 — Barcode, slug, Braille, and dieline geometry validation",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "144": {
+      "repository": "studio-berry/loop",
+      "number": 144,
+      "title": "X00-05 — Standards currency: PDF/X-6, PDF 2.0 output intents, and GWG 2022 check sets",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "145": {
+      "repository": "studio-berry/loop",
+      "number": 145,
+      "title": "X00-06 — Verifiable receipts and content credentials for published artifacts",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "146": {
+      "repository": "studio-berry/loop",
+      "number": 146,
+      "title": "X00-07 — XJDF/JMF job-ticket and device-outcome interchange",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "147": {
+      "repository": "studio-berry/loop",
+      "number": 147,
+      "title": "X00-08 — Bounded local automation interface for agents and integrations",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "148": {
+      "repository": "studio-berry/loop",
+      "number": 148,
+      "title": "X00-09 — PDF/UA accessibility preflight",
+      "state": "OPEN",
+      "milestone": "X00 - Expansion Candidates"
+    },
+    "165": {
+      "repository": "studio-berry/loop",
+      "number": 165,
+      "title": "L13-03a — Qualify job-scoped spot-color mapping",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "166": {
+      "repository": "studio-berry/loop",
+      "number": 166,
+      "title": "L13-03b — Normalize rich black using profile recipes",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "167": {
+      "repository": "studio-berry/loop",
+      "number": 167,
+      "title": "L13-03c — Assign output intent with standards-safe validation",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "168": {
+      "repository": "studio-berry/loop",
+      "number": 168,
+      "title": "L13-03d — Limit total ink via qualified ICC/DeviceLink path",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "169": {
+      "repository": "studio-berry/loop",
+      "number": 169,
+      "title": "L13-04a — Correct thin strokes to the production minimum",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "170": {
+      "repository": "studio-berry/loop",
+      "number": 170,
+      "title": "L13-04b — Convert unsafe white overprint to knockout",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "171": {
+      "repository": "studio-berry/loop",
+      "number": 171,
+      "title": "L13-05a — Flatten optional content to the print configuration",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "172": {
+      "repository": "studio-berry/loop",
+      "number": 172,
+      "title": "L13-05b — Remove exactly identified invisible and off-page objects",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "173": {
+      "repository": "studio-berry/loop",
+      "number": 173,
+      "title": "L13-05c — Remove JavaScript and forbidden PDF actions safely",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "174": {
+      "repository": "studio-berry/loop",
+      "number": 174,
+      "title": "L13-06a — Derive and validate TrimBox/BleedBox from trusted geometry",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "175": {
+      "repository": "studio-berry/loop",
+      "number": 175,
+      "title": "L13-06b — Scale to trim with bounded geometry tolerance",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "176": {
+      "repository": "studio-berry/loop",
+      "number": 176,
+      "title": "L13-06c — Normalize page rotation against rendered orientation",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "177": {
+      "repository": "studio-berry/loop",
+      "number": 177,
+      "title": "L13-07a — Decide transparency flattener and fidelity budget (research gate)",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "178": {
+      "repository": "studio-berry/loop",
+      "number": 178,
+      "title": "L13-07b — Implement admitted transparency flattening behind Core gateway",
+      "state": "OPEN",
+      "milestone": "L13 - Correction Catalog Breadth"
+    },
+    "179": {
+      "repository": "studio-berry/loop",
+      "number": 179,
+      "title": "L14 — Interaction Performance module gate",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "180": {
+      "repository": "studio-berry/loop",
+      "number": 180,
+      "title": "L14-01 — Decide stale-revision vs stale-resolution presentation rule",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "181": {
+      "repository": "studio-berry/loop",
+      "number": 181,
+      "title": "L14-02 — Implement sub-rectangle page-surface rendering",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "182": {
+      "repository": "studio-berry/loop",
+      "number": 182,
+      "title": "L14-03 — Refine zoom and scroll progressively from low to full resolution",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "183": {
+      "repository": "studio-berry/loop",
+      "number": 183,
+      "title": "L14-04 — Prefetch adjacent pages and prioritize viewing over background work",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "184": {
+      "repository": "studio-berry/loop",
+      "number": 184,
+      "title": "L14-05 — Enforce a GUI-thread stall budget",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "185": {
+      "repository": "studio-berry/loop",
+      "number": 185,
+      "title": "L14-06 — Gate present-lane frame budgets on a pinned reference machine",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "186": {
+      "repository": "studio-berry/loop",
+      "number": 186,
+      "title": "L14-07 — Measure cold start and open-to-first-view on installed artifacts",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "187": {
+      "repository": "studio-berry/loop",
+      "number": 187,
+      "title": "L14-08 — Qualify long-session interaction feel",
+      "state": "OPEN",
+      "milestone": "L14 - Interaction Performance"
+    },
+    "205": {
+      "repository": "studio-berry/loop",
+      "number": 205,
+      "title": "Ship a default recipe for the page-box drag move",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "206": {
+      "repository": "studio-berry/loop",
+      "number": 206,
+      "title": "Decide drag-commit semantics for findings, guides and text",
+      "state": "OPEN",
+      "milestone": "L02 - Interaction Contract"
+    },
+    "207": {
+      "repository": "studio-berry/loop",
+      "number": 207,
+      "title": "Reconcile or retire the legacy milestone sync after the reset",
+      "state": "OPEN",
+      "milestone": "G00 - Repository Governance"
+    },
+    "209": {
+      "repository": "studio-berry/loop",
+      "number": 209,
+      "title": "Freeze the cross-module source and disposition register",
+      "state": "OPEN",
+      "milestone": "G00 - Repository Governance"
+    },
+    "210": {
+      "repository": "studio-berry/loop",
+      "number": 210,
+      "title": "Assign owners and record decisions for pending architecture proof harnesses",
+      "state": "OPEN",
+      "milestone": "G00 - Repository Governance"
+    },
+    "231": {
+      "repository": "studio-berry/loop",
+      "number": 231,
+      "title": "L03-13 — Restore Quick GUI coverage for the retired Widgets surfaces",
+      "state": "OPEN",
+      "milestone": "L03 - Quick Workspace"
+    },
+    "261": {
+      "repository": "studio-berry/loop",
+      "number": 261,
+      "title": "L08-08 — Gate free-text slots behind a single-key text helper",
+      "state": "OPEN",
+      "milestone": "L08 - Bounded Decision Worker"
+    }
+  },
+  "pull_requests": [
+    {
+      "number": 149,
+      "title": "fix(catalog): separate live and legacy issue records (#111)",
+      "state": "MERGED",
+      "sha": "e26d83a078ce8d141f4f67d08f6a2ef7f42bae3f"
+    },
+    {
+      "number": 155,
+      "title": "[0.3.0 first half] L01 Evidence Core train — unstable → stable",
+      "state": "MERGED",
+      "sha": "a492bf683d99a2fc4025f3f1f230695bc73286d0"
+    },
+    {
+      "number": 202,
+      "title": "L03-03: Add the Compare and review workspace (#29)",
+      "state": "MERGED",
+      "sha": "e1a14184d4bf38d25ecdf17427def35eefe19bf1"
+    },
+    {
+      "number": 208,
+      "title": "L04-01: reconcile the operation registry and canonical plan contract (#33)",
+      "state": "MERGED",
+      "sha": "f2e494d9607f86ed1738371727753d0dda40c86a"
+    },
+    {
+      "number": 221,
+      "title": "L04-02–08 — Governed execution, revalidation, provenance, and rollback",
+      "state": "MERGED",
+      "sha": "d217db55cca5c516807185801d4f9da6c7e7f8d0"
+    },
+    {
+      "number": 244,
+      "title": "Qualify native accessibility against final packages (#31)",
+      "state": "MERGED",
+      "sha": "9fea0095221911fa81dcfa816a49d090995bddbd"
+    }
+  ]
+}
