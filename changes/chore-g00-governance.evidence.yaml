@@ -14,5 +14,12 @@ claims:
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
+  - id: plugin-and-packaging-proof-lanes
+    evidence:
+      - unit:agent-policy:plugins
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
 unresolved:
+  - Hosted Linux/Windows packaging and CodeQL checks are pending on the PR head; workflow references identify the required lanes, not a passing run.
   - Pending architecture measurements and supplemental guards retain their declared or deferred disposition in docs/ARCHITECTURE_PROOF_DISPOSITIONS.md.

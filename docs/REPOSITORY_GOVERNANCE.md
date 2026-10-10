@@ -110,6 +110,23 @@ the focused Python tests, and `python scripts/agent/check-change.py --base origi
 Pending measurements, independent oracle results, and release admission remain
 with their named owners. Review of this PR is the maintainer decision checkpoint.
 
+The focused suite ran 118 Python cases: 117 passed, and the optional PdfTool
+inventory case skipped because PdfTool is not built in this worktree.
+The catalog, live tracker read-back, version, product-reference, supply-chain,
+and Phase 5 evidence checks passed. The before-audit found eight stale preflight
+states, four absent expansion milestones, sixteen colliding product follow-ups,
+retired README/update links, and the active obsolete milestone writer.
+The after-audit resolves those findings.
+
+The mapped `UnitTestsPluginAbi` test passed in the existing
+`C:/\.dev/build/loop-milestone-1-gaps` build. Its build plan reports
+`ninja: no work to do`. The plugin implementation, header, and ABI test are
+byte-identical between that build's source checkout at
+`73ca7268f2dc1345b36568eea85d029ac0fcc232` and this PR.
+This is focused ABI evidence for unchanged native inputs, not a complete build
+or installed-package qualification of the PR head. Check-change uses that
+existing build for its mapped lane. Hosted packaging and CodeQL remain pending.
+
 Quality review: the change reuses existing product identities, tracker owners,
 catalogs, and behavioral tests. It removes the obsolete milestone writer and
 keeps source availability, implementation, measured proof, and release admission
