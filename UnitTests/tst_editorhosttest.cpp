@@ -279,6 +279,7 @@ private slots:
     void outputRenderFormats_data();
     void outputRenderFormats();
     void outputOverprintWarning();
+    void outputRenderFailure();
     void encryptedOpen_data();
     void encryptedOpen();
     void passwordFailureIsTypedAndRetryable();
@@ -1826,10 +1827,6 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     QTRY_VERIFY_WITH_TIMEOUT(host.fixLifecycleStateName() != QStringLiteral("executing"), 120000);
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("succeeded"));
 
-    // Completion presents the revalidated result and the artifact Core signed, distinct
-    // from the as-received input and bound to the plan the operator approved. The run
-    // presents the published bytes; materializing them as a file is the export slice, so
-    // this asserts the presentation rather than a filesystem write.
     const QVariantMap recheck = host.fixRecheck();
     QVERIFY(recheck.value(QStringLiteral("available")).toBool());
     const QString verdictState = recheck.value(QStringLiteral("verdictState")).toString();
@@ -2554,6 +2551,8 @@ void EditorHostTest::outputRenderFormats()
     }
     QFile artifact(destination);
     QVERIFY(artifact.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(artifact.readAll(), QCryptographicHash::Sha256).toHex()),
+             record.value(QStringLiteral("artifact")).toMap().value(QStringLiteral("sha256")).toString());
     qInfo().noquote() << "quick-output-fixture" << format << "source_sha256="
                       << QString::fromLatin1(host.sessionForTest()->context().getDocumentPointer()->getSourceDataHash().toHex())
                       << "artifact_sha256=" << record.value(QStringLiteral("artifact")).toMap().value(QStringLiteral("sha256")).toString();
@@ -2577,6 +2576,29 @@ void EditorHostTest::outputOverprintWarning()
     QCOMPARE(host.outputRecord().value(QStringLiteral("status")).toString(), QStringLiteral("saved"));
     QVERIFY(host.outputRecord().value(QStringLiteral("fidelityAcknowledged")).toBool());
     QVERIFY(!host.outputRecord().value(QStringLiteral("printProof")).toBool());
+}
+
+void EditorHostTest::outputRenderFailure()
+{
+    pdf::PDFDocumentBuilder builder;
+    const auto page = builder.appendPage(QRectF(0, 0, 72, 144));
+    const auto stream = builder.addObject(pdf::PDFObject::createStream(
+        std::make_shared<pdf::PDFStream>(pdf::PDFDictionary(), QByteArray("unknownOperator"))));
+    pdf::PDFDictionary dictionary;
+    dictionary.addEntry(QByteArray("Contents"), pdf::PDFObject::createReference(stream));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(dictionary))));
+    loopeditor::OutputRequest request;
+    request.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(builder.build()));
+    request.format = loopeditor::OutputFormat::Png;
+    request.revision = QStringLiteral("broken-content-fixture");
+    request.dpi = 72;
+    request.fidelityAcknowledged = true;
+    loopeditor::OutputResult result;
+    pdf::PDFJobContext job(std::make_shared<pdf::PDFJobCancellationToken>(), pdf::PDFProcessingLimits::conservativeDefaults(), {});
+    loopeditor::prepareOutput(request, result, job);
+    QVERIFY2(result.error.startsWith(QLatin1String("output/render-failed")), qPrintable(result.error));
+    QVERIFY(!QFile::exists(result.stagedPath));
+    QVERIFY(!result.record.contains(QStringLiteral("artifact")));
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

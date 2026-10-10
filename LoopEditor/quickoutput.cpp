@@ -130,6 +130,16 @@ void prepareOutput(const OutputRequest& request, OutputResult& result, pdf::PDFJ
             renderer.beginPaint(pixels);
             renderer.processContents();
             renderer.endPaint();
+            for (const auto& error : renderer.getRenderErrors())
+            {
+                if (error.type == pdf::RenderErrorType::Error)
+                {
+                    result.error = QStringLiteral("output/render-failed: %1").arg(error.message);
+                    return;
+                }
+                if (error.type != pdf::RenderErrorType::Information)
+                    diagnostics.record(pdf::PDFRenderFidelity::Unsupported, error.message);
+            }
             diagnostics.merge(renderer.getRenderDiagnostics());
             if (!diagnostics.isExact() && !request.fidelityAcknowledged)
             {
