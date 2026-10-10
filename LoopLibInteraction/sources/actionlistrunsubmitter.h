@@ -53,6 +53,7 @@ struct ActionListWorkerOutcome
     QVector<pdf::PDFActionListStepResult> validationSteps;
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocumentPointer candidate;
+    QByteArray publishedBytes;
 };
 
 using ActionListRunWorker = std::function<void(pdf::PDFJobContext&)>;

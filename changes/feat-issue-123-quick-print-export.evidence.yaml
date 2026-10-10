@@ -1,0 +1,18 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: quick-print-to-pdf-and-export
+    evidence:
+      - unit:agent-policy:quick
+      - unit:agent-policy:interaction
+      - unit:agent-policy:build_policy
+      - unit:agent-policy:schemas_contracts
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - integration:tools/ProductQuickAccessibilitySmoke/main.cpp
+      - architecture:docs/QUICK_PRINT_EXPORT.md
+unresolved:
+  - clean-machine-windows-print-to-file
+  - clean-machine-linux-print-to-file

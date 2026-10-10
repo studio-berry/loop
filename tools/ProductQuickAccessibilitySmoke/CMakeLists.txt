@@ -3,6 +3,8 @@ qt_policy(SET QTP0001 NEW)
 qt_add_executable(ProductQuickAccessibilitySmoke
     main.cpp
     ../../LoopEditor/editorhost.cpp
+    ../../LoopEditor/quickoutput.cpp
+    ../../LoopEditor/quickoutput.h
     ../../LoopEditor/editorhost.h
     ../../LoopEditor/focusrestoration.cpp
     ../../LoopEditor/focusrestoration.h

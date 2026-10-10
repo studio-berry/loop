@@ -29,9 +29,13 @@ slice is intentionally model-driven:
 
 The following remain deliberately declared or policy-excluded until their
 typed bridge and revision-fenced tests land: annotation/form overlays and
-editing, attachments and metadata editing, print/export, undo/redo, encryption
+editing, attachments and metadata editing, native printer spooling, undo/redo, encryption
 creation or changes, sanitization, optimization, signature verification,
 OCR, PageMaster, Compare, Redaction, signature creation, and deep inspection.
+
+Print-to-PDF and PDF/PNG/TIFF exports use the revision-fenced Core output bridge
+described in [Quick print and export](QUICK_PRINT_EXPORT.md). Corrected PDF
+export copies the exact publication bytes and retains their Core receipt.
 
 Search currently runs through the Core model on the host thread. It is a
 functional read-only bridge, but its next hardening step is to submit the same

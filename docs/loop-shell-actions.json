@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 193,
   "source_ui": "LoopEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
-  "expected_action_count": 108,
+  "expected_action_count": 109,
   "actions": [
     {
       "id": "actionAbout",
@@ -1041,10 +1041,36 @@
         "shortcut": {
           "standard_key": "Print"
         },
-        "parameters": [],
-        "capability": "unclassified",
-        "cancellable": false,
-        "availability": "declared"
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "format",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dpi",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "fidelityAcknowledged",
+            "type": "boolean",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
+        "cancellable": true,
+        "availability": "implemented"
       },
       "menu_group": "File"
     },
@@ -1541,6 +1567,45 @@
         "availability": "implemented"
       },
       "menu_group": "View"
+    },
+    {
+      "id": "actionExportDocument",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionExportDocument.label",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "format",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dpi",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "fidelityAcknowledged",
+            "type": "boolean",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
+        "cancellable": true,
+        "availability": "implemented"
+      },
+      "menu_group": "File"
     }
   ]
 }
