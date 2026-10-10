@@ -18,6 +18,16 @@
 
 namespace loopeditor
 {
+namespace
+{
+class OutputRenderer final : public pdf::PDFTransparencyRenderer
+{
+public:
+    using pdf::PDFPageContentProcessor::getRenderErrors;
+    using pdf::PDFTransparencyRenderer::PDFTransparencyRenderer;
+};
+}
+
 void prepareOutput(const OutputRequest& request, OutputResult& result, pdf::PDFJobContext& job)
 {
     if (!request.document || request.revision.isEmpty() || request.dpi < 72 || request.dpi > 600)
@@ -124,8 +134,8 @@ void prepareOutput(const OutputRequest& request, OutputResult& result, pdf::PDFJ
             const QSize pixels(qCeil(points.width() * request.dpi / 72.0), qCeil(points.height() * request.dpi / 72.0));
             job.processingBudget().chargeRenderPixels(uint64_t(pixels.width()) * uint64_t(pixels.height()), QStringLiteral("Quick output"));
             const QTransform matrix = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, QRectF(QPointF(), QSizeF(pixels)));
-            pdf::PDFTransparencyRenderer renderer(page, request.document.data(), session->getFontCache(), session->getCMS(),
-                                                  &optionalContent, &inks, settings, matrix);
+            OutputRenderer renderer(page, request.document.data(), session->getFontCache(), session->getCMS(),
+                                    &optionalContent, &inks, settings, matrix);
             renderer.setOperationControl(job.operationControl());
             renderer.beginPaint(pixels);
             renderer.processContents();
