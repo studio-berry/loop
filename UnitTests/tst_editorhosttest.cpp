@@ -2585,7 +2585,7 @@ void EditorHostTest::outputRenderFailure()
     const auto stream = builder.addObject(pdf::PDFObject::createStream(
         std::make_shared<pdf::PDFStream>(pdf::PDFDictionary(), QByteArray("unknownOperator"))));
     pdf::PDFDictionary dictionary;
-    dictionary.addEntry(QByteArray("Contents"), pdf::PDFObject::createReference(stream));
+    dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(stream));
     builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(dictionary))));
     loopeditor::OutputRequest request;
     request.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(builder.build()));
