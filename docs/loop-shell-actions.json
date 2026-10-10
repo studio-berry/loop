@@ -1083,16 +1083,27 @@
     {
       "id": "actionRedo",
       "disposition": "KEEP",
-      "target": "Document",
+      "target": "Fix",
       "command": {
         "label_key": "command.actionRedo.label",
         "shortcut": {
           "standard_key": "Redo"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "rollbackId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },
@@ -1497,16 +1508,27 @@
     {
       "id": "actionUndo",
       "disposition": "KEEP",
-      "target": "Document",
+      "target": "Fix",
       "command": {
         "label_key": "command.actionUndo.label",
         "shortcut": {
           "standard_key": "Undo"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "rollbackId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },

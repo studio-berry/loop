@@ -104,6 +104,7 @@ private slots:
     void rollbackPointsRetentionAndAtomicity();
     void rollbackRevalidatesAndRecordsGovernedReceipt();
     void rollbackRefusesWithoutProfileOrOnCompromisedChain();
+    void rollbackToOriginalRequiresTheAcceptedExecutionBeingUndone();
     void externalPayloadTamperingCompromisesChain();
     void provenanceKindsRoundTripAndMiddleDeletionCompromisesChain();
     void schemaVersionPersistsAcrossReopen();
@@ -1581,6 +1582,76 @@ void OperationHistoryTest::unreadableOrCompromisedApprovalHistoryRefusesPublicat
     QVERIFY(!pdf::publishGovernedArtifact(approval, planDigest, sourceSha256, candidateBytes,
                                           outputPath, pdf::PDFSafeFileWriter::OverwritePolicy::Fail, context));
     QVERIFY(!QFile::exists(outputPath));
+}
+
+void OperationHistoryTest::rollbackToOriginalRequiresTheAcceptedExecutionBeingUndone()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    pdf::PDFArtifactStore artifacts(directory.path());
+    const QByteArray originalBytes = minimalPdfBytes(200, 200);
+    const QByteArray correctedBytes = minimalPdfBytes(220, 220);
+    const auto original = artifacts.importBytes(originalBytes, { QStringLiteral("application/pdf"), QStringLiteral("original.pdf") });
+    const auto corrected = artifacts.importBytes(correctedBytes, { QStringLiteral("application/pdf"), QStringLiteral("corrected.pdf") });
+    QVERIFY(original.success && corrected.success);
+    const QString databasePath = directory.filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QVERIFY(history.open());
+    QVERIFY(history.registerOriginalInput(original.artifact));
+    QVERIFY(history.registerArtifact(corrected.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.input = original.artifact;
+    execution.operationId = QStringLiteral("test.correction");
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = executionId;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.output = corrected.artifact;
+    accepted.approval.kind = pdf::PDFApprovalKind::Human;
+    accepted.approval.actorId = QStringLiteral("original-approver");
+    accepted.approval.decision = QStringLiteral("approve");
+    accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    accepted.resultSummary = QJsonObject{ { QStringLiteral("receipt"), QStringLiteral("retained-original-receipt") } };
+    QVERIFY(history.appendEvent(accepted));
+    const auto before = history.events();
+    pdf::PDFRollbackRequest request;
+    request.currentArtifactSha256 = corrected.artifact.sha256;
+    request.targetArtifactSha256 = original.artifact.sha256;
+    request.targetExecutionId = QUuid::createUuid();
+    approveRollback(request);
+    const QString destination = directory.filePath(QStringLiteral("undo.pdf"));
+    QVERIFY(!history.rollbackTo(request, artifacts, destination));
+    QVERIFY(!QFileInfo::exists(destination));
+    request.targetExecutionId = executionId;
+    request.currentArtifactSha256 = original.artifact.sha256;
+    QVERIFY(!history.rollbackTo(request, artifacts, destination));
+    request.currentArtifactSha256 = corrected.artifact.sha256;
+    QVERIFY(history.rollbackTo(request, artifacts, destination));
+    QFile output(destination);
+    QVERIFY(output.open(QIODevice::ReadOnly));
+    QCOMPARE(output.readAll(), originalBytes);
+    const auto after = history.events();
+    QCOMPARE(after.first().toJson(), before.first().toJson());
+    QCOMPARE(after.last().status, pdf::PDFOperationHistoryStatus::RolledBack);
+    QVERIFY(artifacts.verify(original.artifact));
+    QVERIFY(artifacts.verify(corrected.artifact));
+    qInfo().noquote() << "history-original-fixture" << "source=" << corrected.artifact.sha256
+                      << "rollback=" << original.artifact.sha256 << "accepted-event=" << before.first().entryId
+                      << "rollback-event=" << after.last().entryId;
+    history.close();
+    pdf::PDFOperationHistoryStore reopened(databasePath);
+    QVERIFY(reopened.open());
+    QVERIFY(reopened.verify().verified);
+    QCOMPARE(reopened.events().first().toJson(), before.first().toJson());
+    QFile corrupt(artifacts.pathFor(original.artifact));
+    QVERIFY(QFile::setPermissions(corrupt.fileName(), QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    QVERIFY(corrupt.open(QIODevice::Append));
+    corrupt.write("tampered");
+    corrupt.close();
+    QVERIFY(!reopened.rollbackTo(request, artifacts, directory.filePath(QStringLiteral("refused.pdf"))));
+    QVERIFY(!QFileInfo::exists(directory.filePath(QStringLiteral("refused.pdf"))));
+    QCOMPARE(reopened.events().first().toJson(), before.first().toJson());
 }
 
 QTEST_MAIN(OperationHistoryTest)

@@ -29,7 +29,7 @@ slice is intentionally model-driven:
 
 The following remain deliberately declared or policy-excluded until their
 typed bridge and revision-fenced tests land: annotation/form overlays and
-editing, attachments and metadata editing, print/export, undo/redo, encryption
+editing, attachments and metadata editing, print/export, encryption
 creation or changes, sanitization, optimization, signature verification,
 OCR, PageMaster, Compare, Redaction, signature creation, and deep inspection.
 
@@ -37,3 +37,5 @@ Search currently runs through the Core model on the host thread. It is a
 functional read-only bridge, but its next hardening step is to submit the same
 snapshot computation through `PDFJobScheduler` and admit the value on the
 owner thread, matching the renderer and preflight paths.
+
+Quick Undo and Redo follow [governed revision history](QUICK_REVISION_HISTORY.md).

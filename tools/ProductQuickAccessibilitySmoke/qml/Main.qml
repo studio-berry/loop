@@ -131,6 +131,36 @@ ApplicationWindow {
         saveAsDialog: saveAsDialog
     }
 
+    Dialog {
+        id: historyConfirm
+        objectName: "historyNavigationConfirmDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: commandId === "actionUndo" ? qsTr("Undo published correction") : qsTr("Redo published correction")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property string commandId: ""
+        property string rollbackId: ""
+        property string revision: ""
+        Label {
+            width: 360
+            wrapMode: Text.Wrap
+            text: qsTr("Publish a new rollback artifact after revalidation? Existing revisions, approvals and receipts are retained.")
+            Accessible.name: text
+        }
+        onAccepted: if (window.host) window.host.invokeCommand(commandId, {rollbackId: rollbackId, revision: revision})
+    }
+
+    Connections {
+        target: window.host
+        function onHistoryNavigationRequested(commandId, rollbackId, revision) {
+            historyConfirm.commandId = commandId
+            historyConfirm.rollbackId = rollbackId
+            historyConfirm.revision = revision
+            historyConfirm.open()
+        }
+    }
+
     FileDialog {
         id: openDialog
         title: qsTr("Open PDF")

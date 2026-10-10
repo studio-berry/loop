@@ -53,6 +53,7 @@ struct ActionListWorkerOutcome
     QVector<pdf::PDFActionListStepResult> validationSteps;
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocumentPointer candidate;
+    QString publishedPath;
 };
 
 using ActionListRunWorker = std::function<void(pdf::PDFJobContext&)>;
@@ -64,7 +65,10 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             std::shared_ptr<ActionListWorkerOutcome> outcome,
                                             QString preflightProfilePath = {},
                                             QJsonObject preflightProfile = {},
-                                            QJsonObject preflightProfileBindings = {});
+                                            QJsonObject preflightProfileBindings = {},
+                                            QString publicationSourcePath = {});
+
+bool retainHistoryForArtifact(const QString& sourcePath, const QString& destinationPath, QString* error);
 
 }   // namespace pdfinteraction
 

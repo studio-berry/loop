@@ -1840,8 +1840,140 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     QVERIFY2(host.fixLifecycleSummary().contains(QStringLiteral("published")),
              qPrintable(host.fixLifecycleSummary()));
 
-    // The as-received input is never the publication target.
     QCOMPARE(fileDigest(documentPath), sourceDigest);
+    const QString publishedPath = host.governedArtifactPath();
+    QVERIFY(publishedPath != documentPath);
+    QCOMPARE(QString::fromLatin1(fileDigest(publishedPath)), publishedSha256);
+    QVERIFY(host.historyUndoAvailable());
+    QVERIFY(!host.historyRedoAvailable());
+    const QVariantList recorded = host.revisionHistory();
+    QVERIFY(!recorded.isEmpty());
+    QVERIFY(std::any_of(recorded.cbegin(), recorded.cend(), [&approvedDigest](const QVariant& value)
+                        { return value.toMap().value(QStringLiteral("receiptText")).toString().contains(approvedDigest); }));
+    const QString beforeRevision = host.sessionForTest()->facade().currentRevision().toString();
+    host.invokeCommand(QStringLiteral("actionZoom_In"));
+    host.setWorkspace(EditorHost::LoopWorkspace::Inspect);
+    QVERIFY(host.sessionForTest()->interaction());
+    host.sessionForTest()->interaction()->selectTarget(makeFindingTarget(QStringLiteral("view-only-selection"), QRectF(0, 0, 20, 20)));
+    QCOMPARE(host.sessionForTest()->facade().currentRevision().toString(), beforeRevision);
+    QCOMPARE(host.revisionHistory(), recorded);
+    QSignalSpy confirmation(&host, &EditorHost::historyNavigationRequested);
+    host.invokeCommand(QStringLiteral("actionUndo"));
+    QCOMPARE(confirmation.count(), 1);
+    const QList<QVariant> undoIntent = confirmation.takeFirst();
+    const QVariantMap undoParameters{ { QStringLiteral("rollbackId"), undoIntent[1] },
+                                      { QStringLiteral("revision"), undoIntent[2] } };
+    host.invokeCommand(QStringLiteral("actionUndo"), QVariantMap{ { QStringLiteral("rollbackId"), undoIntent[1] },
+                                                                  { QStringLiteral("revision"), QStringLiteral("stale") } });
+    QCOMPARE(host.governedArtifactPath(), publishedPath);
+    bool historyJobFinished = false;
+    QObject::connect(&host.sessionForTest()->scheduler(), &pdf::PDFJobScheduler::jobFinished, &host,
+                     [&historyJobFinished](const pdf::PDFJobSnapshot& snapshot)
+                     { if (snapshot.operationId.startsWith(QStringLiteral("rollback."))) historyJobFinished = true; });
+    host.invokeCommand(QStringLiteral("actionUndo"), undoParameters);
+    QTRY_VERIFY_WITH_TIMEOUT(historyJobFinished, 15000);
+    QCOMPARE(host.governedArtifactPath(), publishedPath);
+    QCOMPARE(QString::fromLatin1(fileDigest(publishedPath)), publishedSha256);
+    QCOMPARE(host.revisionHistory(), recorded);
+    const QString historyProfilePath = directory.filePath(QStringLiteral("history-profile.json"));
+    QFile historyProfile(historyProfilePath);
+    QVERIFY(historyProfile.open(QIODevice::WriteOnly));
+    historyProfile.write(QJsonDocument(QJsonObject{
+                                           { QStringLiteral("schema_version"), 1 }, { QStringLiteral("id"), QStringLiteral("history-fixture") }, { QStringLiteral("version"), QStringLiteral("1.0.0") }, { QStringLiteral("name"), QStringLiteral("History fixture") }, { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("embedded-fonts") }, { QStringLiteral("severity"), QStringLiteral("error") } } } } })
+                             .toJson());
+    historyProfile.close();
+    QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(historyProfilePath)));
+    historyJobFinished = false;
+    host.invokeCommand(QStringLiteral("actionUndo"), undoParameters);
+    QTRY_VERIFY_WITH_TIMEOUT(historyJobFinished, 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(host.sessionForTest()->facade().source().path != documentPath && host.hasDocument(), 15000);
+    const QString undoPath = host.sessionForTest()->facade().source().path;
+    QCOMPARE(fileDigest(undoPath), sourceDigest);
+    QCOMPARE(QString::fromLatin1(fileDigest(publishedPath)), publishedSha256);
+    QVERIFY(!host.historyUndoAvailable());
+    QVERIFY(host.historyRedoAvailable());
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.historyRedoAvailable());
+    host.invokeCommand(QStringLiteral("actionRedo"));
+    QCOMPARE(confirmation.count(), 1);
+    const QList<QVariant> redoIntent = confirmation.takeFirst();
+    host.invokeCommand(QStringLiteral("actionRedo"), QVariantMap{ { QStringLiteral("rollbackId"), redoIntent[1] },
+                                                                  { QStringLiteral("revision"), redoIntent[2] } });
+    QTRY_VERIFY_WITH_TIMEOUT(host.sessionForTest()->facade().source().path != undoPath && host.hasDocument(), 60000);
+    const QString redoPath = host.sessionForTest()->facade().source().path;
+    QCOMPARE(QString::fromLatin1(fileDigest(redoPath)), publishedSha256);
+    QVERIFY(host.historyUndoAvailable());
+    QVERIFY(!host.historyRedoAvailable());
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.historyUndoAvailable());
+    QVERIFY(!host.historyRedoAvailable());
+    pdf::PDFOperationHistoryStore persisted(redoPath + QStringLiteral(".loop-history/history.sqlite3"));
+    QVERIFY(persisted.open());
+    QVERIFY(persisted.verify().verified);
+    const auto reopenedEvents = persisted.events();
+    QVERIFY(std::any_of(reopenedEvents.cbegin(), reopenedEvents.cend(), [&approvedDigest](const auto& event)
+                        { return event.status == pdf::PDFOperationHistoryStatus::Accepted &&
+                                 event.resultSummary.value(QStringLiteral("governed")).toObject().value(QStringLiteral("receipt")).toObject().value(QStringLiteral("plan_digest")).toString() == approvedDigest; }));
+    persisted.close();
+    int correctionNumber = 0;
+    const auto publishAnotherCorrection = [&]()
+    {
+        QFile nextRecipe(recipePath);
+        if (!nextRecipe.open(QIODevice::WriteOnly))
+            return false;
+        nextRecipe.write(QJsonDocument(QJsonObject{
+                                           { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                           { QStringLiteral("id"), QStringLiteral("history-next-%1").arg(++correctionNumber) },
+                                           { QStringLiteral("name"), QStringLiteral("Next bleed correction") },
+                                           { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                          { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("operation"), QStringLiteral("add-bleed") }, { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 5 + correctionNumber }, { QStringLiteral("mode"), QStringLiteral("mirror") }, { QStringLiteral("force"), true } } } } } } })
+                             .toJson());
+        nextRecipe.close();
+        if (!host.importActionListRecipe(QUrl::fromLocalFile(recipePath)) || !host.validateActionListRecipe() ||
+            !QTest::qWaitFor([&]
+                             { return host.actionList()->property("validationReady").toBool(); }, 15000) ||
+            !host.planActionList() || !QTest::qWaitFor([&]
+                                                       { return host.fixLifecycleStateName() == QStringLiteral("preview-ready"); }, 15000) ||
+            !host.approveActionListPlan() || !host.executeApprovedActionListPlan())
+            return false;
+        return QTest::qWaitFor([&]
+                               { return host.fixLifecycleStateName() != QStringLiteral("executing"); }, 30000) &&
+               host.fixLifecycleStateName() == QStringLiteral("succeeded");
+    };
+    const auto navigateHistory = [&](const QString& command, const QByteArray& expected)
+    {
+        const QString previousPath = host.sessionForTest()->facade().source().path;
+        confirmation.clear();
+        host.invokeCommand(command);
+        if (confirmation.count() != 1)
+            return false;
+        const auto intent = confirmation.takeFirst();
+        host.invokeCommand(command, QVariantMap{ { QStringLiteral("rollbackId"), intent[1] }, { QStringLiteral("revision"), intent[2] } });
+        return QTest::qWaitFor([&]
+                               { return host.hasDocument() && host.sessionForTest()->facade().source().path != previousPath; }, 15000) &&
+               fileDigest(host.governedArtifactPath()) == expected;
+    };
+    QVERIFY2(publishAnotherCorrection(), qPrintable(host.fixLifecycleSummary() + QStringLiteral(" ") + host.actionList()->property("operatorSummary").toString()));
+    const QByteArray secondDigest = fileDigest(host.governedArtifactPath());
+    QVERIFY(secondDigest != publishedSha256.toLatin1());
+    QVERIFY(navigateHistory(QStringLiteral("actionUndo"), publishedSha256.toLatin1()));
+    QVERIFY(navigateHistory(QStringLiteral("actionUndo"), sourceDigest));
+    QVERIFY(navigateHistory(QStringLiteral("actionRedo"), publishedSha256.toLatin1()));
+    QVERIFY(host.historyRedoAvailable());
+    host.reopenDocument();
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(navigateHistory(QStringLiteral("actionRedo"), secondDigest));
+    QVERIFY(!host.historyRedoAvailable());
+    QVERIFY(navigateHistory(QStringLiteral("actionUndo"), publishedSha256.toLatin1()));
+    QVERIFY(host.historyRedoAvailable());
+    QVERIFY2(publishAnotherCorrection(), qPrintable(host.fixLifecycleSummary() + QStringLiteral(" ") + host.actionList()->property("operatorSummary").toString()));
+    QVERIFY(!host.historyRedoAvailable());
+    QCOMPARE(QString::fromLatin1(fileDigest(publishedPath)), publishedSha256);
+    qInfo().noquote() << "editor-history-fixture" << "source=" << sourceDigest
+                      << "published=" << publishedSha256 << "undo=" << fileDigest(undoPath)
+                      << "redo=" << fileDigest(redoPath) << "events=" << reopenedEvents.size();
 }
 
 void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding()
@@ -1954,15 +2086,15 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     QVERIFY(host.fixRollbackAvailable());
     QVERIFY(!host.fixRollbackSummary().trimmed().isEmpty());
 
-    // Only revisions Core can actually return to are offered: the as-received input stays a
-    // protected retention point and is never presented as a selectable revision.
     for (const QVariant& point : points)
     {
-        QCOMPARE(point.toMap().value(QStringLiteral("isOriginalInput")).toBool(), false);
         QVERIFY(!point.toMap().value(QStringLiteral("rollbackId")).toString().isEmpty());
         QVERIFY(!point.toMap().value(QStringLiteral("documentRevisionDigest")).toString().isEmpty());
     }
-    const QString rollbackId = points.first().toMap().value(QStringLiteral("rollbackId")).toString();
+    const auto acceptedPoint = std::find_if(points.cbegin(), points.cend(), [](const QVariant& point)
+                                            { return !point.toMap().value(QStringLiteral("isOriginalInput")).toBool(); });
+    QVERIFY(acceptedPoint != points.cend());
+    const QString rollbackId = acceptedPoint->toMap().value(QStringLiteral("rollbackId")).toString();
 
     // An unknown revision is refused before anything is written, and the refusal writes no
     // revision. (A rollback without a validated profile is refused the same way; Core's
@@ -2009,9 +2141,8 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
     QVERIFY(QFile::exists(sourcePath));
 
     // Core recorded the rollback as a new event and left the existing history intact.
-    const QString historyPath =
-        QDir(QFileInfo(repairedPath).absoluteFilePath() + QStringLiteral(".loop-history"))
-            .filePath(QStringLiteral("history.sqlite3"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument() && host.sessionForTest()->facade().source().path != repairedPath, 15000);
+    const QString historyPath = host.sessionForTest()->facade().source().path + QStringLiteral(".loop-history/history.sqlite3");
     pdf::PDFOperationHistoryStore history(historyPath);
     QString historyError;
     QVERIFY2(history.open(&historyError), qPrintable(historyError));

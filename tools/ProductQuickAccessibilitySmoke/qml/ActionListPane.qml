@@ -290,7 +290,7 @@ Pane {
             GroupBox {
                 objectName: "fixRollbackGroup"
                 Layout.fillWidth: true
-                title: qsTr("Recorded revisions")
+                title: qsTr("Revision history")
                 Accessible.name: qsTr("Rollback to a recorded revision")
 
                 ColumnLayout {
@@ -305,6 +305,61 @@ Pane {
                         Accessible.name: qsTr("Rollback availability")
                     }
 
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: root.host ? root.host.revisionHistorySummary : ""
+                        Accessible.name: qsTr("Governed revision history summary")
+                    }
+                    RowLayout {
+                        Button {
+                            objectName: "historyUndoButton"
+                            text: qsTr("Undo")
+                            enabled: root.host && root.host.historyUndoAvailable
+                            onClicked: root.host.invokeCommand("actionUndo")
+                            Accessible.name: qsTr("Undo by publishing a forward rollback")
+                        }
+                        Button {
+                            objectName: "historyRedoButton"
+                            text: qsTr("Redo")
+                            enabled: root.host && root.host.historyRedoAvailable
+                            onClicked: root.host.invokeCommand("actionRedo")
+                            Accessible.name: qsTr("Redo by publishing a forward rollback")
+                        }
+                        Button {
+                            text: qsTr("Open published artifact")
+                            enabled: root.host && root.host.hasDocument
+                            onClicked: root.host.openGovernedArtifact()
+                            Accessible.description: root.host ? root.host.governedArtifactPath : ""
+                        }
+                    }
+                    Repeater {
+                        model: root.host ? root.host.revisionHistory : []
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: qsTr("Event %1 · %2 · revision %3%4 · approval %5 by %6")
+                                    .arg(modelData.sequence).arg(modelData.status)
+                                    .arg(modelData.output ? modelData.output.sha256 : modelData.documentRevisionDigest)
+                                    .arg(modelData.current ? qsTr(" (current)") : "")
+                                    .arg(modelData.approval.decision || qsTr("none"))
+                                    .arg(modelData.approval.actorId || qsTr("none"))
+                                Accessible.name: text
+                            }
+                            TextArea {
+                                Layout.fillWidth: true
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                                visible: modelData.receiptText !== "{}"
+                                text: modelData.receiptText
+                                Accessible.name: qsTr("Revision approval and publication receipt")
+                            }
+                        }
+                    }
                     Repeater {
                         model: root.host ? root.host.fixRollbackPoints : []
 
@@ -325,7 +380,7 @@ Pane {
 
                             Button {
                                 text: qsTr("Return to this revision")
-                                enabled: root.host !== null && root.host.fixRollbackAvailable
+                                enabled: root.host !== null && root.host.fixRollbackAvailable && modelData.canReturn
                                 onClicked: {
                                     root.pendingRollbackId = modelData.rollbackId
                                     rollbackConfirm.open()
