@@ -26,8 +26,9 @@ Consequences:
 
 ## Where legacy content is recoverable
 
-The retired repository itself cannot be recovered from GitHub here. The specifications
-and dispositions survive in Notion:
+The retired repository itself cannot be recovered from GitHub here. The recovery sources are identified in Notion, but both ledger databases
+return deleted markers at the 2026-10-10 read-back. The Issues archive query
+returns no rows. Individual legacy bodies remain unavailable:
 
 - the *Loop Issues* ledger and the *Sessions* ledger, linked from the master roadmap
   (§2) — the source of record for legacy titles, bodies, and status;
@@ -97,3 +98,16 @@ The legacy URL rewrite is complete: `docs/GOVERNED_EXECUTION.md` and
 `docs/adr/adr-011-architecture-contracts-d1-d5.md` were the last files holding a legacy
 link, and no `docs/` file links a legacy number now. The reset-issue links in
 `docs/CORE_QUALIFICATION.md` are live and stay as they are.
+
+## Current recovery and tracker register
+
+The [cross-module source register](GOVERNANCE_SOURCE_REGISTER.md) pins the current
+review SHA, source availability, owners, and live tracker identities. It records
+the deleted ledgers and preserves readable deleted-page snapshots as historical
+evidence. Their status cannot establish implementation or release acceptance.
+
+Product follow-up numbers in `docs/product-surface.json` now point to the existing
+Quick coverage issue #231. The source register preserves every former number
+as legacy provenance. The pre-reset workspace documents qualify legacy #193.
+Old changelog fragments and Git commit subjects retain their original numbers
+under the historical-reference rule above; no history is rewritten.

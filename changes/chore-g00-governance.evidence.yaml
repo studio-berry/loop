@@ -1,0 +1,18 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: governance-records-and-write-retirement
+    evidence:
+      - unit:scripts/ci/test_check_governance_registers.py
+      - unit:scripts/ci/test_check_loop_identity.py
+      - unit:scripts/github/test_sync_milestones.py
+      - architecture:scripts/ci/check_governance_registers.py
+      - architecture:scripts/ci/check_loop_identity.py
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: agent-policy-tooling
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+unresolved:
+  - Pending architecture measurements and supplemental guards retain their declared or deferred disposition in docs/ARCHITECTURE_PROOF_DISPOSITIONS.md.

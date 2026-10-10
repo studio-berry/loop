@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -114,8 +116,46 @@ def find_legacy_token_findings(root: Path = ROOT) -> list[str]:
     return legacy_token_findings(files)
 
 
+def repository_reference_findings(files: Mapping[str, str]) -> list[str]:
+    retired = re.compile(r"https://github\.com/(?:mberrys/(?:Loop-pdf|loop2?)|studio-berry/(?:loop2|Loop-pdf))(?:[/#?\s]|$)", re.IGNORECASE)
+    findings = []
+    for path, content in sorted(files.items()):
+        for number, line in enumerate(content.splitlines(), 1):
+            if retired.search(line) or "gh-releases-zsync|mberrys|Loop-pdf|" in line:
+                findings.append(f"{path}:{number}: retired repository reference")
+    return findings
+
+
+def persisted_identity_findings(files: Mapping[str, str]) -> list[str]:
+    findings = []
+    checks = {
+        "WixInstaller/Product.wxs.in": (".//{*}Product", "UpgradeCode", "26336d8a-b2e7-44fc-9a73-68aa99900c7a"),
+        "AppxManifest.xml.in": (".//{*}Identity", "Name", "mberrys.Loop-pdf"),
+    }
+    for path, (element_path, attribute, expected) in checks.items():
+        element = ET.fromstring(files[path]).find(element_path)
+        if element is None or element.get(attribute) != expected:
+            findings.append(f"{path}: persisted identity changed; migration proof required")
+    identity = ET.fromstring(files["AppxManifest.xml.in"]).find(".//{*}Identity")
+    if identity is None or identity.get("Publisher") != "CN=F0582764-7439-4F99-A76D-473EDF10E031":
+        findings.append("AppxManifest.xml.in: publisher changed; migration proof required")
+    if json.loads(files["Flatpak/io.github.mberrys.Loop-pdf.json"])["app-id"] != "io.github.mberrys.Loop-pdf":
+        findings.append("Flatpak: persisted app-id changed; migration proof required")
+    return findings
+
+
 def contract_findings(root: Path = ROOT) -> list[str]:
     findings = find_legacy_token_findings(root)
+    active = ["README.md", "docs/REPO_MAP.md", "docs/VERSIONING.md", "docs/PLATFORM_SUPPORT.md"]
+    active.extend(str(path.relative_to(root)) for pattern in
+                  (".github/workflows/*.yml", "Desktop/*.xml", "Flatpak/*.json")
+                  for path in root.glob(pattern))
+    findings.extend(repository_reference_findings(
+        {path: (root / path).read_text(encoding="utf-8") for path in active}))
+    identities = ("WixInstaller/Product.wxs.in", "AppxManifest.xml.in",
+                  "Flatpak/io.github.mberrys.Loop-pdf.json")
+    findings.extend(persisted_identity_findings(
+        {path: (root / path).read_text(encoding="utf-8") for path in identities}))
 
     def require(path_name: str, snippet: str, description: str) -> None:
         path = root / path_name
@@ -141,6 +181,14 @@ def contract_findings(root: Path = ROOT) -> list[str]:
         "migrateLegacySettings",
         "legacy settings migration",
     )
+
+    policy = json.loads((root / "docs/version-policy.json").read_text(encoding="utf-8"))
+    display_version = policy["current"] + ("-" + policy["prerelease"] if policy["prerelease"] else "")
+    require("README.md", f"Current source version: `{display_version}`", "current source version")
+    require("docs/REPO_MAP.md", f"**{display_version}**", "current source version")
+    require("Desktop/io.github.mberrys.Loop-pdf.appdata.xml", "<name>Loop</name>", "Loop display name")
+    require("Desktop/io.github.mberrys.Loop-pdf.appdata.xml",
+            "<id>io.github.mberrys.Loop-pdf</id>", "preserved AppStream identity")
 
     for path_name, surface in ENTRYPOINT_SURFACES.items():
         require(

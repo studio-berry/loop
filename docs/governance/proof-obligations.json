@@ -1,0 +1,247 @@
+{
+  "format_version": 1,
+  "repository": "studio-berry/loop",
+  "reviewed_sha": "9fea0095221911fa81dcfa816a49d090995bddbd",
+  "reviewed_on": "2026-10-10",
+  "obligations": [
+    {
+      "id": "deterministic-core",
+      "owner": "Core parser/writer and security maintainers",
+      "issues": [
+        96,
+        136
+      ],
+      "evidence": [
+        "LoopLibCore/sources/pdfdocumentbuilder.cpp",
+        "architecture/invariants.yaml"
+      ],
+      "next_action": "Classify clock/RNG call sites and separately admit parser/writer guards under #96/#136. Preserve legitimate document/signing timestamps until that decision.",
+      "limitation": "QtNetwork isolation is enforced; the clock/RNG classification TODO remains deferred.",
+      "disposition": "deferred",
+      "enforcement": "enforced",
+      "measured_baseline": null
+    },
+    {
+      "id": "d1-canonical-json-bytes",
+      "owner": "Governed-execution maintainers",
+      "issues": [
+        5,
+        33
+      ],
+      "evidence": [
+        "UnitTests/tst_governedexecutiontest.cpp",
+        "UnitTests/testdata/canonical-json/operation-plan-envelope.json",
+        "docs/CANONICAL_JSON.md"
+      ],
+      "next_action": "Admit a scoped include/call-site guard with deliberate noncanonical digest fixtures before closing the supplemental TODO.",
+      "limitation": "Golden vectors exist; no complete static call-site guard is admitted.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "d2-preview-non-publishing",
+      "owner": "Governed-execution maintainers",
+      "issues": [
+        5,
+        35
+      ],
+      "evidence": [
+        "UnitTests/tst_governedexecutiontest.cpp",
+        "LoopLibCore/sources/pdfgovernedexecution.cpp"
+      ],
+      "next_action": "Define the publication boundary and reject a deliberate preview-to-publisher call in a binding CI guard before changing this declaration.",
+      "limitation": "Behavioral preview negatives exist; the supplemental call-graph guard is deferred.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "d3-destination-not-in-plan-digest",
+      "owner": "Governed-execution maintainers",
+      "issues": [
+        5,
+        37
+      ],
+      "evidence": [
+        "UnitTests/testdata/canonical-json/operation-plan-envelope.json",
+        "UnitTests/tst_governedexecutiontest.cpp"
+      ],
+      "next_action": "Bind an envelope-key guard and reject a destination-bearing plan fixture before admitting static enforcement.",
+      "limitation": "Destination-binding behavior is tested; the supplemental envelope guard is deferred.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "d4-publication-vs-durable-completion",
+      "owner": "Governed-execution and provenance maintainers",
+      "issues": [
+        5,
+        39
+      ],
+      "evidence": [
+        "UnitTests/tst_governedexecutiontest.cpp",
+        "LoopLibCore/sources/pdfoperationhistory.cpp"
+      ],
+      "next_action": "Keep publication and durable completion distinct. A proposed state schema requires an architect checkpoint, migration fixtures and failure proof.",
+      "limitation": "Publish-without-sign-off behavior exists; no new exported state schema is admitted.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "d5-cross-surface-identity-equality",
+      "owner": "Governed-execution adapter and CI maintainers",
+      "issues": [
+        40
+      ],
+      "evidence": [
+        "scripts/ci/check_governed_parity.py",
+        "UnitTests/tst_productoperatorloop.cpp",
+        "UnitTests/testdata/governed-parity/editor-receipt.json",
+        ".github/workflows/ci.yml"
+      ],
+      "next_action": "Retain named repair, Action List, Editor and PageMaster fixtures and governedPublicationParityAcrossSurfaces. Re-run binding behavior on the candidate.",
+      "limitation": "The named-fixture TODO has binding evidence. The architecture row remains declared and current runtime proof is not asserted.",
+      "disposition": "fulfilled",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "search-latency",
+      "owner": "Document search and benchmark maintainers",
+      "issues": [
+        136,
+        185
+      ],
+      "evidence": [
+        "UnitTests/tst_documentsearchtest.cpp",
+        "UnitTests/tst_benchmarkidentitytest.cpp"
+      ],
+      "next_action": "Measure ms/page over a pinned corpus, toolchain, platform and reference machine. Bind the producer/comparator and show a value over 150 fails.",
+      "limitation": "The 150 ms/page cap is declared; a committed timing baseline is unavailable.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "bleed-fixup-latency",
+      "owner": "Bleed-fixup and benchmark maintainers",
+      "issues": [
+        136,
+        51
+      ],
+      "evidence": [
+        "UnitTests/tst_bleedfixuptest.cpp"
+      ],
+      "next_action": "Publish per-page elapsed time with exact fixture/platform identity and prove a value over 150 ms/page fails.",
+      "limitation": "The 150 ms/page cap has no admitted timing producer or baseline.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "resident-memory",
+      "owner": "Core resource-envelope and benchmark maintainers",
+      "issues": [
+        96,
+        136
+      ],
+      "evidence": [
+        "UnitTests/tst_processingbudgettest.cpp",
+        "docs/RESOURCE_ENVELOPE_QUALIFICATION.md"
+      ],
+      "next_action": "Measure widgets-free process RSS on pinned inputs and platforms. Bind the comparator and prove a value over 512 MiB fails.",
+      "limitation": "Processing budgets are not an RSS measurement; the 512 MiB cap remains declared.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "parser-differential-agreement",
+      "owner": "Independent-oracle and preflight qualification maintainers",
+      "issues": [
+        95
+      ],
+      "evidence": [
+        "UnitTests/tst_standardoracletest.cpp",
+        "UnitTests/tst_conversionoracletest.cpp"
+      ],
+      "next_action": "Publish independent-oracle agreement with tool versions, corpus identity and exact SHA. Reject agreement below 1 and missing measurements.",
+      "limitation": "The oracle tests exist; a machine-readable agreement producer/comparator is not admitted.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "packaging-size",
+      "owner": "Linux and Windows packaging maintainers",
+      "issues": [
+        94,
+        136
+      ],
+      "evidence": [
+        ".github/workflows/LinuxInstall.yml",
+        ".github/workflows/WindowsInstall.yml",
+        "scripts/ci/verify_release_assets.py"
+      ],
+      "next_action": "Pin paired Linux/Windows package byte baselines and compare matching tool/platform identities. Show growth over 2 percent and missing artifacts fail.",
+      "limitation": "No admitted package-byte baseline exists; current packaging-size enforcement remains unavailable.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "sealed-rendering-channel-delta",
+      "owner": "Fixture custodians and independent print qualification maintainers",
+      "issues": [
+        51,
+        95
+      ],
+      "evidence": [
+        "architecture/fixtures.yaml",
+        "UnitTests/testdata/fixture-classes/sealed-eval/mixed-surface-holdout.yaml"
+      ],
+      "next_action": "Obtain authorized held-out raised-text, mixed-paint and texture measurements. Bind the comparator and show channel delta above 2 fails.",
+      "limitation": "Sealed outputs cannot be retuned by this change. Held-out measurement remains unavailable.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "canonical-json-digest-stability",
+      "owner": "Governed-execution and qualification maintainers",
+      "issues": [
+        5,
+        136
+      ],
+      "evidence": [
+        "UnitTests/tst_governedexecutiontest.cpp",
+        "UnitTests/testdata/canonical-json/operation-plan-envelope.json"
+      ],
+      "next_action": "Publish the digest-vector set count with identities and bind its comparator. A count below 1 or absent measurement must fail.",
+      "limitation": "Golden digest behavior exists; the metric artifact/count producer remains deferred.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    },
+    {
+      "id": "compare-review-delta-classification",
+      "owner": "Quick Compare and qualification maintainers",
+      "issues": [
+        4,
+        136
+      ],
+      "evidence": [
+        "UnitTests/tst_productoperatorloop.cpp",
+        "architecture/quality-budgets.yaml"
+      ],
+      "next_action": "Publish golden comparison-vector counts with exact pair identity. Bind the comparator and prove zero or absent vectors fail.",
+      "limitation": "The subsequently merged Compare metric is included. Classification behavior is not its missing count artifact.",
+      "disposition": "deferred",
+      "enforcement": "declared",
+      "measured_baseline": null
+    }
+  ]
+}
