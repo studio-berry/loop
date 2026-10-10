@@ -31,6 +31,8 @@ qt_add_executable(LoopEditor
     documentviewsession.cpp
     documentviewsession.h
     editorhost.cpp
+    quickoutput.cpp
+    quickoutput.h
     editorhost.h
     focusrestoration.cpp
     focusrestoration.h

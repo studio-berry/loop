@@ -416,6 +416,7 @@ EditorHost::EditorHost(QObject* parent) :
                 finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
+                finishDocumentOutput(snapshot);
                 refreshCanvasTrace(); });
 }
 
@@ -426,6 +427,8 @@ EditorHost::~EditorHost()
     cancelPreflight();
     cancelActionList();
     QObject::disconnect(&m_session->scheduler(), nullptr, this, nullptr);
+    if (outputBusy())
+        m_session->scheduler().cancel(m_outputJobId);
     unbindCanvas();
 
     // The guard registration is global process state owned by the thread that
@@ -3348,6 +3351,161 @@ void EditorHost::reopenDocument()
     }
 }
 
+QString EditorHost::outputRevision() const
+{
+    return m_session->facade().currentRevision().toString();
+}
+
+bool EditorHost::exportDocumentFileUrl(const QUrl& url, const QString& format, int dpi,
+                                       const QString& revision, bool fidelityAcknowledged)
+{
+    if (!url.isValid() || !url.isLocalFile())
+        return false;
+    return invokeCommand(format == QLatin1String("print-pdf") ? QStringLiteral("actionPrint") : QStringLiteral("actionExportDocument"),
+                         { { QStringLiteral("path"), url.toLocalFile() }, { QStringLiteral("format"), format }, { QStringLiteral("dpi"), dpi }, { QStringLiteral("revision"), revision }, { QStringLiteral("fidelityAcknowledged"), fidelityAcknowledged } }) != pdfinteraction::InvalidCommandInvocation;
+}
+
+void EditorHost::beginDocumentOutput(pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+{
+    const auto refuse = [this, invocation](const QString& reason)
+    {
+        m_outputRecord = { { QStringLiteral("error"), reason }, { QStringLiteral("printProof"), false } };
+        m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, reason);
+        announceDocumentState(reason);
+        bumpPresentation();
+        Q_EMIT documentOutputFinished();
+    };
+    if (!hasDocument() || outputBusy() || m_session->facade().operation().pending ||
+        parameters.value(QStringLiteral("revision")).toString() != outputRevision())
+    {
+        refuse(QStringLiteral("output/stale-or-busy-document"));
+        return;
+    }
+    loopeditor::OutputRequest request;
+    const QString format = parameters.value(QStringLiteral("format")).toString();
+    if (format == QLatin1String("pdf"))
+        request.format = loopeditor::OutputFormat::PublishedPdf;
+    else if (format == QLatin1String("print-pdf"))
+        request.format = loopeditor::OutputFormat::PrintPdf;
+    else if (format == QLatin1String("png"))
+        request.format = loopeditor::OutputFormat::Png;
+    else if (format == QLatin1String("tiff"))
+        request.format = loopeditor::OutputFormat::Tiff;
+    else
+    {
+        refuse(QStringLiteral("output/invalid-format"));
+        return;
+    }
+    const bool printing = request.format == loopeditor::OutputFormat::PrintPdf;
+    request.dpi = parameters.value(QStringLiteral("dpi"), 300).toInt();
+    if ((printing && (!m_documentModel.canPrint() || (!m_documentModel.canHighResolutionPrint() && request.dpi > 150))) ||
+        (!printing && !m_documentModel.canCopy()))
+    {
+        refuse(QStringLiteral("output/permission-restricted"));
+        return;
+    }
+    request.fidelityAcknowledged = parameters.value(QStringLiteral("fidelityAcknowledged")).toBool();
+    if (!pageFidelityIsExact() && !request.fidelityAcknowledged)
+    {
+        refuse(QStringLiteral("output/fidelity-acknowledgment-required"));
+        return;
+    }
+    request.revision = outputRevision();
+    request.document = m_session->context().getDocumentPointer();
+    request.sourcePath = m_session->facade().source().path;
+    request.page = currentPage();
+    if (m_publicationRevision == request.revision)
+    {
+        request.publishedBytes = m_publishedOutputBytes;
+        request.publicationReceipt = m_publicationReceipt;
+    }
+    if (request.format == loopeditor::OutputFormat::PublishedPdf && request.publishedBytes.isEmpty() &&
+        m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        refuse(QStringLiteral("output/unpublished-revision"));
+        return;
+    }
+    const QString destination = parameters.value(QStringLiteral("path")).toString();
+    const QFileInfo target(destination), source(request.sourcePath);
+    if (destination.isEmpty() || target.isDir() ||
+        target.absoluteFilePath() == source.absoluteFilePath() ||
+        (target.exists() && target.canonicalFilePath() == source.canonicalFilePath()))
+    {
+        refuse(QStringLiteral("output/invalid-or-source-destination"));
+        return;
+    }
+    m_outputRevision = request.revision;
+    m_outputDestination = destination;
+    m_outputInvocation = invocation;
+    m_outputCancelled = false;
+    m_outputJobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    m_outputRecord = { { QStringLiteral("status"), QStringLiteral("preparing") } };
+    m_outputResult = std::make_shared<loopeditor::OutputResult>();
+    pdf::PDFJobSpec spec;
+    spec.jobId = m_outputJobId;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_outputRevision;
+    spec.operationId = QStringLiteral("quick-output.%1").arg(format);
+    const auto result = m_outputResult;
+    m_session->scheduler().submit(spec, [request, result](pdf::PDFJobContext& job)
+                                  { loopeditor::prepareOutput(request, *result, job); });
+    refreshFeatureAvailability();
+    bumpPresentation();
+}
+
+void EditorHost::finishDocumentOutput(const pdf::PDFJobSnapshot& snapshot)
+{
+    if (snapshot.jobId != m_outputJobId || !m_outputResult)
+        return;
+    QString error = m_outputResult->error;
+    if (m_outputCancelled || snapshot.status != pdf::PDFJobStatus::Succeeded || !hasDocument() ||
+        snapshot.kind != pdf::PDFJobKind::Export || snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != outputRevision() || snapshot.documentRevision != m_outputRevision ||
+        !m_session->catalog().isPending(m_outputInvocation))
+    {
+        error = QStringLiteral("output/cancelled-stale-or-failed");
+    }
+    if (error.isEmpty())
+    {
+        QFile staged(m_outputResult->stagedPath);
+        if (!staged.open(QIODevice::ReadOnly))
+            error = QStringLiteral("output/staging-read-failed");
+        else
+        {
+            const QString expectedDigest = snapshot.outputArtifact.sha256;
+            const auto written = pdf::PDFSafeFileWriter::writeDevice(m_outputDestination, [&staged, expectedDigest](QIODevice* output)
+                                                                     {
+                QCryptographicHash digest(QCryptographicHash::Sha256);
+                while (!staged.atEnd())
+                {
+                    const QByteArray chunk = staged.read(65536);
+                    if (chunk.isEmpty() || output->write(chunk) != chunk.size()) return false;
+                    digest.addData(chunk);
+                }
+                return staged.error() == QFile::NoError && QString::fromLatin1(digest.result().toHex()) == expectedDigest; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            if (!written)
+                error = QStringLiteral("output/commit-failed");
+        }
+    }
+    const bool ok = error.isEmpty();
+    m_outputRecord = m_outputResult->record.toVariantMap();
+    m_outputRecord.insert(QStringLiteral("status"), ok ? QStringLiteral("saved") : QStringLiteral("failed"));
+    m_outputRecord.insert(QStringLiteral("error"), error);
+    m_outputRecord.insert(QStringLiteral("printProof"), false);
+    m_session->catalog().finishInvocation(m_outputInvocation, ok ? pdfinteraction::CommandTerminalState::Completed : snapshot.status == pdf::PDFJobStatus::Cancelled ? pdfinteraction::CommandTerminalState::Cancelled
+                                                                                                                                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                          error);
+    m_outputJobId.clear();
+    m_outputResult.reset();
+    m_outputInvocation = pdfinteraction::InvalidCommandInvocation;
+    refreshFeatureAvailability();
+    announceDocumentState(ok ? tr("Output saved. Artifact %1. This is not print proof.").arg(snapshot.outputArtifact.sha256.left(12)) : error);
+    bumpPresentation();
+    Q_EMIT documentOutputFinished();
+}
+
 void EditorHost::cancelPendingOperation()
 {
     if (m_session->facade().cancelPendingOperation())
@@ -3553,6 +3711,32 @@ void EditorHost::registerShellHandlers()
 
 void EditorHost::registerFeatureHandlers()
 {
+    for (const QString& id : { QStringLiteral("actionPrint"), QStringLiteral("actionExportDocument") })
+    {
+        pdfinteraction::CommandCatalog::Handler output;
+        output.invoke = [this, id](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            if (parameters.isEmpty())
+            {
+                Q_EMIT documentOutputRequested(id == QLatin1String("actionPrint"));
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+                return;
+            }
+            QVariantMap request = parameters;
+            if (id == QLatin1String("actionPrint"))
+                request.insert(QStringLiteral("format"), QStringLiteral("print-pdf"));
+            beginDocumentOutput(invocation, request);
+        };
+        output.cancel = [this](pdfinteraction::CommandInvocationId invocation)
+        {
+            if (invocation == m_outputInvocation)
+            {
+                m_outputCancelled = true;
+                m_session->scheduler().cancel(m_outputJobId);
+            }
+        };
+        m_session->catalog().setHandler(id, std::move(output));
+    }
     auto bind = [this](const QString& id, std::function<void()> action)
     {
         pdfinteraction::CommandCatalog::Handler handler;
@@ -3616,6 +3800,8 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
     availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
+    availability.insert(QStringLiteral("actionPrint"), ready && !outputBusy() && m_documentModel.canPrint());
+    availability.insert(QStringLiteral("actionExportDocument"), ready && !outputBusy() && m_documentModel.canCopy());
     m_session->catalog().setEnabledBatch(availability);
 }
 
@@ -3713,6 +3899,12 @@ void EditorHost::syncDocumentLifecycle()
 
 void EditorHost::onDocumentGone()
 {
+    if (outputBusy())
+        m_session->scheduler().cancel(m_outputJobId);
+    m_publishedOutputBytes.clear();
+    m_publicationReceipt = {};
+    m_publicationRevision.clear();
+    m_outputRecord.clear();
     cancelPreflight();
     cancelActionList();
     if (m_findingNavigator)
@@ -3961,6 +4153,10 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
                     m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult))
                 {
                     m_session->context().setDocument(outcome->candidate);
+                    m_session->scheduler().setCurrentRevision(m_session->revisionSource()->documentKey(), m_session->facade().currentRevision().toString());
+                    m_publishedOutputBytes = outcome->publishedBytes;
+                    m_publicationReceipt = outcome->executionResult.governed.value(QStringLiteral("receipt")).toObject();
+                    m_publicationRevision = m_session->facade().currentRevision().toString();
                     m_preflight.markProfileStale();
                     syncRevisionModels();
                     announceDocumentState(tr("Action List applied to the open document."));
@@ -4116,6 +4312,14 @@ void EditorHost::syncRevisionModels()
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
+    if (outputBusy() && documentRevision != m_outputRevision)
+        m_session->scheduler().cancel(m_outputJobId);
+    if (documentRevision != m_publicationRevision)
+    {
+        m_publishedOutputBytes.clear();
+        m_publicationReceipt = {};
+        m_publicationRevision.clear();
+    }
     m_actionListController.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);

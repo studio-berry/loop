@@ -33,6 +33,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QPainter>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
@@ -55,6 +56,10 @@
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
+#include "quickoutput.h"
+#include <QImageReader>
+#include <QImageWriter>
 #include "pdfsecurityhandler.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfsettings.h"
@@ -269,6 +274,11 @@ class EditorHostTest : public QObject
     Q_OBJECT
 
 private slots:
+    void outputBytesAndFences();
+    void outputPublishedPacket();
+    void outputRenderFormats_data();
+    void outputRenderFormats();
+    void outputOverprintWarning();
     void encryptedOpen_data();
     void encryptedOpen();
     void passwordFailureIsTypedAndRetryable();
@@ -1840,6 +1850,13 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     QVERIFY2(host.fixLifecycleSummary().contains(QStringLiteral("published")),
              qPrintable(host.fixLifecycleSummary()));
 
+    const QString exportPath = directory.filePath(QStringLiteral("accepted-correction.pdf"));
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(exportPath), QStringLiteral("pdf"), 300, host.outputRevision(), true));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 10000);
+    QVERIFY2(host.outputRecord().value(QStringLiteral("status")).toString() == QLatin1String("saved"), qPrintable(host.outputRecord().value(QStringLiteral("error")).toString()));
+    QCOMPARE(QString::fromLatin1(fileDigest(exportPath)), publishedSha256);
+    QCOMPARE(host.outputRecord().value(QStringLiteral("publicationReceipt")).toMap().value(QStringLiteral("published_sha256")).toString(), publishedSha256);
+
     // The as-received input is never the publication target.
     QCOMPARE(fileDigest(documentPath), sourceDigest);
 }
@@ -2390,6 +2407,176 @@ void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
     QVERIFY(host.approveActionListPlan());
     QVERIFY(host.fixExecutionArmed());
     QVERIFY(host.executeApprovedActionListPlan());
+}
+
+void EditorHostTest::outputBytesAndFences()
+{
+    QTemporaryDir directory;
+    const QString source = directory.filePath(QStringLiteral("source.pdf"));
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 72, 144));
+    const auto document = builder.build();
+    QVERIFY(pdf::PDFDocumentWriter(nullptr).write(source, &document, true));
+    QFile input(source);
+    QVERIFY(input.open(QIODevice::ReadOnly));
+    const auto bytes = input.readAll();
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    const QString destination = directory.filePath(QStringLiteral("export.pdf"));
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), QStringLiteral("pdf"), 300, QStringLiteral("stale"), true));
+    QVERIFY(!QFile::exists(destination));
+    QCOMPARE(host.outputRecord().value(QStringLiteral("error")).toString(), QStringLiteral("output/stale-or-busy-document"));
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), QStringLiteral("pdf"), 300, host.outputRevision(), true));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 10000);
+    QCOMPARE(host.outputRecord().value(QStringLiteral("status")).toString(), QStringLiteral("saved"));
+    QFile exported(destination);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QCOMPARE(exported.readAll(), bytes);
+    exported.close();
+    QCOMPARE(host.outputRecord().value(QStringLiteral("artifact")).toMap().value(QStringLiteral("sha256")).toString(),
+             QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex()));
+    QVERIFY(!host.outputRecord().value(QStringLiteral("printProof")).toBool());
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(source), QStringLiteral("pdf"), 300, host.outputRevision(), true));
+    QCOMPARE(host.outputRecord().value(QStringLiteral("error")).toString(), QStringLiteral("output/invalid-or-source-destination"));
+
+    const QVariantMap parameters{ { QStringLiteral("path"), destination }, { QStringLiteral("format"), QStringLiteral("print-pdf") }, { QStringLiteral("dpi"), 72 }, { QStringLiteral("revision"), host.outputRevision() }, { QStringLiteral("fidelityAcknowledged"), true } };
+    const auto invocation = host.invokeCommand(QStringLiteral("actionPrint"), parameters);
+    QVERIFY(invocation != pdfinteraction::InvalidCommandInvocation);
+    QVERIFY(host.cancelCommand(invocation));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 10000);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QCOMPARE(exported.readAll(), bytes);
+    exported.close();
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), QStringLiteral("print-pdf"), 72, host.outputRevision(), true));
+    host.invokeCommand(QStringLiteral("actionClose"));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 10000);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QCOMPARE(exported.readAll(), bytes);
+}
+
+void EditorHostTest::outputPublishedPacket()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 72, 144));
+    loopeditor::OutputRequest request;
+    request.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(builder.build()));
+    request.revision = QStringLiteral("accepted-revision");
+    request.publishedBytes = QByteArray("%PDF-1.7\nexact published packet\n%%EOF");
+    const QString digest = QString::fromLatin1(QCryptographicHash::hash(request.publishedBytes, QCryptographicHash::Sha256).toHex());
+    request.publicationReceipt = { { QStringLiteral("status"), QStringLiteral("published") },
+                                   { QStringLiteral("published_sha256"), digest },
+                                   { QStringLiteral("plan_digest"), QStringLiteral("reviewed-plan") } };
+    pdf::PDFJobContext job(std::make_shared<pdf::PDFJobCancellationToken>(), pdf::PDFProcessingLimits::conservativeDefaults(), {});
+    loopeditor::OutputResult result;
+    loopeditor::prepareOutput(request, result, job);
+    QVERIFY2(result.error.isEmpty(), qPrintable(result.error));
+    QFile exported(result.stagedPath);
+    QVERIFY(exported.open(QIODevice::ReadOnly));
+    QCOMPARE(exported.readAll(), request.publishedBytes);
+    QCOMPARE(result.record.value(QStringLiteral("publicationReceipt")).toObject(), request.publicationReceipt);
+    request.publicationReceipt.insert(QStringLiteral("published_sha256"), QString(64, QLatin1Char('0')));
+    loopeditor::OutputResult refused;
+    loopeditor::prepareOutput(request, refused, job);
+    QCOMPARE(refused.error, QStringLiteral("output/publication-identity-mismatch"));
+    QVERIFY(!QFile::exists(refused.stagedPath));
+}
+
+void EditorHostTest::outputRenderFormats_data()
+{
+    QTest::addColumn<QString>("format");
+    QTest::newRow("print-to-PDF") << QStringLiteral("print-pdf");
+    QTest::newRow("PNG") << QStringLiteral("png");
+    QTest::newRow("TIFF") << QStringLiteral("tiff");
+}
+
+void EditorHostTest::outputRenderFormats()
+{
+    QFETCH(QString, format);
+    if (format == QLatin1String("tiff") && !QImageWriter::supportedImageFormats().contains(QByteArray("tiff")))
+        QSKIP("Qt TIFF encoder is unavailable; the product refuses TIFF output explicitly.");
+    QTemporaryDir directory;
+    const QString source = directory.filePath(QStringLiteral("source.pdf"));
+    pdf::PDFDocumentBuilder builder;
+    const auto firstPage = builder.appendPage(QRectF(0, 0, 72, 144));
+    builder.appendPage(QRectF(0, 0, 144, 72));
+    pdf::PDFPageContentStreamBuilder contents(&builder);
+    auto* painter = contents.begin(firstPage);
+    QVERIFY(painter);
+    painter->fillRect(QRectF(0, 0, 36, 144), Qt::black);
+    contents.end(painter);
+    const auto document = builder.build();
+    QVERIFY(pdf::PDFDocumentWriter(nullptr).write(source, &document, true));
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(source));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    const QString destination = directory.filePath(QStringLiteral("output"));
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    host.goToPage(0);
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), format, 72, host.outputRevision(), true));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 20000);
+    const auto record = host.outputRecord();
+    QVERIFY2(record.value(QStringLiteral("status")).toString() == QLatin1String("saved"), qPrintable(record.value(QStringLiteral("error")).toString()));
+    QCOMPARE(record.value(QStringLiteral("dpi")).toInt(), 72);
+    QCOMPARE(record.value(QStringLiteral("renderer")).toString(), QStringLiteral("Loop Core PDFTransparencyRenderer"));
+    QVERIFY(!record.value(QStringLiteral("colorHandling")).toString().isEmpty());
+    QVERIFY(!record.value(QStringLiteral("printProof")).toBool());
+    if (format == QLatin1String("print-pdf"))
+    {
+        pdf::PDFDocumentReader reader(nullptr, {}, true, false);
+        const auto printed = reader.readFromFile(destination);
+        QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+        QCOMPARE(printed.getCatalog()->getPageCount(), size_t(2));
+        QCOMPARE(printed.getCatalog()->getPage(0)->getMediaBox().size(), QSizeF(72, 144));
+        QCOMPARE(printed.getCatalog()->getPage(1)->getMediaBox().size(), QSizeF(144, 72));
+        loopeditor::OutputRequest request;
+        request.format = loopeditor::OutputFormat::Png;
+        request.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(printed));
+        request.revision = QStringLiteral("printed-fixture");
+        request.dpi = 72;
+        request.fidelityAcknowledged = true;
+        loopeditor::OutputResult result;
+        pdf::PDFJobContext job(std::make_shared<pdf::PDFJobCancellationToken>(), pdf::PDFProcessingLimits::conservativeDefaults(), {});
+        loopeditor::prepareOutput(request, result, job);
+        QVERIFY2(result.error.isEmpty(), qPrintable(result.error));
+        const auto image = QImageReader(result.stagedPath).read();
+        QCOMPARE(image.pixelColor(18, 72), QColor(Qt::black));
+        QCOMPARE(image.pixelColor(54, 72), QColor(Qt::white));
+    }
+    else
+    {
+        QImageReader reader(destination);
+        const auto image = reader.read();
+        QCOMPARE(image.size(), QSize(72, 144));
+        QCOMPARE(image.pixelColor(18, 72), QColor(Qt::black));
+        QCOMPARE(image.pixelColor(54, 72), QColor(Qt::white));
+        QVERIFY(qAbs(image.dotsPerMeterX() - qRound(72 / 0.0254)) <= 1);
+    }
+    QFile artifact(destination);
+    QVERIFY(artifact.open(QIODevice::ReadOnly));
+    qInfo().noquote() << "quick-output-fixture" << format << "source_sha256="
+                      << QString::fromLatin1(host.sessionForTest()->context().getDocumentPointer()->getSourceDataHash().toHex())
+                      << "artifact_sha256=" << record.value(QStringLiteral("artifact")).toMap().value(QStringLiteral("sha256")).toString();
+}
+
+void EditorHostTest::outputOverprintWarning()
+{
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode0-on.pdf")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
+    host.goToPage(0);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_VERIFY_WITH_TIMEOUT(!host.pageFidelityIsExact(), 10000);
+    QTemporaryDir directory;
+    const QString destination = directory.filePath(QStringLiteral("output.png"));
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), QStringLiteral("png"), 72, host.outputRevision(), false));
+    QCOMPARE(host.outputRecord().value(QStringLiteral("error")).toString(), QStringLiteral("output/fidelity-acknowledgment-required"));
+    QVERIFY(!QFile::exists(destination));
+    QVERIFY(host.exportDocumentFileUrl(QUrl::fromLocalFile(destination), QStringLiteral("png"), 72, host.outputRevision(), true));
+    QTRY_VERIFY_WITH_TIMEOUT(!host.outputBusy(), 20000);
+    QCOMPARE(host.outputRecord().value(QStringLiteral("status")).toString(), QStringLiteral("saved"));
+    QVERIFY(host.outputRecord().value(QStringLiteral("fidelityAcknowledged")).toBool());
+    QVERIFY(!host.outputRecord().value(QStringLiteral("printProof")).toBool());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

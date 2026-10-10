@@ -47,6 +47,7 @@
 #include "focusrestoration.h"
 #include "documentviewsession.h"
 #include "quickdocumentmodel.h"
+#include "quickoutput.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
@@ -86,6 +87,8 @@ class EditorHost final : public QObject
 
     Q_PROPERTY(QString documentState READ documentState NOTIFY presentationChanged)
     Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY presentationChanged)
+    Q_PROPERTY(bool outputBusy READ outputBusy NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap outputRecord READ outputRecord NOTIFY presentationChanged)
     Q_PROPERTY(bool correctionsAllowed READ correctionsAllowed NOTIFY presentationChanged)
     Q_PROPERTY(QString displayTitle READ displayTitle NOTIFY presentationChanged)
     Q_PROPERTY(QString typedError READ typedError NOTIFY presentationChanged)
@@ -193,6 +196,11 @@ public:
 
     QString documentState() const;
     bool hasDocument() const;
+    bool outputBusy() const { return !m_outputJobId.isEmpty(); }
+    QVariantMap outputRecord() const { return m_outputRecord; }
+    Q_INVOKABLE QString outputRevision() const;
+    Q_INVOKABLE bool exportDocumentFileUrl(const QUrl& url, const QString& format, int dpi,
+                                           const QString& revision, bool fidelityAcknowledged);
     bool correctionsAllowed() const;
     QString displayTitle() const;
     QString typedError() const;
@@ -485,6 +493,8 @@ signals:
     void preflightProfileDraftChanged();
     void actionListRecipesChanged();
     void preflightReportExportRequested();
+    void documentOutputRequested(bool printing);
+    void documentOutputFinished();
     void preflightProfileImportRequested();
     void preflightProfileExportRequested();
     void preflightProfileSaveRequested();
@@ -518,6 +528,8 @@ private:
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
     void finishActionListJob(const pdf::PDFJobSnapshot& snapshot);
     void finishRollbackJob(const pdf::PDFJobSnapshot& snapshot);
+    void beginDocumentOutput(pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters);
+    void finishDocumentOutput(const pdf::PDFJobSnapshot& snapshot);
     bool submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                              pdfinteraction::ActionListController::State controllerState);
     void reloadActionListRecipes();
@@ -565,6 +577,16 @@ private:
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
+    QString m_outputJobId;
+    QString m_outputRevision;
+    QString m_outputDestination;
+    bool m_outputCancelled = false;
+    pdfinteraction::CommandInvocationId m_outputInvocation = pdfinteraction::InvalidCommandInvocation;
+    std::shared_ptr<loopeditor::OutputResult> m_outputResult;
+    QVariantMap m_outputRecord;
+    QByteArray m_publishedOutputBytes;
+    QJsonObject m_publicationReceipt;
+    QString m_publicationRevision;
     struct PreflightWorkerOutcome;
     QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
     QHash<QString, std::shared_ptr<pdfinteraction::ActionListWorkerOutcome>> m_actionListOutcomes;

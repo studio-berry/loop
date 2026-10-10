@@ -144,6 +144,113 @@ ApplicationWindow {
         onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
+    Dialog {
+        id: outputDialog
+        objectName: "documentOutputDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: printing ? qsTr("Print to PDF") : qsTr("Export document")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property bool printing: false
+        property string revision: ""
+        Accessible.name: title
+        contentItem: ColumnLayout {
+            Label {
+                text: host ? host.previewFidelitySummary : ""
+                wrapMode: Text.WordWrap
+                Layout.preferredWidth: 440
+            }
+            Label {
+                text: outputDialog.printing ? qsTr("Print every page to a PDF file using the authoritative renderer.") :
+                      qsTr("PDF copies the exact document bytes. PNG and TIFF export the current page.")
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ComboBox {
+                id: outputFormat
+                visible: !outputDialog.printing
+                model: [qsTr("PDF"), qsTr("PNG"), qsTr("TIFF")]
+                Accessible.name: qsTr("Export format")
+                Layout.fillWidth: true
+            }
+            SpinBox {
+                id: outputResolution
+                from: 72
+                to: 600
+                value: 300
+                editable: true
+                visible: outputDialog.printing || outputFormat.currentIndex !== 0
+                Accessible.name: qsTr("Resolution in dots per inch")
+            }
+            CheckBox {
+                id: outputAcknowledgment
+                text: qsTr("I acknowledge fidelity warnings. This output is not print proof.")
+                Accessible.name: text
+                Layout.fillWidth: true
+            }
+        }
+        onOpened: printing ? outputResolution.forceActiveFocus() : outputFormat.forceActiveFocus()
+        onAccepted: outputFileDialog.open()
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: outputFileDialog
+        title: outputDialog.title
+        fileMode: FileDialog.SaveFile
+        readonly property string format: outputDialog.printing ? "print-pdf" : ["pdf", "png", "tiff"][outputFormat.currentIndex]
+        nameFilters: format === "png" ? [qsTr("PNG files (*.png)")] :
+                     format === "tiff" ? [qsTr("TIFF files (*.tiff *.tif)")] : [qsTr("PDF files (*.pdf)")]
+        onAccepted: {
+            if (host) host.exportDocumentFileUrl(selectedFile, format, outputResolution.value, outputDialog.revision, outputAcknowledgment.checked)
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    Connections {
+        target: host
+        function onDocumentOutputRequested(printing) {
+            if (host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            outputDialog.printing = printing
+            outputDialog.revision = host.outputRevision()
+            outputAcknowledgment.checked = false
+            outputResolution.value = printing && !host.documentModel.canHighResolutionPrint ? 150 : 300
+            outputDialog.open()
+        }
+        function onDocumentOutputFinished() { outputResultDialog.open() }
+    }
+
+    Dialog {
+        id: outputResultDialog
+        objectName: "documentOutputResultDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Output result")
+        standardButtons: Dialog.Close
+        Accessible.name: title
+        contentItem: ColumnLayout {
+            Label {
+                Layout.preferredWidth: 500
+                wrapMode: Text.WrapAnywhere
+                text: {
+                    const record = host ? host.outputRecord : ({})
+                    if (record.error) return record.error
+                    const artifact = record.artifact || ({})
+                    const receipt = record.publicationReceipt || ({})
+                    return qsTr("Saved artifact: %1\nRevision: %2\n%3\n%4\nThis output is not print proof.")
+                        .arg(artifact.sha256 || "").arg(record.revision || "")
+                        .arg(record.renderer || "")
+                        .arg(receipt.plan_digest ? qsTr("Correction receipt plan: %1").arg(receipt.plan_digest) :
+                             record.dpi ? qsTr("%1 dpi — %2").arg(record.dpi).arg(record.colorHandling) : qsTr("Original source bytes"))
+                }
+                Accessible.name: text
+            }
+        }
+        onClosed: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
     FileDialog {
         id: saveAsDialog
         title: qsTr("Save PDF As")

@@ -277,6 +277,10 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                         mutation.operationControl = context.operationControl();
                         pdf::PDFGovernedMutationReceipt receipt;
                         const pdf::PDFOperationResult governedResult = pdf::executeGovernedMutation(mutation, &receipt);
+                        if (governedResult && receipt.isPublished())
+                        {
+                            outcome->publishedBytes = candidateData;
+                        }
                         outcome->executionResult.governed = QJsonObject{
                             { QStringLiteral("approval"), approval.toJson() },
                             { QStringLiteral("revalidation"), receipt.revalidation.toJson() },
