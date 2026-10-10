@@ -156,7 +156,8 @@ public:
                                   const QString& destinationPath,
                                   qint64* sequence = nullptr);
 
-    /// Resolves a rollback target only when it is the output of an accepted event.
+    /// Resolves an accepted output, or its retained original input when the
+    /// request binds that input to the accepted execution being undone.
     PDFOperationResult resolveRollbackTarget(const PDFRollbackRequest& request,
                                              PDFArtifactIdentity* targetArtifact) const;
 

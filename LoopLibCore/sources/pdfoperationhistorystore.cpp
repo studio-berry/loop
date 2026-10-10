@@ -1138,8 +1138,17 @@ PDFOperationResult PDFOperationHistoryStore::resolveRollbackTarget(const PDFRoll
     query.prepare(QStringLiteral("SELECT a.sha256, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM history_events h JOIN artifacts a ON a.sha256 = h.output_sha256 JOIN rollback_points p ON p.audit_event_id = h.entry_id WHERE h.execution_id = ? AND h.status = 'accepted' AND h.output_sha256 = ? AND p.artifact_evicted = 0 ORDER BY h.sequence DESC LIMIT 1"));
     query.addBindValue(request.targetExecutionId.toString(QUuid::WithoutBraces));
     query.addBindValue(request.targetArtifactSha256.toLower());
-    if (!query.exec() || !query.next())
-        return PDFOperationResult(QStringLiteral("Rollback target is not an accepted immutable artifact."));
+    if (!query.exec())
+        return PDFOperationResult(queryError(query));
+    if (!query.next())
+    {
+        query.prepare(QStringLiteral("SELECT a.sha256, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM artifacts a JOIN rollback_points p ON p.document_revision_digest = a.sha256 JOIN executions e ON e.source_sha256 = a.sha256 JOIN history_events h ON h.execution_id = e.execution_id WHERE e.execution_id = ? AND h.status = 'accepted' AND h.output_sha256 = ? AND a.sha256 = ? AND p.is_original_input = 1 AND p.artifact_evicted = 0 AND a.artifact_evicted = 0 LIMIT 1"));
+        query.addBindValue(request.targetExecutionId.toString(QUuid::WithoutBraces));
+        query.addBindValue(request.currentArtifactSha256.toLower());
+        query.addBindValue(request.targetArtifactSha256.toLower());
+        if (!query.exec() || !query.next())
+            return PDFOperationResult(QStringLiteral("Rollback target is neither an accepted immutable artifact nor the retained original input of the accepted revision being undone."));
+    }
     targetArtifact->sha256 = query.value(0).toString();
     targetArtifact->size = query.value(1).toLongLong();
     targetArtifact->mediaType = query.value(2).toString();

@@ -638,31 +638,6 @@ QVariantMap fixStateVisualMap(const pdfquick::tokens::LoopStateVisual& visual)
     return result;
 }
 
-/// Recorded rollback points for a document's history sidecar, or nothing when there is no
-/// history or it cannot be read. Read-only: the shell never rewrites history.
-QList<pdf::PDFRollbackPoint> rollbackPointsForDocument(const QString& documentPath)
-{
-    if (documentPath.isEmpty())
-    {
-        return {};
-    }
-
-    const QString historyDirectory =
-        QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
-    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
-    if (!QFileInfo::exists(historyPath))
-    {
-        return {};
-    }
-
-    pdf::PDFOperationHistoryStore history(historyPath);
-    QString error;
-    if (!history.open(&error))
-    {
-        return {};
-    }
-    return history.rollbackPoints(&error);
-}
 }   // namespace
 
 QString EditorHost::fixCurrentPlanDigest() const
@@ -1027,13 +1002,47 @@ QVariantMap EditorHost::fixSignOff() const
 
 bool EditorHost::fixRollbackAvailable() const
 {
-    return m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
-           documentShellStatus() != QLatin1String("MODIFIED");
+    return m_historyError.isEmpty() && m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
+           m_rollbackOutcomes.isEmpty() && m_actionListOutcomes.isEmpty() &&
+           m_session->facade().outputState() != pdfinteraction::DocumentOutputState::Pending &&
+           (documentShellStatus() != QLatin1String("MODIFIED") ||
+            m_publishedHistoryRevision == m_session->facade().currentRevision().toString());
 }
 
 QVariantList EditorHost::fixRollbackPoints() const
 {
     return m_fixRollbackPoints;
+}
+
+QString EditorHost::historyDocumentPath() const
+{
+    return m_publishedHistoryRevision == m_session->facade().currentRevision().toString()
+               ? m_publishedHistoryPath
+               : m_session->facade().source().path;
+}
+
+QString EditorHost::historyArtifactDigest() const
+{
+    const auto document = m_session->context().getDocumentPointer();
+    return document ? QString::fromLatin1(document->getSourceDataHash().toHex()) : QString();
+}
+
+QString EditorHost::revisionHistorySummary() const
+{
+    if (!m_historyError.isEmpty())
+        return tr("Revision history is unavailable: %1").arg(m_historyError);
+    return tr("%1 recorded events. Undo and Redo publish forward rollback artifacts; approvals and receipts are retained.")
+        .arg(m_revisionHistory.size());
+}
+
+bool EditorHost::historyUndoAvailable() const
+{
+    return fixRollbackAvailable() && !m_historyUndoId.isEmpty();
+}
+
+bool EditorHost::historyRedoAvailable() const
+{
+    return fixRollbackAvailable() && !m_historyRedoId.isEmpty();
 }
 
 QString EditorHost::fixRollbackSummary() const
@@ -1042,7 +1051,8 @@ QString EditorHost::fixRollbackSummary() const
     {
         return tr("Open a document to return to a recorded revision.");
     }
-    if (documentShellStatus() == QLatin1String("MODIFIED"))
+    if (documentShellStatus() == QLatin1String("MODIFIED") &&
+        m_publishedHistoryRevision != m_session->facade().currentRevision().toString())
     {
         return tr("Save the document before returning to a recorded revision.");
     }
@@ -2441,9 +2451,9 @@ bool EditorHost::saveActionListRecipe()
 bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                      pdfinteraction::ActionListController::State controllerState)
 {
-    if (!m_session->facade().permissions().allowsCorrection())
+    if (!m_rollbackOutcomes.isEmpty() || !m_session->facade().permissions().allowsCorrection())
     {
-        announceDocumentState(tr("Document permissions restrict corrections. No plan or output was created."));
+        announceDocumentState(tr("A rollback is in progress or document permissions restrict corrections."));
         return false;
     }
     if (!hasDocument() || m_selectedActionListRecipeId.isEmpty() || !m_session->revisionSource())
@@ -2542,7 +2552,8 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                                 outcome,
                                                 preflightProfilePath,
                                                 preflightProfile,
-                                                preflightProfileBindings));
+                                                preflightProfileBindings,
+                                                historyDocumentPath()));
     if (submittedId != jobId)
     {
         m_actionListOutcomes.remove(jobId);
@@ -2826,44 +2837,72 @@ void EditorHost::refreshFixRollbackPoints()
 void EditorHost::refreshFixRollbackPointsFromHistory()
 {
     m_fixRollbackPoints.clear();
-
+    m_revisionHistory.clear();
+    m_historyUndoId.clear();
+    m_historyRedoId.clear();
+    m_historyError.clear();
     if (!hasDocument())
+        return;
+    const QString databasePath = QDir(historyDocumentPath() + QStringLiteral(".loop-history")).filePath(QStringLiteral("history.sqlite3"));
+    if (!QFileInfo::exists(databasePath))
+        return;
+    pdf::PDFOperationHistoryStore history(databasePath);
+    if (!history.open(&m_historyError))
+        return;
+    const auto verification = history.verify();
+    if (!verification.verified)
     {
-        m_fixRollbackSummary = fixRollbackSummary();
+        m_historyError = verification.errorMessage;
         return;
     }
-
-    const QList<pdf::PDFRollbackPoint> points = documentRollbackPoints();
-    for (const pdf::PDFRollbackPoint& point : points)
+    const auto points = history.rollbackPoints(&m_historyError);
+    const auto events = history.events(&m_historyError);
+    QHash<QString, QString> parents;
+    QStringList redo;
+    const QString currentDigest = historyArtifactDigest();
+    for (const auto& event : events)
     {
-        // Core returns to a revision only when it is the accepted output of a recorded
-        // execution, so an evicted artifact or the as-received input (kept as a protected
-        // retention point rather than a selectable revision) is never offered as one.
-        if (point.artifactEvicted || point.isOriginalInput)
-        {
+        QVariantMap row = event.toJson().toVariantMap();
+        row.insert(QStringLiteral("current"), event.output && event.output->sha256 == currentDigest);
+        row.insert(QStringLiteral("receiptText"), QString::fromUtf8(QJsonDocument(event.resultSummary.value(QStringLiteral("governed")).toObject()).toJson(QJsonDocument::Compact)));
+        m_revisionHistory.append(row);
+        if (!event.output)
             continue;
+        const auto execution = history.execution(event.executionId, &m_historyError);
+        if (!execution)
+            continue;
+        const QString source = execution->input.sha256;
+        const QString target = event.output->sha256;
+        if (event.status == pdf::PDFOperationHistoryStatus::Accepted && source != target)
+        {
+            parents.insert(target, source);
+            redo.clear();
         }
-        QVariantMap entry;
-        entry.insert(QStringLiteral("rollbackId"), point.rollbackId);
-        entry.insert(QStringLiteral("documentRevisionDigest"), point.documentRevisionDigest);
-        entry.insert(QStringLiteral("createdUtc"), point.createdAtUtc.toString(Qt::ISODateWithMs));
-        entry.insert(QStringLiteral("operationId"), point.operationId);
-        entry.insert(QStringLiteral("artifactBytes"), point.artifactBytes);
-        entry.insert(QStringLiteral("isOriginalInput"), point.isOriginalInput);
-        entry.insert(QStringLiteral("approvedOutput"), point.approvedOutput);
-        entry.insert(QStringLiteral("planSummary"), point.planSummary.left(160));
-        m_fixRollbackPoints.append(entry);
+        else if (event.status == pdf::PDFOperationHistoryStatus::RolledBack)
+        {
+            if (parents.value(source) == target)
+                redo.append(source);
+            else if (!redo.isEmpty() && redo.last() == target)
+                redo.removeLast();
+            else
+                redo.clear();
+        }
     }
-    m_fixRollbackSummary = fixRollbackSummary();
-}
-
-QList<pdf::PDFRollbackPoint> EditorHost::documentRollbackPoints() const
-{
-    if (!hasDocument() || !m_session->facade().source().isValid())
+    for (const auto& point : points)
     {
-        return {};
+        const auto accepted = std::find_if(events.cbegin(), events.cend(), [&point](const auto& event)
+                                           { return event.entryId == point.auditEventId && event.status == pdf::PDFOperationHistoryStatus::Accepted; });
+        if (point.artifactEvicted || (!point.isOriginalInput && accepted == events.cend()))
+            continue;
+        QVariantMap entry = point.toJson().toVariantMap();
+        entry.insert(QStringLiteral("canReturn"), !point.isOriginalInput || point.documentRevisionDigest == parents.value(currentDigest));
+        m_fixRollbackPoints.append(entry);
+        if (point.documentRevisionDigest == parents.value(currentDigest))
+            m_historyUndoId = point.rollbackId;
+        if (!redo.isEmpty() && point.documentRevisionDigest == redo.last())
+            m_historyRedoId = point.rollbackId;
     }
-    return rollbackPointsForDocument(m_session->facade().source().path);
+    refreshFeatureAvailability();
 }
 
 bool EditorHost::requestFixRollback(const QString& rollbackId)
@@ -2873,7 +2912,7 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
-    const QString documentPath = m_session->facade().source().path;
+    const QString documentPath = historyDocumentPath();
     if (documentPath.isEmpty())
     {
         return false;
@@ -2911,11 +2950,23 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     const QString currentDigest =
         QString::fromLatin1(QCryptographicHash::hash(currentBytes, QCryptographicHash::Sha256).toHex());
 
+    if (currentDigest != historyArtifactDigest())
+    {
+        announceDocumentState(tr("The source artifact changed; reopen it before navigating history."));
+        return false;
+    }
     QUuid targetExecutionId;
     const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
     const auto event = std::find_if(events.cbegin(), events.cend(),
-                                    [&point](const pdf::PDFOperationHistoryEvent& candidate)
-                                    { return candidate.entryId == point->auditEventId; });
+                                    [&point, &history, &currentDigest](const pdf::PDFOperationHistoryEvent& candidate)
+                                    {
+                                        if (!point->isOriginalInput)
+                                            return candidate.entryId == point->auditEventId;
+                                        const auto execution = history.execution(candidate.executionId);
+                                        return execution && candidate.status == pdf::PDFOperationHistoryStatus::Accepted &&
+                                               candidate.output && candidate.output->sha256 == currentDigest &&
+                                               execution->input.sha256 == point->documentRevisionDigest;
+                                    });
     if (event == events.cend())
     {
         announceDocumentState(tr("The recorded revision has no audit event and cannot be returned to."));
@@ -2958,8 +3009,8 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     const QFileInfo documentInfo(documentPath);
     const QString destination =
         documentInfo.absoluteDir().filePath(QStringLiteral("%1-rollback-%2.pdf")
-                                                .arg(documentInfo.completeBaseName(),
-                                                     point->documentRevisionDigest.left(8)));
+                                                .arg(documentInfo.completeBaseName().left(32),
+                                                     QUuid::createUuid().toString(QUuid::WithoutBraces)));
 
     // One rollback at a time: a second request while the first is still restoring would
     // race the same history and publish two revisions from one document state.
@@ -2974,7 +3025,6 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     // scheduled exactly like the Action List run. The worker builds its own stores: Qt SQL
     // connections are thread-affine, so the GUI-thread history opened above must never be
     // touched off-thread.
-    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
     const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     pdf::PDFJobSpec spec;
@@ -2995,20 +3045,24 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        [request, historyPath, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
+        [request, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
         {
             if (context.isCancellationRequested())
             {
                 return;
             }
-            pdf::PDFOperationHistoryStore workerHistory(historyPath);
             QString openError;
+            const QString sourcePath = historyDirectory.left(historyDirectory.size() - QStringLiteral(".loop-history").size());
+            if (!pdfinteraction::retainHistoryForArtifact(sourcePath, destination, &openError))
+                throw std::runtime_error(openError.toStdString());
+            const QString outputHistoryDirectory = destination + QStringLiteral(".loop-history");
+            pdf::PDFOperationHistoryStore workerHistory(QDir(outputHistoryDirectory).filePath(QStringLiteral("history.sqlite3")));
             if (!workerHistory.open(&openError))
             {
                 throw std::runtime_error(
                     QStringLiteral("Recorded revisions are unavailable: %1").arg(openError).toStdString());
             }
-            pdf::PDFArtifactStore artifacts(historyDirectory);
+            pdf::PDFArtifactStore artifacts(outputHistoryDirectory);
             const pdf::PDFOperationResult rollback = workerHistory.rollbackTo(request, artifacts, destination);
             if (!rollback)
             {
@@ -3033,7 +3087,8 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
-    // The rollback is scheduled, not complete: finishRollbackJob announces the outcome.
+    refreshFeatureAvailability();
+    bumpPresentation();
     return true;
 }
 
@@ -3598,6 +3653,30 @@ void EditorHost::registerFeatureHandlers()
         bumpPresentation();
     };
     m_session->catalog().setHandler(MoveSelectionCommandId, std::move(move));
+    for (const QString& command : { QStringLiteral("actionUndo"), QStringLiteral("actionRedo") })
+    {
+        pdfinteraction::CommandCatalog::Handler navigation;
+        navigation.invoke = [this, command](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            const QString rollbackId = command == QLatin1String("actionUndo") ? m_historyUndoId : m_historyRedoId;
+            bool accepted = command == QLatin1String("actionUndo") ? historyUndoAvailable() : historyRedoAvailable();
+            if (accepted && parameters.isEmpty())
+            {
+                setWorkspace(LoopWorkspace::Fix);
+                Q_EMIT historyNavigationRequested(command, rollbackId, m_session->facade().currentRevision().toString());
+            }
+            else if (accepted)
+            {
+                accepted = parameters.value(QStringLiteral("rollbackId")).toString() == rollbackId &&
+                           parameters.value(QStringLiteral("revision")).toString() == m_session->facade().currentRevision().toString() &&
+                           requestFixRollback(rollbackId);
+            }
+            m_session->catalog().finishInvocation(invocation, accepted ? pdfinteraction::CommandTerminalState::Completed : pdfinteraction::CommandTerminalState::Failed,
+                                                  accepted ? QString() : QStringLiteral("history/stale-or-unavailable"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(command, std::move(navigation));
+    }
     refreshFeatureAvailability();
 }
 
@@ -3615,6 +3694,8 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindNext"), hasSearchResults);
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
+    availability.insert(QStringLiteral("actionUndo"), historyUndoAvailable());
+    availability.insert(QStringLiteral("actionRedo"), historyRedoAvailable());
     availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
     m_session->catalog().setEnabledBatch(availability);
 }
@@ -3713,6 +3794,8 @@ void EditorHost::syncDocumentLifecycle()
 
 void EditorHost::onDocumentGone()
 {
+    m_publishedHistoryPath.clear();
+    m_publishedHistoryRevision.clear();
     cancelPreflight();
     cancelActionList();
     if (m_findingNavigator)
@@ -3961,6 +4044,11 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
                     m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult))
                 {
                     m_session->context().setDocument(outcome->candidate);
+                    m_session->scheduler().setCurrentRevision(m_session->revisionSource()->documentKey(),
+                                                              m_session->facade().currentRevision().toString());
+                    m_publishedHistoryPath = outcome->publishedPath;
+                    m_publishedHistoryRevision = outcome->publishedPath.isEmpty() ? QString()
+                                                                                  : m_session->facade().currentRevision().toString();
                     m_preflight.markProfileStale();
                     syncRevisionModels();
                     announceDocumentState(tr("Action List applied to the open document."));
@@ -4021,7 +4109,9 @@ void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
     }
 
     const QString message = outcome->errorMessage.isEmpty() ? snapshot.errorMessage : outcome->errorMessage;
+    refreshFeatureAvailability();
     announceDocumentState(tr("The document was not rolled back: %1").arg(message));
+    bumpPresentation();
 }
 
 void EditorHost::refreshCanvasTrace()
