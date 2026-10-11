@@ -85,6 +85,7 @@ add_library(LoopLibInteraction STATIC
     sources/interactiontracecontract.h
     sources/interactioncontroller.cpp
     sources/interactioncontroller.h
+    sources/shellglossary.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
     sources/preflightprofiledraft.cpp
