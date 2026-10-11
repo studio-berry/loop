@@ -4,12 +4,23 @@ claims:
   - id: governed-revision-history
     evidence:
       - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
       - unit:agent-policy:interaction
       - unit:agent-policy:quick
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - unit:UnitTests/tst_operationhistorytest.cpp
       - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
       - integration:tools/ProductQuickAccessibilitySmoke/main.cpp
       - architecture:docs/QUICK_REVISION_HISTORY.md
-unresolved: []
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
