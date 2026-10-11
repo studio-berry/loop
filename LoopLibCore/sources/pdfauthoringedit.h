@@ -77,22 +77,22 @@ struct PDFAuthoringEdit
 {
     enum class Kind
     {
-        ToggleBookmark,      ///< Add the page's bookmark, or remove it when one targets the page.
+        ToggleBookmark,   ///< Add the page's bookmark, or remove it when one targets the page.
         GenerateBookmarks,   ///< Add a bookmark for every page that has none.
-        ReplaceBookmarks,    ///< Replace the outline with `bookmarks`.
-        AddUriLink,          ///< Link annotation with a URI action.
+        ReplaceBookmarks,   ///< Replace the outline with `bookmarks`.
+        AddUriLink,   ///< Link annotation with a URI action.
         AddDestinationLink   ///< Link annotation with a GoTo action of `destinationType`.
     };
 
     Kind kind = Kind::ToggleBookmark;
-    QString text;                        ///< Bookmark title, or the URI of a URI link.
-    int pageIndex = -1;                  ///< Bookmark target page, or the link rectangle's page.
-    QRectF rectangle;                    ///< Link rectangle, page space.
-    int targetPageIndex = -1;            ///< Link destination page.
+    QString text;   ///< Bookmark title, or the URI of a URI link.
+    int pageIndex = -1;   ///< Bookmark target page, or the link rectangle's page.
+    QRectF rectangle;   ///< Link rectangle, page space.
+    int targetPageIndex = -1;   ///< Link destination page.
     DestinationType destinationType = DestinationType::Fit;
-    QRectF targetRectangle;              ///< FitR / XYZ destination rectangle, page space.
+    QRectF targetRectangle;   ///< FitR / XYZ destination rectangle, page space.
     PDFReal zoom = std::numeric_limits<PDFReal>::quiet_NaN();   ///< XYZ zoom; NaN inherits.
-    QList<PDFBookmarkRecord> bookmarks;  ///< ReplaceBookmarks payload.
+    QList<PDFBookmarkRecord> bookmarks;   ///< ReplaceBookmarks payload.
 };
 
 /// How one edit resolved. `Refused` means no document was written and
@@ -110,7 +110,7 @@ struct PDFAuthoringEditResult
     };
 
     Kind kind = Kind::Refused;
-    QString typedError;      ///< Set exactly when kind == Refused.
+    QString typedError;   ///< Set exactly when kind == Refused.
     int affectedCount = 0;   ///< Bookmarks written by Generated/Replaced.
     PDFDocumentPointer document;
     PDFModifiedDocument::ModificationFlags flags;

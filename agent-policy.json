@@ -82,6 +82,7 @@
     "core": {
       "paths": [
         "LoopLibCore/**",
+        "UnitTests/tst_authoringedittest.cpp",
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_bleedmarginprobetest.cpp",
         "UnitTests/tst_bleedstresstest.cpp",
@@ -137,6 +138,7 @@
         "UnitTestsGovernedExecution",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsApplicationIdentity",
+        "UnitTestsAuthoringEdit",
         "UnitTestsIdentitySeparation",
         "UnitTestsImageDecodeGuard",
         "UnitTestsImageOptimizer",

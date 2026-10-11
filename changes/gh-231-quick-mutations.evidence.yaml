@@ -3,30 +3,35 @@ kind: evidence
 claims:
   - id: authoring-edit-gateway
     evidence:
-      - unit:UnitTestsAuthoringEdit
-      - unit:UnitTestsAnnotationAuthoring
-      - unit:UnitTestsDirectEdit
-      - unit:UnitTestsDocumentFacade
-      - unit:agent-policy:interaction
       - unit:agent-policy:core
+      - unit:agent-policy:interaction
   - id: quick-authoring-surfaces
     evidence:
-      - unit:UnitTestsEditorHost
-      - unit:UnitTestsShellWorkspace
-      - unit:UnitTestsShellKeyboard
-      - unit:UnitTestsProductOperatorLoop
       - unit:agent-policy:quick
-  - id: catalog-contract
+  - id: governed-execution-parity
     evidence:
-      - unit:scripts/ci/test_command_catalog.py
-      - architecture:scripts/verify-command-catalog.py
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: core-contracts
+    evidence:
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: build-policy
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: documentation-and-catalogs
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
   - id: agent-policy-contracts
     evidence:
       - unit:scripts/agent/test_architecture_contracts.py
       - architecture:scripts/agent/check-architecture.py
       - architecture:scripts/agent/generate-adapters.py
-      - architecture:scripts/generate-architecture-catalogs.py
-  - id: documentation-and-catalogs
-    evidence:
-      - unit:agent-policy:documentation
-unresolved: []
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
