@@ -14,6 +14,9 @@ claims:
       - unit:UnitTests/tst_operationhistorytest.cpp
       - unit:UnitTests/tst_editorhosttest.cpp
       - unit:UnitTests/tst_shellworkspacetest.cpp
+      - unit:UnitTestsShellWorkspace
+      - unit:scripts/ci/test_check_operator_help.py
+      - architecture:scripts/ci/check_operator_help.py
       - unit:UnitTestsGovernedExecution
       - unit:UnitTestsProductOperatorLoop
       - unit:scripts/ci/test_check_governed_parity.py
