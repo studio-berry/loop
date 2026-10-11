@@ -5478,17 +5478,17 @@ void EditorHost::registerFeatureHandlers()
     // document's permission before any writer runs. A refusal finishes Failed
     // with the facade's own stable code, so a stale, unauthorized, XFA or
     // unsupported edit is reported rather than silently dropped.
-    auto bindDocumentDirectEdit = [this](const QString& id, pdfinteraction::DocumentDirectEditRequest::Kind kind)
+    auto bindDocumentDirectEdit = [this](const QString& id, pdfinteraction::DirectEditKind kind)
     {
         pdfinteraction::CommandCatalog::Handler handler;
         handler.invoke = [this, kind](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
         {
-            const pdfinteraction::DocumentDirectEditResult result = applyAuthoringEdit(kind, parameters);
+            const pdfinteraction::DirectEditOutcome result = submitDocumentDirectEdit(kind, parameters);
             m_session->catalog().finishInvocation(invocation,
-                                                  result.applied ? pdfinteraction::CommandTerminalState::Completed
-                                                                 : pdfinteraction::CommandTerminalState::Failed,
-                                                  result.applied ? QString() : result.typedError);
-            if (result.applied)
+                                                  result.accepted ? pdfinteraction::CommandTerminalState::Completed
+                                                                  : pdfinteraction::CommandTerminalState::Failed,
+                                                  result.accepted ? QString() : result.typedError);
+            if (result.accepted)
             {
                 announceDocumentState(tr("The document was edited. Save to publish the new revision."));
                 // The document was replaced in place, so the surfaces the new
@@ -5508,10 +5508,10 @@ void EditorHost::registerFeatureHandlers()
         m_session->catalog().setHandler(id, std::move(handler));
     };
 
-    bindDocumentDirectEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DocumentDirectEditRequest::Kind::SetFormFieldValue);
-    bindDocumentDirectEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment);
-    bindDocumentDirectEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::RemoveAttachment);
-    bindDocumentDirectEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DocumentDirectEditRequest::Kind::EditMetadata);
+    bindDocumentDirectEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DirectEditKind::SetFormFieldValue);
+    bindDocumentDirectEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DirectEditKind::AddAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DirectEditKind::RemoveAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DirectEditKind::EditMetadata);
 
     // Send by e-mail hands the current published revision to the mail client and
     // writes nothing. An unsaved document is refused with a typed reason: the
@@ -5536,17 +5536,17 @@ void EditorHost::registerFeatureHandlers()
     refreshFeatureAvailability();
 }
 
-pdfinteraction::DocumentDirectEditResult EditorHost::applyAuthoringEdit(pdfinteraction::DocumentDirectEditRequest::Kind kind,
-                                                                        const QVariantMap& parameters)
+pdfinteraction::DirectEditOutcome EditorHost::submitDocumentDirectEdit(pdfinteraction::DirectEditKind kind,
+                                                                       const QVariantMap& parameters)
 {
-    pdfinteraction::DocumentDirectEditResult result;
+    pdfinteraction::DirectEditOutcome outcome;
     if (!hasDocument())
     {
-        result.typedError = QStringLiteral("document/not-ready");
-        return result;
+        outcome.typedError = QStringLiteral("document/not-ready");
+        return outcome;
     }
 
-    pdfinteraction::DocumentDirectEditRequest request;
+    pdfinteraction::DirectEditRequest request;
     request.kind = kind;
     request.scalars = parameters;
     // The caller names the revision the edit was begun against. It is parsed at
@@ -5555,7 +5555,7 @@ pdfinteraction::DocumentDirectEditResult EditorHost::applyAuthoringEdit(pdfinter
     // the caller meant.
     request.revision = pdf::PDFRevisionIdentity::fromString(parameters.value(QStringLiteral("revision")).toString());
 
-    if (kind == pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment)
+    if (kind == pdfinteraction::DirectEditKind::AddAttachment)
     {
         // The command carries a path; the host reads the file so the mutation
         // gateway never touches the filesystem.
@@ -5564,13 +5564,13 @@ pdfinteraction::DocumentDirectEditResult EditorHost::applyAuthoringEdit(pdfinter
         QFile file(source);
         if (source.isEmpty() || !file.open(QIODevice::ReadOnly))
         {
-            result.typedError = QStringLiteral("attachment/source-unreadable");
-            return result;
+            outcome.typedError = QStringLiteral("attachment/source-unreadable");
+            return outcome;
         }
         if (file.size() > maximumAttachmentBytes)
         {
-            result.typedError = QStringLiteral("attachment/source-too-large");
-            return result;
+            outcome.typedError = QStringLiteral("attachment/source-too-large");
+            return outcome;
         }
         request.contents = file.readAll();
     }
@@ -5768,13 +5768,13 @@ void EditorHost::runAuthoringEdit(pdfinteraction::CommandInvocationId invocation
                                   const QVariantMap& parameters)
 {
     QString typedError = buildError;
-    pdfinteraction::DocumentEditOutcome outcome;
+    pdfinteraction::DirectEditOutcome outcome;
     if (edit.has_value())
     {
         outcome = submitAuthoringEdit(*edit, parameters, typedError);
     }
 
-    const bool applied = edit.has_value() && outcome.applied;
+    const bool applied = edit.has_value() && outcome.accepted;
     if (applied)
     {
         announceDocumentState(authoringEditAnnouncement(*edit, outcome));
@@ -5792,9 +5792,9 @@ void EditorHost::runAuthoringEdit(pdfinteraction::CommandInvocationId invocation
     refreshFeatureAvailability();
 }
 
-pdfinteraction::DocumentEditOutcome EditorHost::submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
-                                                                    const QVariantMap& parameters,
-                                                                    QString& typedError)
+pdfinteraction::DirectEditOutcome EditorHost::submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                                  const QVariantMap& parameters,
+                                                                  QString& typedError)
 {
     const pdf::PDFRevisionIdentity current = m_session->facade().currentRevision();
     const QString displayed = parameters.value(QStringLiteral("revision")).toString();
@@ -5806,10 +5806,11 @@ pdfinteraction::DocumentEditOutcome EditorHost::submitAuthoringEdit(const pdf::P
         return {};
     }
 
-    pdfinteraction::DocumentEditRequest request;
-    request.edit = edit;
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring = edit;
     request.revision = current;
-    const pdfinteraction::DocumentEditOutcome outcome = m_session->facade().applyAuthoringEdit(request);
+    const pdfinteraction::DirectEditOutcome outcome = m_session->facade().applyDirectEdit(request);
     typedError = outcome.typedError;
     return outcome;
 }
@@ -5926,7 +5927,7 @@ bool EditorHost::goToAdjacentBookmark(int direction, QString& typedError)
 }
 
 QString EditorHost::authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
-                                              const pdfinteraction::DocumentEditOutcome& outcome) const
+                                              const pdfinteraction::DirectEditOutcome& outcome) const
 {
     switch (outcome.resolution)
     {

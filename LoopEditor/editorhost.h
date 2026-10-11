@@ -753,13 +753,13 @@ private:
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
     bool commandPermissionAllowed(const QString& commandId) const;
-    /// Applies one authoring command through the facade's direct-edit gateway
-    /// (ADR-014). The command's declared scalars become the request's payload;
-    /// for an attachment the host reads the source file, so the gateway itself
-    /// never touches the filesystem. The facade's typed refusal is returned as
-    /// it stands.
-    pdfinteraction::DocumentDirectEditResult applyAuthoringEdit(pdfinteraction::DocumentDirectEditRequest::Kind kind,
-                                                                const QVariantMap& parameters);
+    /// Applies one document-family direct-edit command through the facade's
+    /// direct-edit gateway (ADR-014). The command's declared scalars become the
+    /// request's payload; for an attachment the host reads the source file, so
+    /// the gateway itself never touches the filesystem. The facade's typed
+    /// refusal is returned as it stands.
+    pdfinteraction::DirectEditOutcome submitDocumentDirectEdit(pdfinteraction::DirectEditKind kind,
+                                                               const QVariantMap& parameters);
     /// Hands the current published revision to the shell's mail client. Refuses
     /// when there is no open document, when its source is not a file, or when it
     /// has unsaved changes: the bytes on disk would then be a different revision
@@ -778,9 +778,9 @@ private:
                           const QVariantMap& parameters);
     /// The fence and the facade call behind every authoring command. `typedError`
     /// is set on refusal.
-    pdfinteraction::DocumentEditOutcome submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
-                                                            const QVariantMap& parameters,
-                                                            QString& typedError);
+    pdfinteraction::DirectEditOutcome submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                          const QVariantMap& parameters,
+                                                          QString& typedError);
     /// The link rectangle and page a hyperlink command addresses: explicit
     /// scalars when the surface supplied them, otherwise the current text
     /// selection, which is the Quick shell's own "this region" gesture.
@@ -791,7 +791,7 @@ private:
     bool goToAdjacentBookmark(int direction, QString& typedError);
     /// The operator-facing sentence for one applied edit.
     QString authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
-                                      const pdfinteraction::DocumentEditOutcome& outcome) const;
+                                      const pdfinteraction::DirectEditOutcome& outcome) const;
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();

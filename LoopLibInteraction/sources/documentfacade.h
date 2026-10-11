@@ -175,47 +175,6 @@ struct DocumentPlanIntent
     pdf::PDFRevisionIdentity revision;
 };
 
-/// One direct authoring edit's request (ADR-014).
-///
-/// Every authoring handler submits through this one shape: the edit kind, the
-/// command's own scalar parameters, the attachment bytes when the kind needs
-/// them, and the `PDFRevisionIdentity` the edit was begun against. The gateway
-/// checks the fence before it reads anything else, so an edit begun against a
-/// superseded revision can never mutate the current one.
-struct DocumentDirectEditRequest
-{
-    enum class Kind
-    {
-        SetFormFieldValue,
-        AddAttachment,
-        RemoveAttachment,
-        EditMetadata
-    };
-
-    Kind kind = Kind::SetFormFieldValue;
-    pdf::PDFRevisionIdentity revision;
-
-    /// The edit's scalar payload: exactly the parameters the command declares
-    /// (`field`, `value`, `checked`, `name`, `description`, `title`, ...).
-    QVariantMap scalars;
-
-    /// Attachment bytes for Kind::AddAttachment. The command contract carries a
-    /// path; the host resolves and reads it, so the mutation gateway itself
-    /// never touches the filesystem.
-    QByteArray contents;
-};
-
-/// The gateway's typed outcome. `applied` is the only success: a refused edit
-/// carries a stable `typedError` code and changed nothing.
-struct DocumentDirectEditResult
-{
-    bool applied = false;
-    QString typedError;
-    pdf::PDFRevisionIdentity revision;
-
-    bool ok() const { return applied; }
-};
-
 struct DocumentInspection
 {
     DocumentInspectionState state = DocumentInspectionState::NotChecked;
@@ -259,28 +218,6 @@ struct DocumentPermissions
     bool modifyAnnotations = false;
 
     bool allowsCorrection() const { return print && modify && copy && assemble; }
-};
-
-/// One interactive authoring edit (ADR-014): the edit Core is asked to write
-/// and the revision it was begun against. The facade checks the fence and the
-/// document's modify permission before any mutation, so a stale or unauthorized
-/// request is refused with a typed reason and changes nothing.
-struct DocumentEditRequest
-{
-    pdf::PDFAuthoringEdit edit;
-    pdf::PDFRevisionIdentity revision;
-};
-
-/// The outcome of one authoring edit. `applied` means the document advanced to
-/// a new revision and `revision` names it; a refusal carries the typed reason
-/// and leaves the document and its revision untouched.
-struct DocumentEditOutcome
-{
-    bool applied = false;
-    QString typedError;
-    pdf::PDFAuthoringEditResult::Kind resolution = pdf::PDFAuthoringEditResult::Kind::Refused;
-    int affectedCount = 0;
-    pdf::PDFRevisionIdentity revision;
 };
 
 /// One presentation-facing document lifecycle.
@@ -354,17 +291,6 @@ public:
     bool requestPlan(const QString& operationId, QString& error);
     void clearPlanIntent();
 
-    /// Applies one direct authoring edit (ADR-014).
-    ///
-    /// The order is the contract: the fence is checked against the complete
-    /// `PDFRevisionIdentity` before anything else, then the document's
-    /// permission for that edit family, then the payload is parsed at this
-    /// boundary, and only then does a Core writer run. An accepted edit
-    /// replaces the document in the context — one new revision, one history
-    /// fence — and marks the document modified. A refused edit changes nothing
-    /// and returns its stable code in `typedError`.
-    DocumentDirectEditResult applyDirectEdit(const DocumentDirectEditRequest& request);
-
     /// Begins a signature check for the current revision. One check at a time.
     /// The host runs Core's verification on a scheduler worker and admits the
     /// result through completeSignatureCheck/failSignatureCheck.
@@ -398,20 +324,20 @@ public:
     /// the lifecycle.
     void markModified();
 
-    /// Applies one interactive authoring edit (ADR-014). The fence is checked
-    /// before any mutation: a request begun against a revision that is no
-    /// longer current, or against a document whose modify permission is not
-    /// granted, is refused with a typed reason. An applied edit replaces the
-    /// document, which advances the revision and the cache generation.
-    DocumentEditOutcome applyAuthoringEdit(const DocumentEditRequest& request);
-
-    /// Applies one typed direct edit — the single mutation gateway for
-    /// interactive authoring (ADR-014). The revision fence and the document's
-    /// modify-annotations permission are checked before anything is built, so a
-    /// refusal mutates nothing. An accepted edit replaces the document with the
-    /// new revision produced by the Core writer primitive and appends one
-    /// operation-history event and rollback point (#124's model); the outcome
-    /// reports the mutation and the provenance write separately.
+    /// Applies one direct-edit request — the single mutation gateway for
+    /// interactive authoring (ADR-014). Dispatches on `request.kind` to the
+    /// edit family's own helper, each of which keeps that family's fence,
+    /// permission and refusal codes.
+    ///
+    /// The order is the contract: the fence is checked against the complete
+    /// `PDFRevisionIdentity` before anything else, then the document's
+    /// permission for that edit family, then the payload is parsed at this
+    /// boundary, and only then does a Core writer run. An accepted edit
+    /// replaces the document in the context — one new revision — and marks the
+    /// document modified; a CreateAnnotation edit also appends one
+    /// operation-history event and rollback point (#124's model), reporting the
+    /// mutation and the provenance write separately. A refused edit changes
+    /// nothing and returns its stable code in `typedError`.
     DirectEditOutcome applyDirectEdit(const DirectEditRequest& request);
 
     CommandInvocationId open(const QString& path);
@@ -479,6 +405,13 @@ private:
     /// authority, and one accepted edit is exactly one revision.
     void noteDirectMutation();
 
+    /// One direct-edit family's application, dispatched from applyDirectEdit.
+    /// Each helper owns its family's fence order, permission check and refusal
+    /// codes: the unification is one shape at the gateway, not one policy.
+    DirectEditOutcome applyAnnotationEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyOutlineEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyDocumentEdit(const DirectEditRequest& request);
+
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();
     bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;
@@ -487,7 +420,7 @@ private:
     /// Whether the open document's security handler grants the permission one
     /// direct-edit family needs. A document that grants none of them is not an
     /// error state; it is a refusal with a typed reason.
-    bool directEditAllowed(DocumentDirectEditRequest::Kind kind) const;
+    bool directEditAllowed(DirectEditKind kind) const;
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a

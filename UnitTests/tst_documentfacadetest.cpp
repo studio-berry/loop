@@ -1800,14 +1800,15 @@ void DocumentFacadeTest::authoringEditAdvancesTheRevisionAndWritesTheOutline()
     const pdf::PDFRevisionIdentity before = harness.facade->currentRevision();
     const QString documentKey = harness.context.getDocumentIdentity().documentId;
 
-    pdfinteraction::DocumentEditRequest request;
-    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
-    request.edit.pageIndex = 2;
-    request.edit.text = QStringLiteral("Appendix");
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 2;
+    request.authoring.text = QStringLiteral("Appendix");
     request.revision = before;
 
-    const pdfinteraction::DocumentEditOutcome outcome = harness.facade->applyAuthoringEdit(request);
-    QVERIFY2(outcome.applied, qPrintable(outcome.typedError));
+    const pdfinteraction::DirectEditOutcome outcome = harness.facade->applyDirectEdit(request);
+    QVERIFY2(outcome.accepted, qPrintable(outcome.typedError));
     QCOMPARE(outcome.resolution, pdf::PDFAuthoringEditResult::Kind::BookmarkAdded);
     QVERIFY(outcome.revision != before);
     QCOMPARE(outcome.revision, harness.facade->currentRevision());
@@ -1846,13 +1847,14 @@ void DocumentFacadeTest::authoringEditRefusesAStaleRevisionWithoutMutating()
     const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
     const pdf::PDFRevisionIdentity revisionBefore = harness.facade->currentRevision();
 
-    pdfinteraction::DocumentEditRequest request;
-    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
-    request.edit.pageIndex = 1;
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 1;
     request.revision = displayed;
 
-    const pdfinteraction::DocumentEditOutcome outcome = harness.facade->applyAuthoringEdit(request);
-    QVERIFY(!outcome.applied);
+    const pdfinteraction::DirectEditOutcome outcome = harness.facade->applyDirectEdit(request);
+    QVERIFY(!outcome.accepted);
     QCOMPARE(outcome.typedError, QStringLiteral("edit/stale-revision"));
     // A refusal produces no revision at all.
     QVERIFY(!outcome.revision.isValid());
@@ -1872,13 +1874,14 @@ void DocumentFacadeTest::authoringEditRefusesWithoutAReadyDocumentOrPermission()
 {
     Harness harness;
 
-    pdfinteraction::DocumentEditRequest request;
-    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
-    request.edit.pageIndex = 0;
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 0;
     request.revision = harness.facade->currentRevision();
 
-    const pdfinteraction::DocumentEditOutcome noDocument = harness.facade->applyAuthoringEdit(request);
-    QVERIFY(!noDocument.applied);
+    const pdfinteraction::DirectEditOutcome noDocument = harness.facade->applyDirectEdit(request);
+    QVERIFY(!noDocument.accepted);
     QCOMPARE(noDocument.typedError, QStringLiteral("edit/document-not-ready"));
 
     // A document whose user permissions deny Modify refuses the edit with the
@@ -1910,8 +1913,7 @@ void DocumentFacadeTest::authoringEditRefusesWithoutAReadyDocumentOrPermission()
                                       {
                                           *accepted = true;
                                       }
-                                      return QStringLiteral("fixture-user");
-                                  }, true, false);
+                                      return QStringLiteral("fixture-user"); }, true, false);
     pdf::PDFDocument restricted = reader.readFromFile(path);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1923,8 +1925,8 @@ void DocumentFacadeTest::authoringEditRefusesWithoutAReadyDocumentOrPermission()
 
     request.revision = harness.facade->currentRevision();
     const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
-    const pdfinteraction::DocumentEditOutcome denied = harness.facade->applyAuthoringEdit(request);
-    QVERIFY(!denied.applied);
+    const pdfinteraction::DirectEditOutcome denied = harness.facade->applyDirectEdit(request);
+    QVERIFY(!denied.accepted);
     QCOMPARE(denied.typedError, QStringLiteral("edit/modify-permission-denied"));
     QCOMPARE(harness.context.getDocumentPointer().data(), documentBefore.data());
 }

@@ -26,8 +26,10 @@
 #include "interactionglobal.h"
 
 #include "pdfannotationauthoring.h"
+#include "pdfauthoringedit.h"
 #include "pdfdocumentcontext.h"
 
+#include <QByteArray>
 #include <QList>
 #include <QPair>
 #include <QString>
@@ -43,7 +45,12 @@ namespace pdfinteraction
 /// handler cannot smuggle an unmodelled mutation through the gateway.
 enum class DirectEditKind
 {
-    CreateAnnotation
+    CreateAnnotation,   ///< An annotation of `annotation`'s subtype.
+    EditOutline,   ///< A bookmark or hyperlink edit (`authoring`).
+    SetFormFieldValue,   ///< A form-field write (`scalars`).
+    AddAttachment,   ///< An attachment addition (`scalars`, `contents`).
+    RemoveAttachment,   ///< An attachment removal (`scalars`).
+    EditMetadata   ///< A document-information write (`scalars`).
 };
 
 const char* getDirectEditKindName(DirectEditKind kind);
@@ -55,19 +62,36 @@ bool parseDirectEditKind(const QString& name, DirectEditKind* kind);
 /// mutation-gateway shape ADR-014 requires: the edit kind, its typed payload,
 /// and the `PDFRevisionIdentity` the edit was begun against.
 ///
+/// The payload member follows the kind: `annotation` for CreateAnnotation,
+/// `authoring` for EditOutline, and `scalars`/`contents` for the document
+/// families. A member the kind does not use is ignored, never guessed at.
+///
 /// `revision` is the fence, not a hint. A request whose revision no longer
 /// matches the context's current revision is refused with nothing written.
 struct DirectEditRequest
 {
     DirectEditKind kind = DirectEditKind::CreateAnnotation;
+
     pdf::AnnotationAuthoringSpec annotation;
+    pdf::PDFAuthoringEdit authoring;
 
     /// The revision the edit was begun against (complete PDFRevisionIdentity).
     pdf::PDFRevisionIdentity revision;
 
     /// The acting identity recorded on the appended operation-history event.
-    /// Required; an empty identity is refused rather than attributed to nobody.
+    /// Required by CreateAnnotation; an empty identity is refused rather than
+    /// attributed to nobody.
     QString operatorIdentity;
+
+    /// The document families' scalar payload: exactly the parameters the
+    /// command declares (`field`, `value`, `checked`, `name`, `description`,
+    /// `title`, ...).
+    QVariantMap scalars;
+
+    /// Attachment bytes for AddAttachment. The command contract carries a path;
+    /// the host resolves and reads it, so the mutation gateway itself never
+    /// touches the filesystem.
+    QByteArray contents;
 };
 
 /// Result of one gateway submission. `accepted` is true exactly when the edit
@@ -83,12 +107,20 @@ struct DirectEditOutcome
     bool accepted = false;
     QString typedError;
 
-    /// The revision the outcome describes: the new revision when accepted,
-    /// the still-current revision when refused.
+    /// The revision the outcome describes: the new revision when accepted; on
+    /// refusal, whatever the family's fence reported before the unification —
+    /// the still-current revision for annotation and document edits, the
+    /// invalid default for outline edits.
     pdf::PDFRevisionIdentity revision;
 
     pdf::PDFObjectReference annotation;
     pdf::PDFObjectReference page;
+
+    /// The outline edit's resolution (#233); `Refused` for every other family.
+    pdf::PDFAuthoringEditResult::Kind resolution = pdf::PDFAuthoringEditResult::Kind::Refused;
+
+    /// Bookmarks written by a Generate/Replace outline edit.
+    int affectedCount = 0;
 
     bool historyAppended = false;
     quint64 historySequence = 0;
