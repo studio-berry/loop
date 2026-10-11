@@ -128,21 +128,35 @@ class CatalogFixture:
         policy: dict | None = None,
         main_window: str = MAIN_WINDOW,
         controller: str = CONTROLLER,
+        ratchet_unbound: list[str] | None = None,
     ):
         self.root = Path(stack.enterContext(tempfile.TemporaryDirectory()))
         self.policy_path = self.root / "loop-shell-actions.json"
+        self.ratchet_path = self.root / "shell-handler-coverage.json"
         self.main_window_path = self.root / "pdfeditormainwindow.cpp"
         self.controller_path = self.root / "pdfprogramcontroller.cpp"
-        self.write(policy if policy is not None else copy.deepcopy(POLICY))
+        effective_policy = policy if policy is not None else copy.deepcopy(POLICY)
+        self.write(effective_policy)
+        if ratchet_unbound is None:
+            ratchet_unbound = verifier.unbound_actions(effective_policy)
+        self.write_ratchet(ratchet_unbound)
         self.main_window_path.write_text(main_window, encoding="utf-8")
         self.controller_path.write_text(controller, encoding="utf-8")
 
     def write(self, policy: dict) -> None:
         self.policy_path.write_text(json.dumps(policy), encoding="utf-8")
 
+    def write_ratchet(self, unbound: list[str]) -> None:
+        self.ratchet_path.write_text(
+            json.dumps({"schema_version": 1, "unbound": unbound}), encoding="utf-8"
+        )
+
     def run(self) -> list[str]:
         return verifier.validate_catalog(
-            self.policy_path, self.main_window_path, self.controller_path
+            self.policy_path,
+            self.main_window_path,
+            self.controller_path,
+            self.ratchet_path,
         )
 
 
@@ -210,6 +224,58 @@ class CommandCatalogTests(unittest.TestCase):
     def test_unexpected_implemented_command_is_rejected(self):
         errors = self.mutate("actionAbout", availability="implemented", capability="none")
         self.assertTrue(any("without a registered handler" in error for error in errors), errors)
+
+    def test_unrecorded_unbound_command_is_rejected(self):
+        errors = CatalogFixture(self, ratchet_unbound=[]).run()
+        self.assertTrue(
+            any(
+                "actionBleedFixup" in error and "ratchet baseline" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_baseline_entry_with_a_handler_is_rejected(self):
+        errors = CatalogFixture(
+            self, ratchet_unbound=["actionBleedFixup", "actionOpen"]
+        ).run()
+        self.assertTrue(
+            any(
+                "actionOpen" in error and "bound handler" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_baseline_entry_for_unknown_command_is_rejected(self):
+        errors = CatalogFixture(
+            self, ratchet_unbound=["actionBleedFixup", "actionGhost"]
+        ).run()
+        self.assertTrue(any("actionGhost" in error for error in errors), errors)
+
+    def test_baseline_entry_for_advanced_command_is_rejected(self):
+        errors = CatalogFixture(
+            self, ratchet_unbound=["actionAbout", "actionBleedFixup"]
+        ).run()
+        self.assertTrue(
+            any(
+                "actionAbout" in error and "KEEP" in error for error in errors
+            ),
+            errors,
+        )
+
+    def test_recording_writes_the_current_gap_set(self):
+        fixture = CatalogFixture(self, ratchet_unbound=[])
+        self.assertTrue(fixture.run(), "an empty baseline must fail while a gap exists")
+        unbound = verifier.record_ratchet(fixture.policy_path, fixture.ratchet_path)
+        self.assertEqual(unbound, ["actionBleedFixup"])
+        self.assertEqual(fixture.run(), [])
+
+    def test_unsorted_or_duplicated_baseline_is_reported(self):
+        fixture = CatalogFixture(self, ratchet_unbound=["actionBleedFixup"])
+        fixture.write_ratchet(["actionBleedFixup", "actionBleedFixup"])
+        with self.assertRaises(verifier.ContractError):
+            fixture.run()
 
     def test_downgrading_an_implemented_command_is_rejected(self):
         errors = self.mutate("actionOpen", availability="declared", parameters=[])

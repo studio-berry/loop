@@ -49,6 +49,13 @@ constexpr double MinimumBucketedZoom = 1e-6;
 /// identity.
 const QString AuthoritativeOverprintMarker = QStringLiteral("|overprint-authoritative");
 
+/// Appended to a colorOutputIdentity by withSoftProofMarker, carrying the
+/// proofing profile identifier after the separator. Like the overprint marker
+/// it is only ever appended, and the profile identifier is a Core-issued
+/// identifier with no '|' in it, so parsing back is exact rather than
+/// heuristic.
+const QString SoftProofMarkerPrefix = QStringLiteral("|soft-proof:");
+
 }   // namespace
 
 int zoomBucketFor(qreal zoom)
@@ -132,6 +139,30 @@ QString withAuthoritativeOverprintMarker(const QString& colorOutputIdentity)
 bool hasAuthoritativeOverprintMarker(const QString& colorOutputIdentity)
 {
     return colorOutputIdentity.endsWith(AuthoritativeOverprintMarker);
+}
+
+QString withSoftProofMarker(const QString& colorOutputIdentity, const QString& proofProfileId)
+{
+    if (proofProfileId.isEmpty())
+    {
+        return colorOutputIdentity;
+    }
+    return colorOutputIdentity + SoftProofMarkerPrefix + proofProfileId;
+}
+
+bool hasSoftProofMarker(const QString& colorOutputIdentity)
+{
+    return colorOutputIdentity.contains(SoftProofMarkerPrefix);
+}
+
+QString softProofProfileId(const QString& colorOutputIdentity)
+{
+    const qsizetype marker = colorOutputIdentity.indexOf(SoftProofMarkerPrefix);
+    if (marker < 0)
+    {
+        return QString();
+    }
+    return colorOutputIdentity.mid(marker + SoftProofMarkerPrefix.size());
 }
 
 const char* getSurfaceTerminalStateName(SurfaceTerminalState state)

@@ -31,6 +31,8 @@
 #include "interactiontrace.h"
 #include "overlaybuilder.h"
 #include "overlayframe.h"
+#include "pageunitsource.h"
+#include "textselectionsource.h"
 #include "viewportcontroller.h"
 
 #include <QList>
@@ -38,6 +40,17 @@
 
 namespace pdfinteraction
 {
+
+/// The outcome of a Copy request. `text` is non-empty exactly when `copied` is
+/// true; a refusal always names its reason, so "nothing was copied" is never
+/// presented as success with an empty clipboard payload.
+struct TextCopyResult
+{
+    bool copied = false;
+    QString text;
+    QString refusalCode;
+    QString refusalReason;
+};
 
 /// Turns host input into transient state, viewport motion and overlay frames.
 ///
@@ -112,6 +125,48 @@ public:
     void setActiveTool(InteractionTool tool);
     InteractionTool activeTool() const noexcept { return m_activeTool; }
 
+    /// Text extraction for the Text tool and the selection commands (issue
+    /// #232). Observed, not owned; may be nullptr, which makes every selection
+    /// request answer "unavailable" rather than inventing text.
+    void setTextSelectionSource(ITextSelectionSource* source);
+    ITextSelectionSource* textSelectionSource() const noexcept { return m_textSelectionSource; }
+
+    /// The page's user-space scale for measurement (issue #238). Observed, not
+    /// owned; when absent the measure tool refuses to begin rather than measure
+    /// at a guessed scale.
+    void setPageUnitSource(IPageUnitSource* source);
+    IPageUnitSource* pageUnitSource() const noexcept { return m_pageUnitSource; }
+
+    /// The selected text, or the typed reason there is none. The host puts the
+    /// text on the clipboard; the refusal is never an empty string copied as
+    /// success.
+    TextCopyResult selectedText() const;
+
+    /// Selects the current page's whole text layer, in reading order.
+    bool selectAllText();
+
+    /// Selects the text block under the pointer as one typed selection. What a
+    /// table is to the text layer is a block, so this is how a table is
+    /// selected.
+    bool selectTableUnderPointer();
+
+    /// Steps the text selection one line in reading order. With no selection,
+    /// selects the first line (direction > 0) or the last (direction < 0).
+    bool stepTextSelectionByLine(int direction);
+
+    /// Drops the text selection. Returns true when there was one.
+    bool deselectText();
+
+    /// Drops every measurement. Returns true when there was something to drop.
+    bool clearMeasurements();
+
+    /// The document revision moved under the interaction state. Cancels the
+    /// active gesture with RevisionChanged and drops what was derived from the
+    /// previous revision -- measurements and the text selection -- because
+    /// carrying either onto new geometry is presenting a fact about a document
+    /// the operator is no longer looking at.
+    void handleRevisionChanged();
+
     void handlePointer(const PointerIntent& intent);
     void handleWheel(const WheelIntent& intent);
     void handleKey(const KeyIntent& intent);
@@ -157,6 +212,17 @@ signals:
     /// hysteresis threshold. The owner turns it into one command invocation.
     void dragCompleted(pdfinteraction::DragSession session);
 
+    /// Exactly one per completed measurement, and never for a click below the
+    /// hysteresis threshold. Presentation state only: nothing here is routed to
+    /// a command.
+    void measurementCompleted(pdfinteraction::Measurement measurement);
+
+    /// Every measurement was dropped, by the operator or by a revision change.
+    void measurementsCleared();
+
+    /// The text selection was replaced, stepped or cleared.
+    void textSelectionChanged();
+
     void interactionCancelled(pdfinteraction::InteractionCancelReason reason);
 
 private:
@@ -191,6 +257,23 @@ private:
     void handlePointerMove(const PointerIntent& intent);
     void handlePointerRelease(const PointerIntent& intent);
 
+    /// A left press in the Text tool: begins the gesture and the draft range.
+    void beginTextSelection(const PointerIntent& intent);
+
+    /// A left press in the Measure tool: begins the gesture and the draft
+    /// measurement. Does nothing when the page has no resolvable scale.
+    void beginMeasurement(const PointerIntent& intent);
+
+    /// Recomputes the draft text selection from the source and stores it
+    /// without announcing a change: a drag in progress is overlay-only.
+    void applyTextRange(int pageIndex, QPointF startPagePoint, QPointF endPagePoint);
+
+    /// Stores a text selection for the current fence and announces it.
+    bool storeTextSelection(const TextSelection& selection);
+
+    /// True when the fence still names the open document revision.
+    bool fenceIsCurrent() const;
+
     InteractionTarget hitTestAt(QPoint viewportPx, int* pageIndex, QPointF* pagePoint) const;
 
     void cancelActive(InteractionCancelReason reason);
@@ -201,6 +284,8 @@ private:
     HitTestDispatcher* m_hitTest = nullptr;
     OverlayBuilder* m_overlays = nullptr;
     InteractionTraceRecorder* m_trace = nullptr;
+    ITextSelectionSource* m_textSelectionSource = nullptr;
+    IPageUnitSource* m_pageUnitSource = nullptr;
 
     InteractionState m_state;
     OverlayFrame m_overlay;
@@ -219,6 +304,18 @@ private:
     /// Pointer position at the last pan step, so a pan scrolls by the delta
     /// rather than by the absolute position.
     QPoint m_panAnchorPx;
+
+    /// The text gesture's page and anchor: a selection stays on the page it
+    /// began on, exactly as a drag does.
+    int m_textGesturePage = -1;
+    QPoint m_textAnchorPx;
+    QPointF m_textAnchorPagePoint;
+
+    /// The measure gesture's page, anchor and scale, read once at the press
+    /// from the page's own /UserUnit.
+    int m_measurePageIndex = -1;
+    QPoint m_measureAnchorPx;
+    qreal m_measurePointToMM = 0.0;
 };
 
 }   // namespace pdfinteraction

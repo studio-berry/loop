@@ -144,6 +144,25 @@ QString withAuthoritativeOverprintMarker(const QString& colorOutputIdentity);
 /// True if \p colorOutputIdentity was produced by withAuthoritativeOverprintMarker.
 bool hasAuthoritativeOverprintMarker(const QString& colorOutputIdentity);
 
+/// Joins the soft-proof marker onto a colorOutputIdentity (issue #237). A soft
+/// proof simulates the output intent through Core's colour management, so its
+/// pixels are a distinct identity with their own cache slot and their own
+/// admission -- exactly as the authoritative overprint marker is -- and the
+/// marker carries the proofing profile's identifier, so the renderer proofs
+/// through the profile the caller resolved rather than through a default.
+///
+/// A proofed surface can therefore never be served from, or stand in for, the
+/// fast or authoritative render of the same page, and the simulation's identity
+/// travels with the pixels instead of being remembered beside them.
+QString withSoftProofMarker(const QString& colorOutputIdentity, const QString& proofProfileId);
+
+/// True if \p colorOutputIdentity was produced by withSoftProofMarker.
+bool hasSoftProofMarker(const QString& colorOutputIdentity);
+
+/// The proofing profile identifier a soft-proof identity carries, or an empty
+/// string when the identity is not a soft proof.
+QString softProofProfileId(const QString& colorOutputIdentity);
+
 /// The zoom quantizer used by makePageSurfaceKey, exposed so a test can pin it
 /// rather than re-derive it.
 int zoomBucketFor(qreal zoom);

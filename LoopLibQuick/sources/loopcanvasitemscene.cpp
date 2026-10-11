@@ -35,6 +35,11 @@ QSGNode* LoopCanvasItem::prepareSceneGraph(QSGNode* oldNode, QQuickWindow* hostW
         refreshPalette();
     }
 
+    if (m_displayColorDirty)
+    {
+        refreshDisplayColor();
+    }
+
     if (m_builderResetPending.exchange(false))
     {
         m_builder.forget();
@@ -139,8 +144,8 @@ int LoopCanvasItem::syncOverlays(QSGNode* root, qreal pixelScale)
 }
 
 void LoopCanvasItem::syncTraceHud(QSGNode* root,
-                                   QQuickWindow* hostWindow,
-                                   qreal devicePixelRatio)
+                                  QQuickWindow* hostWindow,
+                                  qreal devicePixelRatio)
 {
     const bool wantHud = m_traceOverlayVisible && m_recorder;
     QSGImageNode* hud = root->childCount() > HudChild

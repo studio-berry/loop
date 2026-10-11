@@ -71,6 +71,12 @@ add_library(LoopLibInteraction STATIC
     sources/interactiontarget.h
     sources/interactionstate.cpp
     sources/interactionstate.h
+    sources/textselectionsource.h
+    sources/pdfdocumenttextselectionsource.cpp
+    sources/pdfdocumenttextselectionsource.h
+    sources/pdfdocumentimageextractor.cpp
+    sources/pdfdocumentimageextractor.h
+    sources/pageunitsource.h
     sources/hittestsource.cpp
     sources/hittestsource.h
     sources/pagespatialindex.cpp

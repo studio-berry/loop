@@ -64,6 +64,8 @@ const char* getOverlayPrimitiveKindName(OverlayPrimitiveKind kind)
             return "marker";
         case OverlayPrimitiveKind::Handle:
             return "handle";
+        case OverlayPrimitiveKind::Measurement:
+            return "measurement";
     }
 
     return "unknown";

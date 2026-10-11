@@ -30,6 +30,19 @@ ApplicationWindow {
         host: window.host
     }
 
+    SettingsDialog {
+        id: settingsDialog
+        parent: Overlay.overlay
+        host: window.host
+    }
+
+    DiagnosticsDialog {
+        id: diagnosticsDialog
+        parent: Overlay.overlay
+        host: window.host
+        folderDialog: diagnosticsFolderDialog
+    }
+
     Shortcut {
         sequence: "F1"
         onActivated: {
@@ -300,6 +313,32 @@ ApplicationWindow {
     }
 
     FileDialog {
+        id: screenshotDialog
+        title: qsTr("Save Screenshot")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PNG images (*.png)")]
+        onAccepted: {
+            if (host) {
+                host.captureCanvasFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FolderDialog {
+        id: extractImagesDialog
+        title: qsTr("Extract Images Into Folder")
+        onAccepted: {
+            if (host) {
+                host.extractCurrentPageImagesFileUrl(selectedFolder)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
         id: preflightReportDialog
         title: qsTr("Export Preflight Report")
         fileMode: FileDialog.SaveFile
@@ -369,6 +408,29 @@ ApplicationWindow {
             profileSaveVersionField.text = host ? host.preflightProfileDraftVersion : ""
             preflightProfileSaveDialog.open()
         }
+        function onScreenshotRequested() {
+            screenshotDialog.open()
+        }
+        function onImageExtractionRequested() {
+            extractImagesDialog.open()
+        }
+        function onSettingsPanelRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onSettingsResetRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onDiagnosticsCollectionRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            diagnosticsDialog.open()
+        }
+    }
+
+    FolderDialog {
+        id: diagnosticsFolderDialog
+        title: qsTr("Choose a folder for the diagnostics bundle")
     }
 
     TextField {

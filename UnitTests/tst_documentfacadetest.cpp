@@ -439,7 +439,10 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    QCOMPARE(implemented, 30);
+    // The display colour modes (#235), the select/copy/capture commands (#232),
+    // the measure commands (#238) and the shell settings/diagnostics surfaces
+    // (#239) joined the implemented set in epic #231 PR1.
+    QCOMPARE(implemented, 55);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()

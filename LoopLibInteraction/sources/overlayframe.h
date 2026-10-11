@@ -72,7 +72,12 @@ enum class OverlayPrimitiveKind
     Rectangle,
     Polyline,
     Marker,
-    Handle
+    Handle,
+
+    /// A measurement: a dimension line between two page-space points, with the
+    /// readout in `label`. It paints in the Guides band the z-order table
+    /// already assigns to measurements.
+    Measurement
 };
 
 const char* getOverlayPrimitiveKindName(OverlayPrimitiveKind kind);
@@ -108,6 +113,11 @@ struct OverlayPrimitive
     int pageIndex = -1;
     QRectF pageBounds;
     QPolygonF pagePolygon;
+
+    /// The readout of a measurement primitive, e.g. "42.3 mm". Empty for every
+    /// other kind; a host draws it near the line and a screen reader announces
+    /// it without deriving either.
+    QString label;
 
     /// The thing this primitive represents, so a host can route a click back
     /// without a second lookup table.

@@ -136,6 +136,33 @@ QTransform PDFDocumentPageGeometrySource::pagePointToDeviceMatrix(int pageIndex,
     return pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, extraRotation);
 }
 
+bool PDFDocumentPageGeometrySource::pagePointToMM(int pageIndex, qreal* factor) const
+{
+    const pdf::PDFDocument* document = this->document();
+    if (!document || !factor || pageIndex < 0 || pageIndex >= pageCount())
+    {
+        return false;
+    }
+
+    const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+    if (!page)
+    {
+        return false;
+    }
+
+    // /UserUnit is a multiplier of 1/72 inch (ISO 32000-2). A missing or
+    // nonsensical value is refused rather than coerced to 1.0, because a
+    // measurement at a guessed scale is a wrong number presented as a fact.
+    const pdf::PDFReal userUnit = page->getUserUnit();
+    if (!(userUnit > 0.0) || !std::isfinite(userUnit))
+    {
+        return false;
+    }
+
+    *factor = pdf::PDF_POINT_TO_MM * userUnit;
+    return true;
+}
+
 ViewportController::ViewportController(QObject* parent) :
     QObject(parent)
 {

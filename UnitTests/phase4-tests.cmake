@@ -72,6 +72,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -110,6 +112,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -316,6 +320,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -345,6 +351,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -375,6 +383,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp

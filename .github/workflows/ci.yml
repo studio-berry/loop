@@ -126,6 +126,10 @@ jobs:
         run: |
           python3 scripts/ci/test_correction_operation_catalog.py
           python3 scripts/generate-architecture-catalogs.py --check
+      - name: Verify command catalog handler coverage (#231)
+        run: |
+          python3 scripts/ci/test_command_catalog.py
+          python3 scripts/verify-command-catalog.py
       - name: Verify preflight check catalog and coverage backlog (#165)
         run: python3 scripts/ci/test_preflight_check_catalog.py
       - name: Verify preflight corpus coverage map (#165)

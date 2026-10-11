@@ -100,6 +100,13 @@ class LOOPLIBQUICK_EXPORT LoopCanvasItem : public QQuickItem
     Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(bool traceOverlayVisible READ isTraceOverlayVisible WRITE setTraceOverlayVisible NOTIFY traceOverlayVisibleChanged)
     Q_PROPERTY(bool highContrast READ isHighContrast WRITE setHighContrast NOTIFY highContrastChanged)
+    /// Display colour modes (issue #235 display half). They filter the pixels
+    /// this item already holds; they are not render requests, so setting one
+    /// re-renders nothing and no surface identity depends on them.
+    Q_PROPERTY(QString displayColorMode READ displayColorMode WRITE setDisplayColorMode NOTIFY displayColorChanged)
+    Q_PROPERTY(QColor displayColorCustomForeground READ displayColorCustomForeground WRITE setDisplayColorCustomForeground NOTIFY displayColorChanged)
+    Q_PROPERTY(QColor displayColorCustomBackground READ displayColorCustomBackground WRITE setDisplayColorCustomBackground NOTIFY displayColorChanged)
+    Q_PROPERTY(int displayColorBitonalThreshold READ displayColorBitonalThreshold WRITE setDisplayColorBitonalThreshold NOTIFY displayColorChanged)
     Q_PROPERTY(QString accessibleDocumentSummary READ accessibleDocumentSummary WRITE setAccessibleDocumentSummary NOTIFY accessibleDocumentSummaryChanged)
 
 public:
@@ -149,6 +156,18 @@ public:
     bool isHighContrast() const noexcept { return m_highContrast; }
     void setHighContrast(bool highContrast);
 
+    QString displayColorMode() const;
+    /// Parses a display colour mode name once at this boundary and returns false
+    /// for a name outside the vocabulary, leaving the mode in place.
+    bool setDisplayColorMode(const QString& modeName);
+    bool isDisplayColorModeActive() const noexcept { return m_displayColor.isActive(); }
+    QColor displayColorCustomForeground() const noexcept { return m_displayColor.customForeground; }
+    void setDisplayColorCustomForeground(const QColor& color);
+    QColor displayColorCustomBackground() const noexcept { return m_displayColor.customBackground; }
+    void setDisplayColorCustomBackground(const QColor& color);
+    int displayColorBitonalThreshold() const noexcept { return m_displayColor.bitonalThreshold; }
+    void setDisplayColorBitonalThreshold(int threshold);
+
     QString accessibleDocumentSummary() const;
     void setAccessibleDocumentSummary(const QString& summary);
     void notifyAccessibilityUpdate();
@@ -164,6 +183,7 @@ signals:
     void activeToolChanged();
     void traceOverlayVisibleChanged();
     void highContrastChanged();
+    void displayColorChanged();
     void accessibleDocumentSummaryChanged();
 
 protected:
@@ -211,6 +231,10 @@ private:
 
     void publishViewportGeometry();
     void refreshPalette();
+    /// Pushes the display colour settings to the node builder and marks the
+    /// tiles for a re-sync. Called from prepareSceneGraph, on the render thread,
+    /// where the builder may be touched at all.
+    void refreshDisplayColor();
 
     /// Reconnects the window-lifetime signals. Called from itemChange for every
     /// scene change, including the change to nullptr when the item is removed
@@ -254,6 +278,7 @@ private:
 
     bool m_traceOverlayVisible = false;
     bool m_highContrast = false;
+    CanvasDisplayColorSettings m_displayColor;
     QString m_accessibleDocumentSummary;
 
     /// Set when the snapshot or the frame changed and the scene graph has not
@@ -281,6 +306,9 @@ private:
     bool m_tilesDirty = true;
     bool m_overlaysDirty = true;
     bool m_paletteDirty = true;
+    /// Set on the GUI thread, acted on in prepareSceneGraph: the builder is
+    /// render-thread state, so a mode change only raises this flag there.
+    bool m_displayColorDirty = true;
 
     /// Written in updatePaintNode on the render thread, read on the GUI thread
     /// by frameStats(). Plain ints: the GUI thread is blocked while

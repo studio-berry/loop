@@ -25,6 +25,7 @@
 #include "pdfdocument.h"
 #include "pdfdocumentsession.h"
 #include "pdfexception.h"
+#include "pdfcms.h"
 #include "pdfpagecachebudget.h"
 #include "pdfpainter.h"
 #include "pdfprocessingbudget.h"
@@ -172,6 +173,125 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
     return result;
 }
 
+/// Renders one page as a soft proof of the output intent (issue #237): the page
+/// goes through PDFTransparencyRenderer with the separation-accurate policy, and
+/// every colour it converts passes through a proofing CMS built for the profile
+/// the caller's marker named. Core's own PDFLittleCMS implements the proof
+/// (cmsCreateProofingTransform with the proofing profile and intent), so the
+/// simulation is Core's colour management rather than a second approximation
+/// invented here.
+///
+/// The CMS is built per render from a local PDFCMSManager, the construction
+/// PdfTool's ink tools already use, and never replaces the document session's
+/// own CMS: proofing is scoped to the surfaces that asked for it, so the
+/// authoritative render of the same page and every production consumer keep
+/// rendering unproofed.
+///
+/// A missing or unusable profile is a typed terminal state, never a silent
+/// fallback to sRGB: the render fails and the caller reports the reason.
+PageSurfaceResult renderSoftProof(const PageSurfaceRequest& request,
+                                  const pdf::PDFPage* page,
+                                  const pdf::PDFDocument* document,
+                                  pdf::PDFDocumentSession* session,
+                                  pdf::PDFJobContext& jobContext,
+                                  QSize pixelSize,
+                                  pdf::PDFRenderer::Features features)
+{
+    if (jobContext.isCancellationRequested())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));
+    }
+
+    const QString proofProfileId = softProofProfileId(request.key.colorOutputIdentity);
+    if (proofProfileId.isEmpty())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/soft-proof-profile-missing"));
+    }
+
+    pdf::PDFCMSManager proofCms(nullptr);
+    proofCms.setDocument(document, session->getProcessingBudget());
+
+    pdf::PDFCMSSettings settings = proofCms.getDefaultSettings();
+    settings.system = pdf::PDFCMSSettings::System::LittleCMS2;
+    settings.isConsiderOutputIntent = true;
+    settings.isSoftProofing = true;
+    settings.softProofingProfile = proofProfileId;
+    proofCms.setSettings(settings);
+
+    const pdf::PDFCMSPointer proofingCms = proofCms.getCurrentCMS();
+    if (proofingCms.isNull())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/soft-proof-profile-unavailable"));
+    }
+
+    pdf::PDFInkMapper inkMapper(&proofCms, document);
+    inkMapper.createSpotColors(true);
+
+    pdf::PDFTransparencyRendererSettings rendererSettings;
+    rendererSettings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, true);
+    rendererSettings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SmoothImageTransformation,
+                                   features.testFlag(pdf::PDFRenderer::SmoothImages));
+    rendererSettings.renderPolicy = pdf::PDFRenderPolicy::forSeparationPreview();
+
+    const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));
+    const QTransform pagePointToDevice = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, request.key.rotation);
+
+    pdf::PDFTransparencyRenderer renderer(page,
+                                          document,
+                                          session->getFontCache(),
+                                          proofingCms.data(),
+                                          session->getOptionalContentActivity(),
+                                          &inkMapper,
+                                          rendererSettings,
+                                          pagePointToDevice);
+    renderer.setOperationControl(jobContext.operationControl());
+
+    renderer.beginPaint(pixelSize);
+    renderer.processContents();
+    renderer.endPaint();
+
+    if (jobContext.isCancellationRequested())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));
+    }
+
+    const QColor paperColor = proofingCms->getPaperColor();
+    QImage image = renderer.toImage(false,
+                                    true,
+                                    pdf::PDFRGB{ static_cast<pdf::PDFColorComponent>(paperColor.redF()),
+                                                 static_cast<pdf::PDFColorComponent>(paperColor.greenF()),
+                                                 static_cast<pdf::PDFColorComponent>(paperColor.blueF()) });
+    if (image.isNull())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/render-failed"));
+    }
+
+    image = applySurfaceFeatures(std::move(image), page, pagePointToDevice, features, proofingCms.data());
+    image.setDevicePixelRatio(request.key.devicePixelRatio1000 / 1000.0);
+
+    PageSurfaceResult result;
+    result.key = request.key;
+    result.token = request.token;
+    result.state = SurfaceTerminalState::Complete;
+    result.pixels = makeSurfaceBuffer(std::move(image));
+    result.pixelSize = pixelSize;
+    result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+    result.diagnostics = renderer.getRenderDiagnostics();
+
+    // A soft proof is a simulation of the output intent. Recording that here
+    // keeps it out of any exact-render claim: the surface describes what the
+    // proof did, and no consumer can read it as the authoritative render.
+    result.diagnostics.record(pdf::PDFRenderFidelity::SupportedWithFallback,
+                              QStringLiteral("soft-proof/simulation"));
+
+    if (!result.pixels)
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/empty-surface"));
+    }
+
+    return result;
+}
+
 }   // namespace
 
 PDFSessionPageSurfaceRenderer::PDFSessionPageSurfaceRenderer(pdf::PDFDocumentContext& context) :
@@ -281,6 +401,14 @@ PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest
         // in a parallel accounting scheme. Pool RasterTile already exists for
         // exactly this work.
         jobContext.processingBudget().chargeRenderPixels(static_cast<std::uint64_t>(pixelSize.width()) * static_cast<std::uint64_t>(pixelSize.height()), QStringLiteral("page surface"));
+
+        if (hasSoftProofMarker(request.key.colorOutputIdentity))
+        {
+            // The proofing simulation from issue #237: a separation-accurate
+            // render through Core's colour management under proofing settings,
+            // for the surfaces whose identity asked for it.
+            return renderSoftProof(request, page, document, session, jobContext, pixelSize, features);
+        }
 
         if (hasAuthoritativeOverprintMarker(request.key.colorOutputIdentity))
         {

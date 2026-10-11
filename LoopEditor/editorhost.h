@@ -46,8 +46,11 @@
 
 #include "focusrestoration.h"
 #include "documentviewsession.h"
+#include "editorsettings.h"
 #include "quickdocumentmodel.h"
 #include "quickoutput.h"
+
+#include "canvasdisplaycolor.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
@@ -55,6 +58,7 @@
 #include "pdfsignaturehandler.h"
 
 #include <QColor>
+#include <QImage>
 #include <QObject>
 #include <QHash>
 #include <QJsonObject>
@@ -64,6 +68,7 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <optional>
 
 namespace pdfinteraction
 {
@@ -154,6 +159,16 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString productionStateName READ productionStateName NOTIFY presentationChanged)
     Q_PROPERTY(bool allowDeveloperDiagnostics READ allowDeveloperDiagnostics CONSTANT)
 
+    // ---- Shell settings and diagnostics (#239) -------------------------------------
+    // The settings store is the one typed home of the persisted render options;
+    // QML renders its rows and toggles them through its typed invokables. The
+    // diagnostics bundle projection names the last collection outcome, never a
+    // second copy of the bundle's content.
+    Q_PROPERTY(QObject* settings READ settings CONSTANT)
+    Q_PROPERTY(QString settingsNotice READ settingsNotice NOTIFY presentationChanged)
+    Q_PROPERTY(bool settingsResetPending READ settingsResetPending NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap diagnosticsBundle READ diagnosticsBundle NOTIFY presentationChanged)
+
     // ---- Workspace surfaces (#586) -------------------------------------------------
     // Every property below is a read-only projection of what Core, PdfTool or the
     // shell's own run already decided. QML renders these; it derives no state and
@@ -181,6 +196,28 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
 
+    // ---- Display colour modes (#235 display half) -----------------------------------
+    // Presentation-only display modes. They filter the pixels the canvas already
+    // holds; they ask for no render, they join no surface identity, and the
+    // fidelity indicator reports them as a simulation.
+    Q_PROPERTY(QString displayColorModeName READ displayColorModeName NOTIFY presentationChanged)
+    Q_PROPERTY(bool displayColorModeActive READ displayColorModeActive NOTIFY presentationChanged)
+    Q_PROPERTY(QColor displayColorCustomForeground READ displayColorCustomForeground NOTIFY presentationChanged)
+    Q_PROPERTY(QColor displayColorCustomBackground READ displayColorCustomBackground NOTIFY presentationChanged)
+    Q_PROPERTY(int displayColorBitonalThreshold READ displayColorBitonalThreshold NOTIFY presentationChanged)
+
+    // ---- Soft proof, plates and ink coverage (#237) ---------------------------------
+    Q_PROPERTY(bool softProofActive READ softProofActive NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofStateName READ softProofStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileName READ softProofProfileName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileId READ softProofProfileId NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileTypeName READ softProofProfileTypeName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofSummary READ softProofSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList productionPlates READ productionPlates NOTIFY presentationChanged)
+    Q_PROPERTY(QString plateIsolationSummary READ plateIsolationSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap inkCoverageReadout READ inkCoverageReadout NOTIFY presentationChanged)
+    Q_PROPERTY(qreal currentPageCentreX READ currentPageCentreX NOTIFY presentationChanged)
+    Q_PROPERTY(qreal currentPageCentreY READ currentPageCentreY NOTIFY presentationChanged)
     // ---- Signature review (#125) ----------------------------------------------------
     // The open document's signature status, reduced by Core's verification and
     // admitted through the document facade. QML renders these values; it never
@@ -203,7 +240,10 @@ public:
     };
     Q_ENUM(LoopWorkspace)
 
-    explicit EditorHost(QObject* parent = nullptr, QString recipesDirectory = QString());
+    /// `settings` is the one typed settings store. When null, the host opens
+    /// the application's own user-scope store on first use; an injected store
+    /// stays owned by the caller and must outlive the host.
+    explicit EditorHost(EditorSettings* settings = nullptr, QObject* parent = nullptr, QString recipesDirectory = QString());
     ~EditorHost() override;
 
     EditorHost(const EditorHost&) = delete;
@@ -286,6 +326,35 @@ public:
     /// Production / plate model for the Pages and Production Preview surfaces.
     QObject* production() { return &m_production; }
 
+    /// The one typed settings store (#239). QML renders its option rows and
+    /// calls its typed invokables; nothing else owns a settings copy.
+    QObject* settings() { return m_settings; }
+
+    /// The settings store's visible notice: a persisted value that was rejected
+    /// and replaced, or the last refused settings operation. Empty when nothing
+    /// needs reporting.
+    QString settingsNotice();
+
+    /// True while a confirmed reset-to-factory is armed and awaiting the
+    /// operator's confirmation.
+    bool settingsResetPending() const noexcept { return m_settingsResetPending; }
+
+    /// Outcome of the last diagnostics collection: `status` is `idle`, `ready`
+    /// or `failed`, with the bundle directory and file count on success and a
+    /// typed error on failure.
+    QVariantMap diagnosticsBundle() const;
+
+    /// Arms the reset-to-factory confirmation and opens the settings surface.
+    /// The reset itself only runs through confirmSettingsReset().
+    Q_INVOKABLE bool requestSettingsReset();
+    Q_INVOKABLE bool confirmSettingsReset();
+    Q_INVOKABLE void cancelSettingsReset();
+
+    /// Collects the ADR-006 diagnostics bundle under the operator-chosen parent
+    /// directory and projects the outcome. QML passes a folder URL; paths stay
+    /// in C++.
+    Q_INVOKABLE bool collectDiagnosticsFileUrl(const QUrl& parentDirectory);
+
     /// Operator lifecycle of the governed-correction route (#586):
     /// `idle`, `planned`, `preview-ready`, `approved`, `executing`, `succeeded`,
     /// `stale`, `rejected`, `cancelled`, `failed`. It is a projection of the run the
@@ -338,19 +407,77 @@ public:
 
     /// Render fidelity and origin of the interactive preview (#28), the same fact on the
     /// ordinary canvas and in the Production Preview. `previewFidelityStateName` is one of
-    /// `unavailable`, `stale`, `exact`, `approximate` or `authoritative`, derived by
-    /// `pdfquick::tokens::classifyPreviewFidelityState()` from the preview state and the
-    /// current page's render diagnostics; `previewFidelityOriginName` names the render path
-    /// (`none`, `fast-canvas`, `output-preview`). `previewRequiresAuthoritative` is true for
-    /// the overprint-sensitive fast render (`approximate`), whose pixels are not proof of
-    /// print-safe output. The interactive preview never certifies publication safety: only
-    /// `authoritative` names the output-preview origin, and no state reaches a pass.
+    /// `unavailable`, `stale`, `exact`, `approximate`, `authoritative`, `display-filter` or
+    /// `soft-proof`, derived by `pdfquick::tokens::classifyPreviewFidelityState()` from the
+    /// preview state, the display simulation in force and the current page's render
+    /// diagnostics; `previewFidelityOriginName` names the render path (`none`, `fast-canvas`,
+    /// `output-preview`, `display-filter`, `soft-proof`). `previewRequiresAuthoritative` is
+    /// true for the overprint-sensitive fast render (`approximate`), whose pixels are not
+    /// proof of print-safe output. The interactive preview never certifies publication
+    /// safety: only `authoritative` names the output-preview origin, and no state reaches a
+    /// pass.
     QString previewFidelityStateName() const;
     QVariantMap previewFidelityVisual() const;
     QColor previewFidelityColor() const;
     QString previewFidelityOriginName() const;
     QString previewFidelitySummary() const;
     bool previewRequiresAuthoritative() const;
+
+    // ---- Display colour modes (#235 display half) -----------------------------------
+    /// The display colour mode in force, by vocabulary name, and the settings the
+    /// custom mode reads. A display mode is a presentation filter: it changes what
+    /// the canvas shows, never what the document is, and it is reported as a
+    /// simulation by the fidelity indicator.
+    QString displayColorModeName() const;
+    bool displayColorModeActive() const;
+    QColor displayColorCustomForeground() const;
+    QColor displayColorCustomBackground() const;
+    int displayColorBitonalThreshold() const;
+    /// Parses the mode name once at this boundary. An unknown name is refused and
+    /// changes nothing.
+    Q_INVOKABLE bool setDisplayColorMode(const QString& modeName);
+    Q_INVOKABLE bool setDisplayColorCustomColors(const QColor& foreground, const QColor& background);
+    Q_INVOKABLE bool setDisplayColorBitonalThreshold(int threshold);
+
+    // ---- Soft proof (#237) -----------------------------------------------------------
+    /// True while the canvas is showing the proofing simulation.
+    bool softProofActive() const;
+    /// `off`, `simulating`, `profile-missing` or `profile-invalid`. A document
+    /// whose output-intent profile is absent or unreadable is a visible state: the
+    /// proof is refused with the reason, never silently rendered as sRGB.
+    QString softProofStateName() const;
+    QString softProofProfileName() const;
+    QString softProofProfileId() const;
+    QString softProofProfileTypeName() const;
+    QString softProofSummary() const;
+    /// Enables or disables the proofing simulation. Enabling resolves the
+    /// document's output-intent profile through Core's colour management; a
+    /// document without a usable one returns false and reports `profile-missing`
+    /// or `profile-invalid`.
+    Q_INVOKABLE bool setSoftProofEnabled(bool enabled);
+    Q_INVOKABLE bool toggleSoftProof();
+
+    // ---- Plates and ink coverage (#237) ----------------------------------------------
+    /// The separations Core resolves for the open document: the process plates and
+    /// the document's spot plates, each with its visibility and whether it is the
+    /// isolated plate. Presentation state: hiding or isolating a plate changes what
+    /// the preview shows, never the document.
+    QVariantList productionPlates() const;
+    QString plateIsolationSummary() const;
+    Q_INVOKABLE bool setPlateVisible(const QString& plateId, bool visible);
+    /// Shows exactly one plate and hides the others. An unknown plate id is refused.
+    Q_INVOKABLE bool isolatePlate(const QString& plateId);
+    Q_INVOKABLE bool showAllPlates();
+    /// Renders the current page through Core's separation-accurate path and reports
+    /// the ink coverage at one page-space point. Asynchronous: the readout lands in
+    /// inkCoverageReadout() when the job finishes.
+    Q_INVOKABLE bool requestInkCoverageAtPoint(qreal pageX, qreal pageY);
+    QVariantMap inkCoverageReadout() const;
+    /// The centre of the current page's crop box in page space (PDF user space, the
+    /// same space requestInkCoverageAtPoint takes). The host computes it so a
+    /// surface can offer a point readout without deriving document geometry.
+    qreal currentPageCentreX() const;
+    qreal currentPageCentreY() const;
 
     /// Read-only composition of the Core comparison facts for the Compare workspace:
     /// the before/after artifact identities, the technical finding delta, the attributes
@@ -490,6 +617,21 @@ public:
     /// in-flight drag with ToolChanged (#141 AC3).
     Q_INVOKABLE bool setActiveTool(const QString& toolId);
 
+    // ---- Select, copy and capture (issue #232) -------------------------------------
+    /// Copies the canvas text selection to the clipboard. The clipboard is only
+    /// written when there is text to copy; a page with no text layer reports
+    /// that state and an empty string is never copied as success.
+    Q_INVOKABLE bool copySelectedText();
+
+    /// Writes the visible canvas region to `url` as a PNG through the atomic
+    /// writer, which refuses to overwrite an existing file.
+    Q_INVOKABLE bool captureCanvasFileUrl(const QUrl& url);
+
+    /// Extracts the current page's images into `directory` through the atomic
+    /// writer. Refuses up front when any target file already exists, so a run
+    /// cannot half-overwrite the destination.
+    Q_INVOKABLE bool extractCurrentPageImagesFileUrl(const QUrl& directory);
+
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
     Q_INVOKABLE quint64 invokeCommand(const QString& commandId, const QVariantMap& parameters = {});
@@ -541,6 +683,21 @@ signals:
     void preflightProfileImportRequested();
     void preflightProfileExportRequested();
     void preflightProfileSaveRequested();
+
+    /// The Screenshot command needs a destination, so the shell asks for one
+    /// and answers with captureCanvasFileUrl(). The command itself writes
+    /// nothing.
+    void screenshotRequested();
+
+    /// The Extract Image command needs a destination directory, so the shell
+    /// asks for one and answers with extractCurrentPageImagesFileUrl().
+    void imageExtractionRequested();
+
+    /// The shell-side surfaces (#239). The commands emit these; QML owns the
+    /// dialogs and opens them.
+    void settingsPanelRequested();
+    void settingsResetRequested();
+    void diagnosticsCollectionRequested();
 
 private:
     void connectFacade();
@@ -596,6 +753,36 @@ private:
     void applyEmptyCanvasInspectorSelection();
     void setInspectionMode(QString mode);
 
+    /// The visible canvas region as one image, or a null image when no admitted
+    /// tile intersects it or the snapshot is stale.
+    QImage composeVisibleCanvasImage() const;
+    // ---- Display colour modes, soft proof and plates (#235 display half, #237) -------
+    void applyDisplayColorToCanvas();
+    /// The simulation the fidelity indicator must name, or empty when the display
+    /// shows the render path's own pixels: `soft-proof` or `display-filter`.
+    QString displaySimulationName() const;
+    struct SoftProofProfile
+    {
+        QString id;
+        QString name;
+        QString typeName;
+    };
+    /// Resolves the document's output-intent profile through Core's colour
+    /// management. `documentDeclaresOutputIntent` distinguishes "the document
+    /// names no output intent" from "the one it names could not be read", which
+    /// are two different visible states. Nothing is resolved without a document.
+    std::optional<SoftProofProfile> resolveOutputIntentProfile(bool* documentDeclaresOutputIntent) const;
+    /// Caches the separations Core resolves for the open document, keyed by
+    /// colorant name, keeping the operator's visibility state for plates that
+    /// are still present.
+    void reloadProductionPlates();
+    QVariantMap plateRow(const QString& id) const;
+    QPointF currentPageCentre() const;
+    void finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot);
+    /// Pushes the typed render options into the shared render presentation
+    /// policy and re-requests the surfaces whose keys the change superseded.
+    void applyRenderOptions();
+
     /// Operator review of the planned correction (#586). `fixPlanIsCurrent()` is the only
     /// authority on whether the reviewed plan still describes the open revision.
     QString fixCurrentPlanDigest() const;
@@ -631,6 +818,23 @@ private:
     FocusRestoration m_focusRestoration;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
 
+    /// The settings store: injected by the caller, or owned here when the host
+    /// was constructed without one. See the constructor's contract.
+    std::unique_ptr<EditorSettings> m_ownedSettings;
+    EditorSettings* m_settings = nullptr;
+    bool m_settingsResetPending = false;
+
+    /// The last diagnostics collection's outcome. A projection of the
+    /// collector's own result, never a second copy of the bundle.
+    struct DiagnosticsBundleState
+    {
+        QString status = QStringLiteral("idle");
+        QString directory;
+        QString error;
+        int fileCount = 0;
+    };
+    DiagnosticsBundleState m_diagnosticsBundle;
+
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
     QString m_outputJobId;
@@ -659,6 +863,35 @@ private:
         QString retentionError;
     };
     QHash<QString, std::shared_ptr<RollbackJobOutcome>> m_rollbackOutcomes;
+
+    /// Display colour mode in force (issue #235 display half). Presentation state:
+    /// pushed to the canvas item, never to a render request.
+    pdfquick::CanvasDisplayColorSettings m_displayColor;
+
+    /// Soft proof state (issue #237). The profile is the document's output-intent
+    /// profile Core resolved; `m_softProofStateName` is `off`, `simulating`,
+    /// `profile-missing` or `profile-invalid`.
+    bool m_softProofEnabled = false;
+    QString m_softProofStateName = QStringLiteral("off");
+    SoftProofProfile m_softProofProfile;
+
+    /// Separations Core resolved for the open document, and the operator's own
+    /// presentation state over them. Visibility is keyed by colorant name so a
+    /// plate that is still present keeps its state across a reload.
+    QVariantList m_plates;
+    QHash<QString, bool> m_plateVisible;
+    QString m_isolatedPlateId;
+
+    /// The last ink-coverage readout, and the worker outcomes still in flight.
+    QVariantMap m_inkCoverageReadout;
+    struct InkCoverageOutcome
+    {
+        bool ok = false;
+        QString reason;
+        int pageIndex = -1;
+        QVariantMap readout;
+    };
+    QHash<QString, std::shared_ptr<InkCoverageOutcome>> m_inkCoverageOutcomes;
     QVariantList m_revisionHistory;
     QString m_historyError;
     QString m_historyUndoId;

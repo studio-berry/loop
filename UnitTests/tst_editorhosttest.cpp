@@ -25,6 +25,7 @@
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
+#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
@@ -49,8 +50,10 @@
 
 #include "documentviewsession.h"
 #include "editorhost.h"
+#include "editorsettings.h"
 #include "loopstatevisual.h"
 #include "looptokens.h"
+#include "pdfrenderer.h"
 #include "quickdocumentmodel.h"
 
 #include "pdfapplicationidentity.h"
@@ -327,6 +330,22 @@ private slots:
     void signatureInvalidationGateBlocksExecutionUntilAcknowledged();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
+    void displayColorModesChangePresentationAndAreNeverProductionEvidence();
+    void displayColorModeNamesAreParsedOnceAtTheBoundary();
+    void softProofSimulatesThroughCoreColourManagementAndNeverBecomesEvidence();
+    void softProofWithoutAUsableOutputIntentIsAVisibleState();
+    void platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument();
+    void inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable();
+
+    // Shell settings, render options and diagnostics (#239).
+    void settingsRoundTripThroughTheOneStore();
+    void settingsFactoryResetIsConfirmedAndComplete();
+    void invalidPersistedRenderOptionIsReportedAndReplaced();
+    void renderOptionsReachTheRendererAndTheFidelityIndicator();
+    void collectDiagnosticsProducesTheAdrBundle();
+
+    /// Issue #232: extraction refuses to overwrite an existing file up front.
+    void imageExtractionRefusesToOverwriteAnExistingFile();
 };
 
 void EditorHostTest::init()
@@ -365,7 +384,7 @@ void EditorHostTest::encryptedOpen()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("encrypted.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::Algorithm(algorithm), QStringLiteral("fixture-user"), userPermissions));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     const quint64 request = host.passwordRequestId();
@@ -402,7 +421,7 @@ void EditorHostTest::passwordFailureIsTypedAndRetryable()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("wrong-password-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("incorrect-fixture-password")));
@@ -421,7 +440,7 @@ void EditorHostTest::passwordCancelCloseAndSupersessionAreTerminal()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("cancelled-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.cancelPassword(host.passwordRequestId()));
@@ -455,7 +474,7 @@ void EditorHostTest::teardownWhilePasswordPromptIsPending()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("teardown-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    auto host = std::make_unique<EditorHost>(nullptr, m_fixtureRecipes->path());
+    auto host = std::make_unique<EditorHost>(nullptr, nullptr, m_fixtureRecipes->path());
     host->openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host->passwordRequestId() != 0, 10000);
     QElapsedTimer timer;
@@ -476,7 +495,7 @@ void EditorHostTest::restrictedDocumentCannotPlanOrPublish()
     QVERIFY(source.open(QIODevice::ReadOnly));
     const QByteArray original = source.readAll();
     source.close();
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
     QCOMPARE(host.passwordRequestId(), quint64(0));
@@ -526,7 +545,7 @@ void EditorHostTest::encryptedInspectionReceiptContainsNoPassword()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("inspection-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
@@ -562,7 +581,7 @@ void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 {
     QVERIFY(!pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
     {
-        EditorHost host(nullptr, m_fixtureRecipes->path());
+        EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
         QVERIFY(pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
         QVERIFY(pdf::PDFBlockingThreadGuard::isCurrentThreadInteractive());
     }
@@ -574,7 +593,7 @@ void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 
 void EditorHostTest::startsWithNoDocument()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.documentState(), QStringLiteral("empty"));
     QVERIFY(!host.hasDocument());
     QCOMPARE(host.pageCount(), 0);
@@ -593,7 +612,7 @@ void EditorHostTest::startsWithNoDocument()
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     const QVariantList descriptors = host.commandDescriptors();
     QVERIFY(descriptors.size() > 100);
 
@@ -613,7 +632,7 @@ void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
 
 void EditorHostTest::navigationCommandsStayDisabledUntilOpen()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.isCommandEnabled(QStringLiteral("actionGoToNextPage")));
     QCOMPARE(host.invokeCommand(QStringLiteral("actionGoToNextPage")), quint64(0));
 }
@@ -662,7 +681,7 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.runPreflight());
@@ -701,7 +720,7 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -803,7 +822,7 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
 
     // 2. The GUI's report, through the export path the operator uses:
     //    EditorHost::exportPreflightReportFileUrl -> PreflightController::serializedReport.
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
 
@@ -894,7 +913,7 @@ void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
     QCOMPARE(cliScope.value(QStringLiteral("pages")).toArray(), QJsonArray{ 1 });
     QCOMPARE(cliScope.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
@@ -946,7 +965,7 @@ void EditorHostTest::importValidProfileAddsDigest()
     const QString expectedDigest = profile.value(QStringLiteral("digest")).toString();
     QVERIFY(!expectedDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
 
     const QString expectedId = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
@@ -984,7 +1003,7 @@ void EditorHostTest::importDigestMismatchProfileIsRejected()
     QVERIFY(sourceFile.open(QIODevice::WriteOnly));
     sourceFile.write(QJsonDocument(profile).toJson(QJsonDocument::Compact));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
 }
 
@@ -993,7 +1012,7 @@ void EditorHostTest::saveProfileForkRecordsDerivedFrom()
     QTemporaryDir temp;
     QVERIFY(temp.isValid());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QString parentDigest;
     for (const QVariant& entry : host.preflightProfiles())
     {
@@ -1047,7 +1066,7 @@ void EditorHostTest::openLargeDocument()
     QElapsedTimer openTimer;
     openTimer.start();
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 90000);
     const qint64 openToFirstViewMs = openTimer.elapsed();
@@ -1238,7 +1257,7 @@ void EditorHostTest::openLargeDocument()
 
 void EditorHostTest::fixWorkspacePresentsIdleLifecycleAndRefusesToArm()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
 
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
     QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
@@ -1306,7 +1325,7 @@ void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     // The catalog identifies a recipe by the file that defines it, and importing selects it.
     QVERIFY(!host.selectedActionListRecipeId().isEmpty());
@@ -1419,7 +1438,7 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.isCommandEnabled(commandId));
     QCOMPARE(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)), quint64(0));
 
@@ -1616,7 +1635,7 @@ bool writeSignatureAppendedCopy(const QString& sourcePath, const QString& destin
 
 void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     bool listed = false;
     for (const QVariant& entry : host.actionListRecipes())
     {
@@ -1651,7 +1670,7 @@ void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRe
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -1700,7 +1719,7 @@ void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
     const QString recipePath = directory.filePath(QStringLiteral("operator-move.json"));
     QVERIFY(writeTranslatePageBoxRecipe(recipePath, QStringLiteral("operator-move"), 0));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -1730,7 +1749,7 @@ void EditorHostTest::invalidOperatorRecipeStopsMoveWithoutShippedFallback()
     const QString brokenPath = QDir(m_fixtureRecipes->path()).filePath(QStringLiteral("broken-move.json"));
     QVERIFY(writeTranslatePageBoxRecipe(brokenPath, QStringLiteral("broken-move"), QStringLiteral("first")));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -1772,7 +1791,7 @@ void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()
         QVERIFY(writer.write(documentPath, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     DocumentViewSession* session = host.sessionForTest();
@@ -1866,7 +1885,7 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -2157,7 +2176,7 @@ void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding(
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
@@ -2220,7 +2239,7 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
         QCOMPARE(process.exitCode(), 0);
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(repairedPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -2327,7 +2346,7 @@ void EditorHostTest::preflightFencesCompletionsThatLostTheirRequestIdentity()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -2440,7 +2459,7 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -2729,7 +2748,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
@@ -2754,7 +2773,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
         preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
     QVERIFY2(QFileInfo::exists(overprintPath), qPrintable(overprintPath));
 
-    EditorHost overprintHost(nullptr, m_fixtureRecipes->path());
+    EditorHost overprintHost(nullptr, nullptr, m_fixtureRecipes->path());
     overprintHost.openFileUrl(QUrl::fromLocalFile(overprintPath));
     QTRY_VERIFY_WITH_TIMEOUT(overprintHost.hasDocument(), 30000);
     overprintHost.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
@@ -2779,7 +2798,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
 
 void EditorHostTest::refusedRenderCannotBecomeAuthoritativeEvidence()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf")));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
     auto* surfaces = host.sessionForTest()->surfaces();
@@ -2845,7 +2864,7 @@ void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -3060,6 +3079,666 @@ void EditorHostTest::outputRenderFailure()
     QVERIFY(!result.record.contains(QStringLiteral("artifact")));
 }
 
-QTEST_GUILESS_MAIN(EditorHostTest)
+/// Issue #235, display half. A display colour mode changes what the canvas shows and
+/// nothing else: it is marked a simulation by the fidelity indicator, and neither the
+/// Compare workspace nor the production identity can see it. The failure case is a
+/// display mode mistaken for a production render.
+void EditorHostTest::displayColorModesChangePresentationAndAreNeverProductionEvidence()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
 
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("display-modes.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Every display mode is a bound command with a document open.
+    const QStringList actions = { QStringLiteral("actionColorInvert"), QStringLiteral("actionColorGrayscale"),
+                                  QStringLiteral("actionColorHighContrast"), QStringLiteral("actionColorBitonal"),
+                                  QStringLiteral("actionColorCustom") };
+    for (const QString& action : actions)
+    {
+        QVERIFY2(host.isCommandEnabled(action), qPrintable(action));
+    }
+
+    const QVariantMap compareBefore = host.compareReview();
+    const QVariantMap identityBefore = host.previewIdentity();
+    const QVariantMap signOffBefore = host.fixSignOff();
+    const QString revisionBefore = host.sessionForTest()->facade().currentRevision().toString();
+
+    // The menu entry works, and what it produces is a simulation -- not the render
+    // path's fidelity, and never a pass.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorInvert")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("invert"));
+    QVERIFY(host.displayColorModeActive());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("display-filter"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("display-filter"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("never recorded as approval evidence")));
+
+    const QVariantMap visual = host.previewFidelityVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), QStringLiteral("Warning"));
+    QVERIFY(visual.value(QStringLiteral("kind")).toString() != QStringLiteral("Passed"));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+    QVERIFY(!visual.value(QStringLiteral("accessibleName")).toString().trimmed().isEmpty());
+
+    // The failure case: nothing in Compare or sign-off may mistake it for a production
+    // render. The comparison, the preview identity and the sign-off are the same facts
+    // they were before the mode existed.
+    QCOMPARE(host.compareReview(), compareBefore);
+    QCOMPARE(host.previewIdentity(), identityBefore);
+    QCOMPARE(host.fixSignOff(), signOffBefore);
+    QVERIFY(!host.fixPreview().value(QStringLiteral("available")).toBool());
+    QCOMPARE(host.sessionForTest()->facade().currentRevision().toString(), revisionBefore);
+
+    // Invoking the mode already in force returns to normal: there is no sixth action,
+    // and a display mode with no way back is a trap.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorInvert")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+    QVERIFY(!host.displayColorModeActive());
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Each of the remaining modes is reachable and distinct.
+    for (const QString& action : { QStringLiteral("actionColorGrayscale"), QStringLiteral("actionColorHighContrast"),
+                                   QStringLiteral("actionColorBitonal"), QStringLiteral("actionColorCustom") })
+    {
+        QVERIFY(host.invokeCommand(action) != 0);
+        QVERIFY(host.displayColorModeActive());
+        QCOMPARE(host.previewFidelityStateName(), QStringLiteral("display-filter"));
+    }
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("custom"));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorCustom")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+}
+
+void EditorHostTest::displayColorModeNamesAreParsedOnceAtTheBoundary()
+{
+    EditorHost host;
+
+    QVERIFY(!host.setDisplayColorMode(QStringLiteral("sepia")));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+    QVERIFY(!host.setDisplayColorMode(QString()));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+
+    QVERIFY(host.setDisplayColorMode(QStringLiteral("Grayscale")));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("grayscale"));
+    QVERIFY(host.setDisplayColorMode(QStringLiteral("normal")));
+
+    // The custom mode's settings are validated at the boundary too: an invalid colour
+    // or an out-of-range threshold is refused rather than coerced.
+    QVERIFY(host.setDisplayColorCustomColors(QColor(10, 20, 30), QColor(200, 210, 220)));
+    QCOMPARE(host.displayColorCustomForeground(), QColor(10, 20, 30));
+    QCOMPARE(host.displayColorCustomBackground(), QColor(200, 210, 220));
+    QVERIFY(!host.setDisplayColorCustomColors(QColor(), QColor(200, 210, 220)));
+    QVERIFY(!host.setDisplayColorCustomColors(QColor(10, 20, 30), QColor()));
+
+    QVERIFY(host.setDisplayColorBitonalThreshold(200));
+    QCOMPARE(host.displayColorBitonalThreshold(), 200);
+    QVERIFY(!host.setDisplayColorBitonalThreshold(0));
+    QVERIFY(!host.setDisplayColorBitonalThreshold(255));
+    QCOMPARE(host.displayColorBitonalThreshold(), 200);
+}
+
+/// Issue #237. The soft proof renders through Core's colour management under proofing
+/// settings, shows the profile identity, and is marked a simulation. It is never
+/// recorded as approval evidence, and it never replaces the document session's own CMS.
+void EditorHostTest::softProofSimulatesThroughCoreColourManagementAndNeverBecomesEvidence()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-cmyk.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    // A page's fidelity is only reported once the shell has a layout and the
+    // page's surface has been requested.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 30000);
+
+    QCOMPARE(host.softProofStateName(), QStringLiteral("off"));
+    QVERIFY(!host.softProofActive());
+    QVERIFY(!host.softProofSummary().trimmed().isEmpty());
+
+    QVERIFY(host.setSoftProofEnabled(true));
+    QCOMPARE(host.softProofStateName(), QStringLiteral("simulating"));
+    QVERIFY(host.softProofActive());
+    QVERIFY(!host.softProofProfileId().isEmpty());
+    QCOMPARE(host.softProofProfileTypeName(), QStringLiteral("output-intent"));
+    // The identity shown is the profile's: its Core-issued identifier always, and
+    // its name when the profile carries one.
+    QVERIFY(host.softProofSummary().contains(host.softProofProfileId()));
+    QVERIFY(host.softProofSummary().contains(host.softProofProfileName().isEmpty()
+                                                 ? host.softProofProfileId()
+                                                 : host.softProofProfileName()));
+
+    // The proof is its own render identity: the surfaces re-render as proofs, through
+    // Core's colour management, and the diagnostics carry the simulation's reason.
+    // Until that render is admitted the indicator honestly says `unavailable`, so the
+    // simulation state is asserted once the proof is on screen.
+    auto* surfaces = host.sessionForTest()->surfaces();
+    QVERIFY(surfaces->isSoftProofing());
+    QCOMPARE(surfaces->softProofProfile(), host.softProofProfileId());
+    QTRY_VERIFY_WITH_TIMEOUT(surfaces->diagnosticsForPage(0).has_value() && surfaces->diagnosticsForPage(0)->reasons.contains(QStringLiteral("soft-proof/simulation")),
+                             30000);
+    QVERIFY(!host.pageFidelityIsExact());
+
+    // The indicator says simulation, and the origin names the proofing path rather
+    // than the fast canvas or the output-preview render.
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("soft-proof"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("soft-proof"));
+    const QVariantMap visual = host.previewFidelityVisual();
+    QVERIFY(visual.value(QStringLiteral("kind")).toString() != QStringLiteral("Passed"));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+
+    // Never approval evidence: no correction preview, no sign-off, no comparison.
+    QVERIFY(!host.fixPreview().value(QStringLiteral("available")).toBool());
+    QVERIFY(host.fixSignOff().value(QStringLiteral("planDigest")).toString().isEmpty());
+
+    // Turning it off restores the unproofed identity.
+    QVERIFY(!host.toggleSoftProof());
+    QCOMPARE(host.softProofStateName(), QStringLiteral("off"));
+    QVERIFY(!host.softProofActive());
+    QVERIFY(!surfaces->isSoftProofing());
+    QVERIFY(host.softProofProfileId().isEmpty());
+    QVERIFY(!host.previewFidelityStateName().contains(QStringLiteral("soft-proof")));
+}
+
+void EditorHostTest::softProofWithoutAUsableOutputIntentIsAVisibleState()
+{
+    // A document that names no output intent at all.
+    {
+        const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-missing.pdf");
+        QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(path));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+        host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+        QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+        QVERIFY(!host.setSoftProofEnabled(true));
+        QCOMPARE(host.softProofStateName(), QStringLiteral("profile-missing"));
+        QVERIFY(!host.softProofActive());
+        QVERIFY(host.softProofProfileId().isEmpty());
+        QVERIFY(host.softProofSummary().contains(QStringLiteral("no output-intent profile")));
+
+        // Never a silent sRGB fallback: the surfaces keep the unproofed identity, and
+        // the indicator still describes the render path, not a simulation.
+        QVERIFY(!host.sessionForTest()->surfaces()->isSoftProofing());
+        QVERIFY(host.previewFidelityStateName() != QStringLiteral("soft-proof"));
+        QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
+    }
+
+    // A document that names one Core cannot read.
+    {
+        const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-profile-invalid.pdf");
+        QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(path));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+        QVERIFY(!host.setSoftProofEnabled(true));
+        QCOMPARE(host.softProofStateName(), QStringLiteral("profile-invalid"));
+        QVERIFY(!host.softProofActive());
+        QVERIFY(host.softProofSummary().contains(QStringLiteral("could not be read")));
+        QVERIFY(!host.sessionForTest()->surfaces()->isSoftProofing());
+    }
+}
+
+/// Issue #237. The plates are Core's own separations for the document, and the
+/// operator's visibility and isolation over them is presentation state: the document
+/// revision does not move.
+void EditorHostTest::platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/color-inventory-spot.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    const QVariantList plates = host.productionPlates();
+    QVERIFY(plates.size() >= 5);
+
+    QSet<QString> ids;
+    bool sawProcess = false;
+    bool sawSpot = false;
+    for (const QVariant& entry : plates)
+    {
+        const QVariantMap row = entry.toMap();
+        const QString id = row.value(QStringLiteral("id")).toString();
+        QVERIFY(!id.isEmpty());
+        QVERIFY(!row.value(QStringLiteral("displayName")).toString().isEmpty());
+        QVERIFY(row.value(QStringLiteral("visible")).toBool());
+        ids.insert(id);
+        if (row.value(QStringLiteral("kind")).toString() == QStringLiteral("spot"))
+        {
+            sawSpot = true;
+            QCOMPARE(row.value(QStringLiteral("spotColorName")).toString(), id);
+        }
+        else
+        {
+            sawProcess = true;
+        }
+    }
+    QVERIFY(sawProcess);
+    QVERIFY(sawSpot);
+    QVERIFY(ids.contains(QStringLiteral("Cyan")));
+    QVERIFY(ids.contains(QStringLiteral("Black")));
+    QVERIFY(ids.contains(QStringLiteral("PANTONE 185 C")));
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Every plate is shown")));
+
+    const QString revisionBefore = host.sessionForTest()->facade().currentRevision().toString();
+    const QString spotId = QStringLiteral("PANTONE 185 C");
+
+    const auto rowFor = [&host](const QString& id)
+    {
+        for (const QVariant& entry : host.productionPlates())
+        {
+            const QVariantMap row = entry.toMap();
+            if (row.value(QStringLiteral("id")).toString() == id)
+            {
+                return row;
+            }
+        }
+        return QVariantMap();
+    };
+
+    // Hiding a plate is presentation state, and it is visible in the summary.
+    QVERIFY(host.setPlateVisible(spotId, false));
+    QVERIFY(!rowFor(spotId).value(QStringLiteral("visible")).toBool());
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Hidden plates")));
+    QVERIFY(host.plateIsolationSummary().contains(spotId));
+
+    // Isolating one shows exactly one.
+    QVERIFY(host.isolatePlate(QStringLiteral("Cyan")));
+    for (const QVariant& entry : host.productionPlates())
+    {
+        const QVariantMap row = entry.toMap();
+        QCOMPARE(row.value(QStringLiteral("visible")).toBool(),
+                 row.value(QStringLiteral("id")).toString() == QStringLiteral("Cyan"));
+        QCOMPARE(row.value(QStringLiteral("isolated")).toBool(),
+                 row.value(QStringLiteral("id")).toString() == QStringLiteral("Cyan"));
+    }
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Isolated plate: Cyan")));
+
+    QVERIFY(host.showAllPlates());
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Every plate is shown")));
+
+    // An unknown plate id is refused rather than inventing a plate.
+    QVERIFY(!host.setPlateVisible(QStringLiteral("No Such Ink"), false));
+    QVERIFY(!host.isolatePlate(QStringLiteral("No Such Ink")));
+
+    // Presentation state: the document revision never moved.
+    QCOMPARE(host.sessionForTest()->facade().currentRevision().toString(), revisionBefore);
+}
+
+/// Issue #237. The readout is measured through Core's separation-accurate path, and a
+/// readout that could not be produced is a visible reason -- never a zero, which would
+/// read as "no ink here".
+void EditorHostTest::inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/color-cmyk.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    // A point on the current page is only meaningful once the shell has a layout.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 30000);
+
+    // Nothing has been measured yet.
+    QVERIFY(!host.inkCoverageReadout().value(QStringLiteral("available")).toBool());
+
+    // Inside the page: a real measurement with per-plate channels. The channel count
+    // is whatever the page's separated device space has -- three for this fixture --
+    // so the assertion is on the shape of the answer, not on a number: named plates,
+    // coverage in [0, 1] each, and a total that is their sum.
+    QVERIFY(host.requestInkCoverageAtPoint(150.0, 150.0));
+    QTRY_VERIFY_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("available")).toBool(), 30000);
+    const QVariantMap readout = host.inkCoverageReadout();
+    QCOMPARE(readout.value(QStringLiteral("pageIndex")).toInt(), 0);
+    const int channelCount = readout.value(QStringLiteral("channelCount")).toInt();
+    QVERIFY2(channelCount >= 1,
+             qPrintable(QStringLiteral("channelCount=%1").arg(channelCount)));
+    const QVariantList channels = readout.value(QStringLiteral("channels")).toList();
+    QCOMPARE(channels.size(), channelCount);
+
+    double channelSum = 0.0;
+    for (const QVariant& entry : channels)
+    {
+        const QVariantMap channel = entry.toMap();
+        QVERIFY(!channel.value(QStringLiteral("name")).toString().isEmpty());
+        QVERIFY(!channel.value(QStringLiteral("displayName")).toString().isEmpty());
+        const double coverage = channel.value(QStringLiteral("coverage")).toDouble();
+        QVERIFY(coverage >= 0.0 && coverage <= 1.0);
+        channelSum += coverage;
+    }
+
+    const double total = readout.value(QStringLiteral("totalInkCoverage")).toDouble();
+    QVERIFY(qAbs(total - channelSum) < 1e-6);
+    // The sampled point is inside the fixture's ink, so the readout is a measurement
+    // rather than a plausible zero.
+    QVERIFY(total > 0.0);
+    QVERIFY(readout.value(QStringLiteral("reason")).toString().isEmpty());
+
+    // Outside the page: a typed reason and available=false, not a zero readout.
+    QVERIFY(host.requestInkCoverageAtPoint(-100.0, -100.0));
+    QTRY_COMPARE_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("reason")).toString(),
+                              QStringLiteral("ink-coverage/point-outside-page"), 30000);
+    QVERIFY(!host.inkCoverageReadout().value(QStringLiteral("available")).toBool());
+    QVERIFY(!host.inkCoverageReadout().contains(QStringLiteral("totalInkCoverage")));
+
+    // No document: the request is refused outright.
+    EditorHost empty;
+    QVERIFY(!empty.requestInkCoverageAtPoint(10.0, 10.0));
+}
+
+
+void EditorHostTest::settingsRoundTripThroughTheOneStore()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    // A fresh store starts every option at its typed default.
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("antialiasing")));
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+
+    // Toggling through the command handler persists immediately.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionSmoothPictures")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionAntialiasing")) != 0);
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The diagnostic-view commands toggle the same typed options.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionShow_Text_Blocks")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("showTextBlocks")));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionDisplayRenderTimes")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayRenderTimes")));
+
+    // The shared render presentation policy follows the store.
+    const pdf::PDFRenderer::Features features = host.sessionForTest()->surfaces()->renderSettings().features;
+    QVERIFY(features.testFlag(pdf::PDFRenderer::SmoothImages));
+    QVERIFY(!features.testFlag(pdf::PDFRenderer::Antialiasing));
+    QVERIFY(features.testFlag(pdf::PDFRenderer::DebugTextBlocks));
+    QVERIFY(features.testFlag(pdf::PDFRenderer::DisplayTimes));
+
+    // A second store over the same file reads the same typed state.
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/smoothPictures")).toString(), QStringLiteral("true"));
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/antialiasing")).toString(), QStringLiteral("false"));
+    EditorSettings restarted(&reread);
+    QVERIFY(restarted.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(!restarted.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The rows QML renders come from the same typed state.
+    const QVariantList rows = settings.options();
+    QCOMPARE(rows.size(), 8);
+    bool sawSmoothPictures = false;
+    for (const QVariant& row : rows)
+    {
+        const QVariantMap entry = row.toMap();
+        QVERIFY(!entry.value(QStringLiteral("id")).toString().isEmpty());
+        QVERIFY(!entry.value(QStringLiteral("label")).toString().isEmpty());
+        if (entry.value(QStringLiteral("id")).toString() == QStringLiteral("smoothPictures"))
+        {
+            sawSmoothPictures = entry.value(QStringLiteral("enabled")).toBool();
+        }
+    }
+    QVERIFY(sawSmoothPictures);
+}
+
+void EditorHostTest::settingsFactoryResetIsConfirmedAndComplete()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionSmoothPictures")) != 0);
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionDisplayAnnotations")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+
+    // Nothing runs without the confirmation the command arms first.
+    QVERIFY(!host.confirmSettingsReset());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionResetToFactorySettings")) != 0);
+    QVERIFY(host.settingsResetPending());
+    host.cancelSettingsReset();
+    QVERIFY(!host.settingsResetPending());
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionResetToFactorySettings")) != 0);
+    QVERIFY(host.settingsResetPending());
+    QVERIFY(host.confirmSettingsReset());
+    QVERIFY(!host.settingsResetPending());
+
+    // Every option is back at its default and the owned keys are gone.
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+    QVERIFY(host.settingsNotice().contains(QStringLiteral("factory")));
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QVERIFY(!reread.contains(QStringLiteral("renderOptions/smoothPictures")));
+    QVERIFY(!reread.contains(QStringLiteral("renderOptions/displayAnnotations")));
+
+    const pdf::PDFRenderer::Features features = host.sessionForTest()->surfaces()->renderSettings().features;
+    QVERIFY(features.testFlag(pdf::PDFRenderer::Antialiasing));
+    QVERIFY(!features.testFlag(pdf::PDFRenderer::SmoothImages));
+}
+
+void EditorHostTest::invalidPersistedRenderOptionIsReportedAndReplaced()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    {
+        QSettings seed(settingsPath, QSettings::IniFormat);
+        seed.setValue(QStringLiteral("renderOptions/displayAnnotations"), QStringLiteral("sometimes"));
+        seed.setValue(QStringLiteral("renderOptions/antialiasing"), QStringLiteral("false"));
+        seed.sync();
+        QCOMPARE(seed.status(), QSettings::NoError);
+    }
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    // The invalid value is replaced by its default, never coerced ...
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+    // ... while a valid persisted value is honoured.
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The notice names the setting and the rejected value, and the surface
+    // that renders it reads the same notice through the host.
+    QVERIFY(settings.notice().contains(QStringLiteral("displayAnnotations")));
+    QVERIFY(settings.notice().contains(QStringLiteral("sometimes")));
+    QVERIFY(host.settingsNotice().contains(QStringLiteral("displayAnnotations")));
+
+    // The store is repaired on disk, not left invalid.
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/displayAnnotations")).toString(), QStringLiteral("true"));
+}
+
+void EditorHostTest::renderOptionsReachTheRendererAndTheFidelityIndicator()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("render-options.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    QSettings backing(directory.filePath(QStringLiteral("shell-settings.ini")), QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+    QVERIFY(host.pageFidelityIsExact());
+
+    // The override that deviates from the document's own view state is
+    // reflected in the fidelity indicator and its reason ...
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("ignoreOptionalContentSettings")));
+    QVERIFY(host.sessionForTest()->surfaces()->renderSettings().features.testFlag(pdf::PDFRenderer::IgnoreOptionalContent));
+    QVERIFY(!host.pageFidelityIsExact());
+    QVERIFY(host.pageFidelityReason().contains(QStringLiteral("optional content")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("approximate"), 30000);
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("optional content")));
+
+    // ... and turning it off restores the exact render.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings")) != 0);
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("ignoreOptionalContentSettings")));
+    QVERIFY(!host.sessionForTest()->surfaces()->renderSettings().features.testFlag(pdf::PDFRenderer::IgnoreOptionalContent));
+    QVERIFY(host.pageFidelityIsExact());
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Presentation only: no option changed the document.
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("OPEN"));
+    QVERIFY(!host.sessionForTest()->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+}
+
+void EditorHostTest::collectDiagnosticsProducesTheAdrBundle()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    EditorHost host;
+    QCOMPARE(host.diagnosticsBundle().value(QStringLiteral("status")).toString(), QStringLiteral("idle"));
+
+    // A non-local parent is refused with a typed failure; nothing is written.
+    QVERIFY(!host.collectDiagnosticsFileUrl(QUrl(QStringLiteral("https://example.test/bundles"))));
+    QCOMPARE(host.diagnosticsBundle().value(QStringLiteral("status")).toString(), QStringLiteral("failed"));
+    QVERIFY(!host.diagnosticsBundle().value(QStringLiteral("error")).toString().isEmpty());
+
+    QVERIFY(host.collectDiagnosticsFileUrl(QUrl::fromLocalFile(directory.path())));
+    const QVariantMap bundle = host.diagnosticsBundle();
+    QCOMPARE(bundle.value(QStringLiteral("status")).toString(), QStringLiteral("ready"));
+    QVERIFY(bundle.value(QStringLiteral("fileCount")).toInt() > 0);
+
+    const QString bundleDirectory = bundle.value(QStringLiteral("directory")).toString();
+    QVERIFY(QDir(bundleDirectory).exists());
+    QVERIFY(QDir(bundleDirectory).dirName().startsWith(QStringLiteral("loop-diagnostics-editor-")));
+
+    QFile manifestFile(QDir(bundleDirectory).filePath(QStringLiteral("manifest.json")));
+    QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+    const QJsonObject manifest = QJsonDocument::fromJson(manifestFile.readAll()).object();
+    QCOMPARE(manifest.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("application")).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("editor"));
+    QVERIFY(!manifest.value(QStringLiteral("files")).toArray().isEmpty());
+    QVERIFY(QFile::exists(QDir(bundleDirectory).filePath(QStringLiteral("README.txt"))));
+
+    // The bundle never carries a PDF, however the collection was started.
+    QDirIterator pdfs(bundleDirectory, QStringList{ QStringLiteral("*.pdf") }, QDir::Files, QDirIterator::Subdirectories);
+    QVERIFY(!pdfs.hasNext());
+}
+
+/// Issue #232. Extraction must refuse to overwrite an existing file up front and
+/// leave that file byte-identical; a silent clobber would destroy the operator's
+/// own file.
+void EditorHostTest::imageExtractionRefusesToOverwriteAnExistingFile()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    // A one-page document carrying one 2x2 RGB image XObject and no text.
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    QByteArray imageData;
+    for (int pixel = 0; pixel < 4; ++pixel)
+    {
+        imageData.append('\xff');
+        imageData.append('\0');
+        imageData.append('\0');
+    }
+
+    pdf::PDFDictionary imageDictionary;
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Image"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Width"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Height"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"), pdf::PDFObject::createName("DeviceRGB"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("BitsPerComponent"), pdf::PDFObject::createInteger(8));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(imageData.size()));
+    pdf::PDFStream imageStream(std::move(imageDictionary), std::move(imageData));
+    const pdf::PDFObjectReference imageReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(imageStream)));
+
+    const QByteArray content = "q 40 0 0 40 80 80 cm /Im0 Do Q";
+    pdf::PDFDictionary contentDictionary;
+    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                               pdf::PDFObject::createInteger(content.size()));
+    pdf::PDFStream contentStream(std::move(contentDictionary), QByteArray(content));
+    const pdf::PDFObjectReference contentReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(contentStream)));
+
+    pdf::PDFDictionary xObjects;
+    xObjects.addEntry(pdf::PDFInplaceOrMemoryString("Im0"), pdf::PDFObject::createReference(imageReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
+
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+
+    const QString path = directory.filePath(QStringLiteral("extract-source.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    const QString existing = directory.filePath(QStringLiteral("page-1-image-1.png"));
+    QFile planted(existing);
+    QVERIFY(planted.open(QIODevice::WriteOnly));
+    planted.write("keep-me");
+    planted.close();
+
+    QVERIFY(!host.extractCurrentPageImagesFileUrl(QUrl::fromLocalFile(directory.path())));
+
+    QFile untouched(existing);
+    QVERIFY(untouched.open(QIODevice::ReadOnly));
+    QCOMPARE(untouched.readAll(), QByteArray("keep-me"));
+}
+
+QTEST_GUILESS_MAIN(EditorHostTest)
 #include "tst_editorhosttest.moc"
