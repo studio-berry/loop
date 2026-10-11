@@ -45,7 +45,14 @@ struct PDFBookmarkRecord
     int pageIndex = -1;
     QList<PDFBookmarkRecord> children;
 
-    bool operator==(const PDFBookmarkRecord&) const = default;
+    /// Explicit rather than defaulted: a defaulted equality makes GCC 13's
+    /// `has_operator_equal` probe instantiate the definition while QList's own
+    /// equality is still being formed, which is a hard error there (MSVC
+    /// accepts it). The explicit declaration short-circuits the probe.
+    bool operator==(const PDFBookmarkRecord& other) const
+    {
+        return title == other.title && pageIndex == other.pageIndex && children == other.children;
+    }
 };
 
 /// The bookmark interchange file of the direct-edit family (ADR-014).
