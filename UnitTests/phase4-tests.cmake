@@ -99,8 +99,10 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsEditorHost")
-        set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsEditorHost" -o -,txt)
+        # The signed fixtures live in the source tree, not the ctest working directory.
+        set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT
+            "QT_QPA_PLATFORM=offscreen;LOOP_FIXTURE_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/testdata")
 
         add_executable(UnitTestsProductOperatorLoop
             tst_productoperatorloop.cpp

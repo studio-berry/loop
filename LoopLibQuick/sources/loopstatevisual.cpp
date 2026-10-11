@@ -365,4 +365,37 @@ LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName)
              QStringLiteral("Preview fidelity unavailable") };
 }
 
+LoopStateVisual resolveSignatureStateVisual(const QString& stateName)
+{
+    // The verification owns these names; nothing here analyses a signature. Each
+    // state takes a shape no other signature state uses, and only `valid` - the
+    // state Core's verification itself reported as OK - reaches Passed.
+    const QString normalized = stateName.trimmed().toLower();
+
+    if (normalized == QLatin1String("valid"))
+    {
+        return { StateKind::Passed, ColorRole::Success, StateIcon::Checkmark,
+                 QStringLiteral("Signature verified") };
+    }
+    if (normalized == QLatin1String("invalid"))
+    {
+        return { StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle,
+                 QStringLiteral("Signature invalid") };
+    }
+    if (normalized == QLatin1String("modified-after-signing"))
+    {
+        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Cross,
+                 QStringLiteral("Document changed after signing") };
+    }
+    if (normalized == QLatin1String("unknown"))
+    {
+        return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
+                 QStringLiteral("Signature could not be verified") };
+    }
+
+    // "not-signed", an empty string and anything unrecognised: nothing to trust.
+    return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline,
+             QStringLiteral("No signature is present") };
+}
+
 }   // namespace pdfquick::tokens

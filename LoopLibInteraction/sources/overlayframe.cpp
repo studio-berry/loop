@@ -35,6 +35,8 @@ const char* getOverlayLayerName(OverlayLayer layer)
             return "page-chrome";
         case OverlayLayer::Guides:
             return "guides";
+        case OverlayLayer::Annotations:
+            return "annotations";
         case OverlayLayer::Findings:
             return "findings";
         case OverlayLayer::Hover:

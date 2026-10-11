@@ -46,6 +46,11 @@ enum class OverlayLayer
 {
     PageChrome,
     Guides,
+
+    /// Document annotations, drawn over guides and under the findings analysis
+    /// layer. Read-only review marks (issue #125): they carry no interaction
+    /// target kind, so nothing hit-tests them.
+    Annotations,
     Findings,
 
     /// Transient pointer feedback. Its own band rather than a flag on the

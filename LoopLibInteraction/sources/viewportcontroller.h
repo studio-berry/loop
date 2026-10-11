@@ -215,6 +215,19 @@ public:
     /// Block that contains `pageIndex` in the current layout, or 0 when unknown.
     int blockIndexForPage(int pageIndex) const;
 
+    /// Reveals `pageIndex` and centres it in the viewport. In a block layout the
+    /// block that contains the page is selected first. False when the page is
+    /// outside the layout or the viewport has no area.
+    bool revealPage(int pageIndex);
+
+    /// Reveals `pageIndex`, then zooms and pans so `pageBounds` (page space) is
+    /// centred and fills at most three quarters of the viewport. `contextMargin`
+    /// expands the bounds by that fraction of their own size before fitting.
+    /// False when the page or the bounds are unusable. The one implementation of
+    /// "navigate to a page region"; callers with revision-fenced requests gate
+    /// themselves before calling it.
+    bool revealPageRegion(int pageIndex, QRectF pageBounds, qreal contextMargin);
+
     /// Rebuilds the layout for a replaced document or a changed revision. This
     /// supersedes all prior surface demand.
     void invalidateLayout();

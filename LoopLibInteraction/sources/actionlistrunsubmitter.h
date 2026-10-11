@@ -64,7 +64,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             std::shared_ptr<ActionListWorkerOutcome> outcome,
                                             QString preflightProfilePath = {},
                                             QJsonObject preflightProfile = {},
-                                            QJsonObject preflightProfileBindings = {});
+                                            QJsonObject preflightProfileBindings = {},
+                                            bool signatureInvalidationAcknowledged = false);
 
 }   // namespace pdfinteraction
 

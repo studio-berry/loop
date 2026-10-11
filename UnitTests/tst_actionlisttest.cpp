@@ -39,6 +39,7 @@
 
 #include <QCryptographicHash>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QJsonDocument>
 #include <QFile>
@@ -219,6 +220,7 @@ private slots:
     void stepPlansCarryDeclaredSavePolicy();
     void executeRefusesWeakenedRequestedSavePolicy();
     void executionResultReportsMergedSavePolicy();
+    void signatureInvalidatingExecutionRefusesWithoutAcknowledgement();
     void fullClassStepCannotBeNarrowed();
     void oracleClassStepFailsClosedWithoutIndependentValidation();
 };
@@ -1332,6 +1334,83 @@ void ActionListTest::executionResultReportsMergedSavePolicy()
     QVERIFY(pdf::PDFActionListExecutor().plan(grommetRecipe(QStringLiteral("merged-append")), source, {}, &grommetPlan));
     QCOMPARE(grommetPlan.savePolicy.mode, pdf::PDFSaveMode::IncrementalAppend);
     QVERIFY(grommetPlan.savePolicy.rationale.contains(QStringLiteral("planning-only operation does not mutate the document")));
+}
+
+void ActionListTest::signatureInvalidatingExecutionRefusesWithoutAcknowledgement()
+{
+    // A source the save-policy world already treats as signed: a `Type /Sig`
+    // dictionary, the same criterion PDFDocumentWriter's write-mode decision uses.
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFObjectReference signature = builder.createSignatureDictionary(
+        QByteArrayLiteral("Adobe.PPKLite"),
+        QByteArrayLiteral("adbe.pkcs7.detached"),
+        QByteArrayLiteral("signed-placeholder"),
+        QDateTime::currentDateTimeUtc(),
+        0);
+    const pdf::PDFObjectReference field = builder.createFormFieldSignature(
+        QStringLiteral("LoopSignature"), {}, signature);
+    builder.createInvisibleFormFieldWidget(field, page);
+    const pdf::PDFDocumentPointer signedDocument(new pdf::PDFDocument(builder.build()));
+
+    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("signature-gate"));
+
+    const auto runExecute = [&actionList](const pdf::PDFDocumentPointer& document, bool acknowledged)
+    {
+        auto outcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
+        struct LocalContext
+        {
+            pdf::PDFJobCancellationTokenPtr token = std::make_shared<pdf::PDFJobCancellationToken>();
+            pdf::PDFJobContext context{ token, pdf::PDFProcessingLimits(), [](int) {} };
+        } local;
+        pdfinteraction::makeActionListRunWorker(pdfinteraction::ActionListRunPhase::Execute,
+                                                actionList,
+                                                document,
+                                                QJsonObject(),
+                                                outcome,
+                                                defaultPreflightProfilePath(),
+                                                QJsonObject(),
+                                                QJsonObject(),
+                                                acknowledged)(local.context);
+        return outcome;
+    };
+    const auto namesSignatureRefusal = [](const pdf::PDFActionListExecutionResult& result)
+    {
+        for (const QJsonValue& diagnostic : result.diagnostics)
+        {
+            if (diagnostic.toObject().value(QStringLiteral("code")).toString() ==
+                QStringLiteral("action-list.signature-invalidation-unacknowledged"))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // The recipe's merged policy invalidates signatures, the source is signed,
+    // and the operator has not acknowledged: nothing may be published.
+    const auto refused = runExecute(signedDocument, false);
+    QVERIFY(refused->executionResult.savePolicy.invalidatesSignatures);
+    QVERIFY(!refused->ok);
+    QVERIFY(!refused->candidate);
+    QVERIFY(namesSignatureRefusal(refused->executionResult));
+
+    // The acknowledgement is the whole difference: the same run proceeds and
+    // produces its candidate.
+    const auto acknowledged = runExecute(signedDocument, true);
+    QVERIFY2(acknowledged->ok,
+             qPrintable(QString::fromUtf8(QJsonDocument(acknowledged->executionResult.toJson()).toJson(QJsonDocument::Compact))));
+    QVERIFY(acknowledged->candidate);
+    QVERIFY(!namesSignatureRefusal(acknowledged->executionResult));
+
+    // An unsigned document is not gated at all.
+    pdf::PDFDocumentBuilder unsignedBuilder;
+    unsignedBuilder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocumentPointer unsignedDocument(new pdf::PDFDocument(unsignedBuilder.build()));
+    const auto unsignedRun = runExecute(unsignedDocument, false);
+    QVERIFY2(unsignedRun->ok,
+             qPrintable(QString::fromUtf8(QJsonDocument(unsignedRun->executionResult.toJson()).toJson(QJsonDocument::Compact))));
+    QVERIFY(!namesSignatureRefusal(unsignedRun->executionResult));
 }
 
 void ActionListTest::fullClassStepCannotBeNarrowed()

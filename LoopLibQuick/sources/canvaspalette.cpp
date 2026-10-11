@@ -144,6 +144,20 @@ OverlayStyle CanvasPalette::styleFor(const OverlayPrimitive& primitive) const
             style.strokeWidthPx = StrokeNone;
             break;
 
+        case OverlayLayer::Annotations:
+            // Read-only document facts, deliberately quieter than every finding
+            // severity. The review list's focused annotation carries the accent,
+            // a wider stroke and a fill, so the difference is never colour alone.
+            style.stroke = withAlpha(m_mutedText, 180);
+            style.strokeWidthPx = StrokeNone;
+            if (primitive.selected)
+            {
+                style.stroke = m_accent;
+                style.fill = withAlpha(m_accent, 40);
+                style.strokeWidthPx = StrokeWarning;
+            }
+            break;
+
         case OverlayLayer::Findings:
             style.stroke = severityColor(primitive.severity);
             switch (primitive.severity)

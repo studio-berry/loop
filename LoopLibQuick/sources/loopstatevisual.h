@@ -149,6 +149,17 @@ LOOPLIBQUICK_EXPORT QString previewFidelityOriginName(const QString& stateName);
 /// colour or a check.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName);
 
+/// Verification status of the open document's signatures (issue #125). `stateName` is
+/// `pdfinteraction::getDocumentSignatureStateName()`: `not-signed`, `valid`, `invalid`,
+/// `unknown` or `modified-after-signing`.
+///
+/// `valid` is the one state Core's own verification reported as OK, and it is the only
+/// signature state that reaches Passed. `invalid`, `modified-after-signing` and `unknown`
+/// each take a shape no other signature state uses, and none of them looks like a pass.
+/// This renders Core's verdict, never a derivation: a caller may not reach Passed unless
+/// the verification itself said so.
+LOOPLIBQUICK_EXPORT LoopStateVisual resolveSignatureStateVisual(const QString& stateName);
+
 }   // namespace pdfquick::tokens
 
 #endif   // LOOPSTATEVISUAL_H
