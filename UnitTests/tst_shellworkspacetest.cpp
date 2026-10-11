@@ -77,7 +77,7 @@ void ShellWorkspaceTest::cleanup()
 
 void ShellWorkspaceTest::workspaceTransitionsPreserveClosedDocumentState()
 {
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.workspace(), EditorHost::Document);
     QCOMPARE(host.documentShellStatus(), QStringLiteral("NO_DOCUMENT"));
     QCOMPARE(host.preflightStateName(), QStringLiteral("not-checked"));
@@ -112,7 +112,7 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
     const QString path = directory.filePath(QStringLiteral("shell.pdf"));
     QVERIFY(writer.write(path, &document, true));
 
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY(host.hasDocument());
 
@@ -140,7 +140,7 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
 
 void ShellWorkspaceTest::compareWorkspaceIsReachable()
 {
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.workspace(), EditorHost::Document);
     QVERIFY(host.isWorkspaceEnabled(EditorHost::Compare));
 
@@ -156,7 +156,7 @@ void ShellWorkspaceTest::compareWorkspaceIsReachable()
 
 void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()
 {
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     const QVariantList descriptors = host.commandDescriptors();
     QVERIFY(descriptors.size() > 100);
 
@@ -194,7 +194,7 @@ void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()
 
 void ShellWorkspaceTest::developerDiagnosticsFollowReleaseProfile()
 {
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
 #ifdef LOOP_LOOP_DISTRIBUTION_BUILD
     QVERIFY(!host.allowDeveloperDiagnostics());
 #else
@@ -282,7 +282,7 @@ void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
         const QVariantMap descriptor = job.toMap();
         const QVariantMap sample = help.prepareSample(descriptor.value(QStringLiteral("id")).toString());
         QVERIFY(sample.value(QStringLiteral("ok")).toBool());
-        EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+        EditorHost host(nullptr, m_fixtureRecipes->path());
         QVERIFY(host.importPreflightProfileFileUrl(sample.value(QStringLiteral("profile")).toUrl()));
         host.openFileUrl(sample.value(QStringLiteral("pdf")).toUrl());
         QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
@@ -305,7 +305,7 @@ void ShellWorkspaceTest::correctionSampleRunsGovernedCore()
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
     const QVariantMap sample = help.prepareSample(QStringLiteral("correction"));
     QVERIFY(sample.value(QStringLiteral("ok")).toBool());
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(sample.value(QStringLiteral("profile")).toUrl()));
     QVERIFY(host.importActionListRecipe(sample.value(QStringLiteral("recipe")).toUrl()));
     host.openFileUrl(sample.value(QStringLiteral("pdf")).toUrl());
@@ -331,7 +331,7 @@ void ShellWorkspaceTest::helpDialogShowsCatalogLimitsAndWelcome()
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
     QQmlEngine engine;
-    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, m_fixtureRecipes->path());
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(LOOP_OPERATOR_SOURCE_DIR "/LoopEditor/qml/OperatorHelpDialog.qml")));
     QTRY_VERIFY_WITH_TIMEOUT(component.status() != QQmlComponent::Loading, 10000);
     QVERIFY2(!component.isError(), qPrintable(component.errorString()));
