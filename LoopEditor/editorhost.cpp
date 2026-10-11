@@ -85,6 +85,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <vector>
 #include <cmath>
@@ -98,6 +99,56 @@ namespace
 const QString QuitCommandId = QStringLiteral("actionQuit");
 const QString MoveSelectionCommandId = QStringLiteral("actionMoveSelection");
 const QString TranslatePageBoxOperationId = QStringLiteral("translate-page-box");
+
+/// The destination type each `actionCreateHyperlinkToThisPDF*` command writes
+/// (issue #233). `XYZInheritZoom` is the XYZ destination with a null zoom,
+/// which asks the viewer to keep its own zoom.
+struct HyperlinkDestinationVariant
+{
+    const char* command;
+    pdf::DestinationType type;
+    bool inheritZoom;
+};
+
+const HyperlinkDestinationVariant HyperlinkDestinationVariants[] = {
+    { "actionCreateHyperlinkToThisPDFFit", pdf::DestinationType::Fit, false },
+    { "actionCreateHyperlinkToThisPDFFitB", pdf::DestinationType::FitB, false },
+    { "actionCreateHyperlinkToThisPDFFitBH", pdf::DestinationType::FitBH, false },
+    { "actionCreateHyperlinkToThisPDFFitBV", pdf::DestinationType::FitBV, false },
+    { "actionCreateHyperlinkToThisPDFFitH", pdf::DestinationType::FitH, false },
+    { "actionCreateHyperlinkToThisPDFFitR", pdf::DestinationType::FitR, false },
+    { "actionCreateHyperlinkToThisPDFFitV", pdf::DestinationType::FitV, false },
+    { "actionCreateHyperlinkToThisPDFXYZ", pdf::DestinationType::XYZ, false },
+    { "actionCreateHyperlinkToThisPDFXYZInheritZoom", pdf::DestinationType::XYZ, true },
+};
+
+/// Reads a page-space rectangle from four scalar parameters, or nothing when
+/// the surface supplied none. A partial rectangle is refused: a corner the
+/// surface never gave is not a corner the host may invent.
+std::optional<QRectF> rectangleFromParameters(const QVariantMap& parameters,
+                                              const QString& leftKey,
+                                              const QString& bottomKey,
+                                              const QString& rightKey,
+                                              const QString& topKey,
+                                              QString& typedError)
+{
+    const bool any = parameters.contains(leftKey) || parameters.contains(bottomKey) ||
+                     parameters.contains(rightKey) || parameters.contains(topKey);
+    if (!any)
+    {
+        return std::nullopt;
+    }
+
+    if (!parameters.contains(leftKey) || !parameters.contains(bottomKey) ||
+        !parameters.contains(rightKey) || !parameters.contains(topKey))
+    {
+        typedError = QStringLiteral("hyperlink/incomplete-geometry");
+        return std::nullopt;
+    }
+
+    return QRectF(QPointF(parameters.value(leftKey).toDouble(), parameters.value(bottomKey).toDouble()),
+                  QPointF(parameters.value(rightKey).toDouble(), parameters.value(topKey).toDouble()));
+}
 
 QString actionListBindingsHash(const QJsonObject& bindings)
 {
@@ -753,6 +804,30 @@ bool EditorHost::extractCurrentPageImagesFileUrl(const QUrl& directory)
 
     announceDocumentState(tr("Extracted %n image(s).", "", images.size()));
     return true;
+}
+
+bool EditorHost::importBookmarksFileUrl(const QUrl& url, const QString& revision)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    return invokeCommand(QStringLiteral("actionBookmarkImport"),
+                         { { QStringLiteral("path"), url.toLocalFile() },
+                           { QStringLiteral("revision"), revision } }) != pdfinteraction::InvalidCommandInvocation;
+}
+
+bool EditorHost::exportBookmarksFileUrl(const QUrl& url, const QString& revision)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    return invokeCommand(QStringLiteral("actionBookmarkExport"),
+                         { { QStringLiteral("path"), url.toLocalFile() },
+                           { QStringLiteral("revision"), revision } }) != pdfinteraction::InvalidCommandInvocation;
 }
 
 QObject* EditorHost::preflight()
@@ -5100,6 +5175,234 @@ void EditorHost::registerFeatureHandlers()
         };
         m_session->catalog().setHandler(command, std::move(navigation));
     }
+
+    // ---- Bookmarks and hyperlinks (issue #233, ADR-014) -------------------------------
+    // Every edit is one typed direct-edit request on the document facade, which
+    // fences the revision and the document's modify permission before Core
+    // writes the outline or the link annotation. Nothing here and nothing in
+    // QML edits the outline model; it re-reads the revision the edit produced.
+    auto bindAuthoringEdit = [this](const QString& id,
+                                    std::function<std::optional<pdf::PDFAuthoringEdit>(const QVariantMap&, QString&)> build)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, build = std::move(build)](pdfinteraction::CommandInvocationId invocation,
+                                                          const QVariantMap& parameters)
+        {
+            QString typedError;
+            const std::optional<pdf::PDFAuthoringEdit> edit = build(parameters, typedError);
+            runAuthoringEdit(invocation, edit, typedError, parameters);
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindAuthoringEdit(QStringLiteral("actionBookmarkPage"),
+                      [this](const QVariantMap& parameters, QString& typedError)
+                      {
+                          const int page = currentPage();
+                          if (page < 0)
+                          {
+                              // The viewport has placed no page yet, so there is
+                              // no page the operator is on. Refuse with that
+                              // reason instead of blaming the document's page
+                              // range, which is not what is wrong.
+                              typedError = QStringLiteral("bookmark/no-current-page");
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+                          edit.text = parameters.value(QStringLiteral("title")).toString();
+                          edit.pageIndex = page;
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+    bindAuthoringEdit(QStringLiteral("actionBookmarkAutoGenerate"),
+                      [](const QVariantMap&, QString&)
+                      {
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::GenerateBookmarks;
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+    bindAuthoringEdit(QStringLiteral("actionCreateHyperlink"),
+                      [this](const QVariantMap& parameters, QString& typedError)
+                      {
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::AddUriLink;
+                          edit.text = parameters.value(QStringLiteral("uri")).toString();
+                          if (edit.text.isEmpty())
+                          {
+                              typedError = QStringLiteral("hyperlink/uri-required");
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+                          if (!authoringLinkGeometry(parameters, &edit.pageIndex, &edit.rectangle, typedError))
+                          {
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+
+    for (const HyperlinkDestinationVariant& variant : HyperlinkDestinationVariants)
+    {
+        bindAuthoringEdit(QString::fromLatin1(variant.command),
+                          [this, variant](const QVariantMap& parameters, QString& typedError)
+                          {
+                              pdf::PDFAuthoringEdit edit;
+                              edit.kind = pdf::PDFAuthoringEdit::Kind::AddDestinationLink;
+                              edit.destinationType = variant.type;
+                              if (!authoringLinkGeometry(parameters, &edit.pageIndex, &edit.rectangle, typedError))
+                              {
+                                  return std::optional<pdf::PDFAuthoringEdit>();
+                              }
+
+                              edit.targetPageIndex =
+                                  parameters.value(QStringLiteral("targetPage"), currentPage()).toInt();
+                              const std::optional<QRectF> target =
+                                  rectangleFromParameters(parameters,
+                                                          QStringLiteral("targetLeft"),
+                                                          QStringLiteral("targetBottom"),
+                                                          QStringLiteral("targetRight"),
+                                                          QStringLiteral("targetTop"),
+                                                          typedError);
+                              if (!typedError.isEmpty())
+                              {
+                                  return std::optional<pdf::PDFAuthoringEdit>();
+                              }
+                              if (target.has_value())
+                              {
+                                  edit.targetRectangle = *target;
+                              }
+
+                              // XYZ without an explicit zoom uses the zoom on
+                              // screen; the inherit-zoom variant writes the PDF
+                              // null zoom instead, which keeps the viewer's own.
+                              edit.zoom = variant.inheritZoom
+                                              ? std::numeric_limits<pdf::PDFReal>::quiet_NaN()
+                                              : parameters.value(QStringLiteral("zoom"), m_session->viewport().zoom()).toDouble();
+                              return std::optional<pdf::PDFAuthoringEdit>(edit);
+                          });
+    }
+
+    // Import and export carry a file, so the file is read or written here and
+    // only the outline replacement is a document edit. Without a path the
+    // command asks the shell for one and answers through
+    // importBookmarksFileUrl()/exportBookmarksFileUrl().
+    pdfinteraction::CommandCatalog::Handler importBookmarks;
+    importBookmarks.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+    {
+        const QString path = parameters.value(QStringLiteral("path")).toString();
+        if (path.isEmpty())
+        {
+            Q_EMIT bookmarkImportRequested();
+            m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+            return;
+        }
+
+        QString typedError;
+        std::optional<pdf::PDFBookmarkFile> file;
+        QFile source(path);
+        if (!source.open(QIODevice::ReadOnly))
+        {
+            typedError = QStringLiteral("bookmark/file-unreadable");
+        }
+        else
+        {
+            file = pdf::PDFBookmarkFile::fromJson(source.readAll(), typedError);
+        }
+
+        std::optional<pdf::PDFAuthoringEdit> edit;
+        if (file.has_value())
+        {
+            pdf::PDFAuthoringEdit replacement;
+            replacement.kind = pdf::PDFAuthoringEdit::Kind::ReplaceBookmarks;
+            replacement.bookmarks = file->bookmarks;
+            edit = replacement;
+        }
+        runAuthoringEdit(invocation, edit, typedError, parameters);
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionBookmarkImport"), std::move(importBookmarks));
+
+    pdfinteraction::CommandCatalog::Handler exportBookmarks;
+    exportBookmarks.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+    {
+        const QString path = parameters.value(QStringLiteral("path")).toString();
+        if (path.isEmpty())
+        {
+            Q_EMIT bookmarkExportRequested();
+            m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+            return;
+        }
+
+        QString typedError;
+        pdf::PDFBookmarkFile file;
+        const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+        const QString displayed = parameters.value(QStringLiteral("revision")).toString();
+        std::optional<QList<pdf::PDFBookmarkRecord>> records;
+        if (!document)
+        {
+            typedError = QStringLiteral("bookmark/document-not-ready");
+        }
+        else if (!displayed.isEmpty() && displayed != m_session->facade().currentRevision().toString())
+        {
+            // The file would describe a revision the document has left.
+            typedError = QStringLiteral("bookmark/stale-revision");
+        }
+        else
+        {
+            records = pdf::PDFAuthoringEditWriter::readOutline(document.data(), typedError);
+        }
+
+        if (records.has_value())
+        {
+            file.bookmarks = *records;
+            const pdf::PDFOperationResult written = pdf::PDFSafeFileWriter::writeData(
+                path, file.toJson(), pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            if (!written)
+            {
+                typedError = QStringLiteral("bookmark/export-failed");
+            }
+        }
+
+        const bool exported = typedError.isEmpty() && records.has_value();
+        if (exported)
+        {
+            announceDocumentState(tr("Exported %n bookmark(s).", "", file.count()));
+        }
+        else
+        {
+            announceDocumentState(tr("The bookmarks could not be exported: %1").arg(typedError));
+        }
+        m_session->catalog().finishInvocation(invocation,
+                                              exported ? pdfinteraction::CommandTerminalState::Completed
+                                                       : pdfinteraction::CommandTerminalState::Failed,
+                                              exported ? QString() : typedError);
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionBookmarkExport"), std::move(exportBookmarks));
+
+    for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
+    {
+        pdfinteraction::CommandCatalog::Handler navigation;
+        navigation.invoke = [this, id](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            QString typedError;
+            const bool moved = goToAdjacentBookmark(id == QLatin1String("actionGotoNextBookmark") ? 1 : -1,
+                                                    typedError);
+            if (moved)
+            {
+                announceDocumentState(tr("Moved to bookmark on page %1.").arg(currentPage() + 1));
+            }
+            else
+            {
+                announceDocumentState(tr("No bookmark to move to: %1").arg(typedError));
+            }
+            m_session->catalog().finishInvocation(invocation,
+                                                  moved ? pdfinteraction::CommandTerminalState::Completed
+                                                        : pdfinteraction::CommandTerminalState::Failed,
+                                                  moved ? QString() : typedError);
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(navigation));
+    }
+
     refreshFeatureAvailability();
 }
 
@@ -5159,7 +5462,224 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionPrint"), ready && !outputBusy() && m_documentModel.canPrint());
     availability.insert(QStringLiteral("actionExportDocument"), ready && !outputBusy() && m_documentModel.canCopy());
 
+    // Bookmarks and hyperlinks (#233). The edits are document mutations, so they
+    // follow the document's modify permission; navigation needs an outline to
+    // move through, and export follows the same copy permission the document
+    // export uses.
+    const bool canModify = ready && m_session->facade().permissions().modify;
+    for (const QString& id : { QStringLiteral("actionBookmarkPage"),
+                               QStringLiteral("actionBookmarkAutoGenerate"),
+                               QStringLiteral("actionBookmarkImport"),
+                               QStringLiteral("actionCreateHyperlink"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFit"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitB"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitBH"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitBV"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitH"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitR"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitV"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFXYZ"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFXYZInheritZoom") })
+    {
+        availability.insert(id, canModify);
+    }
+    availability.insert(QStringLiteral("actionBookmarkExport"), ready && m_documentModel.canCopy());
+    for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
+    {
+        availability.insert(id, ready && m_documentModel.hasOutline());
+    }
+
     m_session->catalog().setEnabledBatch(availability);
+}
+
+void EditorHost::runAuthoringEdit(pdfinteraction::CommandInvocationId invocation,
+                                  const std::optional<pdf::PDFAuthoringEdit>& edit,
+                                  const QString& buildError,
+                                  const QVariantMap& parameters)
+{
+    QString typedError = buildError;
+    pdfinteraction::DocumentEditOutcome outcome;
+    if (edit.has_value())
+    {
+        outcome = submitAuthoringEdit(*edit, parameters, typedError);
+    }
+
+    const bool applied = edit.has_value() && outcome.applied;
+    if (applied)
+    {
+        announceDocumentState(authoringEditAnnouncement(*edit, outcome));
+    }
+    else
+    {
+        announceDocumentState(tr("The edit was refused: %1").arg(typedError));
+    }
+
+    m_session->catalog().finishInvocation(invocation,
+                                          applied ? pdfinteraction::CommandTerminalState::Completed
+                                                  : pdfinteraction::CommandTerminalState::Failed,
+                                          applied ? QString() : typedError);
+    bumpPresentation();
+    refreshFeatureAvailability();
+}
+
+pdfinteraction::DocumentEditOutcome EditorHost::submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                                    const QVariantMap& parameters,
+                                                                    QString& typedError)
+{
+    const pdf::PDFRevisionIdentity current = m_session->facade().currentRevision();
+    const QString displayed = parameters.value(QStringLiteral("revision")).toString();
+    if (!displayed.isEmpty() && displayed != current.toString())
+    {
+        // The surface acted on a revision the document has left; the edit is
+        // refused rather than rebased onto one the operator never saw.
+        typedError = QStringLiteral("edit/stale-revision");
+        return {};
+    }
+
+    pdfinteraction::DocumentEditRequest request;
+    request.edit = edit;
+    request.revision = current;
+    const pdfinteraction::DocumentEditOutcome outcome = m_session->facade().applyAuthoringEdit(request);
+    typedError = outcome.typedError;
+    return outcome;
+}
+
+bool EditorHost::authoringLinkGeometry(const QVariantMap& parameters, int* pageIndex, QRectF* rectangle,
+                                       QString& typedError) const
+{
+    const std::optional<QRectF> explicitRectangle = rectangleFromParameters(parameters,
+                                                                            QStringLiteral("left"),
+                                                                            QStringLiteral("bottom"),
+                                                                            QStringLiteral("right"),
+                                                                            QStringLiteral("top"),
+                                                                            typedError);
+    if (!typedError.isEmpty())
+    {
+        return false;
+    }
+
+    const QVariant page = parameters.value(QStringLiteral("page"));
+    if (explicitRectangle.has_value() || page.isValid())
+    {
+        if (!explicitRectangle.has_value() || !page.isValid())
+        {
+            typedError = QStringLiteral("hyperlink/incomplete-geometry");
+            return false;
+        }
+
+        *pageIndex = page.toInt();
+        *rectangle = *explicitRectangle;
+        return true;
+    }
+
+    // No explicit geometry: the current text selection is the shell's own
+    // "this region" gesture, already fenced to the revision it was taken from.
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (interaction)
+    {
+        const std::optional<pdfinteraction::TextSelection>& selection = interaction->state().textSelection();
+        if (selection.has_value() && selection->isValid() && selection->available && !selection->geometry.isEmpty())
+        {
+            QRectF bounds;
+            for (const QRectF& span : selection->geometry)
+            {
+                bounds = bounds.united(span);
+            }
+
+            if (bounds.isValid() && !bounds.isEmpty())
+            {
+                *pageIndex = selection->pageIndex;
+                *rectangle = bounds;
+                return true;
+            }
+        }
+    }
+
+    typedError = QStringLiteral("hyperlink/link-rectangle-required");
+    return false;
+}
+
+bool EditorHost::goToAdjacentBookmark(int direction, QString& typedError)
+{
+    if (!hasDocument())
+    {
+        typedError = QStringLiteral("bookmark/document-not-ready");
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    const QList<int> pages = pdf::PDFAuthoringEditWriter::bookmarkPages(document.data());
+    if (pages.isEmpty())
+    {
+        typedError = QStringLiteral("bookmark/none");
+        return false;
+    }
+
+    // Outline order, not page order: the first bookmark after (or before) the
+    // current page, wrapping at the ends like the shell's historical bookmark
+    // cursor. The page the operator is already on is never its own destination.
+    const int current = currentPage();
+    int target = -1;
+    if (direction > 0)
+    {
+        for (const int page : pages)
+        {
+            if (page > current)
+            {
+                target = page;
+                break;
+            }
+        }
+        if (target < 0)
+        {
+            target = pages.constFirst();
+        }
+    }
+    else
+    {
+        for (auto it = pages.crbegin(); it != pages.crend(); ++it)
+        {
+            if (*it < current)
+            {
+                target = *it;
+                break;
+            }
+        }
+        if (target < 0)
+        {
+            target = pages.constLast();
+        }
+    }
+
+    goToPage(target);
+    return true;
+}
+
+QString EditorHost::authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
+                                              const pdfinteraction::DocumentEditOutcome& outcome) const
+{
+    switch (outcome.resolution)
+    {
+        case pdf::PDFAuthoringEditResult::Kind::BookmarkAdded:
+            return tr("Bookmark added for page %1.").arg(edit.pageIndex + 1);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarkRemoved:
+            return tr("Bookmark removed for page %1.").arg(edit.pageIndex + 1);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarksGenerated:
+            return tr("Generated %n bookmark(s).", "", outcome.affectedCount);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarksReplaced:
+            return tr("Imported %n bookmark(s).", "", outcome.affectedCount);
+
+        case pdf::PDFAuthoringEditResult::Kind::LinkCreated:
+            return tr("Hyperlink created.");
+
+        case pdf::PDFAuthoringEditResult::Kind::Refused:
+            break;
+    }
+
+    return QString();
 }
 
 void EditorHost::moveSearch(int direction)
@@ -5977,6 +6497,16 @@ void EditorHost::updateCanvasAccessibilitySummary()
                                               .arg(state.measurements().size())
                                               .arg(pdfinteraction::measurementReadout(state.measurements().last()));
         }
+    }
+
+    // The outline is the one document structure the canvas can announce (issue
+    // #233): its count is read from the same Core projection bookmark
+    // navigation moves through.
+    const QList<int> bookmarkPages =
+        pdf::PDFAuthoringEditWriter::bookmarkPages(m_session->context().getDocumentPointer().data());
+    if (!bookmarkPages.isEmpty())
+    {
+        summary += QLatin1Char(' ') + tr("%n bookmark(s).", "", bookmarkPages.size());
     }
 
     m_canvas->setAccessibleDocumentSummary(summary);

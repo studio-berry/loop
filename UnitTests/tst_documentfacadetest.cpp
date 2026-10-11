@@ -45,10 +45,13 @@
 #include "documentloader.h"
 #include "jobsubmitter.h"
 
+#include "pdfauthoringedit.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfjobscheduler.h"
+#include "pdfsecurityhandler.h"
 
 namespace
 {
@@ -389,6 +392,11 @@ private slots:
     void signatureCheckReducesVerificationResultsToTheOperatorVocabulary();
     void signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument();
 
+    // The typed direct-edit gateway (ADR-014, issue #233).
+    void authoringEditAdvancesTheRevisionAndWritesTheOutline();
+    void authoringEditRefusesAStaleRevisionWithoutMutating();
+    void authoringEditRefusesWithoutAReadyDocumentOrPermission();
+
     void realDocumentRoundTripsThroughCoreReaderAndWriter();
 };
 
@@ -440,9 +448,10 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
         }
     }
     // The display colour modes (#235), the select/copy/capture commands (#232),
-    // the measure commands (#238) and the shell settings/diagnostics surfaces
-    // (#239) joined the implemented set in epic #231 PR1.
-    QCOMPARE(implemented, 55);
+    // the measure commands (#238), the shell settings/diagnostics surfaces
+    // (#239) and the bookmark/hyperlink commands (#233) joined the implemented
+    // set in epic #231.
+    QCOMPARE(implemented, 71);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
@@ -1779,6 +1788,145 @@ void DocumentFacadeTest::inspectionStopsWhenContextIsDestroyed()
     QVERIFY(!absent.canActOnInspection());
     QVERIFY(!facade.completeInspection(*token, fixture.result, fixture.evidence, error));
     QVERIFY(!facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+}
+
+void DocumentFacadeTest::authoringEditAdvancesTheRevisionAndWritesTheOutline()
+{
+    Harness harness;
+    harness.loader.nextResult.document = buildDocument(3);
+    harness.facade->open(QStringLiteral("/corpus/bookmarks.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    const pdf::PDFRevisionIdentity before = harness.facade->currentRevision();
+    const QString documentKey = harness.context.getDocumentIdentity().documentId;
+
+    pdfinteraction::DocumentEditRequest request;
+    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.edit.pageIndex = 2;
+    request.edit.text = QStringLiteral("Appendix");
+    request.revision = before;
+
+    const pdfinteraction::DocumentEditOutcome outcome = harness.facade->applyAuthoringEdit(request);
+    QVERIFY2(outcome.applied, qPrintable(outcome.typedError));
+    QCOMPARE(outcome.resolution, pdf::PDFAuthoringEditResult::Kind::BookmarkAdded);
+    QVERIFY(outcome.revision != before);
+    QCOMPARE(outcome.revision, harness.facade->currentRevision());
+    QVERIFY(!harness.facade->revisionSource().isCurrent(before));
+
+    // The edit is a document mutation: dirty, unsaved, and the published fence
+    // follows the revision the edit produced.
+    QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(harness.facade->shellDocumentStatus(), pdfinteraction::ShellDocumentStatus::Modified);
+    QCOMPARE(harness.submitter.publishedRevisions.value(documentKey), harness.context.getRevision());
+
+    // Read back through Core: the outline carries the bookmark.
+    QString typedError;
+    const std::optional<QList<pdf::PDFBookmarkRecord>> records =
+        pdf::PDFAuthoringEditWriter::readOutline(harness.context.getDocument(), typedError);
+    QVERIFY2(records.has_value(), qPrintable(typedError));
+    QCOMPARE(records->size(), 1);
+    QCOMPARE(records->at(0).title, QStringLiteral("Appendix"));
+    QCOMPARE(records->at(0).pageIndex, 2);
+}
+
+void DocumentFacadeTest::authoringEditRefusesAStaleRevisionWithoutMutating()
+{
+    Harness harness;
+    harness.loader.nextResult.document = buildDocument(2);
+    harness.facade->open(QStringLiteral("/corpus/stale.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    // The revision the operator acted on.
+    const pdf::PDFRevisionIdentity displayed = harness.facade->currentRevision();
+
+    // The document moves underneath it, as a background save or another edit
+    // would.
+    harness.facade->markModified();
+    QVERIFY(!harness.facade->revisionSource().isCurrent(displayed));
+    const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
+    const pdf::PDFRevisionIdentity revisionBefore = harness.facade->currentRevision();
+
+    pdfinteraction::DocumentEditRequest request;
+    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.edit.pageIndex = 1;
+    request.revision = displayed;
+
+    const pdfinteraction::DocumentEditOutcome outcome = harness.facade->applyAuthoringEdit(request);
+    QVERIFY(!outcome.applied);
+    QCOMPARE(outcome.typedError, QStringLiteral("edit/stale-revision"));
+    // A refusal produces no revision at all.
+    QVERIFY(!outcome.revision.isValid());
+
+    // Nothing moved: the same document object is open at the same revision.
+    QCOMPARE(harness.context.getDocumentPointer().data(), documentBefore.data());
+    QCOMPARE(harness.facade->currentRevision(), revisionBefore);
+
+    QString typedError;
+    const std::optional<QList<pdf::PDFBookmarkRecord>> records =
+        pdf::PDFAuthoringEditWriter::readOutline(harness.context.getDocument(), typedError);
+    QVERIFY(records.has_value());
+    QVERIFY(records->isEmpty());
+}
+
+void DocumentFacadeTest::authoringEditRefusesWithoutAReadyDocumentOrPermission()
+{
+    Harness harness;
+
+    pdfinteraction::DocumentEditRequest request;
+    request.edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.edit.pageIndex = 0;
+    request.revision = harness.facade->currentRevision();
+
+    const pdfinteraction::DocumentEditOutcome noDocument = harness.facade->applyAuthoringEdit(request);
+    QVERIFY(!noDocument.applied);
+    QCOMPARE(noDocument.typedError, QStringLiteral("edit/document-not-ready"));
+
+    // A document whose user permissions deny Modify refuses the edit with the
+    // same visible reason the operator-facing command reports. The document is
+    // read back from an encrypted file, so its security handler carries the
+    // user's own permission bits exactly as an opened document does.
+    using Algorithm = pdf::PDFSecurityHandlerFactory::Algorithm;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("restricted.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 200, 200));
+        pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+        settings.algorithm = Algorithm::AES_256;
+        settings.permissions = 0;
+        settings.userPassword = QStringLiteral("fixture-user");
+        settings.ownerPassword = QStringLiteral("fixture-owner");
+        settings.id = builder.build().getIdPart(0);
+        builder.setSecurityHandler(pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool* accepted)
+                                  {
+                                      if (accepted)
+                                      {
+                                          *accepted = true;
+                                      }
+                                      return QStringLiteral("fixture-user");
+                                  }, true, false);
+    pdf::PDFDocument restricted = reader.readFromFile(path);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    harness.loader.nextResult.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(std::move(restricted)));
+    harness.facade->open(QStringLiteral("/corpus/restricted.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QVERIFY(harness.facade->permissions().encrypted);
+    QVERIFY(!harness.facade->permissions().modify);
+
+    request.revision = harness.facade->currentRevision();
+    const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
+    const pdfinteraction::DocumentEditOutcome denied = harness.facade->applyAuthoringEdit(request);
+    QVERIFY(!denied.applied);
+    QCOMPARE(denied.typedError, QStringLiteral("edit/modify-permission-denied"));
+    QCOMPARE(harness.context.getDocumentPointer().data(), documentBefore.data());
 }
 
 QTEST_GUILESS_MAIN(DocumentFacadeTest)

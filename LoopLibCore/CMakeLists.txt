@@ -166,6 +166,8 @@ add_library(LoopLibCore SHARED
     sources/pdfoptimizer.h
     sources/pdfoptionalcontent.cpp
     sources/pdfoptionalcontent.h
+    sources/pdfauthoringedit.cpp
+    sources/pdfauthoringedit.h
     sources/pdfoutline.cpp
     sources/pdfoutline.h
     sources/pdfpagenavigation.cpp

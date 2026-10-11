@@ -56,6 +56,7 @@
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistory.h"
 #include "pdfsignaturehandler.h"
+#include "pdfauthoringedit.h"
 
 #include <QColor>
 #include <QImage>
@@ -617,6 +618,18 @@ public:
     /// in-flight drag with ToolChanged (#141 AC3).
     Q_INVOKABLE bool setActiveTool(const QString& toolId);
 
+    // ---- Bookmarks and hyperlinks (issue #233) -------------------------------------
+    /// Imports a bookmark interchange file and replaces the document outline
+    /// with its records. `revision` is the revision the operator saw when the
+    /// file dialog opened; an import that no longer matches it is refused with
+    /// a typed reason instead of landing on a revision the operator never saw.
+    Q_INVOKABLE bool importBookmarksFileUrl(const QUrl& url, const QString& revision);
+
+    /// Exports the document outline to the bookmark interchange file. The
+    /// exported bytes describe `revision`; a stale `revision` is refused rather
+    /// than exported as if it described the current document.
+    Q_INVOKABLE bool exportBookmarksFileUrl(const QUrl& url, const QString& revision);
+
     // ---- Select, copy and capture (issue #232) -------------------------------------
     /// Copies the canvas text selection to the clipboard. The clipboard is only
     /// written when there is text to copy; a page with no text layer reports
@@ -699,6 +712,12 @@ signals:
     void settingsResetRequested();
     void diagnosticsCollectionRequested();
 
+    /// The bookmark import/export commands need a file, so the shell asks for
+    /// one and answers with importBookmarksFileUrl()/exportBookmarksFileUrl().
+    /// The commands themselves write nothing.
+    void bookmarkImportRequested();
+    void bookmarkExportRequested();
+
 private:
     void connectFacade();
     void connectViewport();
@@ -710,6 +729,32 @@ private:
     void refreshFeatureAvailability();
     bool commandPermissionAllowed(const QString& commandId) const;
     bool requestMoveSelection(const QVariantMap& parameters);
+
+    // ---- Bookmarks and hyperlinks (issue #233) -------------------------------------
+    /// Runs one authoring command: submits the built edit through the facade
+    /// gateway and finishes the invocation with the outcome, announcing what
+    /// happened. `buildError` is the command's typed refusal when no edit could
+    /// be built.
+    void runAuthoringEdit(pdfinteraction::CommandInvocationId invocation,
+                          const std::optional<pdf::PDFAuthoringEdit>& edit,
+                          const QString& buildError,
+                          const QVariantMap& parameters);
+    /// The fence and the facade call behind every authoring command. `typedError`
+    /// is set on refusal.
+    pdfinteraction::DocumentEditOutcome submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                            const QVariantMap& parameters,
+                                                            QString& typedError);
+    /// The link rectangle and page a hyperlink command addresses: explicit
+    /// scalars when the surface supplied them, otherwise the current text
+    /// selection, which is the Quick shell's own "this region" gesture.
+    bool authoringLinkGeometry(const QVariantMap& parameters, int* pageIndex, QRectF* rectangle,
+                               QString& typedError) const;
+    /// Moves to the next (1) or previous (-1) bookmark page in outline order,
+    /// wrapping at the ends like the shell's historical bookmark cursor.
+    bool goToAdjacentBookmark(int direction, QString& typedError);
+    /// The operator-facing sentence for one applied edit.
+    QString authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
+                                      const pdfinteraction::DocumentEditOutcome& outcome) const;
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();

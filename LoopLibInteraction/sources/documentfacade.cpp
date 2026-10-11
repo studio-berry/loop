@@ -195,6 +195,12 @@ void DocumentFacade::markModified()
         return;
     }
 
+    documentContext->markModified();
+    noteAuthoringMutation();
+}
+
+void DocumentFacade::noteAuthoringMutation()
+{
     // A queued save was fenced against the revision that is about to be
     // superseded. The scheduler would discard it silently, leaving the
     // invocation without a terminal state, so it is superseded here instead.
@@ -202,8 +208,6 @@ void DocumentFacade::markModified()
     {
         supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
     }
-
-    documentContext->markModified();
 
     if (!m_publishedKey.isEmpty())
     {
@@ -213,6 +217,67 @@ void DocumentFacade::markModified()
     setOutputState(DocumentOutputState::None);
     setFacets(m_facets | DocumentFacet::Dirty);
     updateAvailability();
+}
+
+DocumentEditOutcome DocumentFacade::applyAuthoringEdit(const DocumentEditRequest& request)
+{
+    DocumentEditOutcome outcome;
+    const auto refuse = [&outcome](const QString& typedError)
+    {
+        outcome.applied = false;
+        outcome.typedError = typedError;
+        return outcome;
+    };
+
+    pdf::PDFDocumentContext* documentContext = context();
+    if (m_state != DocumentState::Ready || !documentContext || !documentContext->getDocument())
+    {
+        return refuse(QStringLiteral("edit/document-not-ready"));
+    }
+
+    // The fence is checked before any mutation, so an edit begun against a
+    // revision the operator is no longer looking at cannot land on this one.
+    if (!m_revisionSource.isCurrent(request.revision))
+    {
+        return refuse(QStringLiteral("edit/stale-revision"));
+    }
+
+    if (!permissions().modify)
+    {
+        return refuse(QStringLiteral("edit/modify-permission-denied"));
+    }
+
+    pdf::PDFAuthoringEditResult result;
+    try
+    {
+        result = pdf::PDFAuthoringEditWriter::apply(documentContext->getDocument(), request.edit);
+    }
+    catch (const pdf::PDFResourceBudgetExceededException&)
+    {
+        return refuse(QStringLiteral("edit/resource-budget-exceeded"));
+    }
+    catch (const pdf::PDFException&)
+    {
+        return refuse(QStringLiteral("edit/refused-by-core"));
+    }
+
+    if (!result.applied())
+    {
+        return refuse(result.typedError.isEmpty() ? QStringLiteral("edit/refused") : result.typedError);
+    }
+
+    // The writer produced a new document; replacing it advances the document
+    // revision and the cache generation, which is the revision this edit
+    // produced. The old document stays owned by nothing once the context drops
+    // it, exactly as a document replacement does.
+    documentContext->setDocument(result.document, result.flags);
+    noteAuthoringMutation();
+
+    outcome.applied = true;
+    outcome.resolution = result.kind;
+    outcome.affectedCount = result.affectedCount;
+    outcome.revision = m_revisionSource.currentRevision();
+    return outcome;
 }
 
 CommandInvocationId DocumentFacade::open(const QString& path)

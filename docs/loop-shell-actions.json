@@ -65,10 +65,16 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkAutoGenerate.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -78,10 +84,21 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkExport.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -91,10 +108,21 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkImport.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -107,10 +135,21 @@
         "shortcut": {
           "sequence": "Ctrl+M"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "title",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -298,10 +337,46 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlink.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "uri",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -311,10 +386,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFit.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -324,10 +460,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitB.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -337,10 +534,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitBH.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -350,10 +608,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitBV.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -363,10 +682,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitH.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -376,10 +756,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitR.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -389,10 +830,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitV.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -402,10 +904,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFXYZ.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -415,10 +978,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFXYZInheritZoom.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -739,9 +1363,9 @@
           "sequence": "Ctrl+."
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -787,9 +1411,9 @@
           "sequence": "Ctrl+,"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },

@@ -28,6 +28,7 @@
 #include "documentloader.h"
 #include "jobrelay.h"
 #include "jobsubmitter.h"
+#include "pdfauthoringedit.h"
 #include "pdfpreflightverdict.h"
 #include "pdfsignaturehandler.h"
 
@@ -212,6 +213,28 @@ struct DocumentPermissions
     bool allowsCorrection() const { return print && modify && copy && assemble; }
 };
 
+/// One interactive authoring edit (ADR-014): the edit Core is asked to write
+/// and the revision it was begun against. The facade checks the fence and the
+/// document's modify permission before any mutation, so a stale or unauthorized
+/// request is refused with a typed reason and changes nothing.
+struct DocumentEditRequest
+{
+    pdf::PDFAuthoringEdit edit;
+    pdf::PDFRevisionIdentity revision;
+};
+
+/// The outcome of one authoring edit. `applied` means the document advanced to
+/// a new revision and `revision` names it; a refusal carries the typed reason
+/// and leaves the document and its revision untouched.
+struct DocumentEditOutcome
+{
+    bool applied = false;
+    QString typedError;
+    pdf::PDFAuthoringEditResult::Kind resolution = pdf::PDFAuthoringEditResult::Kind::Refused;
+    int affectedCount = 0;
+    pdf::PDFRevisionIdentity revision;
+};
+
 /// One presentation-facing document lifecycle.
 ///
 /// The facade owns no PDF truth. pdf::PDFDocumentContext remains the document
@@ -316,6 +339,13 @@ public:
     /// the lifecycle.
     void markModified();
 
+    /// Applies one interactive authoring edit (ADR-014). The fence is checked
+    /// before any mutation: a request begun against a revision that is no
+    /// longer current, or against a document whose modify permission is not
+    /// granted, is refused with a typed reason. An applied edit replaces the
+    /// document, which advances the revision and the cache generation.
+    DocumentEditOutcome applyAuthoringEdit(const DocumentEditRequest& request);
+
     CommandInvocationId open(const QString& path);
 
     /// Re-opens the current source. Replacement, not a refresh: the old identity
@@ -369,6 +399,10 @@ private:
     void setFacets(DocumentFacets facets);
     void setOutputState(DocumentOutputState outputState);
     void updateAvailability();
+    /// The bookkeeping every in-session mutation shares: a queued save was
+    /// fenced against a revision that is now superseded, the published revision
+    /// moves, and the document is dirty with no pending output.
+    void noteAuthoringMutation();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();

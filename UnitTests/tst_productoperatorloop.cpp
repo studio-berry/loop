@@ -526,6 +526,7 @@ private slots:
     void partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument();
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
+    void bookmarkEditsReachTheCanvasAccessibleSummary();
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
     void governedPublicationParityAcrossSurfaces();
@@ -989,6 +990,37 @@ void ProductOperatorLoopTest::canvasBindingClearsWhenTheDocumentCloses()
     QTRY_VERIFY_WITH_TIMEOUT(!host.hasDocument(), 10000);
     QTRY_VERIFY_WITH_TIMEOUT(canvas->viewport() == nullptr, 5000);
     QCOMPARE(canvas->accessibleDocumentSummary(), QStringLiteral("No document is currently open."));
+}
+
+void ProductOperatorLoopTest::bookmarkEditsReachTheCanvasAccessibleSummary()
+{
+    const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(pdfPath));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(pdfPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 640, 480);
+
+    QQuickWindow window;
+    window.resize(640, 480);
+    auto* canvas = new pdfquick::LoopCanvasItem(window.contentItem());
+    canvas->setSize(QSizeF(640, 480));
+    host.attachCanvas(canvas);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_VERIFY_WITH_TIMEOUT(canvas->viewport() != nullptr, 5000);
+
+    // No bookmark yet: the one accessible canvas node says nothing about them.
+    QVERIFY(!canvas->accessibleDocumentSummary().contains(QStringLiteral("bookmark(s).")));
+
+    // Auto-generate writes the outline, and the count reaches the same summary
+    // a screen reader reads, so the document change is announced with text and
+    // not only as a visual list change.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate")) != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(canvas->accessibleDocumentSummary().contains(QStringLiteral("bookmark(s).")), 5000);
+
+    host.detachCanvas();
 }
 
 void ProductOperatorLoopTest::cancellationLeavesNoAcceptedResult()
