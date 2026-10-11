@@ -141,6 +141,8 @@ private Q_SLOTS:
     void highMarkerCountStaysBounded();
     void invalidTokenYieldsAnEmptyFrame();
     void denyExtraGraphicsSuppressesOverlays();
+    void annotationMarksPaintUnderFindingsWithTheirOwnSelection();
+    void annotationMarksAreBounded();
 
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
@@ -199,6 +201,62 @@ void OverlayFrameTest::zOrderIsDeterministic()
     QCOMPARE(frame.primitives.at(0).id, QStringLiteral("trim"));
     QCOMPARE(frame.primitives.at(4).id, QStringLiteral("handle-nw"));
     QVERIFY(frame.primitives.at(2).selected);
+}
+
+void OverlayFrameTest::annotationMarksPaintUnderFindingsWithTheirOwnSelection()
+{
+    m_overlays->setAnnotations({ makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:8 0 R"), QRectF(10.0, 10.0, 30.0, 20.0)),
+                                 makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:9 0 R"), QRectF(50.0, 50.0, 30.0, 20.0)) });
+    m_overlays->setSelectedAnnotationId(QStringLiteral("annotation:9 0 R"));
+    m_overlays->setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, makeToken());
+
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 3);
+
+    // Annotations paint over guides and under the findings analysis band.
+    QCOMPARE(frame.primitives.at(0).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(1).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(2).layer, pdfinteraction::OverlayLayer::Findings);
+
+    // The review list's selected annotation carries the selection treatment;
+    // the other mark does not.
+    QVERIFY(!frame.primitives.at(0).selected);
+    QVERIFY(frame.primitives.at(1).selected);
+
+    // Read-only: an annotation mark keeps no interaction kind, so nothing
+    // hit-tests it and no click can be routed to it.
+    QCOMPARE(frame.primitives.at(0).target.kind, pdfinteraction::InteractionTargetKind::None);
+    QCOMPARE(frame.primitives.at(1).target.kind, pdfinteraction::InteractionTargetKind::None);
+
+    // The interaction selection is independent of the review selection: an
+    // interaction selection of a finding does not move the annotation's.
+    m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)));
+    const pdfinteraction::OverlayFrame selectedFrame = m_overlays->build(m_state, makeToken());
+    QVERIFY(selectedFrame.primitives.at(1).selected);
+    QVERIFY(selectedFrame.primitives.at(2).selected);
+}
+
+void OverlayFrameTest::annotationMarksAreBounded()
+{
+    pdfinteraction::OverlayBounds bounds = pdfinteraction::OverlayBounds::conservativeDefaults();
+    bounds.maxAnnotationPrimitives = 1;
+    pdfinteraction::OverlayBuilder bounded(*m_viewport, m_policy, bounds);
+
+    bounded.setAnnotations({ makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:a"), QRectF(10.0, 10.0, 20.0, 20.0)),
+                             makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:b"), QRectF(40.0, 10.0, 20.0, 20.0)),
+                             makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:c"), QRectF(70.0, 10.0, 20.0, 20.0)) });
+    bounded.setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
+
+    const pdfinteraction::OverlayFrame frame = bounded.build(m_state, makeToken());
+
+    // The bound is a bound, not a hint: one annotation mark survives, the other
+    // two are counted as dropped, and the finding is never crowded out.
+    QCOMPARE(frame.primitives.size(), 2);
+    QCOMPARE(frame.droppedPrimitives, 2);
+    QCOMPARE(frame.primitives.at(0).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(1).layer, pdfinteraction::OverlayLayer::Findings);
 }
 
 void OverlayFrameTest::tiesBreakByRegistrationSequence()
