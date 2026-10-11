@@ -159,6 +159,32 @@ ApplicationWindow {
     }
 
     FileDialog {
+        id: screenshotDialog
+        title: qsTr("Save Screenshot")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PNG images (*.png)")]
+        onAccepted: {
+            if (host) {
+                host.captureCanvasFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FolderDialog {
+        id: extractImagesDialog
+        title: qsTr("Extract Images Into Folder")
+        onAccepted: {
+            if (host) {
+                host.extractCurrentPageImagesFileUrl(selectedFolder)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
         id: preflightReportDialog
         title: qsTr("Export Preflight Report")
         fileMode: FileDialog.SaveFile
@@ -227,6 +253,12 @@ ApplicationWindow {
         function onPreflightProfileSaveRequested() {
             profileSaveVersionField.text = host ? host.preflightProfileDraftVersion : ""
             preflightProfileSaveDialog.open()
+        }
+        function onScreenshotRequested() {
+            screenshotDialog.open()
+        }
+        function onImageExtractionRequested() {
+            extractImagesDialog.open()
         }
     }
 

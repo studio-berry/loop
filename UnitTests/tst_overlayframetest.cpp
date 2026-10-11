@@ -141,6 +141,8 @@ private Q_SLOTS:
     void highMarkerCountStaysBounded();
     void invalidTokenYieldsAnEmptyFrame();
     void denyExtraGraphicsSuppressesOverlays();
+    void measurementPaintsInTheGuidesBandWithItsReadout();
+    void textSelectionPaintsInTheSelectionBandWithoutATarget();
 
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
@@ -409,6 +411,75 @@ void OverlayFrameTest::invalidTokenYieldsAnEmptyFrame()
     // drawing it is how a stale marker survives a reload.
     QVERIFY(frame.isEmpty());
     QVERIFY(!frame.token.isValid());
+}
+
+void OverlayFrameTest::measurementPaintsInTheGuidesBandWithItsReadout()
+{
+    const pdfinteraction::RevisionFencedToken token = makeToken();
+
+    QVERIFY(m_state.begin(pdfinteraction::InteractionKind::Measure, token));
+
+    const pdfinteraction::Measurement draft =
+        pdfinteraction::measureBetween(0, QPointF(10.0, 10.0), QPointF(40.0, 50.0), pdf::PDF_POINT_TO_MM);
+    QVERIFY(m_state.setMeasurementDraft(draft, token));
+
+    pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, token);
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 1);
+
+    const pdfinteraction::OverlayPrimitive* primitive = findPrimitive(frame, QStringLiteral("measurement#draft"));
+    QVERIFY(primitive);
+    QCOMPARE(primitive->layer, pdfinteraction::OverlayLayer::Guides);
+    QCOMPARE(primitive->kind, pdfinteraction::OverlayPrimitiveKind::Measurement);
+    QCOMPARE(primitive->label, pdfinteraction::measurementReadout(draft));
+    QCOMPARE(primitive->pagePolygon.size(), 2);
+    QVERIFY(primitive->renderable);
+
+    // Completing it moves the primitive to its stable completed id.
+    QVERIFY(m_state.completeMeasurement(token).has_value());
+
+    frame = m_overlays->build(m_state, token);
+    QVERIFY(findPrimitive(frame, QStringLiteral("measurement#0")));
+    QVERIFY(!findPrimitive(frame, QStringLiteral("measurement#draft")));
+    QCOMPARE(frame.primitives.size(), 1);
+}
+
+void OverlayFrameTest::textSelectionPaintsInTheSelectionBandWithoutATarget()
+{
+    const pdfinteraction::RevisionFencedToken token = makeToken();
+
+    pdfinteraction::TextSelection selection;
+    selection.kind = pdfinteraction::TextSelectionKind::Text;
+    selection.pageIndex = 0;
+    selection.available = true;
+    selection.text = QStringLiteral("two lines");
+    selection.geometry = { QRectF(10.0, 10.0, 40.0, 8.0), QRectF(10.0, 20.0, 40.0, 8.0) };
+    QVERIFY(m_state.setTextSelection(selection, token));
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, token);
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 2);
+
+    const pdfinteraction::OverlayPrimitive* first = findPrimitive(frame, QStringLiteral("text-selection#0"));
+    const pdfinteraction::OverlayPrimitive* second = findPrimitive(frame, QStringLiteral("text-selection#1"));
+    QVERIFY(first);
+    QVERIFY(second);
+    QCOMPARE(first->layer, pdfinteraction::OverlayLayer::Selection);
+    QCOMPARE(first->kind, pdfinteraction::OverlayPrimitiveKind::Rectangle);
+    QVERIFY(first->renderable);
+
+    // There is no text target kind, so a selection rectangle is not a routed
+    // click target.
+    QVERIFY(!first->target.isValid());
+
+    // An unavailable selection -- a page with no text layer -- has no geometry
+    // to paint.
+    pdfinteraction::TextSelection unavailable;
+    unavailable.pageIndex = 0;
+    unavailable.available = false;
+    unavailable.unavailableReason = QStringLiteral("This page has no text layer.");
+    QVERIFY(m_state.setTextSelection(unavailable, token));
+    QVERIFY(m_overlays->build(m_state, token).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(OverlayFrameTest)

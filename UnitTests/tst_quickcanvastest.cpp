@@ -51,6 +51,7 @@
 #include <QWheelEvent>
 
 #include <atomic>
+#include <cmath>
 #include <memory>
 
 #include "canvaspalette.h"
@@ -169,6 +170,89 @@ pdfinteraction::InteractionTarget makeTarget(const QString& id, QRectF bounds)
     return target;
 }
 
+/// Scripted text extraction, so the canvas-side selection path is provable
+/// without a document. The Core-backed source is exercised against a real
+/// document in UnitTestsDocumentViewSession.
+class ScriptedTextSelectionSource final : public pdfinteraction::ITextSelectionSource
+{
+public:
+    bool hasTextLayer(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available;
+    }
+
+    pdfinteraction::TextSelectionResult selectRange(int pageIndex, QPointF startPagePoint, QPointF endPagePoint) override
+    {
+        Q_UNUSED(pageIndex);
+
+        pdfinteraction::TextSelectionResult result;
+        result.available = available;
+        if (!available)
+        {
+            result.unavailableReason = QStringLiteral("This page has no text layer.");
+            return result;
+        }
+
+        result.text = QStringLiteral("canvas selection");
+        result.geometry = { QRectF(startPagePoint, endPagePoint).normalized() };
+        result.firstLine = 0;
+        result.lastLine = 0;
+        return result;
+    }
+
+    pdfinteraction::TextSelectionResult selectPage(int pageIndex) override
+    {
+        Q_UNUSED(pageIndex);
+        return selectRange(0, QPointF(), QPointF());
+    }
+
+    pdfinteraction::TextSelectionResult selectBlockAt(int pageIndex, QPointF pagePoint) override
+    {
+        Q_UNUSED(pagePoint);
+        return selectPage(pageIndex);
+    }
+
+    int lineCount(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available ? 1 : -1;
+    }
+
+    pdfinteraction::TextSelectionResult selectLine(int pageIndex, int lineIndex) override
+    {
+        Q_UNUSED(lineIndex);
+        return selectPage(pageIndex);
+    }
+
+    bool available = true;
+};
+
+class FakePageUnitSource final : public pdfinteraction::IPageUnitSource
+{
+public:
+    bool pagePointToMM(int pageIndex, qreal* factor) const override
+    {
+        if (!factor || pageIndex < 0 || pageIndex >= pageCount)
+        {
+            return false;
+        }
+
+        *factor = pointToMM;
+        return true;
+    }
+
+    int pageCount = 2;
+    qreal pointToMM = pdf::PDF_POINT_TO_MM;
+};
+
+/// A viewport pixel for a page-space point on page 0, through the same matrix
+/// the page surfaces use.
+QPointF viewportPointFor(const pdfinteraction::ViewportController& viewport, QPointF pagePoint)
+{
+    return viewport.pagePointToViewportMatrix(0).map(pagePoint);
+}
+
 }   // namespace
 
 class QuickCanvasTest : public QObject
@@ -192,6 +276,10 @@ private Q_SLOTS:
     void focusLossCancelsTheDrag();
     void unboundItemIgnoresInput();
     void toolSelectionRoundTrips();
+    void textToolDragThroughTheCanvasStoresASelection();
+    void measureToolDragThroughTheCanvasReportsProductionUnits();
+    void textSelectionOnAPageWithNoTextLayerReportsThatState();
+    void canvasCompositionPlacesTilesInDevicePixels();
 
     void admittedTilesReachTheSceneGraph();
     void revisionReplacementLeavesNoStaleTile();
@@ -250,6 +338,9 @@ private:
     std::unique_ptr<ScriptedHitTestSource> m_source;
     std::unique_ptr<TestCanvasItem> m_item;
 
+    std::unique_ptr<ScriptedTextSelectionSource> m_textSource;
+    std::unique_ptr<FakePageUnitSource> m_units;
+
     std::unique_ptr<InlineJobSubmitter> m_submitter;
     std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
     std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> m_surfaces;
@@ -278,6 +369,11 @@ void QuickCanvasTest::init()
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
+    m_textSource = std::make_unique<ScriptedTextSelectionSource>();
+    m_units = std::make_unique<FakePageUnitSource>();
+    m_controller->setTextSelectionSource(m_textSource.get());
+    m_controller->setPageUnitSource(m_units.get());
+
     m_item = std::make_unique<TestCanvasItem>();
     m_item->setSize(QSizeF(400.0, 400.0));
 }
@@ -285,6 +381,8 @@ void QuickCanvasTest::init()
 void QuickCanvasTest::cleanup()
 {
     m_item.reset();
+    m_units.reset();
+    m_textSource.reset();
     m_window.reset();
     m_surfaces.reset();
     m_renderer.reset();
@@ -631,6 +729,160 @@ void QuickCanvasTest::toolSelectionRoundTrips()
     // A name outside the vocabulary is refused and leaves the tool in place.
     QVERIFY(!m_item->setActiveTool(QStringLiteral("bogus")));
     QCOMPARE(m_item->activeTool(), QStringLiteral("hand"));
+}
+
+// ---------------------------------------------------------------------------
+// Issue #232 / #238: the canvas carries the text-selection and measurement
+// tools the same way it carries select and hand -- events in, neutral intents
+// out, and the typed state read back from the controller.
+// ---------------------------------------------------------------------------
+
+void QuickCanvasTest::textToolDragThroughTheCanvasStoresASelection()
+{
+    bindItem();
+
+    QVERIFY(m_item->setActiveTool(QStringLiteral("text")));
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Text);
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(selection->available);
+    QCOMPARE(selection->text, QStringLiteral("canvas selection"));
+    QCOMPARE(selection->pageIndex, 0);
+
+    // The overlay frame carries one rectangle per line span in the Selection
+    // band, and no page render was asked for.
+    const pdfinteraction::OverlayFrame& frame = m_controller->overlayFrame();
+    QVERIFY(frame.isOrdered());
+    int selectionPrimitives = 0;
+    for (const pdfinteraction::OverlayPrimitive& primitive : frame.primitives)
+    {
+        if (primitive.layer == pdfinteraction::OverlayLayer::Selection)
+        {
+            ++selectionPrimitives;
+        }
+    }
+    QCOMPARE(selectionPrimitives, selection->geometry.size());
+
+    // And Copy through the controller returns exactly what was selected.
+    const pdfinteraction::TextCopyResult copy = m_controller->selectedText();
+    QVERIFY(copy.copied);
+    QCOMPARE(copy.text, QStringLiteral("canvas selection"));
+}
+
+void QuickCanvasTest::measureToolDragThroughTheCanvasReportsProductionUnits()
+{
+    bindItem();
+
+    QVERIFY(m_item->setActiveTool(QStringLiteral("measure")));
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Measure);
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QSignalSpy measureSpy(m_controller.get(), &pdfinteraction::InteractionController::measurementCompleted);
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    QCOMPARE(measureSpy.size(), 1);
+    QCOMPARE(m_controller->state().measurements().size(), 1);
+
+    // The measurement is page-space geometry times the page's own scale, and
+    // the overlay carries the readout.
+    const pdfinteraction::Measurement measurement = m_controller->state().measurements().constFirst();
+    const qreal referenceMM = std::hypot(40.0, 40.0) * m_units->pointToMM;
+    QVERIFY(qAbs(measurement.distanceMM - referenceMM) <= 0.5);
+
+    const pdfinteraction::OverlayFrame& frame = m_controller->overlayFrame();
+    const pdfinteraction::OverlayPrimitive* primitive = nullptr;
+    for (const pdfinteraction::OverlayPrimitive& candidate : frame.primitives)
+    {
+        if (candidate.kind == pdfinteraction::OverlayPrimitiveKind::Measurement)
+        {
+            primitive = &candidate;
+        }
+    }
+    QVERIFY(primitive);
+    QCOMPARE(primitive->label, pdfinteraction::measurementReadout(measurement));
+    QCOMPARE(primitive->layer, pdfinteraction::OverlayLayer::Guides);
+
+    // No DragSession, no command: a measurement is never a document edit.
+    QVERIFY(!m_controller->state().drag().has_value());
+}
+
+void QuickCanvasTest::textSelectionOnAPageWithNoTextLayerReportsThatState()
+{
+    bindItem();
+
+    m_textSource->available = false;
+    QVERIFY(m_item->setActiveTool(QStringLiteral("text")));
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(!selection->available);
+    QCOMPARE(selection->unavailableReason, QStringLiteral("This page has no text layer."));
+
+    // Copy refuses with the typed reason and never an empty success.
+    const pdfinteraction::TextCopyResult copy = m_controller->selectedText();
+    QVERIFY(!copy.copied);
+    QCOMPARE(copy.refusalCode, QStringLiteral("text/no-text-layer"));
+    QVERIFY(copy.text.isEmpty());
+
+    // And there is nothing to paint for an unavailable selection.
+    for (const pdfinteraction::OverlayPrimitive& primitive : m_controller->overlayFrame().primitives)
+    {
+        QVERIFY(primitive.layer != pdfinteraction::OverlayLayer::Selection);
+    }
+}
+
+void QuickCanvasTest::canvasCompositionPlacesTilesInDevicePixels()
+{
+    // The screenshot path composes the admitted tiles into one image. Pure
+    // function, no window and no scene graph: the same call the host makes.
+    pdfinteraction::CanvasSnapshot snapshot;
+    snapshot.token = pdfinteraction::RevisionFencedToken();
+
+    QImage red(20, 20, QImage::Format_ARGB32_Premultiplied);
+    red.fill(Qt::red);
+    QImage blue(20, 20, QImage::Format_ARGB32_Premultiplied);
+    blue.fill(Qt::blue);
+
+    pdfinteraction::CanvasTile first;
+    first.key.pageIndex = 0;
+    first.pixels = pdfinteraction::makeSurfaceBuffer(red);
+    first.placedRect = QRect(0, 0, 20, 20);
+    snapshot.tiles.push_back(first);
+
+    pdfinteraction::CanvasTile second;
+    second.key.pageIndex = 1;
+    second.pixels = pdfinteraction::makeSurfaceBuffer(blue);
+    second.placedRect = QRect(20, 0, 20, 20);
+    snapshot.tiles.push_back(second);
+
+    const QImage composed = pdfinteraction::composeCanvasImage(snapshot, QRect(0, 0, 40, 20), 1.0);
+    QVERIFY(!composed.isNull());
+    QCOMPARE(composed.size(), QSize(40, 20));
+    QCOMPARE(composed.pixelColor(10, 10), QColor(Qt::red));
+    QCOMPARE(composed.pixelColor(30, 10), QColor(Qt::blue));
+
+    // A region no tile intersects is a refusal, not a blank success.
+    QVERIFY(pdfinteraction::composeCanvasImage(snapshot, QRect(100, 100, 40, 20), 1.0).isNull());
 }
 
 // ---------------------------------------------------------------------------

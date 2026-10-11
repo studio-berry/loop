@@ -170,7 +170,14 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     // object that already has one, and a host keys retained nodes on the id. The
     // target keeps its own id so a click routed back from a primitive still names
     // the real object.
-    const auto emitPrimitive = [&](const InteractionTarget& target, const QString& id, QRectF pageBounds, OverlayLayer layer, OverlayPrimitiveKind kind, OverlaySeverity severity) -> bool
+    const auto emitPrimitive = [&](const InteractionTarget& target,
+                                   const QString& id,
+                                   QRectF pageBounds,
+                                   OverlayLayer layer,
+                                   OverlayPrimitiveKind kind,
+                                   OverlaySeverity severity,
+                                   const QString& label = QString(),
+                                   const QPolygonF& pagePolygon = QPolygonF()) -> bool
     {
         if (frame.primitives.size() >= m_bounds.maxPrimitives)
         {
@@ -191,6 +198,8 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
         primitive.severity = severity;
         primitive.pageIndex = target.pageIndex;
         primitive.pageBounds = pageBounds;
+        primitive.pagePolygon = pagePolygon;
+        primitive.label = label;
         primitive.target = target;
         primitive.sequence = sequence++;
         primitive.hovered = state.hovered().isValid() && state.hovered().id == target.id && state.hovered().pageIndex == target.pageIndex;
@@ -240,6 +249,48 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
         emitPrimitive(guide, guide.id, guide.pageBounds, layer, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
     }
 
+    // Measurements paint in the Guides band the z-order table already assigns
+    // them. They are presentation state: a measurement has no command and no
+    // mutation behind it, and a revision change has already dropped it by the
+    // time this frame is rebuilt.
+    if (!suppressExtraGraphics)
+    {
+        const auto emitMeasurement = [&](const Measurement& measurement, const QString& id)
+        {
+            if (!isVisiblePage(measurement.pageIndex))
+            {
+                return;
+            }
+
+            InteractionTarget target;
+            target.kind = InteractionTargetKind::Guide;
+            target.pageIndex = measurement.pageIndex;
+            target.id = id;
+            target.pageBounds = QRectF(measurement.startPagePoint, measurement.endPagePoint).normalized();
+
+            QPolygonF line;
+            line << measurement.startPagePoint << measurement.endPagePoint;
+
+            emitPrimitive(target,
+                          id,
+                          target.pageBounds,
+                          OverlayLayer::Guides,
+                          OverlayPrimitiveKind::Measurement,
+                          OverlaySeverity::None,
+                          measurementReadout(measurement),
+                          line);
+        };
+
+        if (state.measurementDraft().has_value())
+        {
+            emitMeasurement(*state.measurementDraft(), QStringLiteral("measurement#draft"));
+        }
+        for (int index = 0; index < state.measurements().size(); ++index)
+        {
+            emitMeasurement(state.measurements().at(index), QStringLiteral("measurement#%1").arg(index));
+        }
+    }
+
     for (const InteractionTarget& finding : m_findings)
     {
         if (suppressExtraGraphics || !isVisiblePage(finding.pageIndex) || m_hiddenFindingIds.contains(finding.id))
@@ -285,6 +336,27 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     if (!suppressExtraGraphics && selected.isValid() && isVisiblePage(selected.pageIndex))
     {
         emitPrimitive(selected, selected.id + QStringLiteral("#selection"), selected.pageBounds, OverlayLayer::Selection, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
+    }
+
+    // A text selection paints in the Selection band, one rectangle per line
+    // span, so the operator sees which lines are selected. It carries no
+    // target: there is no text target kind, and clicking selected text is a
+    // new selection, not a routed command.
+    const std::optional<TextSelection>& textSelection = state.textSelection();
+    if (!suppressExtraGraphics && textSelection.has_value() && textSelection->available && isVisiblePage(textSelection->pageIndex))
+    {
+        for (int index = 0; index < textSelection->geometry.size(); ++index)
+        {
+            InteractionTarget target;
+            target.pageIndex = textSelection->pageIndex;
+
+            emitPrimitive(target,
+                          QStringLiteral("text-selection#%1").arg(index),
+                          textSelection->geometry.at(index),
+                          OverlayLayer::Selection,
+                          OverlayPrimitiveKind::Rectangle,
+                          OverlaySeverity::None);
+        }
     }
 
     for (const InteractionTarget& handle : m_handles)

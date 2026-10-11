@@ -84,6 +84,15 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionPageLayoutTwoColumns",
         "actionPageLayoutTwoPages",
         "actionProperties",
+        "actionSelectText",
+        "actionSelectTextAll",
+        "actionDeselectText",
+        "actionSelectTable",
+        "actionCopyText",
+        "actionGoToNextLine",
+        "actionGoToPreviousLine",
+        "actionScreenshot",
+        "actionExtractImage",
     }
 )
 

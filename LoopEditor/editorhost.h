@@ -53,6 +53,7 @@
 #include "pdfoperationhistory.h"
 
 #include <QColor>
+#include <QImage>
 #include <QObject>
 #include <QHash>
 #include <QJsonObject>
@@ -440,6 +441,21 @@ public:
     /// in-flight drag with ToolChanged (#141 AC3).
     Q_INVOKABLE bool setActiveTool(const QString& toolId);
 
+    // ---- Select, copy and capture (issue #232) -------------------------------------
+    /// Copies the canvas text selection to the clipboard. The clipboard is only
+    /// written when there is text to copy; a page with no text layer reports
+    /// that state and an empty string is never copied as success.
+    Q_INVOKABLE bool copySelectedText();
+
+    /// Writes the visible canvas region to `url` as a PNG through the atomic
+    /// writer, which refuses to overwrite an existing file.
+    Q_INVOKABLE bool captureCanvasFileUrl(const QUrl& url);
+
+    /// Extracts the current page's images into `directory` through the atomic
+    /// writer. Refuses up front when any target file already exists, so a run
+    /// cannot half-overwrite the destination.
+    Q_INVOKABLE bool extractCurrentPageImagesFileUrl(const QUrl& directory);
+
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
     Q_INVOKABLE quint64 invokeCommand(const QString& commandId, const QVariantMap& parameters = {});
@@ -489,6 +505,15 @@ signals:
     void preflightProfileExportRequested();
     void preflightProfileSaveRequested();
 
+    /// The Screenshot command needs a destination, so the shell asks for one
+    /// and answers with captureCanvasFileUrl(). The command itself writes
+    /// nothing.
+    void screenshotRequested();
+
+    /// The Extract Image command needs a destination directory, so the shell
+    /// asks for one and answers with extractCurrentPageImagesFileUrl().
+    void imageExtractionRequested();
+
 private:
     void connectFacade();
     void connectViewport();
@@ -537,6 +562,10 @@ private:
     void applyInspectorSelection(const pdfinteraction::InteractionTarget& target);
     void applyEmptyCanvasInspectorSelection();
     void setInspectionMode(QString mode);
+
+    /// The visible canvas region as one image, or a null image when no admitted
+    /// tile intersects it or the snapshot is stale.
+    QImage composeVisibleCanvasImage() const;
 
     /// Operator review of the planned correction (#586). `fixPlanIsCurrent()` is the only
     /// authority on whether the reviewed plan still describes the open revision.

@@ -43,6 +43,7 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdocumentimageextractor.h"
 #include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
@@ -60,6 +61,7 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QBuffer>
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -543,6 +545,157 @@ bool EditorHost::setActiveTool(const QString& toolId)
 
     interaction->setActiveTool(*tool);
     Q_EMIT activeToolChanged();
+    return true;
+}
+
+bool EditorHost::copySelectedText()
+{
+    pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (!interaction)
+    {
+        return false;
+    }
+
+    // The refusal is typed and named, and the clipboard is left untouched: an
+    // empty string is never copied as success.
+    const pdfinteraction::TextCopyResult result = interaction->selectedText();
+    if (!result.copied)
+    {
+        announceDocumentState(tr("Copy refused: %1").arg(result.refusalReason));
+        return false;
+    }
+
+    QGuiApplication::clipboard()->setText(result.text);
+    announceDocumentState(tr("Copied %n character(s).", "", result.text.size()));
+    return true;
+}
+
+QImage EditorHost::composeVisibleCanvasImage() const
+{
+    pdfinteraction::PageSurfaceCoordinator* surfaces = m_session->surfaces();
+    if (!surfaces || !hasDocument())
+    {
+        return QImage();
+    }
+
+    const pdfinteraction::CanvasSnapshot& snapshot = surfaces->snapshot();
+    if (snapshot.isEmpty() || !snapshot.token.revision.isValid() ||
+        snapshot.token.revision != m_session->facade().currentRevision())
+    {
+        return QImage();
+    }
+
+    return pdfinteraction::composeCanvasImage(snapshot,
+                                              m_session->viewport().viewportRect(),
+                                              m_session->viewport().devicePixelRatio());
+}
+
+bool EditorHost::captureCanvasFileUrl(const QUrl& url)
+{
+    const QString path = url.toLocalFile();
+    if (path.isEmpty())
+    {
+        announceDocumentState(tr("Choose a local file to save the screenshot to."));
+        return false;
+    }
+
+    const QImage image = composeVisibleCanvasImage();
+    if (image.isNull())
+    {
+        announceDocumentState(tr("There is nothing on the canvas to capture."));
+        return false;
+    }
+
+    QByteArray png;
+    {
+        QBuffer buffer(&png);
+        buffer.open(QIODevice::WriteOnly);
+        if (!image.save(&buffer, "PNG"))
+        {
+            announceDocumentState(tr("The screenshot could not be encoded."));
+            return false;
+        }
+    }
+
+    const pdf::PDFOperationResult result =
+        pdf::PDFSafeFileWriter::writeData(path, png, pdf::PDFSafeFileWriter::OverwritePolicy::Fail);
+    if (!result)
+    {
+        announceDocumentState(tr("Could not write the screenshot: %1").arg(result.getErrorMessage()));
+        return false;
+    }
+
+    announceDocumentState(tr("Screenshot saved."));
+    return true;
+}
+
+bool EditorHost::extractCurrentPageImagesFileUrl(const QUrl& directory)
+{
+    if (!hasDocument() || !m_session->imageExtractor())
+    {
+        announceDocumentState(tr("Open a document before extracting images."));
+        return false;
+    }
+
+    const QString directoryPath = directory.toLocalFile();
+    if (directoryPath.isEmpty() || !QFileInfo(directoryPath).isDir())
+    {
+        announceDocumentState(tr("Choose an existing directory to extract the images into."));
+        return false;
+    }
+
+    QString typedError;
+    const QList<pdfinteraction::PageImage> images = m_session->imageExtractor()->extractPage(currentPage(), &typedError);
+    if (!typedError.isEmpty())
+    {
+        announceDocumentState(tr("Could not extract images: %1").arg(typedError));
+        return false;
+    }
+    if (images.isEmpty())
+    {
+        announceDocumentState(tr("This page has no images to extract."));
+        return false;
+    }
+
+    // Guard every planned output up front: extraction must not silently clobber
+    // an existing file, and a run must not stop halfway through the set.
+    QStringList plannedOutputs;
+    plannedOutputs.reserve(images.size());
+    for (int index = 0; index < images.size(); ++index)
+    {
+        plannedOutputs << QDir(directoryPath).filePath(QStringLiteral("page-%1-image-%2.png").arg(currentPage() + 1).arg(index + 1));
+    }
+
+    if (!pdf::PDFSafeFileWriter::findOutputConflicts(plannedOutputs, true).isEmpty())
+    {
+        announceDocumentState(tr("Refusing to overwrite an existing file in the destination directory."));
+        return false;
+    }
+
+    for (int index = 0; index < images.size(); ++index)
+    {
+        QByteArray png;
+        {
+            QBuffer buffer(&png);
+            buffer.open(QIODevice::WriteOnly);
+            if (!images[index].image.save(&buffer, "PNG"))
+            {
+                announceDocumentState(tr("An extracted image could not be encoded."));
+                return false;
+            }
+        }
+
+        const pdf::PDFOperationResult result =
+            pdf::PDFSafeFileWriter::writeData(plannedOutputs[index], png, pdf::PDFSafeFileWriter::OverwritePolicy::Fail);
+        if (!result)
+        {
+            announceDocumentState(tr("Could not write %1: %2")
+                                      .arg(QFileInfo(plannedOutputs[index]).fileName(), result.getErrorMessage()));
+            return false;
+        }
+    }
+
+    announceDocumentState(tr("Extracted %n image(s).", "", images.size()));
     return true;
 }
 
@@ -3525,6 +3678,25 @@ void EditorHost::connectInteraction()
             &pdfinteraction::InteractionController::dragCompleted,
             this,
             &EditorHost::onDragCompleted);
+
+    // Measurements and text selections are presentation state the accessible
+    // summary reports, so every change re-reads the summary.
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::measurementCompleted,
+            this,
+            [this](const pdfinteraction::Measurement& measurement)
+            {
+                announceDocumentState(tr("Measured %1.").arg(pdfinteraction::measurementReadout(measurement)));
+                bumpPresentation();
+            });
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::measurementsCleared,
+            this,
+            &EditorHost::bumpPresentation);
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::textSelectionChanged,
+            this,
+            &EditorHost::bumpPresentation);
 }
 
 void EditorHost::connectSurfaces()
@@ -3587,6 +3759,58 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionProperties"), [this]
          { setWorkspace(LoopWorkspace::Inspect); });
 
+    // ---- Select, copy and capture (issue #232) -------------------------------------
+    // A selection command finishes Failed with a typed code when it applied
+    // nothing, so "the menu did nothing" is reported rather than implied.
+    auto bindSelectionCommand = [this](const QString& id, std::function<bool()> action)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, action = std::move(action)](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            const bool applied = action();
+            m_session->catalog().finishInvocation(invocation,
+                                                  applied ? pdfinteraction::CommandTerminalState::Completed
+                                                          : pdfinteraction::CommandTerminalState::Failed,
+                                                  applied ? QString() : QStringLiteral("text/selection-refused"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindSelectionCommand(QStringLiteral("actionSelectText"), [this]
+                         { return setActiveTool(QStringLiteral("text")); });
+    bindSelectionCommand(QStringLiteral("actionSelectTextAll"), [this]
+                         { return m_session->interaction()->selectAllText(); });
+    bindSelectionCommand(QStringLiteral("actionDeselectText"), [this]
+                         { return m_session->interaction()->deselectText(); });
+    bindSelectionCommand(QStringLiteral("actionSelectTable"), [this]
+                         { return m_session->interaction()->selectTableUnderPointer(); });
+    bindSelectionCommand(QStringLiteral("actionGoToNextLine"), [this]
+                         { return m_session->interaction()->stepTextSelectionByLine(1); });
+    bindSelectionCommand(QStringLiteral("actionGoToPreviousLine"), [this]
+                         { return m_session->interaction()->stepTextSelectionByLine(-1); });
+
+    // Copy reports the controller's typed refusal, so a page with no text layer
+    // can never be copied as an empty success.
+    pdfinteraction::CommandCatalog::Handler copy;
+    copy.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        const bool copied = copySelectedText();
+        m_session->catalog().finishInvocation(invocation,
+                                              copied ? pdfinteraction::CommandTerminalState::Completed
+                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                              copied ? QString() : QStringLiteral("text/copy-refused"));
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionCopyText"), std::move(copy));
+
+    // Screenshot and image extraction need a destination, so the commands ask
+    // the shell for one and write nothing themselves.
+    bind(QStringLiteral("actionScreenshot"), [this]
+         { Q_EMIT screenshotRequested(); });
+    bind(QStringLiteral("actionExtractImage"), [this]
+         { Q_EMIT imageExtractionRequested(); });
+
     pdfinteraction::CommandCatalog::Handler move;
     move.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
     {
@@ -3616,6 +3840,20 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
     availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
+
+    // Select, copy and capture (issue #232). Every one of these is enabled with
+    // a document: Copy deliberately stays enabled without a selection so its
+    // typed refusal is reachable and visible, rather than the command silently
+    // disappearing from the menu.
+    for (const QString& id : { QStringLiteral("actionSelectText"), QStringLiteral("actionSelectTextAll"),
+                               QStringLiteral("actionDeselectText"), QStringLiteral("actionSelectTable"),
+                               QStringLiteral("actionCopyText"), QStringLiteral("actionGoToNextLine"),
+                               QStringLiteral("actionGoToPreviousLine"), QStringLiteral("actionScreenshot"),
+                               QStringLiteral("actionExtractImage") })
+    {
+        availability.insert(id, ready);
+    }
+
     m_session->catalog().setEnabledBatch(availability);
 }
 
@@ -4181,8 +4419,36 @@ void EditorHost::updateCanvasAccessibilitySummary()
     const int pageNumber = currentPage() + 1;
     const int pages = pageCount();
     const int zoomPercent = qRound(zoom() * 100.0);
-    m_canvas->setAccessibleDocumentSummary(
-        tr("Document canvas. Page %1 of %2. Zoom %3 percent.").arg(pageNumber).arg(pages).arg(zoomPercent));
+    QString summary = tr("Document canvas. Page %1 of %2. Zoom %3 percent.").arg(pageNumber).arg(pages).arg(zoomPercent);
+
+    // Measurements and text selections are readouts, so the screen reader gets
+    // them from the same summary the canvas already exposes.
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (interaction)
+    {
+        const pdfinteraction::InteractionState& state = interaction->state();
+        const std::optional<pdfinteraction::TextSelection>& selection = state.textSelection();
+        if (selection.has_value())
+        {
+            if (!selection->available)
+            {
+                summary += QLatin1Char(' ') + tr("Text selection unavailable: %1").arg(selection->unavailableReason);
+            }
+            else if (!selection->text.isEmpty())
+            {
+                summary += QLatin1Char(' ') + tr("Selected %n character(s).", "", selection->text.size());
+            }
+        }
+
+        if (!state.measurements().isEmpty())
+        {
+            summary += QLatin1Char(' ') + tr("Measurements: %1. Latest: %2.")
+                                              .arg(state.measurements().size())
+                                              .arg(pdfinteraction::measurementReadout(state.measurements().last()));
+        }
+    }
+
+    m_canvas->setAccessibleDocumentSummary(summary);
 }
 
 void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)

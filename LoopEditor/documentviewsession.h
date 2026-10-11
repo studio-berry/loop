@@ -31,6 +31,8 @@ class OverlayBuilder;
 class PageSurfaceCoordinator;
 class PDFDocumentContextSource;
 class PDFDocumentPageGeometrySource;
+class PDFDocumentTextSelectionSource;
+class PDFDocumentImageExtractor;
 }
 
 /// Owns the document-bound view machinery used by EditorHost.
@@ -65,6 +67,7 @@ public:
     pdfinteraction::HitTestDispatcher* hitTest() const noexcept { return m_hitTest.get(); }
     pdfinteraction::OverlayBuilder* overlays() const noexcept { return m_overlays.get(); }
     pdfinteraction::InteractionController* interaction() const noexcept { return m_interaction.get(); }
+    pdfinteraction::PDFDocumentImageExtractor* imageExtractor() const noexcept { return m_imageExtractor.get(); }
     pdfinteraction::ViewportCommandBridge& commandBridge() noexcept { return m_commandBridge; }
     pdfinteraction::PageBoxHitTestSource& pageBoxSource() noexcept { return m_pageBoxSource; }
 
@@ -131,6 +134,8 @@ private:
     std::unique_ptr<pdfinteraction::HitTestDispatcher> m_hitTest;
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
+    std::unique_ptr<pdfinteraction::PDFDocumentTextSelectionSource> m_textSelectionSource;
+    std::unique_ptr<pdfinteraction::PDFDocumentImageExtractor> m_imageExtractor;
     pdfinteraction::ViewportCommandBridge m_commandBridge;
     pdfinteraction::PageBoxHitTestSource m_pageBoxSource;
     qsizetype m_cacheLimit = DefaultCacheLimit;   // total authority (partitioned via PDFPageCacheBudget)

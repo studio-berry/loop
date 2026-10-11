@@ -24,6 +24,8 @@
 
 #include <QtMath>
 
+#include <cmath>
+
 namespace pdfinteraction
 {
 
@@ -91,6 +93,22 @@ void InteractionController::setKeyScrollStepPx(int pixels)
 void InteractionController::setTraceRecorder(InteractionTraceRecorder* recorder)
 {
     m_trace = recorder;
+}
+
+void InteractionController::setTextSelectionSource(ITextSelectionSource* source)
+{
+    m_textSelectionSource = source;
+}
+
+void InteractionController::setPageUnitSource(IPageUnitSource* source)
+{
+    m_pageUnitSource = source;
+}
+
+bool InteractionController::fenceIsCurrent() const
+{
+    const RevisionFencedToken fence = token();
+    return fence.revision.isValid() && (!m_revisions || m_revisions->isCurrent(fence.revision));
 }
 
 RevisionFencedToken InteractionController::token() const
@@ -162,7 +180,17 @@ void InteractionController::cancelActive(InteractionCancelReason reason)
         return;
     }
 
+    // A cancelled text-selection gesture drops the draft selection with it: an
+    // escape or a tool change must not leave half a selection the operator
+    // never finished. A completed selection is dropped by deselectText() or by
+    // a revision change, not by the gesture that made it.
+    const bool wasTextSelect = m_state.isActive(InteractionKind::TextSelect);
     m_state.cancel(reason);
+    if (wasTextSelect && m_state.clearTextSelection())
+    {
+        Q_EMIT textSelectionChanged();
+    }
+
     Q_EMIT interactionCancelled(reason);
 }
 
@@ -251,6 +279,21 @@ void InteractionController::handlePointerPress(const PointerIntent& intent)
         return;
     }
 
+    // Text and Measure own the left button the same way Hand does: they are
+    // tools, so what the press means is decided by the tool, not by the target
+    // under the pointer.
+    if (m_activeTool == InteractionTool::Text)
+    {
+        beginTextSelection(intent);
+        return;
+    }
+
+    if (m_activeTool == InteractionTool::Measure)
+    {
+        beginMeasurement(intent);
+        return;
+    }
+
     const bool selectionDidChange = m_state.setSelected(target);
     if (selectionDidChange)
     {
@@ -289,6 +332,39 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
         }
 
         m_state.setPointerPosition(intent.positionPx, -1, std::nullopt);
+        return;
+    }
+
+    if (m_state.isActive(InteractionKind::TextSelect))
+    {
+        // A text selection stays on the page it began on, exactly as a drag
+        // does; resolving the page under the pointer would retarget the
+        // gesture the moment it crossed a page boundary.
+        const std::optional<QPointF> pagePoint = m_viewport->viewportToPagePoint(intent.positionPx, m_textGesturePage);
+        m_state.setPointerPosition(intent.positionPx, m_textGesturePage, pagePoint);
+        if (pagePoint.has_value())
+        {
+            applyTextRange(m_textGesturePage, m_textAnchorPagePoint, *pagePoint);
+        }
+
+        publishOverlay();
+        return;
+    }
+
+    if (m_state.isActive(InteractionKind::Measure))
+    {
+        const std::optional<QPointF> pagePoint = m_viewport->viewportToPagePoint(intent.positionPx, m_measurePageIndex);
+        m_state.setPointerPosition(intent.positionPx, m_measurePageIndex, pagePoint);
+        if (pagePoint.has_value() && m_state.measurementDraft().has_value())
+        {
+            const Measurement draft = measureBetween(m_measurePageIndex,
+                                                     m_state.measurementDraft()->startPagePoint,
+                                                     *pagePoint,
+                                                     m_measurePointToMM);
+            m_state.setMeasurementDraft(draft, token());
+        }
+
+        publishOverlay();
         return;
     }
 
@@ -340,6 +416,51 @@ void InteractionController::handlePointerRelease(const PointerIntent& intent)
     if (m_state.isActive(InteractionKind::Pan) && panButtonReleased)
     {
         m_state.cancel(InteractionCancelReason::Explicit);
+        return;
+    }
+
+    if (m_state.isActive(InteractionKind::TextSelect))
+    {
+        // Below the hysteresis threshold a press and release is a click: it
+        // clears the selection instead of leaving a zero-length one behind.
+        const QPoint travel = intent.positionPx - m_textAnchorPx;
+        const bool travelled = std::hypot(qreal(travel.x()), qreal(travel.y())) > qreal(m_state.dragThresholdPx());
+
+        m_state.cancel(InteractionCancelReason::Explicit);
+        if (travelled)
+        {
+            Q_EMIT textSelectionChanged();
+        }
+        else if (m_state.clearTextSelection())
+        {
+            Q_EMIT textSelectionChanged();
+        }
+
+        publishOverlay();
+        return;
+    }
+
+    if (m_state.isActive(InteractionKind::Measure))
+    {
+        const QPoint travel = intent.positionPx - m_measureAnchorPx;
+        const bool travelled = std::hypot(qreal(travel.x()), qreal(travel.y())) > qreal(m_state.dragThresholdPx());
+
+        if (!travelled)
+        {
+            m_state.cancel(InteractionCancelReason::Explicit);
+            publishOverlay();
+            return;
+        }
+
+        const std::optional<Measurement> completed = m_state.completeMeasurement(token());
+        if (completed.has_value())
+        {
+            // Presentation state only. Nothing here is routed to a command:
+            // a measurement is not a document edit.
+            Q_EMIT measurementCompleted(*completed);
+        }
+
+        publishOverlay();
         return;
     }
 
@@ -418,6 +539,15 @@ void InteractionController::handleKey(const KeyIntent& intent)
             if (m_state.isActive() || m_state.drag().has_value())
             {
                 cancelActive(InteractionCancelReason::Escape);
+                publishOverlay();
+                return;
+            }
+
+            // With the measure tool active and nothing in progress, Escape is
+            // the keyboard path that drops the completed measurements, so the
+            // tool is operable without a mouse.
+            if (m_activeTool == InteractionTool::Measure && clearMeasurements())
+            {
                 publishOverlay();
             }
             return;
@@ -510,6 +640,311 @@ void InteractionController::selectTarget(const InteractionTarget& target)
     }
 
     Q_EMIT selectionChanged(target);
+    publishOverlay();
+}
+
+void InteractionController::beginTextSelection(const PointerIntent& intent)
+{
+    int pageIndex = -1;
+    QPointF pagePoint;
+    {
+        const StageTimer hitTimer(this, TraceStage::HitTest);
+        hitTestAt(intent.positionPx, &pageIndex, &pagePoint);
+    }
+
+    m_state.setPointerPosition(intent.positionPx, pageIndex, pageIndex >= 0 ? std::optional<QPointF>(pagePoint) : std::nullopt);
+
+    if (pageIndex < 0 || !m_textSelectionSource)
+    {
+        return;
+    }
+
+    m_textGesturePage = pageIndex;
+    m_textAnchorPx = intent.positionPx;
+    m_textAnchorPagePoint = pagePoint;
+
+    m_state.begin(InteractionKind::TextSelect, token());
+    applyTextRange(pageIndex, pagePoint, pagePoint);
+    publishOverlay();
+}
+
+void InteractionController::beginMeasurement(const PointerIntent& intent)
+{
+    int pageIndex = -1;
+    QPointF pagePoint;
+    {
+        const StageTimer hitTimer(this, TraceStage::HitTest);
+        hitTestAt(intent.positionPx, &pageIndex, &pagePoint);
+    }
+
+    m_state.setPointerPosition(intent.positionPx, pageIndex, pageIndex >= 0 ? std::optional<QPointF>(pagePoint) : std::nullopt);
+
+    qreal pointToMM = 0.0;
+    if (pageIndex < 0 || !m_pageUnitSource || !m_pageUnitSource->pagePointToMM(pageIndex, &pointToMM))
+    {
+        // No resolvable page scale is no measurement. A guessed 1.0 would be a
+        // wrong number presented as a fact.
+        return;
+    }
+
+    m_measurePageIndex = pageIndex;
+    m_measureAnchorPx = intent.positionPx;
+    m_measurePointToMM = pointToMM;
+
+    if (!m_state.begin(InteractionKind::Measure, token()))
+    {
+        return;
+    }
+
+    m_state.setMeasurementDraft(measureBetween(pageIndex, pagePoint, pagePoint, pointToMM), token());
+    publishOverlay();
+}
+
+void InteractionController::applyTextRange(int pageIndex, QPointF startPagePoint, QPointF endPagePoint)
+{
+    if (!m_textSelectionSource)
+    {
+        return;
+    }
+
+    const TextSelectionResult result = m_textSelectionSource->selectRange(pageIndex, startPagePoint, endPagePoint);
+
+    TextSelection selection;
+    selection.kind = TextSelectionKind::Text;
+    selection.pageIndex = pageIndex;
+    selection.available = result.available;
+    selection.unavailableReason = result.unavailableReason;
+    selection.text = result.text;
+    selection.geometry = result.geometry;
+    selection.firstLine = result.firstLine;
+    selection.lastLine = result.lastLine;
+
+    // A drag in progress is overlay-only: the change is announced once, when
+    // the gesture completes, not on every pointer delta.
+    m_state.setTextSelection(selection, token());
+}
+
+bool InteractionController::storeTextSelection(const TextSelection& selection)
+{
+    if (!m_state.setTextSelection(selection, token()))
+    {
+        return false;
+    }
+
+    Q_EMIT textSelectionChanged();
+    publishOverlay();
+    return true;
+}
+
+TextCopyResult InteractionController::selectedText() const
+{
+    TextCopyResult result;
+
+    if (!m_textSelectionSource)
+    {
+        result.refusalCode = QStringLiteral("text/unavailable");
+        result.refusalReason = tr("Text selection is unavailable.");
+        return result;
+    }
+
+    const std::optional<TextSelection>& selection = m_state.textSelection();
+    if (!selection.has_value() || !selection->isValid())
+    {
+        result.refusalCode = QStringLiteral("text/nothing-selected");
+        result.refusalReason = tr("Nothing is selected.");
+        return result;
+    }
+
+    if (m_revisions && !m_revisions->isCurrent(selection->fence.revision))
+    {
+        result.refusalCode = QStringLiteral("text/stale-selection");
+        result.refusalReason = tr("The document changed after this selection was made.");
+        return result;
+    }
+
+    if (!selection->available)
+    {
+        result.refusalCode = QStringLiteral("text/no-text-layer");
+        result.refusalReason = selection->unavailableReason.isEmpty()
+                                   ? tr("This page has no text layer.")
+                                   : selection->unavailableReason;
+        return result;
+    }
+
+    if (selection->text.isEmpty())
+    {
+        result.refusalCode = QStringLiteral("text/nothing-selected");
+        result.refusalReason = tr("The selection contains no text.");
+        return result;
+    }
+
+    result.copied = true;
+    result.text = selection->text;
+    return result;
+}
+
+bool InteractionController::selectAllText()
+{
+    const int pageIndex = m_viewport->currentPage();
+    if (pageIndex < 0 || !m_textSelectionSource || !fenceIsCurrent())
+    {
+        return false;
+    }
+
+    const TextSelectionResult result = m_textSelectionSource->selectPage(pageIndex);
+
+    TextSelection selection;
+    selection.kind = TextSelectionKind::Text;
+    selection.pageIndex = pageIndex;
+    selection.available = result.available;
+    selection.unavailableReason = result.unavailableReason;
+    selection.text = result.text;
+    selection.geometry = result.geometry;
+    selection.firstLine = result.firstLine;
+    selection.lastLine = result.lastLine;
+
+    return storeTextSelection(selection);
+}
+
+bool InteractionController::selectTableUnderPointer()
+{
+    if (!m_textSelectionSource || !fenceIsCurrent())
+    {
+        return false;
+    }
+
+    QPointF pagePoint;
+    const int pageIndex = m_viewport->pageUnderPoint(m_state.pointerPx(), &pagePoint);
+    if (pageIndex < 0)
+    {
+        return false;
+    }
+
+    const TextSelectionResult result = m_textSelectionSource->selectBlockAt(pageIndex, pagePoint);
+
+    TextSelection selection;
+    selection.kind = TextSelectionKind::Block;
+    selection.pageIndex = pageIndex;
+    selection.available = result.available;
+    selection.unavailableReason = result.unavailableReason;
+    selection.text = result.text;
+    selection.geometry = result.geometry;
+    selection.firstLine = result.firstLine;
+    selection.lastLine = result.lastLine;
+
+    return storeTextSelection(selection);
+}
+
+bool InteractionController::stepTextSelectionByLine(int direction)
+{
+    if (direction == 0 || !m_textSelectionSource || !fenceIsCurrent())
+    {
+        return false;
+    }
+
+    const std::optional<TextSelection>& current = m_state.textSelection();
+    const bool haveSteppableSelection = current.has_value() && current->isValid() && current->available && current->pageIndex >= 0;
+
+    const int pageIndex = haveSteppableSelection ? current->pageIndex : m_viewport->currentPage();
+    if (pageIndex < 0)
+    {
+        return false;
+    }
+
+    const int count = m_textSelectionSource->lineCount(pageIndex);
+    if (count <= 0)
+    {
+        return false;
+    }
+
+    int target = -1;
+    if (haveSteppableSelection && current->pageIndex == pageIndex)
+    {
+        target = direction > 0
+                     ? (current->lastLine >= 0 ? current->lastLine + 1 : 0)
+                     : (current->firstLine >= 0 ? current->firstLine - 1 : count - 1);
+    }
+    else
+    {
+        target = direction > 0 ? 0 : count - 1;
+    }
+
+    if (target < 0 || target >= count)
+    {
+        // The selection is already at the end of the page's text; the caller
+        // reports that rather than wrapping onto another page.
+        return false;
+    }
+
+    const TextSelectionResult result = m_textSelectionSource->selectLine(pageIndex, target);
+    if (!result.available)
+    {
+        return false;
+    }
+
+    TextSelection selection;
+    selection.kind = TextSelectionKind::Text;
+    selection.pageIndex = pageIndex;
+    selection.available = true;
+    selection.text = result.text;
+    selection.geometry = result.geometry;
+    selection.firstLine = result.firstLine >= 0 ? result.firstLine : target;
+    selection.lastLine = result.lastLine >= 0 ? result.lastLine : target;
+
+    return storeTextSelection(selection);
+}
+
+bool InteractionController::deselectText()
+{
+    if (!m_state.clearTextSelection())
+    {
+        return false;
+    }
+
+    Q_EMIT textSelectionChanged();
+    publishOverlay();
+    return true;
+}
+
+bool InteractionController::clearMeasurements()
+{
+    if (!m_state.clearMeasurements())
+    {
+        return false;
+    }
+
+    Q_EMIT measurementsCleared();
+    return true;
+}
+
+void InteractionController::handleRevisionChanged()
+{
+    const bool wasActive = m_state.isActive() || m_state.drag().has_value();
+    if (wasActive)
+    {
+        cancelActive(InteractionCancelReason::RevisionChanged);
+    }
+
+    const bool hadSelection = m_state.textSelection().has_value();
+    const bool hadMeasurements = m_state.measurementDraft().has_value() || !m_state.measurements().isEmpty();
+    if (!m_state.clearRevisionBoundState())
+    {
+        if (wasActive)
+        {
+            publishOverlay();
+        }
+        return;
+    }
+
+    if (hadSelection)
+    {
+        Q_EMIT textSelectionChanged();
+    }
+    if (hadMeasurements)
+    {
+        Q_EMIT measurementsCleared();
+    }
+
     publishOverlay();
 }
 

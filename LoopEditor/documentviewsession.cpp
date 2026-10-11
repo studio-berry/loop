@@ -5,6 +5,8 @@
 #include "interactioncontroller.h"
 #include "overlaybuilder.h"
 #include "pagesurfacecoordinator.h"
+#include "pdfdocumentimageextractor.h"
+#include "pdfdocumenttextselectionsource.h"
 #include "pdfdocumentsession.h"
 #include "pdfpagecachebudget.h"
 
@@ -104,6 +106,16 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                             *m_hitTest,
                                                                             *m_overlays,
                                                                             this);
+    m_textSelectionSource = std::make_unique<pdfinteraction::PDFDocumentTextSelectionSource>(&m_context);
+    m_interaction->setTextSelectionSource(m_textSelectionSource.get());
+    m_imageExtractor = std::make_unique<pdfinteraction::PDFDocumentImageExtractor>(&m_context);
+
+    // The revision moving under a measurement or a text selection is the
+    // conflict path: both are dropped rather than carried onto geometry the
+    // operator never saw. The session owns the stack, so it owns this wiring.
+    connect(&m_context, &pdf::PDFDocumentContext::revisionChanged, this,
+            [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
+            { m_interaction->handleRevisionChanged(); });
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     applyInitialViewportScreenMetrics(m_viewport);
@@ -205,6 +217,9 @@ void DocumentViewSession::prepareDocumentView()
     m_interaction->invalidate();
     m_geometry = std::make_unique<pdfinteraction::PDFDocumentPageGeometrySource>(&m_context);
     m_viewport.setGeometrySource(m_geometry.get());
+    // The geometry source answers the page's /UserUnit scale too, so the
+    // measure tool reads the same page facts the viewport laid out.
+    m_interaction->setPageUnitSource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
 
@@ -223,6 +238,7 @@ void DocumentViewSession::prepareDocumentView()
 void DocumentViewSession::clearDocumentView()
 {
     m_interaction->invalidate();
+    m_interaction->setPageUnitSource(nullptr);
     m_viewport.setGeometrySource(nullptr);
     m_geometry.reset();
     m_surfaces->invalidate(m_facade->currentRevision());

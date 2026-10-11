@@ -36,6 +36,7 @@
 #include <QJsonDocument>
 #include <QSignalSpy>
 
+#include <cmath>
 #include <memory>
 
 #include "hittestsource.h"
@@ -122,6 +123,130 @@ public:
     bool isCurrent(const pdf::PDFRevisionIdentity& candidate) const override { return candidate == revision; }
 
     pdf::PDFRevisionIdentity revision = makeRevision(QStringLiteral("doc-1"));
+};
+
+/// The page's own /UserUnit scale, injected so a measurement test does not need
+/// a PDF. The default is the un-scaled point-to-millimetre factor.
+class FakePageUnitSource final : public pdfinteraction::IPageUnitSource
+{
+public:
+    bool pagePointToMM(int pageIndex, qreal* factor) const override
+    {
+        if (!factor || pageIndex < 0 || pageIndex >= pageCount)
+        {
+            return false;
+        }
+
+        *factor = pointToMM;
+        return true;
+    }
+
+    int pageCount = 3;
+    qreal pointToMM = pdf::PDF_POINT_TO_MM;
+};
+
+/// Scripted text extraction, so the controller's selection, stepping and copy
+/// behavior is provable without a document. The Core-backed source is exercised
+/// separately against a real document in UnitTestsDocumentViewSession.
+class ScriptedTextSelectionSource final : public pdfinteraction::ITextSelectionSource
+{
+public:
+    bool hasTextLayer(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available;
+    }
+
+    pdfinteraction::TextSelectionResult selectRange(int pageIndex, QPointF startPagePoint, QPointF endPagePoint) override
+    {
+        Q_UNUSED(pageIndex);
+        lastRangeStart = startPagePoint;
+        lastRangeEnd = endPagePoint;
+
+        pdfinteraction::TextSelectionResult result = baseResult();
+        if (!result.available)
+        {
+            return result;
+        }
+
+        result.text = rangeText;
+        result.geometry = { QRectF(startPagePoint, endPagePoint).normalized() };
+        result.firstLine = 0;
+        result.lastLine = 1;
+        return result;
+    }
+
+    pdfinteraction::TextSelectionResult selectPage(int pageIndex) override
+    {
+        Q_UNUSED(pageIndex);
+        pdfinteraction::TextSelectionResult result = baseResult();
+        if (result.available)
+        {
+            result.text = pageText;
+            result.geometry = { QRectF(0.0, 0.0, 50.0, 50.0) };
+            result.firstLine = 0;
+            result.lastLine = lineTexts.size() - 1;
+        }
+        return result;
+    }
+
+    pdfinteraction::TextSelectionResult selectBlockAt(int pageIndex, QPointF pagePoint) override
+    {
+        Q_UNUSED(pageIndex);
+        lastBlockPoint = pagePoint;
+
+        pdfinteraction::TextSelectionResult result = baseResult();
+        if (result.available)
+        {
+            result.text = blockText;
+            result.geometry = { QRectF(10.0, 10.0, 20.0, 20.0) };
+            result.firstLine = 0;
+            result.lastLine = 0;
+        }
+        return result;
+    }
+
+    int lineCount(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available ? lineTexts.size() : -1;
+    }
+
+    pdfinteraction::TextSelectionResult selectLine(int pageIndex, int lineIndex) override
+    {
+        Q_UNUSED(pageIndex);
+
+        pdfinteraction::TextSelectionResult result = baseResult();
+        if (result.available && lineIndex >= 0 && lineIndex < lineTexts.size())
+        {
+            result.text = lineTexts.at(lineIndex);
+            result.geometry = { QRectF(0.0, qreal(lineIndex) * 10.0, 50.0, 8.0) };
+            result.firstLine = lineIndex;
+            result.lastLine = lineIndex;
+        }
+        return result;
+    }
+
+    bool available = true;
+    QString rangeText = QStringLiteral("selected text");
+    QString pageText = QStringLiteral("whole page");
+    QString blockText = QStringLiteral("block text");
+    QStringList lineTexts = { QStringLiteral("line one"), QStringLiteral("line two") };
+    QPointF lastRangeStart;
+    QPointF lastRangeEnd;
+    QPointF lastBlockPoint;
+
+private:
+    pdfinteraction::TextSelectionResult baseResult() const
+    {
+        pdfinteraction::TextSelectionResult result;
+        result.available = available;
+        if (!available)
+        {
+            result.unavailableReason = QStringLiteral("This page has no text layer.");
+        }
+        return result;
+    }
 };
 
 /// Returns targets a test wrote down, so hit-test precedence is provable without
@@ -228,6 +353,19 @@ private Q_SLOTS:
     void traceReplayReproducesState();
     void traceCarriesNoDocumentPayload();
 
+    void measureToolMeasuresInProductionUnits();
+    void measureToolReportsNoDragSessionOrTargetSelection();
+    void measureToolClickWithoutTravelRecordsNothing();
+    void measureToolRefusesWithoutAPageScale();
+    void revisionChangeClearsMeasurementsAndTextSelection();
+    void textToolStoresTypedSelectionFromTheSource();
+    void textToolClickClearsTheSelection();
+    void copyReturnsSelectedTextAndNeverAnEmptyString();
+    void copyRefusesOnAPageWithNoTextLayer();
+    void selectAllAndDeselectText();
+    void steppingByLineWalksTheTextLayer();
+    void tableSelectionUsesTheBlockUnderThePointer();
+
 private:
     void setViewport();
     pdfinteraction::InteractionTarget objectTarget() const;
@@ -239,6 +377,8 @@ private:
     std::unique_ptr<pdfinteraction::HitTestDispatcher> m_dispatcher;
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
+    std::unique_ptr<FakePageUnitSource> m_units;
+    std::unique_ptr<ScriptedTextSelectionSource> m_textSource;
 };
 
 void InteractionControllerTest::init()
@@ -262,11 +402,18 @@ void InteractionControllerTest::init()
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport);
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_dispatcher, *m_overlays);
+
+    m_units = std::make_unique<FakePageUnitSource>();
+    m_textSource = std::make_unique<ScriptedTextSelectionSource>();
+    m_controller->setPageUnitSource(m_units.get());
+    m_controller->setTextSelectionSource(m_textSource.get());
 }
 
 void InteractionControllerTest::cleanup()
 {
     m_controller.reset();
+    m_textSource.reset();
+    m_units.reset();
     m_overlays.reset();
     m_dispatcher.reset();
     m_targets.reset();
@@ -280,12 +427,16 @@ pdfinteraction::InteractionTarget InteractionControllerTest::objectTarget() cons
     return makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0));
 }
 
-/// Viewport pixel for a page-space point on page 0, through the same matrix the
-/// page surfaces use. Computing it any other way would test the test's
-/// arithmetic rather than the controller's.
+/// A viewport pixel for a page-space point on page 0, through the same matrix
+/// the page surfaces use.
+static QPoint viewportPointFor(const pdfinteraction::ViewportController& viewport, int pageIndex, QPointF pagePoint)
+{
+    return viewport.pagePointToViewportMatrix(pageIndex).map(pagePoint).toPoint();
+}
+
 static QPoint viewportPointFor(const pdfinteraction::ViewportController& viewport, QPointF pagePoint)
 {
-    return viewport.pagePointToViewportMatrix(0).map(pagePoint).toPoint();
+    return viewportPointFor(viewport, 0, pagePoint);
 }
 
 void InteractionControllerTest::hoverChangeIsOverlayOnly()
@@ -510,12 +661,16 @@ void InteractionControllerTest::toolVocabularyNamesRoundTrip()
 
     QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Select)), QStringLiteral("select"));
     QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Hand)), QStringLiteral("hand"));
+    QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Text)), QStringLiteral("text"));
+    QCOMPARE(QString::fromLatin1(pdfinteraction::getInteractionToolName(InteractionTool::Measure)), QStringLiteral("measure"));
 
     QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("select")).value_or(InteractionTool::Hand), InteractionTool::Select);
     QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("hand")).value_or(InteractionTool::Select), InteractionTool::Hand);
+    QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("text")).value_or(InteractionTool::Hand), InteractionTool::Text);
+    QCOMPARE(pdfinteraction::interactionToolFromName(QStringLiteral("measure")).value_or(InteractionTool::Hand), InteractionTool::Measure);
 
     // A name outside the vocabulary is refused, never coerced into a default.
-    QVERIFY(!pdfinteraction::interactionToolFromName(QStringLiteral("measure")).has_value());
+    QVERIFY(!pdfinteraction::interactionToolFromName(QStringLiteral("lasso")).has_value());
     QVERIFY(!pdfinteraction::interactionToolFromName(QString()).has_value());
 }
 
@@ -1178,6 +1333,333 @@ void InteractionControllerTest::traceCarriesNoDocumentPayload()
     QVERIFY(!traceJson.contains("secret-document-identifier"));
     QVERIFY(!traceJson.contains("finding-a"));
     QVERIFY(!traceJson.contains("text"));
+}
+
+/// Page-space tolerance for a measurement that made a round trip through
+/// integer viewport pixels. Half a page unit at two pixels per unit is a quarter
+/// of a pixel, and the /UserUnit 2 fixture doubles it; 0.5 mm is the stated
+/// tolerance the acceptance asks for.
+constexpr qreal MeasurementToleranceMM = 0.5;
+
+void InteractionControllerTest::measureToolMeasuresInProductionUnits()
+{
+    // A /UserUnit 2 page: the same page-space points span twice the physical
+    // distance, and the readout must say so.
+    m_units->pointToMM = pdf::PDF_POINT_TO_MM * 2.0;
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Measure);
+
+    const QPointF startPagePoint(10.0, 10.0);
+    const QPointF endPagePoint(40.0, 50.0);
+
+    QSignalSpy measureSpy(m_controller.get(), &pdfinteraction::InteractionController::measurementCompleted);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 1, Qt::LeftButton, Qt::LeftButton));
+    QVERIFY(m_controller->state().measurementDraft().has_value());
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 3, Qt::LeftButton));
+
+    QCOMPARE(measureSpy.size(), 1);
+    QCOMPARE(m_controller->state().measurements().size(), 1);
+
+    const pdfinteraction::Measurement measurement = m_controller->state().measurements().constFirst();
+    const qreal referenceMM =
+        std::hypot(endPagePoint.x() - startPagePoint.x(), endPagePoint.y() - startPagePoint.y()) * m_units->pointToMM;
+
+    QVERIFY(qAbs(measurement.distanceMM - referenceMM) <= MeasurementToleranceMM);
+    QVERIFY(measurement.isValid());
+    QCOMPARE(measurement.fence, m_controller->token());
+    QCOMPARE(measurement.pointToMM, m_units->pointToMM);
+    QCOMPARE(pdfinteraction::measurementReadout(measurement), QStringLiteral("35.3 mm"));
+
+    // The region the two points span is reported in the same units.
+    QVERIFY(qAbs(measurement.widthMM - 30.0 * m_units->pointToMM) <= MeasurementToleranceMM);
+    QVERIFY(qAbs(measurement.heightMM - 40.0 * m_units->pointToMM) <= MeasurementToleranceMM);
+    QVERIFY(qAbs(measurement.perimeterMM - 2.0 * (measurement.widthMM + measurement.heightMM)) <= MeasurementToleranceMM);
+    QVERIFY(qAbs(measurement.areaMM2 - measurement.widthMM * measurement.heightMM) <= 1.0);
+}
+
+void InteractionControllerTest::measureToolReportsNoDragSessionOrTargetSelection()
+{
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Measure);
+
+    QSignalSpy dragSpy(m_controller.get(), &pdfinteraction::InteractionController::dragCompleted);
+    QSignalSpy selectionSpy(m_controller.get(), &pdfinteraction::InteractionController::selectionChanged);
+    const quint64 generationBefore = m_viewport->requestGeneration();
+    const pdf::PDFRevisionIdentity revisionBefore = m_revisions->currentRevision();
+
+    const QPointF startPagePoint(10.0, 10.0);
+    const QPointF endPagePoint(40.0, 50.0);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 3, Qt::LeftButton));
+
+    // A measurement is presentation state: no DragSession, no target selection,
+    // no document revision change and no page render demand.
+    QCOMPARE(dragSpy.size(), 0);
+    QCOMPARE(selectionSpy.size(), 0);
+    QVERIFY(!m_controller->state().drag().has_value());
+    QVERIFY(!m_controller->state().selected().isValid());
+    QCOMPARE(m_revisions->currentRevision(), revisionBefore);
+    QCOMPARE(m_viewport->requestGeneration(), generationBefore);
+}
+
+void InteractionControllerTest::measureToolClickWithoutTravelRecordsNothing()
+{
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Measure);
+
+    const QPoint point = viewportPointFor(*m_viewport, QPointF(30.0, 30.0));
+
+    QSignalSpy measureSpy(m_controller.get(), &pdfinteraction::InteractionController::measurementCompleted);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, point, 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, point, 2, Qt::LeftButton));
+
+    // Below the hysteresis threshold: no zero-length measurement is recorded.
+    QCOMPARE(measureSpy.size(), 0);
+    QVERIFY(m_controller->state().measurements().isEmpty());
+    QVERIFY(!m_controller->state().measurementDraft().has_value());
+}
+
+void InteractionControllerTest::measureToolRefusesWithoutAPageScale()
+{
+    const QPointF startPagePoint(10.0, 10.0);
+    const QPointF endPagePoint(40.0, 50.0);
+
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Measure);
+
+    // A controller with no unit source must refuse the gesture rather than
+    // measure at a guessed 1.0.
+    m_controller->setPageUnitSource(nullptr);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 3, Qt::LeftButton));
+
+    QVERIFY(m_controller->state().measurements().isEmpty());
+    QVERIFY(!m_controller->state().measurementDraft().has_value());
+
+    // And a source that cannot resolve the page refuses the same way.
+    m_units->pageCount = 0;
+    m_controller->setPageUnitSource(m_units.get());
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 4, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 5, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 6, Qt::LeftButton));
+
+    QVERIFY(m_controller->state().measurements().isEmpty());
+    QVERIFY(!m_controller->state().measurementDraft().has_value());
+}
+
+void InteractionControllerTest::revisionChangeClearsMeasurementsAndTextSelection()
+{
+    // A completed measurement...
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Measure);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, QPointF(10.0, 10.0)), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(40.0, 50.0)), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, QPointF(40.0, 50.0)), 3, Qt::LeftButton));
+
+    // ...and a text selection, both taken against the current revision.
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Text);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, QPointF(20.0, 20.0)), 4, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 5, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 6, Qt::LeftButton));
+
+    QCOMPARE(m_controller->state().measurements().size(), 1);
+    QVERIFY(m_controller->state().textSelection().has_value());
+
+    QSignalSpy clearedSpy(m_controller.get(), &pdfinteraction::InteractionController::measurementsCleared);
+    QSignalSpy textSpy(m_controller.get(), &pdfinteraction::InteractionController::textSelectionChanged);
+
+    // The document revision moved under both facts.
+    m_revisions->revision = makeRevision(QStringLiteral("doc-1"), 2);
+    m_controller->handleRevisionChanged();
+
+    // Neither is carried onto geometry the operator never saw.
+    QVERIFY(m_controller->state().measurements().isEmpty());
+    QVERIFY(!m_controller->state().measurementDraft().has_value());
+    QVERIFY(!m_controller->state().textSelection().has_value());
+    QCOMPARE(clearedSpy.size(), 1);
+    QCOMPARE(textSpy.size(), 1);
+
+    const pdfinteraction::TextCopyResult refused = m_controller->selectedText();
+    QVERIFY(!refused.copied);
+    QCOMPARE(refused.refusalCode, QStringLiteral("text/nothing-selected"));
+}
+
+void InteractionControllerTest::textToolStoresTypedSelectionFromTheSource()
+{
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Text);
+
+    QSignalSpy targetSpy(m_controller.get(), &pdfinteraction::InteractionController::selectionChanged);
+    QSignalSpy textSpy(m_controller.get(), &pdfinteraction::InteractionController::textSelectionChanged);
+
+    const QPointF startPagePoint(20.0, 20.0);
+    const QPointF endPagePoint(60.0, 60.0);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 3, Qt::LeftButton));
+
+    // Announced once, when the gesture completed, not on every pointer delta.
+    QCOMPARE(textSpy.size(), 1);
+
+    // A text selection never selects a target: text is not an
+    // InteractionTargetKind.
+    QCOMPARE(targetSpy.size(), 0);
+    QVERIFY(!m_controller->state().selected().isValid());
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(selection->isValid());
+    QVERIFY(selection->available);
+    QCOMPARE(selection->kind, pdfinteraction::TextSelectionKind::Text);
+    QCOMPARE(selection->pageIndex, 0);
+    QCOMPARE(selection->text, m_textSource->rangeText);
+    QCOMPARE(selection->firstLine, 0);
+    QCOMPARE(selection->lastLine, 1);
+    QVERIFY(!selection->geometry.isEmpty());
+    QCOMPARE(selection->fence, m_controller->token());
+
+    // The source was asked in page space, through the viewport's own transform.
+    QVERIFY(qAbs(m_textSource->lastRangeStart.x() - startPagePoint.x()) <= 1.0);
+    QVERIFY(qAbs(m_textSource->lastRangeEnd.x() - endPagePoint.x()) <= 1.0);
+    QVERIFY(qAbs(m_textSource->lastRangeEnd.y() - endPagePoint.y()) <= 1.0);
+}
+
+void InteractionControllerTest::textToolClickClearsTheSelection()
+{
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Text);
+
+    const QPointF startPagePoint(20.0, 20.0);
+    const QPointF endPagePoint(60.0, 60.0);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, startPagePoint), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, endPagePoint), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, endPagePoint), 3, Qt::LeftButton));
+
+    QVERIFY(m_controller->state().textSelection().has_value());
+
+    // A press and release without travel is a click: it clears the selection
+    // rather than leaving a zero-length one behind.
+    const QPoint click = viewportPointFor(*m_viewport, QPointF(30.0, 30.0));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, click, 4, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, click, 5, Qt::LeftButton));
+
+    QVERIFY(!m_controller->state().textSelection().has_value());
+}
+
+void InteractionControllerTest::copyReturnsSelectedTextAndNeverAnEmptyString()
+{
+    // Nothing is selected: the refusal is typed and the text is empty.
+    const pdfinteraction::TextCopyResult nothing = m_controller->selectedText();
+    QVERIFY(!nothing.copied);
+    QCOMPARE(nothing.refusalCode, QStringLiteral("text/nothing-selected"));
+    QVERIFY(nothing.text.isEmpty());
+    QVERIFY(!nothing.refusalReason.isEmpty());
+
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Text);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, QPointF(20.0, 20.0)), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 3, Qt::LeftButton));
+
+    const pdfinteraction::TextCopyResult copied = m_controller->selectedText();
+    QVERIFY(copied.copied);
+    QCOMPARE(copied.text, m_textSource->rangeText);
+    QVERIFY(copied.refusalCode.isEmpty());
+
+    // A selection that carries no text is refused, never copied as an empty
+    // success.
+    m_textSource->rangeText.clear();
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, QPointF(20.0, 20.0)), 4, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 5, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 6, Qt::LeftButton));
+
+    const pdfinteraction::TextCopyResult empty = m_controller->selectedText();
+    QVERIFY(!empty.copied);
+    QCOMPARE(empty.refusalCode, QStringLiteral("text/nothing-selected"));
+    QVERIFY(empty.text.isEmpty());
+}
+
+void InteractionControllerTest::copyRefusesOnAPageWithNoTextLayer()
+{
+    m_textSource->available = false;
+    m_controller->setActiveTool(pdfinteraction::InteractionTool::Text);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Press, viewportPointFor(*m_viewport, QPointF(20.0, 20.0)), 1, Qt::LeftButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 2, Qt::NoButton, Qt::LeftButton));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, viewportPointFor(*m_viewport, QPointF(60.0, 60.0)), 3, Qt::LeftButton));
+
+    // The selection reports the state instead of pretending to be empty.
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(!selection->available);
+    QCOMPARE(selection->unavailableReason, QStringLiteral("This page has no text layer."));
+    QVERIFY(selection->text.isEmpty());
+
+    const pdfinteraction::TextCopyResult result = m_controller->selectedText();
+    QVERIFY(!result.copied);
+    QCOMPARE(result.refusalCode, QStringLiteral("text/no-text-layer"));
+    QVERIFY(result.text.isEmpty());
+}
+
+void InteractionControllerTest::selectAllAndDeselectText()
+{
+    QSignalSpy textSpy(m_controller.get(), &pdfinteraction::InteractionController::textSelectionChanged);
+
+    QVERIFY(m_controller->selectAllText());
+    QCOMPARE(textSpy.size(), 1);
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(selection->available);
+    QCOMPARE(selection->kind, pdfinteraction::TextSelectionKind::Text);
+    QCOMPARE(selection->text, m_textSource->pageText);
+    QCOMPARE(selection->firstLine, 0);
+    QCOMPARE(selection->lastLine, 1);
+
+    QVERIFY(m_controller->deselectText());
+    QVERIFY(!m_controller->state().textSelection().has_value());
+    QCOMPARE(textSpy.size(), 2);
+
+    // Idempotent: nothing to drop is not a change.
+    QVERIFY(!m_controller->deselectText());
+    QCOMPARE(textSpy.size(), 2);
+}
+
+void InteractionControllerTest::steppingByLineWalksTheTextLayer()
+{
+    // With no selection, stepping forward selects the first line of the page's
+    // text layer in reading order.
+    QVERIFY(m_controller->stepTextSelectionByLine(1));
+    QCOMPARE(m_controller->state().textSelection()->text, m_textSource->lineTexts.at(0));
+    QCOMPARE(m_controller->state().textSelection()->firstLine, 0);
+    QCOMPARE(m_controller->state().textSelection()->lastLine, 0);
+
+    QVERIFY(m_controller->stepTextSelectionByLine(1));
+    QCOMPARE(m_controller->state().textSelection()->text, m_textSource->lineTexts.at(1));
+
+    // Past the last line: refused rather than wrapped onto another page.
+    QVERIFY(!m_controller->stepTextSelectionByLine(1));
+    QCOMPARE(m_controller->state().textSelection()->text, m_textSource->lineTexts.at(1));
+
+    QVERIFY(m_controller->stepTextSelectionByLine(-1));
+    QCOMPARE(m_controller->state().textSelection()->text, m_textSource->lineTexts.at(0));
+    QVERIFY(!m_controller->stepTextSelectionByLine(-1));
+}
+
+void InteractionControllerTest::tableSelectionUsesTheBlockUnderThePointer()
+{
+    // "Under the pointer" needs a pointer position over the page.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(30.0, 30.0)), 1));
+
+    QVERIFY(m_controller->selectTableUnderPointer());
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(selection->available);
+    QCOMPARE(selection->kind, pdfinteraction::TextSelectionKind::Block);
+    QCOMPARE(selection->text, m_textSource->blockText);
+    QVERIFY(qAbs(m_textSource->lastBlockPoint.x() - 30.0) <= 1.0);
+    QVERIFY(qAbs(m_textSource->lastBlockPoint.y() - 30.0) <= 1.0);
 }
 
 QTEST_GUILESS_MAIN(InteractionControllerTest)

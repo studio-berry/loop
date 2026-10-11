@@ -25,6 +25,7 @@
 
 #include "interactionglobal.h"
 
+#include "pageunitsource.h"
 #include "pdfdocumentcontext.h"
 #include "pdfpage.h"
 
@@ -89,7 +90,11 @@ public:
 /// The context is observed through a QPointer, so a destroyed context degrades to
 /// an empty document rather than a dangling read -- the same rule
 /// PDFDocumentContextSource follows.
-class PDFDocumentPageGeometrySource final : public IPageGeometrySource
+///
+/// It also answers the page's user-space scale (IPageUnitSource), because that
+/// is the same page-facts question: the viewport's caller reads the page's
+/// /UserUnit for measurement without a second document-backed adapter.
+class PDFDocumentPageGeometrySource final : public IPageGeometrySource, public IPageUnitSource
 {
 public:
     explicit PDFDocumentPageGeometrySource(pdf::PDFDocumentContext* context);
@@ -97,6 +102,8 @@ public:
     int pageCount() const override;
     QSizeF pageSizeMM(int pageIndex, pdf::PageRotation extraRotation) const override;
     QTransform pagePointToDeviceMatrix(int pageIndex, const QRectF& deviceRect, pdf::PageRotation extraRotation) const override;
+
+    bool pagePointToMM(int pageIndex, qreal* factor) const override;
 
 private:
     const pdf::PDFDocument* document() const;

@@ -43,6 +43,10 @@ const char* getInteractionKindName(InteractionKind kind)
             return "marquee";
         case InteractionKind::Pan:
             return "pan";
+        case InteractionKind::TextSelect:
+            return "text-select";
+        case InteractionKind::Measure:
+            return "measure";
         case InteractionKind::ToolGesture:
             return "tool-gesture";
     }
@@ -58,6 +62,10 @@ const char* getInteractionToolName(InteractionTool tool)
             return "select";
         case InteractionTool::Hand:
             return "hand";
+        case InteractionTool::Text:
+            return "text";
+        case InteractionTool::Measure:
+            return "measure";
     }
 
     return "unknown";
@@ -73,8 +81,55 @@ std::optional<InteractionTool> interactionToolFromName(const QString& name)
     {
         return InteractionTool::Hand;
     }
+    if (name == QLatin1String("text"))
+    {
+        return InteractionTool::Text;
+    }
+    if (name == QLatin1String("measure"))
+    {
+        return InteractionTool::Measure;
+    }
 
     return std::nullopt;
+}
+
+const char* getTextSelectionKindName(TextSelectionKind kind)
+{
+    switch (kind)
+    {
+        case TextSelectionKind::Text:
+            return "text";
+        case TextSelectionKind::Block:
+            return "block";
+    }
+
+    return "unknown";
+}
+
+Measurement measureBetween(int pageIndex, QPointF startPagePoint, QPointF endPagePoint, qreal pointToMM)
+{
+    Measurement measurement;
+    measurement.pageIndex = pageIndex;
+    measurement.startPagePoint = startPagePoint;
+    measurement.endPagePoint = endPagePoint;
+    measurement.pointToMM = pointToMM;
+
+    const QPointF delta = endPagePoint - startPagePoint;
+    const qreal scale = pointToMM > 0.0 ? pointToMM : 1.0;
+
+    measurement.distanceMM = std::hypot(delta.x(), delta.y()) * scale;
+    measurement.widthMM = qAbs(delta.x()) * scale;
+    measurement.heightMM = qAbs(delta.y()) * scale;
+    measurement.perimeterMM = 2.0 * (measurement.widthMM + measurement.heightMM);
+    measurement.areaMM2 = measurement.widthMM * measurement.heightMM;
+    measurement.angleDegrees = qRadiansToDegrees(std::atan2(delta.y(), delta.x()));
+
+    return measurement;
+}
+
+QString measurementReadout(const Measurement& measurement)
+{
+    return QStringLiteral("%1 mm").arg(QString::number(measurement.distanceMM, 'f', 1));
 }
 
 const char* getInteractionCancelReasonName(InteractionCancelReason reason)
@@ -266,6 +321,79 @@ void InteractionState::cancel(InteractionCancelReason reason)
     m_lastCancelReason = reason;
 }
 
+bool InteractionState::setMeasurementDraft(const Measurement& draft, const RevisionFencedToken& token)
+{
+    if (!isCurrent(token) || draft.pageIndex < 0 || !std::isfinite(draft.distanceMM))
+    {
+        return false;
+    }
+
+    m_measurementDraft = draft;
+    m_measurementDraft->fence = token;
+    return true;
+}
+
+std::optional<Measurement> InteractionState::completeMeasurement(const RevisionFencedToken& token)
+{
+    if (!m_measurementDraft.has_value())
+    {
+        return std::nullopt;
+    }
+
+    if (!isCurrent(token))
+    {
+        // A measurement that lost its revision is dropped, not carried onto new
+        // geometry.
+        cancel(InteractionCancelReason::RevisionChanged);
+        return std::nullopt;
+    }
+
+    Measurement measurement = *m_measurementDraft;
+    measurement.fence = token;
+    clearTransient();
+
+    m_measurements.push_back(measurement);
+    return measurement;
+}
+
+bool InteractionState::setTextSelection(const TextSelection& selection, const RevisionFencedToken& token)
+{
+    if (!token.isValid() || selection.pageIndex < 0)
+    {
+        return false;
+    }
+
+    m_textSelection = selection;
+    m_textSelection->fence = token;
+    return true;
+}
+
+bool InteractionState::clearTextSelection()
+{
+    if (!m_textSelection.has_value())
+    {
+        return false;
+    }
+
+    m_textSelection.reset();
+    return true;
+}
+
+bool InteractionState::clearMeasurements()
+{
+    const bool hadSomething = m_measurementDraft.has_value() || !m_measurements.isEmpty();
+    m_measurementDraft.reset();
+    m_measurements.clear();
+    return hadSomething;
+}
+
+bool InteractionState::clearRevisionBoundState()
+{
+    const bool hadSelection = clearTextSelection();
+    const bool hadMeasurements = clearMeasurements();
+    return hadSelection || hadMeasurements;
+}
+
 bool InteractionState::clearHover()
 {
     if (!m_hovered.isValid())
@@ -290,6 +418,7 @@ void InteractionState::reset(InteractionCancelReason reason)
     m_lastCancelReason = reason;
     m_hovered = InteractionTarget();
     m_selected = InteractionTarget();
+    clearRevisionBoundState();
     m_pointerPagePoint.reset();
     m_pointerPageIndex = -1;
 }
@@ -304,6 +433,7 @@ void InteractionState::clearTransient()
     m_kind = InteractionKind::None;
     m_token = RevisionFencedToken();
     m_drag.reset();
+    m_measurementDraft.reset();
     m_pointerCapture = false;
 }
 

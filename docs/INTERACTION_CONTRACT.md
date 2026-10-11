@@ -2,7 +2,8 @@
 
 Status: P4-S4 (0.2.0 Phase 4). Types live in `LoopLibInteraction/sources/inputintent.h`,
 `interactiontarget.h`, `interactionstate.h`, `hittestsource.h`, `overlayframe.h`,
-`overlaybuilder.h`, `interactiontrace.h`, and `interactioncontroller.h`.
+`overlaybuilder.h`, `interactiontrace.h`, `textselectionsource.h`, `pageunitsource.h`,
+and `interactioncontroller.h`.
 Architecture invariant **I24**; test targets `UnitTestsInteractionController` and
 `UnitTestsOverlayFrame`. Companion to [PAGE_SURFACE_CONTRACT.md](PAGE_SURFACE_CONTRACT.md),
 which owns page pixels.
@@ -88,6 +89,8 @@ A tool is what a left-button gesture means. The vocabulary is closed and lives i
 | --- | --- |
 | `select` | Selects the target under the pointer; a second press on the selection begins a drag. The default, and the behavior every gesture had before the vocabulary existed. |
 | `hand` | Begins an `InteractionKind::Pan`. Never selects, retargets or starts a transform. |
+| `text` | Begins an `InteractionKind::TextSelect` and drags out a text selection (issue #232). The result is the typed `TextSelection` state; it never selects a target and never reaches the document. |
+| `measure` | Begins an `InteractionKind::Measure` and drags out a measurement in production units (issue #238). It never becomes a `DragSession` and never reaches the document. |
 
 A host parses a tool name into `InteractionTool` once, at its own boundary. A name outside
 the vocabulary is refused there — `interactionToolFromName()` returns nothing — so no
@@ -98,6 +101,36 @@ every tool, so Select keeps a middle-drag pan.
 Changing the tool calls `cancelActive(InteractionCancelReason::ToolChanged)` (issue #141 AC3),
 so a tool change mid-drag drops the gesture and commits nothing. Setting the tool that is
 already active is not a change and cancels nothing.
+
+### Text selection and measurement
+
+Both are derived state, and both are fenced to the revision they were taken from.
+`InteractionState` carries them beside the selection, and `InteractionController` drops them
+when the fence moves: `handleRevisionChanged()` cancels the active gesture with
+`RevisionChanged` and clears the measurements and the text selection, because carrying
+either onto new geometry presents a fact about a document the operator is no longer looking
+at. A measurement also never produces a `DragSession`: it has no command and no mutation
+path behind it.
+
+Text extraction is Core's. `ITextSelectionSource` is the seam — the interaction layer asks
+for text and re-implements no extraction — and `PDFDocumentTextSelectionSource` answers
+from the same `PDFTextLayoutGenerator` and text-flow machinery `pdf::searchDocumentText`
+uses, so a copied selection is the text layer the document search already agreed on,
+including the docstrum reading order. A page with no text layer answers
+`available == false` with a reason; Copy then refuses with a typed code and never copies an
+empty string as success.
+
+A measurement's scale comes from `IPageUnitSource` — millimetres per page-space point,
+including the page's `/UserUnit` — so a `/UserUnit 2` page measures twice what its raw user
+space says. Rotation needs no correction of its own: the two points are page-space points,
+resolved through `ViewportController`'s own transforms, so a measurement taken on a rotated
+page spans the same page-space segment as the unrotated one.
+
+Overlays follow the same value-type rule as everything else. A measurement is an
+`OverlayPrimitiveKind::Measurement` in the `Guides` band with its readout in `label`; a text
+selection is one `Rectangle` per line span in the `Selection` band and carries no target,
+because there is no text target kind and clicking selected text is a new selection rather
+than a routed command.
 
 ## Hit testing
 

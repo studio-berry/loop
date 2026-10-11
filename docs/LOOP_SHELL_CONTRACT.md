@@ -38,7 +38,7 @@ The LoopEditor shell exposes these workspace IDs:
 The implemented composition is:
 
 ```text
-toolbar: open · save/export · undo/redo · select/hand · zoom · preflight · preview
+toolbar: open · save/export · undo/redo · select/hand/text/measure · zoom · preflight · preview
 workspace rail (7 IDs) | workspace stack | Document: pages rail | PDF canvas | contextual inspector dock
 status: document state · production state · preflight state · page/zoom
 ```

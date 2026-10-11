@@ -247,9 +247,9 @@
           "standard_key": "Copy"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },
@@ -536,9 +536,9 @@
           "standard_key": "Deselect"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -562,9 +562,9 @@
       "command": {
         "label_key": "command.actionExtractImage.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -755,9 +755,9 @@
           "standard_key": "MoveToNextLine"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "View"
     },
@@ -803,9 +803,9 @@
           "standard_key": "MoveToPreviousLine"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "View"
     },
@@ -1316,9 +1316,9 @@
       "command": {
         "label_key": "command.actionScreenshot.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1329,9 +1329,9 @@
       "command": {
         "label_key": "command.actionSelectTable.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1342,9 +1342,9 @@
       "command": {
         "label_key": "command.actionSelectText.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1358,9 +1358,9 @@
           "standard_key": "SelectAll"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },

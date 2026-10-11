@@ -22,6 +22,8 @@
 
 #include "canvassnapshot.h"
 
+#include <QPainter>
+
 namespace pdfinteraction
 {
 
@@ -36,6 +38,53 @@ const CanvasTile* CanvasSnapshot::tileForPage(int pageIndex) const
     }
 
     return nullptr;
+}
+
+QImage composeCanvasImage(const CanvasSnapshot& snapshot, QRect viewportRect, qreal devicePixelRatio)
+{
+    const qreal ratio = devicePixelRatio > 0.0 ? devicePixelRatio : 1.0;
+
+    QImage image(viewportRect.size() * ratio, QImage::Format_ARGB32_Premultiplied);
+    if (image.isNull())
+    {
+        return image;
+    }
+
+    // A capture of the visible region shows paper where a page is and the
+    // canvas background where one is not; the tiles carry the paper, so the
+    // canvas is filled with white rather than left undefined.
+    image.fill(Qt::white);
+    image.setDevicePixelRatio(ratio);
+
+    QPainter painter(&image);
+    bool anyTile = false;
+    for (const CanvasTile& tile : snapshot.tiles)
+    {
+        if (!tile.pixels || tile.pixels->image.isNull() || tile.placedRect.isEmpty())
+        {
+            continue;
+        }
+
+        if (!QRectF(tile.placedRect).intersects(QRectF(viewportRect)))
+        {
+            continue;
+        }
+
+        // The tile image is drawn into its placed rectangle in device pixels.
+        // A tile rendered for another resolution is scaled here exactly as the
+        // scene graph scales it, so the capture shows what the canvas shows.
+        const QRectF target(tile.placedRect.topLeft() * ratio, tile.placedRect.size() * ratio);
+        painter.drawImage(target, tile.pixels->image);
+        anyTile = true;
+    }
+    painter.end();
+
+    if (!anyTile)
+    {
+        return QImage();
+    }
+
+    return image;
 }
 
 }   // namespace pdfinteraction
