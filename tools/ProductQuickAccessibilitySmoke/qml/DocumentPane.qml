@@ -10,7 +10,7 @@ Item {
 
     Accessible.role: Accessible.Pane
     Accessible.name: qsTr("Document workspace")
-    Accessible.description: qsTr("Page navigation, document outline, search, PDF canvas, and contextual inspection.")
+    Accessible.description: qsTr("Page navigation, document outline, search, annotations, PDF canvas, and contextual inspection.")
 
     property var host: editorHost
     property var documentModel: host ? host.documentModel : null
@@ -80,6 +80,11 @@ Item {
                             Accessible.ignored: true
                         }
                         Accessible.name: qsTr("Search tab")
+                    }
+                    TabButton {
+                        objectName: "annotationsTabButton"
+                        text: qsTr("Annotations")
+                        Accessible.name: qsTr("Annotations tab")
                     }
                 }
 
@@ -208,6 +213,66 @@ Item {
                                 onClicked: if (root.host)
                                     root.host.goToPage(page)
                             }
+                        }
+                    }
+
+                    ColumnLayout {
+                        objectName: "annotationsReviewColumn"
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            text: root.documentModel
+                                  ? qsTr("%1 annotation(s)").arg(root.documentModel.annotationCount)
+                                  : ""
+                            Accessible.name: qsTr("Annotation count")
+                        }
+
+                        ListView {
+                            id: annotationsView
+                            objectName: "annotationsView"
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            focus: visible && tabBar.currentIndex === 3
+                            activeFocusOnTab: true
+                            keyNavigationEnabled: true
+                            highlightFollowsCurrentItem: true
+                            model: root.documentModel ? root.documentModel.annotations : null
+                            Accessible.role: Accessible.List
+                            Accessible.name: qsTr("Document annotations")
+                            Accessible.description: qsTr("Read-only annotations in this document. Activating one navigates to its page region.")
+
+                            delegate: ItemDelegate {
+                                required property int index
+                                required property int pageNumber
+                                required property string kind
+                                required property string title
+                                required property string contents
+                                required property bool hidden
+                                required property bool selected
+                                width: annotationsView.width
+                                activeFocusOnTab: true
+                                highlighted: selected
+                                text: qsTr("Page %1 — %2%3").arg(pageNumber).arg(kind).arg(hidden ? qsTr(" (hidden)") : "")
+                                Accessible.role: Accessible.ListItem
+                                Accessible.name: text
+                                Accessible.description: qsTr("Annotation %1 by %2: %3")
+                                    .arg(index + 1)
+                                    .arg(title.length > 0 ? title : qsTr("unknown author"))
+                                    .arg(contents)
+                                onClicked: if (root.host)
+                                    root.host.navigateToAnnotation(index)
+                            }
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            visible: annotationsView.count === 0
+                            text: qsTr("No annotations")
+                            Accessible.name: qsTr("No annotations")
                         }
                     }
                 }

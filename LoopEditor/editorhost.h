@@ -51,6 +51,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistory.h"
+#include "pdfsignaturehandler.h"
 
 #include <QColor>
 #include <QObject>
@@ -171,6 +172,15 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
     Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
+
+    // ---- Signature review (#125) ----------------------------------------------------
+    // The open document's signature status, reduced by Core's verification and
+    // admitted through the document facade. QML renders these values; it never
+    // analyses a signature itself.
+    Q_PROPERTY(QString signatureStateName READ signatureStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap signatureStateVisual READ signatureStateVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor signatureStateColor READ signatureStateColor NOTIFY presentationChanged)
+    Q_PROPERTY(QString signatureSummary READ signatureSummary NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -334,6 +344,25 @@ public:
     /// Moves to the step or finding behind one entry of compareReview()'s
     /// `materialDeltas`. Navigation only: it plans, approves and executes nothing.
     Q_INVOKABLE bool navigateCompareDelta(int deltaIndex);
+
+    /// Read-only annotation review (#125): reveals the annotation's page region
+    /// and marks that annotation selected in the review list and the overlay.
+    /// Navigation only: it edits nothing and plans nothing.
+    Q_INVOKABLE bool navigateToAnnotation(int row);
+
+    /// The open document's signature status, as `not-signed`, `valid`,
+    /// `invalid`, `unknown` or `modified-after-signing` (Core's verification,
+    /// reduced by the document facade).
+    QString signatureStateName() const;
+    QVariantMap signatureStateVisual() const;
+    QColor signatureStateColor() const;
+    QString signatureSummary() const;
+
+    /// Records that the operator accepted the signature invalidation this plan
+    /// declares, bound to the exact plan digest that was displayed. Execution
+    /// stays unarmed while an invalidating plan over a signed document has no
+    /// acknowledgement for the current digest.
+    Q_INVOKABLE bool acknowledgePlanSignatureInvalidation(const QString& planDigest);
 
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
@@ -530,6 +559,9 @@ private:
     void updatePreflightProfileWatch();
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
+    void refreshAnnotationOverlay();
+    void submitSignatureCheck();
+    void finishSignatureCheckJob(const pdf::PDFJobSnapshot& snapshot);
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
     static QString dragRefusalMessage(pdfinteraction::InteractionTargetKind kind);
     void onDragCompleted(pdfinteraction::DragSession session);
@@ -550,6 +582,15 @@ private:
     QVariantMap fixPreviewFromResult() const;
     QList<pdf::PDFRollbackPoint> documentRollbackPoints() const;
     void refreshFixRollbackPointsFromHistory();
+
+    /// Signature invalidation disclosure (#125). `applies` means the plan's
+    /// merged save policy invalidates signatures and the open document has some.
+    /// The acknowledgement is bound to the exact plan digest, so a replan or a
+    /// revision change cannot inherit it.
+    bool planSignatureInvalidationApplies() const;
+    bool planSignatureInvalidationAcknowledged() const;
+    QString planSignatureInvalidationSummary() const;
+    QVariantMap signatureInvalidationMap() const;
 
     std::unique_ptr<DocumentViewSession> m_session;
     std::unique_ptr<pdfinteraction::FindingCanvasNavigator> m_findingNavigator;
@@ -636,6 +677,20 @@ private:
     QString m_fixPlannedPlanDigest;
     QVariantList m_fixRollbackPoints;
     QString m_fixRollbackSummary;
+    QString m_fixSignatureInvalidationAcknowledgedDigest;
+
+    /// One signature check at a time, fenced by the facade token it began with.
+    /// The outcome crosses threads only through the scheduler's jobFinished
+    /// dispatch, exactly like the preflight and rollback outcomes.
+    struct SignatureCheckOutcome
+    {
+        pdfinteraction::DocumentSignatureCheckToken token;
+        bool ok = false;
+        QString detail;
+        std::vector<pdf::PDFSignatureVerificationResult> results;
+    };
+    QString m_signatureCheckJobId;
+    std::shared_ptr<SignatureCheckOutcome> m_signatureCheckOutcome;
 };
 
 #endif   // EDITORHOST_H

@@ -47,6 +47,8 @@
 #include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
+#include "pdfcertificatestore.h"
+#include "pdfform.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
@@ -79,6 +81,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 #include <cmath>
 #include <optional>
 #include <stdexcept>
@@ -417,6 +420,7 @@ EditorHost::EditorHost(QObject* parent) :
                 finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
+                finishSignatureCheckJob(snapshot);
                 refreshCanvasTrace(); });
 }
 
@@ -705,7 +709,8 @@ pdf::PDFActionListExecutionResult EditorHost::fixRunResult() const
 bool EditorHost::fixExecutionArmed() const
 {
     return m_session->facade().permissions().allowsCorrection() &&
-           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
+           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent() &&
+           (!planSignatureInvalidationApplies() || planSignatureInvalidationAcknowledged());
 }
 
 QString EditorHost::fixLifecycleStateName() const
@@ -791,6 +796,11 @@ QString EditorHost::fixLifecycleSummary() const
     }
     if (state == QLatin1String("approved"))
     {
+        if (planSignatureInvalidationApplies() && !planSignatureInvalidationAcknowledged())
+        {
+            return tr("The approved plan invalidates document signatures. Acknowledge the signature "
+                      "invalidation before executing.");
+        }
         return tr("The approved plan is bound to revision %1 and is ready to execute.")
             .arg(m_fixPlannedDocumentRevision.left(12));
     }
@@ -845,6 +855,8 @@ QVariantMap EditorHost::fixPlanIdentity() const
                         : (m_fixReviewDecision == FixReviewDecision::Rejected ? QStringLiteral("rejected")
                                                                               : QStringLiteral("none")));
     identity.insert(QStringLiteral("executionArmed"), fixExecutionArmed());
+    identity.insert(QStringLiteral("signatureInvalidationApplies"), planSignatureInvalidationApplies());
+    identity.insert(QStringLiteral("signatureInvalidationAcknowledged"), planSignatureInvalidationAcknowledged());
     return identity;
 }
 
@@ -861,6 +873,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("pageFidelityIsExact"), pageFidelityIsExact());
     preview.insert(QStringLiteral("pageFidelityReason"), pageFidelityReason());
     preview.insert(QStringLiteral("pageFidelityIsAuthoritative"), pageFidelityIsAuthoritative());
+    preview.insert(QStringLiteral("signatureInvalidation"), signatureInvalidationMap());
 
     QVariantList steps;
     QVariantList plannedSteps;
@@ -1024,6 +1037,125 @@ QVariantMap EditorHost::fixSignOff() const
     signOff.insert(QStringLiteral("certificateSummary"), m_preflightCertificateSummary);
     signOff.insert(QStringLiteral("summary"), m_actionListController.governedStatus());
     return signOff;
+}
+
+bool EditorHost::planSignatureInvalidationApplies() const
+{
+    if (!hasDocument())
+    {
+        return false;
+    }
+    if (m_session->facade().signatureFacts().state == pdfinteraction::DocumentSignatureState::None)
+    {
+        return false;
+    }
+    // The plan's own merged save policy, the field Core serializes as
+    // `invalidates_signatures` and includes in the plan digest.
+    return fixRunResult().savePolicy.invalidatesSignatures;
+}
+
+bool EditorHost::planSignatureInvalidationAcknowledged() const
+{
+    return !m_fixSignatureInvalidationAcknowledgedDigest.isEmpty() &&
+           m_fixSignatureInvalidationAcknowledgedDigest == fixCurrentPlanDigest();
+}
+
+QString EditorHost::planSignatureInvalidationSummary() const
+{
+    if (!planSignatureInvalidationApplies())
+    {
+        return QString();
+    }
+
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+    const QString rationale = fixRunResult().savePolicy.rationale;
+    return tr("This plan invalidates %1 document signature(s): %2 The published correction will "
+              "not carry a verifiable signature.")
+        .arg(facts.signatureCount)
+        .arg(rationale);
+}
+
+QVariantMap EditorHost::signatureInvalidationMap() const
+{
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+
+    QVariantMap invalidation;
+    invalidation.insert(QStringLiteral("applies"), planSignatureInvalidationApplies());
+    invalidation.insert(QStringLiteral("acknowledged"), planSignatureInvalidationAcknowledged());
+    invalidation.insert(QStringLiteral("signatureStateName"), signatureStateName());
+    invalidation.insert(QStringLiteral("signatureCount"), facts.signatureCount);
+    invalidation.insert(QStringLiteral("summary"), planSignatureInvalidationSummary());
+    return invalidation;
+}
+
+bool EditorHost::acknowledgePlanSignatureInvalidation(const QString& planDigest)
+{
+    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
+        !fixPlanIsCurrent() || planDigest.isEmpty() ||
+        planDigest != m_fixPlannedPlanDigest || planDigest != fixCurrentPlanDigest())
+    {
+        return false;
+    }
+    if (!planSignatureInvalidationApplies())
+    {
+        return false;
+    }
+
+    m_fixSignatureInvalidationAcknowledgedDigest = planDigest;
+    announceDocumentState(tr("Signature invalidation acknowledged for this plan."));
+    bumpPresentation();
+    return true;
+}
+
+QString EditorHost::signatureStateName() const
+{
+    return QString::fromLatin1(
+        pdfinteraction::getDocumentSignatureStateName(m_session->facade().signatureFacts().state));
+}
+
+QVariantMap EditorHost::signatureStateVisual() const
+{
+    return fixStateVisualMap(
+        pdfquick::tokens::resolveSignatureStateVisual(signatureStateName()));
+}
+
+QColor EditorHost::signatureStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolveSignatureStateVisual(signatureStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::signatureSummary() const
+{
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+
+    switch (facts.state)
+    {
+        case pdfinteraction::DocumentSignatureState::None:
+            return hasDocument() ? tr("No signature is present in this document.")
+                                 : tr("Open a document to check its signatures.");
+        case pdfinteraction::DocumentSignatureState::Valid:
+            return tr("%1 signature(s) verified against the document's source bytes.")
+                .arg(facts.signatureCount);
+        case pdfinteraction::DocumentSignatureState::Invalid:
+            return tr("At least one signature does not match the document's source bytes. The "
+                      "document was changed after it was signed, or the signature is damaged.");
+        case pdfinteraction::DocumentSignatureState::ModifiedAfterSigning:
+            return tr("The document carries bytes added after it was signed; the existing "
+                      "signature(s) do not cover the whole file.");
+        case pdfinteraction::DocumentSignatureState::Unknown:
+            break;
+    }
+
+    if (!facts.detail.isEmpty())
+    {
+        return facts.detail;
+    }
+    return tr("The signature(s) could not be verified with the certificates available to this "
+              "machine.");
 }
 
 bool EditorHost::fixRollbackAvailable() const
@@ -1430,6 +1562,30 @@ bool EditorHost::navigateCompareDelta(int deltaIndex)
         selectFinding(findingId);
     }
     return true;
+}
+
+bool EditorHost::navigateToAnnotation(int row)
+{
+    if (!hasDocument() || !m_documentBound)
+    {
+        return false;
+    }
+
+    QuickAnnotationModel& annotations = m_documentModel.annotationModel();
+    if (row < 0 || row >= annotations.rows().size())
+    {
+        return false;
+    }
+
+    const QuickAnnotation& annotation = annotations.rows().at(row);
+    annotations.setSelectedRow(row);
+    refreshAnnotationOverlay();
+
+    const bool revealed = m_session->viewport().revealPageRegion(annotation.pageIndex,
+                                                                 annotation.bounds, 0.2);
+    updateCanvasAccessibilitySummary();
+    bumpPresentation();
+    return revealed;
 }
 
 QString EditorHost::productionStateName() const
@@ -2548,7 +2704,9 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                                 outcome,
                                                 preflightProfilePath,
                                                 preflightProfile,
-                                                preflightProfileBindings));
+                                                preflightProfileBindings,
+                                                phase == pdfinteraction::ActionListRunPhase::Execute &&
+                                                    planSignatureInvalidationAcknowledged()));
     if (submittedId != jobId)
     {
         m_actionListOutcomes.remove(jobId);
@@ -2576,6 +2734,11 @@ bool EditorHost::runActionList()
 {
     if (!fixExecutionArmed())
     {
+        if (planSignatureInvalidationApplies() && !planSignatureInvalidationAcknowledged())
+        {
+            announceDocumentState(tr("The plan invalidates document signatures. Acknowledge the "
+                                     "signature invalidation before executing."));
+        }
         return false;
     }
     return submitActionListJob(pdfinteraction::ActionListRunPhase::Execute,
@@ -2591,6 +2754,7 @@ void EditorHost::clearFixReview()
 {
     m_fixReviewDecision = FixReviewDecision::None;
     m_fixReviewedPlanDigest.clear();
+    m_fixSignatureInvalidationAcknowledgedDigest.clear();
 }
 
 bool EditorHost::approveActionListPlan()
@@ -3477,6 +3641,7 @@ void EditorHost::connectFacade()
                 {
                     m_documentModel.setDocument(&m_session->context());
                     m_searchRow = -1;
+                    refreshAnnotationOverlay();
                     bumpPresentation();
                 }
             });
@@ -3690,6 +3855,8 @@ void EditorHost::onDocumentReady()
     bindCanvas();
     updateCanvasAccessibilitySummary();
     applyEmptyCanvasInspectorSelection();
+    refreshAnnotationOverlay();
+    submitSignatureCheck();
     announceDocumentState(tr("Document ready."));
 }
 
@@ -3721,6 +3888,13 @@ void EditorHost::onDocumentGone()
 {
     cancelPreflight();
     cancelActionList();
+    if (!m_signatureCheckJobId.isEmpty())
+    {
+        m_session->scheduler().cancel(m_signatureCheckJobId);
+        m_signatureCheckJobId.clear();
+    }
+    m_signatureCheckOutcome.reset();
+    m_fixSignatureInvalidationAcknowledgedDigest.clear();
     if (m_findingNavigator)
     {
         m_findingNavigator->invalidate();
@@ -3731,6 +3905,7 @@ void EditorHost::onDocumentGone()
     m_actionListController.clear();
     m_inspector.clearSelection();
     m_documentModel.clear();
+    refreshAnnotationOverlay();
     m_searchRow = -1;
     m_preview.clear();
     m_production.clear();
@@ -4030,6 +4205,48 @@ void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
     announceDocumentState(tr("The document was not rolled back: %1").arg(message));
 }
 
+void EditorHost::finishSignatureCheckJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    if (snapshot.jobId.isEmpty() || snapshot.jobId != m_signatureCheckJobId || !m_signatureCheckOutcome)
+    {
+        return;
+    }
+
+    const std::shared_ptr<SignatureCheckOutcome> outcome = m_signatureCheckOutcome;
+    m_signatureCheckJobId.clear();
+    m_signatureCheckOutcome.reset();
+
+    if (snapshot.kind != pdf::PDFJobKind::Other ||
+        snapshot.operationId != QStringLiteral("document.verify-signatures"))
+    {
+        return;
+    }
+
+    QString transitionError;
+    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome->ok)
+    {
+        // The facade refuses a completion that belongs to another request,
+        // generation or revision; a refused completion presents nothing.
+        if (m_session->facade().completeSignatureCheck(outcome->token, outcome->results, transitionError))
+        {
+            bumpPresentation();
+        }
+        return;
+    }
+
+    QString detail = outcome->detail;
+    if (detail.isEmpty())
+    {
+        detail = snapshot.status == pdf::PDFJobStatus::Failed
+                     ? tr("Signature verification failed for this document.")
+                     : tr("Signature verification did not complete for this document.");
+    }
+    if (m_session->facade().failSignatureCheck(outcome->token, detail, transitionError))
+    {
+        bumpPresentation();
+    }
+}
+
 void EditorHost::refreshCanvasTrace()
 {
     if (m_canvas)
@@ -4142,6 +4359,138 @@ void EditorHost::syncRevisionModels()
                            tr("The current view uses the standard render path."),
                            QString());
         syncProductionState();
+    }
+}
+
+void EditorHost::refreshAnnotationOverlay()
+{
+    // Read-only review marks (issue #125). Every annotation row becomes one
+    // page-space rectangle; the selected row carries the selection treatment.
+    // The marks are not interaction targets: their kind stays None, so nothing
+    // hit-tests them and nothing routes a click through them.
+    const QuickAnnotationModel& annotations = m_documentModel.annotationModel();
+    const QList<QuickAnnotation>& rows = annotations.rows();
+
+    QList<pdfinteraction::InteractionTarget> marks;
+    marks.reserve(rows.size());
+    for (const QuickAnnotation& row : rows)
+    {
+        pdfinteraction::InteractionTarget target;
+        target.kind = pdfinteraction::InteractionTargetKind::None;
+        target.pageIndex = row.pageIndex;
+        target.id = QStringLiteral("annotation:") + row.reference;
+        target.pageBounds = row.bounds;
+        marks.append(target);
+    }
+
+    const int selectedRow = annotations.selectedRow();
+    const QString selectedId = selectedRow >= 0 && selectedRow < rows.size()
+                                   ? QStringLiteral("annotation:") + rows.at(selectedRow).reference
+                                   : QString();
+
+    m_session->overlays()->setAnnotations(std::move(marks));
+    m_session->overlays()->setSelectedAnnotationId(selectedId);
+    m_session->interaction()->refreshOverlay();
+}
+
+void EditorHost::submitSignatureCheck()
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document)
+    {
+        return;
+    }
+
+    QString beginError;
+    const std::optional<pdfinteraction::DocumentSignatureCheckToken> token =
+        m_session->facade().beginSignatureCheck(beginError);
+    if (!token.has_value())
+    {
+        return;
+    }
+
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("document.verify-signatures");
+    spec.checkId = QStringLiteral("signature-verification");
+    spec.progressModel = QStringLiteral("signature-check-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    const QString documentPath = m_session->facade().source().path;
+    const QByteArray expectedSourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
+
+    auto outcome = std::make_shared<SignatureCheckOutcome>();
+    outcome->token = *token;
+    m_signatureCheckJobId = jobId;
+    m_signatureCheckOutcome = outcome;
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        [document, documentPath, expectedSourceHash, outcome](pdf::PDFJobContext& context)
+        {
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+
+            // Verification needs the exact source bytes a signature covers, and
+            // the loaded document retains only their digest. Re-reading the file
+            // is admitted only when the bytes still hash to the revision the
+            // document was loaded from; a changed file is a failed check, never
+            // a verdict about the open revision.
+            QFile file(documentPath);
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("The source file could not be read for signature verification.");
+                return;
+            }
+            const QByteArray sourceData = file.readAll();
+            if (QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256) != expectedSourceHash)
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("The file changed since the document was loaded; its signatures were not verified.");
+                return;
+            }
+
+            try
+            {
+                pdf::PDFCertificateStore certificateStore;
+                pdf::PDFSignatureHandler::Parameters parameters;
+                parameters.store = &certificateStore;
+                parameters.dss = &document->getCatalog()->getDocumentSecurityStore();
+                parameters.enableVerification = true;
+                parameters.useSystemCertificateStore = true;
+                const pdf::PDFForm form =
+                    pdf::PDFForm::parse(document.get(), document->getCatalog()->getFormObject());
+                outcome->results = pdf::PDFSignatureHandler::verifySignatures(form, sourceData, parameters);
+                outcome->ok = true;
+            }
+            catch (const std::exception&)
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("Signature verification could not complete for this document.");
+            }
+        });
+    if (submittedId != jobId)
+    {
+        m_signatureCheckJobId.clear();
+        m_signatureCheckOutcome.reset();
+        QString failError;
+        m_session->facade().failSignatureCheck(*token,
+                                               tr("Signature verification could not be scheduled."),
+                                               failError);
     }
 }
 

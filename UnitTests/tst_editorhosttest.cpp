@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -50,6 +50,7 @@
 #include "editorhost.h"
 #include "loopstatevisual.h"
 #include "looptokens.h"
+#include "quickdocumentmodel.h"
 
 #include "pdfapplicationidentity.h"
 #include "pdfblockingthreadguard.h"
@@ -305,6 +306,9 @@ private slots:
     void translatePageBoxRefusesAMoveThatIntroducesABlockingFinding();
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
+    void annotationReviewListsAndNavigatesToThePageRegion();
+    void signatureStatusPresentsTheReducedState();
+    void signatureInvalidationGateBlocksExecutionUntilAcknowledged();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
 };
@@ -1269,7 +1273,7 @@ void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
                                              { QStringLiteral("id"), QStringLiteral("bleed") },
                                              { QStringLiteral("operation"), QStringLiteral("add-bleed") },
                                              { QStringLiteral("params"),
-                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 9 },
                                                             { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
                          .toJson(QJsonDocument::Compact));
         recipe.close();
@@ -1469,6 +1473,132 @@ bool writeTrimmedPageDocument(const QString& path)
     const pdf::PDFDocument document = builder.build();
     pdf::PDFDocumentWriter writer(nullptr);
     return static_cast<bool>(writer.write(path, &document, true));
+}
+
+/// A page whose trim box sits inside its media box, carrying a signature
+/// dictionary so the save-policy world treats the document as signed. The blank
+/// page passes the default profile (no fonts, no color, 20 pt of bleed), which
+/// is what lets a successful governed publish be observed.
+bool writeSignedTrimmedPageDocument(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(page, QRectF(20, 20, 160, 160));
+
+    const pdf::PDFObjectReference signature = builder.createSignatureDictionary(
+        QByteArrayLiteral("Adobe.PPKLite"),
+        QByteArrayLiteral("adbe.pkcs7.detached"),
+        QByteArrayLiteral("signed-placeholder"),
+        QDateTime::currentDateTimeUtc(),
+        0);
+    const pdf::PDFObjectReference field = builder.createFormFieldSignature(
+        QStringLiteral("LoopSignature"), {}, signature);
+    builder.createInvisibleFormFieldWidget(field, page);
+    builder.createAcroForm({ field });
+
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return static_cast<bool>(writer.write(path, &document, true));
+}
+
+/// The committed signed fixture, located through the same source-tree
+/// environment variable UnitTestsIncrementalSave uses.
+QString signedFixturePath(const QString& fileName = QStringLiteral("signed-incremental-base.pdf"))
+{
+    const QString root = qEnvironmentVariable("LOOP_FIXTURE_DATA_DIR");
+    return root.isEmpty() ? QStringLiteral("testdata/signatures/%1").arg(fileName)
+                          : QStringLiteral("%1/signatures/%2").arg(root, fileName);
+}
+
+/// Two pages, one Text annotation each, with an author, contents and subject.
+bool writeAnnotationFixture(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference firstPage = builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFObjectReference secondPage = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const auto addTextAnnotation = [&builder](const pdf::PDFObjectReference& pageReference,
+                                              const QString& author,
+                                              const QString& contents,
+                                              const QRectF& rect)
+    {
+        pdf::PDFDictionary annotation;
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Annot"));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Text"));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("Rect"),
+                            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                pdf::PDFObject::createReal(rect.left()),
+                                pdf::PDFObject::createReal(rect.top()),
+                                pdf::PDFObject::createReal(rect.right()),
+                                pdf::PDFObject::createReal(rect.bottom()) })));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("T"), pdf::PDFObject::createString(author.toUtf8()));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createString(contents.toUtf8()));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("Subj"), pdf::PDFObject::createString("Comment"));
+        annotation.addEntry(pdf::PDFInplaceOrMemoryString("P"), pdf::PDFObject::createReference(pageReference));
+        const pdf::PDFObjectReference annotationReference = builder.addObject(
+            pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(annotation))));
+
+        pdf::PDFDictionary pageAnnots;
+        pageAnnots.addEntry(pdf::PDFInplaceOrMemoryString("Annots"),
+                            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                pdf::PDFObject::createReference(annotationReference) })));
+        builder.appendTo(pageReference,
+                         pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageAnnots))));
+    };
+
+    addTextAnnotation(firstPage, QStringLiteral("Reviewer"), QStringLiteral("Please check the margin"),
+                      QRectF(20.0, 40.0, 60.0, 80.0));
+    addTextAnnotation(secondPage, QStringLiteral("Client"), QStringLiteral("Approve page two"),
+                      QRectF(100.0, 120.0, 60.0, 40.0));
+
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return static_cast<bool>(writer.write(path, &document, true));
+}
+
+/// Copies the signed fixture with one byte changed inside the signed range
+/// (the producer string), which is exactly a digest that no longer matches.
+bool writeSignatureTamperedCopy(const QString& sourcePath, const QString& destinationPath)
+{
+    QFile source(sourcePath);
+    if (!source.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+    QByteArray bytes = source.readAll();
+    const int producer = bytes.indexOf("pyHanko");
+    if (producer < 0)
+    {
+        return false;
+    }
+    bytes[producer + 6] = 'n';   // "pyHanko" -> "pyHankn"
+
+    QFile destination(destinationPath);
+    if (!destination.open(QIODevice::WriteOnly))
+    {
+        return false;
+    }
+    return destination.write(bytes) == bytes.size();
+}
+
+/// Copies the signed fixture with bytes appended after the signature, which is
+/// a signature that still verifies but no longer covers the whole file.
+bool writeSignatureAppendedCopy(const QString& sourcePath, const QString& destinationPath)
+{
+    QFile source(sourcePath);
+    if (!source.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+    QByteArray bytes = source.readAll();
+    bytes.append("\n% reviewed after signing\n");
+
+    QFile destination(destinationPath);
+    if (!destination.open(QIODevice::WriteOnly))
+    {
+        return false;
+    }
+    return destination.write(bytes) == bytes.size();
 }
 
 void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
@@ -1711,7 +1841,7 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
                                              { QStringLiteral("id"), QStringLiteral("bleed") },
                                              { QStringLiteral("operation"), QStringLiteral("add-bleed") },
                                              { QStringLiteral("params"),
-                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 9 },
                                                             { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
                          .toJson(QJsonDocument::Compact));
         recipe.close();
@@ -2160,7 +2290,7 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
                                              { QStringLiteral("id"), QStringLiteral("bleed") },
                                              { QStringLiteral("operation"), QStringLiteral("add-bleed") },
                                              { QStringLiteral("params"),
-                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 9 },
                                                             { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
                          .toJson(QJsonDocument::Compact));
         recipe.close();
@@ -2240,6 +2370,205 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
     QVERIFY(host.planActionList());
     QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
     QVERIFY(!host.fixPlanIdentity().value(QStringLiteral("planDigest")).toString().isEmpty());
+}
+
+void EditorHostTest::annotationReviewListsAndNavigatesToThePageRegion()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("annotated.pdf"));
+    QVERIFY(writeAnnotationFixture(documentPath));
+
+    EditorHost host;
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    QuickDocumentModel* documentModel = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(documentModel != nullptr);
+    QCOMPARE(documentModel->annotationCount(), 2);
+
+    const QList<QuickAnnotation>& rows = documentModel->annotationModel().rows();
+    QCOMPARE(rows.size(), 2);
+    QCOMPARE(rows.at(0).pageIndex, 0);
+    QCOMPARE(rows.at(0).kindName, QStringLiteral("text"));
+    QCOMPARE(rows.at(0).title, QStringLiteral("Reviewer"));
+    QCOMPARE(rows.at(0).contents, QStringLiteral("Please check the margin"));
+    QCOMPARE(rows.at(0).subject, QStringLiteral("Comment"));
+    QCOMPARE(rows.at(0).bounds, QRectF(20.0, 40.0, 60.0, 80.0));
+    QCOMPARE(rows.at(1).pageIndex, 1);
+    QCOMPARE(rows.at(1).title, QStringLiteral("Client"));
+    QCOMPARE(rows.at(1).contents, QStringLiteral("Approve page two"));
+
+    // The marks reach the overlay builder as read-only page-space rectangles:
+    // no interaction kind, so nothing hit-tests them.
+    const QList<pdfinteraction::InteractionTarget>& marks = host.sessionForTest()->overlays()->annotations();
+    QCOMPARE(marks.size(), 2);
+    QCOMPARE(marks.at(0).pageIndex, 0);
+    QCOMPARE(marks.at(0).pageBounds, QRectF(20.0, 40.0, 60.0, 80.0));
+    QCOMPARE(marks.at(1).pageIndex, 1);
+    QCOMPARE(marks.at(1).pageBounds, QRectF(100.0, 120.0, 60.0, 40.0));
+    QCOMPARE(marks.at(0).kind, pdfinteraction::InteractionTargetKind::None);
+    QCOMPARE(marks.at(1).kind, pdfinteraction::InteractionTargetKind::None);
+
+    // Navigation reveals the annotation's page region and marks it selected.
+    QCOMPARE(host.currentPage(), 0);
+    QVERIFY(host.navigateToAnnotation(1));
+    QCOMPARE(host.currentPage(), 1);
+    QCOMPARE(documentModel->annotationModel().selectedRow(), 1);
+    QCOMPARE(host.sessionForTest()->overlays()->selectedAnnotationId(),
+             QStringLiteral("annotation:%1").arg(rows.at(1).reference));
+
+    const pdfinteraction::ViewportController& viewport = host.sessionForTest()->viewport();
+    const QRectF region = viewport.pagePointToViewportMatrix(1).mapRect(QRectF(100.0, 120.0, 60.0, 40.0));
+    QVERIFY(QLineF(region.center(), viewport.viewportRect().center()).length() < 2.0);
+
+    // Out-of-range rows are refused; nothing moves.
+    QVERIFY(!host.navigateToAnnotation(2));
+    QVERIFY(!host.navigateToAnnotation(-1));
+    QCOMPARE(host.currentPage(), 1);
+}
+
+void EditorHostTest::signatureStatusPresentsTheReducedState()
+{
+    const QString fixture = signedFixturePath();
+    QVERIFY2(QFile::exists(fixture), qPrintable(fixture));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    // 1. The committed fixture: its certificate is self-signed, so trust cannot
+    //    be established. That is `unknown`, never a pass.
+    {
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(fixture));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(host.signatureStateName(), QStringLiteral("unknown"), 30000);
+        QCOMPARE(host.signatureStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("Incomplete"));
+        QVERIFY(host.signatureSummary().contains(QStringLiteral("could not be verified")));
+    }
+
+    // 2. One byte changed inside the signed range: the digest no longer matches.
+    const QString tamperedPath = directory.filePath(QStringLiteral("tampered.pdf"));
+    QVERIFY(writeSignatureTamperedCopy(fixture, tamperedPath));
+    {
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(tamperedPath));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(host.signatureStateName(), QStringLiteral("invalid"), 30000);
+        QCOMPARE(host.signatureStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("Error"));
+    }
+
+    // 3. Bytes appended after the signature: the signature still verifies but no
+    //    longer covers the whole file.
+    const QString appendedPath = directory.filePath(QStringLiteral("appended.pdf"));
+    QVERIFY(writeSignatureAppendedCopy(fixture, appendedPath));
+    {
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(appendedPath));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(host.signatureStateName(), QStringLiteral("modified-after-signing"), 30000);
+        QCOMPARE(host.signatureStateVisual().value(QStringLiteral("kind")).toString(), QStringLiteral("Warning"));
+    }
+
+    // 4. An unsigned document: the check completes and says exactly that.
+    const QString unsignedPath = directory.filePath(QStringLiteral("unsigned.pdf"));
+    QVERIFY(writeTrimmedPageDocument(unsignedPath));
+    {
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(unsignedPath));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+        QTRY_COMPARE_WITH_TIMEOUT(host.signatureStateName(), QStringLiteral("not-signed"), 30000);
+    }
+}
+
+void EditorHostTest::signatureInvalidationGateBlocksExecutionUntilAcknowledged()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("signed-trimmed.pdf"));
+    QVERIFY(writeSignedTrimmedPageDocument(documentPath));
+
+    const QString recipePath = directory.filePath(QStringLiteral("gh-125-recipe.json"));
+    {
+        QFile recipe(recipePath);
+        QVERIFY(recipe.open(QIODevice::WriteOnly));
+        recipe.write(QJsonDocument(QJsonObject{
+                                       { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                       { QStringLiteral("id"), QStringLiteral("gh-125-test") },
+                                       { QStringLiteral("name"), QStringLiteral("Bleed correction") },
+                                       { QStringLiteral("steps"),
+                                         QJsonArray{ QJsonObject{
+                                             { QStringLiteral("id"), QStringLiteral("bleed") },
+                                             { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                             { QStringLiteral("params"),
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                                            { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
+                         .toJson(QJsonDocument::Compact));
+        recipe.close();
+    }
+
+    const auto fileDigest = [](const QString& path)
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+    };
+    const QByteArray sourceDigest = fileDigest(documentPath);
+    QVERIFY(!sourceDigest.isEmpty());
+
+    EditorHost host;
+    QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // The signature check must have presented a signed state before the plan is
+    // judged, so the disclosure is not skipped by a race with the check job.
+    QTRY_VERIFY_WITH_TIMEOUT(host.signatureStateName() != QStringLiteral("not-signed"), 30000);
+
+    QVERIFY(host.selectActionListRecipeForOperation(QStringLiteral("add-bleed")));
+    QVERIFY(host.validateActionListRecipe());
+    QTRY_VERIFY_WITH_TIMEOUT(host.actionList()->property("validationReady").toBool(), 30000);
+    QVERIFY(host.planActionList());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("preview-ready"), 60000);
+
+    const QVariantMap planIdentity = host.fixPlanIdentity();
+    const QString planDigest = planIdentity.value(QStringLiteral("planDigest")).toString();
+    QVERIFY(!planDigest.isEmpty());
+    QCOMPARE(planIdentity.value(QStringLiteral("signatureInvalidationApplies")).toBool(), true);
+    QCOMPARE(planIdentity.value(QStringLiteral("signatureInvalidationAcknowledged")).toBool(), false);
+
+    // The preview discloses the invalidation from the save policy's own field.
+    const QVariantMap preview = host.fixPreview();
+    const QVariantMap invalidation = preview.value(QStringLiteral("signatureInvalidation")).toMap();
+    QCOMPARE(invalidation.value(QStringLiteral("applies")).toBool(), true);
+    QVERIFY(!invalidation.value(QStringLiteral("summary")).toString().trimmed().isEmpty());
+
+    // Approval alone never arms execution for an invalidating plan.
+    QVERIFY(host.approveActionListPlan(planDigest,
+                                       planIdentity.value(QStringLiteral("sourceSha256")).toString(),
+                                       planIdentity.value(QStringLiteral("plannedRevision")).toString()));
+    QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("approved"));
+    QVERIFY(!host.fixExecutionArmed());
+    QVERIFY(!host.executeApprovedActionListPlan());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("planned"));
+    QCOMPARE(fileDigest(documentPath), sourceDigest);
+
+    // An acknowledgement for any other digest does not count.
+    QVERIFY(!host.acknowledgePlanSignatureInvalidation(QString(64, QLatin1Char('0'))));
+    QVERIFY(!host.fixPlanIdentity().value(QStringLiteral("signatureInvalidationAcknowledged")).toBool());
+    QVERIFY(!host.fixExecutionArmed());
+
+    // The acknowledgement is the whole difference: armed, and the same plan
+    // executes to a published candidate.
+    QVERIFY(host.acknowledgePlanSignatureInvalidation(planDigest));
+    QCOMPARE(host.fixPlanIdentity().value(QStringLiteral("signatureInvalidationAcknowledged")).toBool(), true);
+    QVERIFY(host.fixExecutionArmed());
+    QVERIFY(host.executeApprovedActionListPlan());
+    QTRY_COMPARE_WITH_TIMEOUT(host.fixLifecycleStateName(), QStringLiteral("succeeded"), 60000);
 }
 
 void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
@@ -2354,7 +2683,7 @@ void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
                                              { QStringLiteral("id"), QStringLiteral("bleed") },
                                              { QStringLiteral("operation"), QStringLiteral("add-bleed") },
                                              { QStringLiteral("params"),
-                                               QJsonObject{ { QStringLiteral("bleed_mm"), 3 },
+                                               QJsonObject{ { QStringLiteral("bleed_mm"), 9 },
                                                             { QStringLiteral("mode"), QStringLiteral("mirror") } } } } } } })
                          .toJson(QJsonDocument::Compact));
         recipe.close();
