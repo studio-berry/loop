@@ -77,7 +77,7 @@ void ActionListController::markRecipeStale()
     }
     cancelSchedulerJob();
     m_cancelRequested = true;
-    m_operatorSummary = QStringLiteral("Action List results are stale for the current document or recipe inputs.");
+    m_operatorSummary = tr("Action List results are stale for the current document or recipe inputs.");
     setState(State::Idle);
     m_steps.clear();
     m_result = pdf::PDFActionListExecutionResult();
@@ -183,7 +183,7 @@ bool ActionListController::acceptValidation(const QString& jobId,
     m_validatedDocumentRevision = documentRevision;
     m_validatedRecipeHash = m_runRecipeHash;
     m_validatedBindingsHash = m_runBindingsHash;
-    m_operatorSummary = QStringLiteral("Action List recipe validated.");
+    m_operatorSummary = tr("Action List recipe validated.");
     setState(State::Idle);
     Q_EMIT resultChanged();
     return true;
@@ -210,12 +210,12 @@ bool ActionListController::acceptPlan(const QString& jobId,
     Q_EMIT resultChanged();
     if (result.status == QStringLiteral("planned") && !m_plannedPlanDigest.isEmpty())
     {
-        m_operatorSummary = QStringLiteral("Action List plan is ready for confirmation.");
+        m_operatorSummary = tr("Action List plan is ready for confirmation.");
         setState(State::Planned);
     }
     else
     {
-        m_operatorSummary = QStringLiteral("Action List planning failed.");
+        m_operatorSummary = tr("Action List planning failed.");
         setState(State::Failed);
     }
     return true;
@@ -238,7 +238,7 @@ bool ActionListController::acceptExecution(const QString& jobId,
         (m_plannedPlanDigest.isEmpty() || result.planDigest != m_plannedPlanDigest))
     {
         m_result.status = QStringLiteral("failed");
-        m_operatorSummary = QStringLiteral("Action List execution does not match the confirmed plan.");
+        m_operatorSummary = tr("Action List execution does not match the confirmed plan.");
         m_plannedDocumentKey.clear();
         m_plannedDocumentRevision.clear();
         m_plannedRecipeHash.clear();
@@ -251,17 +251,17 @@ bool ActionListController::acceptExecution(const QString& jobId,
     Q_EMIT resultChanged();
     if (result.status == QStringLiteral("succeeded"))
     {
-        m_operatorSummary = QStringLiteral("Action List completed successfully.");
+        m_operatorSummary = tr("Action List completed successfully.");
         setState(State::Succeeded);
     }
     else if (result.status == QStringLiteral("cancelled"))
     {
-        m_operatorSummary = QStringLiteral("Action List was cancelled.");
+        m_operatorSummary = tr("Action List was cancelled.");
         setState(State::Cancelled);
     }
     else
     {
-        m_operatorSummary = QStringLiteral("Action List execution failed.");
+        m_operatorSummary = tr("Action List execution failed.");
         setState(State::Failed);
     }
     m_plannedDocumentKey.clear();
@@ -295,7 +295,7 @@ bool ActionListController::cancelRun(const QString& jobId)
     m_cancelRequested = true;
     cancelSchedulerJob();
     setState(State::Cancelled);
-    m_operatorSummary = QStringLiteral("Action List was cancelled.");
+    m_operatorSummary = tr("Action List was cancelled.");
     return true;
 }
 

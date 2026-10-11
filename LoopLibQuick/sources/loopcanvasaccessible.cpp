@@ -25,6 +25,7 @@
 #include "loopcanvasitem.h"
 
 #include <QAccessible>
+#include <QCoreApplication>
 #include <QAccessibleObject>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -86,7 +87,7 @@ public:
 
         if (type == QAccessible::Name)
         {
-            return QStringLiteral("Document canvas");
+            return QCoreApplication::translate("LoopGlossary", "Document canvas");
         }
         if (type == QAccessible::Description)
         {

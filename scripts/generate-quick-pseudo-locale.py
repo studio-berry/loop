@@ -15,7 +15,7 @@ def expand(source):
     parts = PROTECTED.split(source)
     text = "".join(part if PROTECTED.fullmatch(part) else part.translate(ACCENTS)
                    for part in parts)
-    return "⟦" + text + " " + "~" * max(3, len(source) // 3) + "⟧"
+    return "[~" + text + " " + "~" * max(3, len(source) // 3) + "~]"
 
 
 def generate(source_path, output_directory):

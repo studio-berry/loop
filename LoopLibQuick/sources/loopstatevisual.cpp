@@ -24,7 +24,7 @@
 #include "loopstatevisual.h"
 
 #include "preflightengine.h"
-#include "shellglossary.h"
+#include "../../LoopLibInteraction/sources/shellglossary.h"
 
 namespace pdfquick::tokens
 {

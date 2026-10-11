@@ -126,6 +126,15 @@ Item {
                             Layout.fillWidth: true
                             objectName: "workspaceButton_" + modelData.workspace
                             text: modelData.label
+                            contentItem: Text {
+                                text: parent.text
+                                font: parent.font
+                                color: parent.palette.buttonText
+                                wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                Accessible.ignored: true
+                            }
                             checkable: true
                             enabled: host ? host.isWorkspaceEnabled(modelData.workspace) : false
                             activeFocusOnTab: true
@@ -143,6 +152,15 @@ Item {
                         objectName: "workspaceHelpButton"
                         Layout.fillWidth: true
                         text: qsTr("Help (F1)")
+                        contentItem: Text {
+                            text: parent.text
+                            font: parent.font
+                            color: parent.palette.buttonText
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            Accessible.ignored: true
+                        }
                         Accessible.name: qsTr("Help for this workspace")
                         onClicked: root.helpRequested("", "")
                     }

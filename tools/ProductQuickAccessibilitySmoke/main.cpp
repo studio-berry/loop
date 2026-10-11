@@ -1,4 +1,5 @@
 #include "editorhost.h"
+#include "operatorhelp.h"
 
 #include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
@@ -1232,15 +1233,11 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
 void runLocalizationProbe(QGuiApplication& application, QQuickWindow* window,
                           EditorHost& host, const QString& directory)
 {
-    if (!QDir(directory).exists())
-    {
-        application.exit(6);
-        return;
-    }
     const QList<QPair<EditorHost::LoopWorkspace, QString>> workspaces = {
         { EditorHost::Preflight, QStringLiteral("preflight") },
         { EditorHost::Fix, QStringLiteral("fix") },
-        { EditorHost::Inspect, QStringLiteral("inspect") }
+        { EditorHost::Inspect, QStringLiteral("inspect") },
+        { EditorHost::Document, QStringLiteral("help") }
     };
     auto* timer = new QTimer(&application);
     QObject::connect(timer, &QTimer::timeout, &application,
@@ -1255,6 +1252,15 @@ void runLocalizationProbe(QGuiApplication& application, QQuickWindow* window,
                              return;
                          }
                          host.setWorkspace(workspaces.at(stage).first);
+                         if (workspaces.at(stage).second == QLatin1String("help"))
+                         {
+                             QObject* dialog = window->findChild<QObject*>(QStringLiteral("operatorHelpDialog"));
+                             if (!dialog || !QMetaObject::invokeMethod(dialog, "open"))
+                             {
+                                 application.exit(6);
+                                 return;
+                             }
+                         }
                          QTimer::singleShot(150, &application, [&application, window, directory, name = workspaces.at(stage).second]()
                                             {
                                                 QJsonArray nodes;
@@ -1276,19 +1282,22 @@ void runLocalizationProbe(QGuiApplication& application, QQuickWindow* window,
                                                     nodes.append(QJsonObject{ { QStringLiteral("object"), item->objectName() },
                                                                               { QStringLiteral("text"), text },
                                                                               { QStringLiteral("truncated"), truncated },
+                                                                              { QStringLiteral("parent"), item->parentItem() ? item->parentItem()->objectName() : QString() },
+                                                                              { QStringLiteral("width"), item->width() },
+                                                                              { QStringLiteral("height"), item->height() },
                                                                               { QStringLiteral("accessible_name"), accessible ? accessible->text(QAccessible::Name) : QString() } });
                                                 }
                                                 auto* menu = window->findChild<QQuickItem*>(QStringLiteral("shellMenuBar"));
                                                 auto* accessibleMenu = menu ? QAccessible::queryAccessibleInterface(menu) : nullptr;
-                                                valid = valid && accessibleMenu && accessibleMenu->text(QAccessible::Name).startsWith(QString::fromUtf8("âŸ¦"));
+                                                valid = valid && accessibleMenu && accessibleMenu->text(QAccessible::Name).startsWith(QStringLiteral("[~"));
                                                 const QImage screenshot = window->grabWindow();
-                                                valid = valid && !screenshot.isNull() && screenshot.save(QDir(directory).filePath(name + QStringLiteral(".png")));
+                                                const bool screenshotSaved = !screenshot.isNull() && screenshot.save(QDir(directory).filePath(name + QStringLiteral(".png")));
                                                 QSaveFile report(QDir(directory).filePath(name + QStringLiteral(".json")));
                                                 const QByteArray bytes = QJsonDocument(QJsonObject{ { QStringLiteral("nodes"), nodes }, { QStringLiteral("layout_pass"), valid } }).toJson();
-                                                valid = valid && report.open(QIODevice::WriteOnly) && report.write(bytes) == bytes.size() && report.commit();
-                                                if (!valid)
+                                                const bool reportSaved = report.open(QIODevice::WriteOnly) && report.write(bytes) == bytes.size() && report.commit();
+                                                if (!valid || !screenshotSaved || !reportSaved)
                                                 {
-                                                    fprintf(stderr, "quick-localization-probe failed workspace=%s\n", qPrintable(name));
+                                                    fprintf(stderr, "quick-localization-probe failed workspace=%s layout=%d screenshot=%d report=%d menu=%s\n", qPrintable(name), valid ? 1 : 0, screenshotSaved ? 1 : 0, reportSaved ? 1 : 0, accessibleMenu ? qPrintable(accessibleMenu->text(QAccessible::Name)) : "missing");
                                                     application.exit(6);
                                                 } });
                          ++stage;
@@ -1374,7 +1383,19 @@ int main(int argc, char** argv)
     }
 
     EditorHost host;
+    std::unique_ptr<QSettings> localizationSettings;
+    std::unique_ptr<OperatorHelp> localizationHelp;
+    if (!localizationDirectory.isEmpty())
+    {
+        localizationSettings = std::make_unique<QSettings>(QDir(localizationDirectory).filePath(QStringLiteral("help.ini")), QSettings::IniFormat);
+        localizationSettings->setValue(QStringLiteral("OperatorHelp/welcomeSeen"), true);
+        localizationHelp = std::make_unique<OperatorHelp>(*localizationSettings, QString());
+    }
     QQmlApplicationEngine engine;
+    if (localizationHelp)
+    {
+        engine.rootContext()->setContextProperty(QStringLiteral("operatorHelpController"), localizationHelp.get());
+    }
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
     qmlRegisterUncreatableType<EditorHost>("Loop.Quick",
                                            1,

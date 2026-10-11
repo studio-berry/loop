@@ -615,7 +615,7 @@ private:
     int m_searchRow = -1;
     QString m_inspectionMode = QStringLiteral("page");
     QString m_preflightCertificateStateName = QStringLiteral("not-certified");
-    QString m_preflightCertificateSummary = QStringLiteral("No certified preflight is recorded for this document.");
+    QString m_preflightCertificateSummary = tr("No certified preflight is recorded for this document.");
 
     /// Review decision for the governed-correction route (#586). The digest records which
     /// plan the operator reviewed, so a replan or a revision change cannot inherit it.

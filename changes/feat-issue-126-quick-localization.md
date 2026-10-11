@@ -1,4 +1,4 @@
 Category: added
 Audience: operators
 Breaking-Change: no
-Summary: Extract Quick menu labels and localize accessible state names, verdicts, and finding labels through one presentation glossary.
+Summary: Refresh the ten Quick language catalogs, localize verdict/finding and accessible names, extract operator help, and wrap expanded labels with pseudo-locale layout proof.

@@ -1936,15 +1936,15 @@ bool EditorHost::runPreflight()
             }
             const auto* security = document->getStorage().getSecurityHandler();
             receipt.limitations.append(security && security->getMode() != pdf::EncryptionMode::None
-                                           ? QStringLiteral("Document is encrypted; authenticated document permissions apply.")
-                                           : QStringLiteral("Document is not encrypted."));
+                                           ? tr("Document is encrypted; authenticated document permissions apply.")
+                                           : tr("Document is not encrypted."));
             outcome->auditSummary.insert(QStringLiteral("inspection_receipt"), receipt.toJson());
 
             if (context.isCancellationRequested())
                 return;
 
             context.reportProgress(95);
-            context.setResultSummary(QStringLiteral("Preflight completed."));
+            context.setResultSummary(tr("Preflight completed."));
         });
     if (submittedId != jobId)
     {
@@ -3012,7 +3012,7 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
             if (!workerHistory.open(&openError))
             {
                 throw std::runtime_error(
-                    QStringLiteral("Recorded revisions are unavailable: %1").arg(openError).toStdString());
+                    tr("Recorded revisions are unavailable: %1").arg(openError).toStdString());
             }
             pdf::PDFArtifactStore artifacts(historyDirectory);
             const pdf::PDFOperationResult rollback = workerHistory.rollbackTo(request, artifacts, destination);
@@ -3142,7 +3142,7 @@ void EditorHost::reloadPreflightProfiles()
         if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
         {
             choice.name = QFileInfo(source).completeBaseName();
-            choice.diagnostic = QStringLiteral("Profile JSON is invalid.");
+            choice.diagnostic = tr("Profile JSON is invalid.");
             profiles.append(choice);
             return;
         }
@@ -4335,7 +4335,7 @@ void EditorHost::applyEmptyCanvasInspectorSelection()
     selection.properties = {
         { QStringLiteral("document"), QStringLiteral("Document"), displayTitle() },
         { QStringLiteral("pages"), QStringLiteral("Pages"), QString::number(pageCount()) },
-        { QStringLiteral("document-status"), QStringLiteral("Document status"), documentShellStatus() },
+        { QStringLiteral("document-status"), tr("Document status"), documentShellStatus() },
         { QStringLiteral("preflight"), QStringLiteral("Preflight"), preflightStateName() },
         { QStringLiteral("production"), QStringLiteral("Production"), productionStateName() },
     };
@@ -4387,8 +4387,8 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
                        QString::number(target.pageBounds.y()),
                        QString::number(target.pageBounds.width()),
                        QString::number(target.pageBounds.height())) },
-            { QStringLiteral("dpi"), QStringLiteral("Effective DPI"), tr("pending") },
-            { QStringLiteral("colour-space"), QStringLiteral("Colour space"), tr("pending") },
+            { QStringLiteral("dpi"), tr("Effective DPI"), tr("pending") },
+            { QStringLiteral("colour-space"), tr("Colour space"), tr("pending") },
             { QStringLiteral("compression"), QStringLiteral("Compression"), tr("pending") },
             { QStringLiteral("mask"), QStringLiteral("Mask"), tr("pending") },
         };
@@ -4407,8 +4407,8 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
         selection.properties = {
             { QStringLiteral("name"), QStringLiteral("Ink"), target.id.mid(11) },
             { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("coverage"), QStringLiteral("Ink coverage"), tr("pending") },
-            { QStringLiteral("kind"), QStringLiteral("Process / spot"), tr("pending") },
+            { QStringLiteral("coverage"), tr("Ink coverage"), tr("pending") },
+            { QStringLiteral("kind"), tr("Process / spot"), tr("pending") },
         };
         m_inspector.setSelection(selection);
         return;
@@ -4432,7 +4432,7 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
               QStringLiteral("%1 x %2")
                   .arg(QString::number(target.pageBounds.width()), QString::number(target.pageBounds.height())) },
             { QStringLiteral("rotation"), QStringLiteral("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
-            { QStringLiteral("ocg"), QStringLiteral("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
+            { QStringLiteral("ocg"), tr("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
         };
         m_inspector.setSelection(selection);
         return;
