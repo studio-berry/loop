@@ -365,7 +365,7 @@ void EditorHostTest::encryptedOpen()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("encrypted.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::Algorithm(algorithm), QStringLiteral("fixture-user"), userPermissions));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     const quint64 request = host.passwordRequestId();
@@ -402,7 +402,7 @@ void EditorHostTest::passwordFailureIsTypedAndRetryable()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("wrong-password-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("incorrect-fixture-password")));
@@ -421,7 +421,7 @@ void EditorHostTest::passwordCancelCloseAndSupersessionAreTerminal()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("cancelled-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.cancelPassword(host.passwordRequestId()));
@@ -455,7 +455,7 @@ void EditorHostTest::teardownWhilePasswordPromptIsPending()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("teardown-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    auto host = std::make_unique<EditorHost>(nullptr, m_fixtureRecipes->path());
+    auto host = std::make_unique<EditorHost>(nullptr, nullptr, m_fixtureRecipes->path());
     host->openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host->passwordRequestId() != 0, 10000);
     QElapsedTimer timer;
@@ -476,7 +476,7 @@ void EditorHostTest::restrictedDocumentCannotPlanOrPublish()
     QVERIFY(source.open(QIODevice::ReadOnly));
     const QByteArray original = source.readAll();
     source.close();
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 10000);
     QCOMPARE(host.passwordRequestId(), quint64(0));
@@ -526,7 +526,7 @@ void EditorHostTest::encryptedInspectionReceiptContainsNoPassword()
     QTemporaryDir directory;
     const QString path = directory.filePath(QStringLiteral("inspection-AES-256.pdf"));
     QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256));
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
     QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
@@ -562,7 +562,7 @@ void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 {
     QVERIFY(!pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
     {
-        EditorHost host(nullptr, m_fixtureRecipes->path());
+        EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
         QVERIFY(pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
         QVERIFY(pdf::PDFBlockingThreadGuard::isCurrentThreadInteractive());
     }
@@ -574,7 +574,7 @@ void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
 
 void EditorHostTest::startsWithNoDocument()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.documentState(), QStringLiteral("empty"));
     QVERIFY(!host.hasDocument());
     QCOMPARE(host.pageCount(), 0);
@@ -593,7 +593,7 @@ void EditorHostTest::startsWithNoDocument()
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     const QVariantList descriptors = host.commandDescriptors();
     QVERIFY(descriptors.size() > 100);
 
@@ -613,7 +613,7 @@ void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
 
 void EditorHostTest::navigationCommandsStayDisabledUntilOpen()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.isCommandEnabled(QStringLiteral("actionGoToNextPage")));
     QCOMPARE(host.invokeCommand(QStringLiteral("actionGoToNextPage")), quint64(0));
 }
@@ -662,7 +662,7 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.runPreflight());
@@ -701,7 +701,7 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -803,7 +803,7 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
 
     // 2. The GUI's report, through the export path the operator uses:
     //    EditorHost::exportPreflightReportFileUrl -> PreflightController::serializedReport.
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
 
@@ -894,7 +894,7 @@ void EditorHostTest::restrictedPreflightReportMatchesPdfTool()
     QCOMPARE(cliScope.value(QStringLiteral("pages")).toArray(), QJsonArray{ 1 });
     QCOMPARE(cliScope.value(QStringLiteral("object_classes")).toArray(), QJsonArray{ QStringLiteral("image") });
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(profilePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
@@ -946,7 +946,7 @@ void EditorHostTest::importValidProfileAddsDigest()
     const QString expectedDigest = profile.value(QStringLiteral("digest")).toString();
     QVERIFY(!expectedDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
 
     const QString expectedId = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
@@ -984,7 +984,7 @@ void EditorHostTest::importDigestMismatchProfileIsRejected()
     QVERIFY(sourceFile.open(QIODevice::WriteOnly));
     sourceFile.write(QJsonDocument(profile).toJson(QJsonDocument::Compact));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.importPreflightProfileFileUrl(QUrl::fromLocalFile(sourcePath)));
 }
 
@@ -993,7 +993,7 @@ void EditorHostTest::saveProfileForkRecordsDerivedFrom()
     QTemporaryDir temp;
     QVERIFY(temp.isValid());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QString parentDigest;
     for (const QVariant& entry : host.preflightProfiles())
     {
@@ -1047,7 +1047,7 @@ void EditorHostTest::openLargeDocument()
     QElapsedTimer openTimer;
     openTimer.start();
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 90000);
     const qint64 openToFirstViewMs = openTimer.elapsed();
@@ -1238,7 +1238,7 @@ void EditorHostTest::openLargeDocument()
 
 void EditorHostTest::fixWorkspacePresentsIdleLifecycleAndRefusesToArm()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
 
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("idle"));
     QVERIFY(!host.fixLifecycleSummary().trimmed().isEmpty());
@@ -1306,7 +1306,7 @@ void EditorHostTest::fixReviewBindsToThePlannedDigestAndTheCurrentRevision()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     // The catalog identifies a recipe by the file that defines it, and importing selects it.
     QVERIFY(!host.selectedActionListRecipeId().isEmpty());
@@ -1419,7 +1419,7 @@ void EditorHostTest::moveSelectionProposesAPageBoxMoveInTheFixWorkspace()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(!host.isCommandEnabled(commandId));
     QCOMPARE(host.invokeCommand(commandId, moveParameters(QStringLiteral("PageBox"), 4.0, 5.0)), quint64(0));
 
@@ -1616,7 +1616,7 @@ bool writeSignatureAppendedCopy(const QString& sourcePath, const QString& destin
 
 void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     bool listed = false;
     for (const QVariant& entry : host.actionListRecipes())
     {
@@ -1651,7 +1651,7 @@ void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRe
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -1700,7 +1700,7 @@ void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
     const QString recipePath = directory.filePath(QStringLiteral("operator-move.json"));
     QVERIFY(writeTranslatePageBoxRecipe(recipePath, QStringLiteral("operator-move"), 0));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -1730,7 +1730,7 @@ void EditorHostTest::invalidOperatorRecipeStopsMoveWithoutShippedFallback()
     const QString brokenPath = QDir(m_fixtureRecipes->path()).filePath(QStringLiteral("broken-move.json"));
     QVERIFY(writeTranslatePageBoxRecipe(brokenPath, QStringLiteral("broken-move"), QStringLiteral("first")));
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -1772,7 +1772,7 @@ void EditorHostTest::completedDragOfARefusedKindIsReportedAndChangesNothing()
         QVERIFY(writer.write(documentPath, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     DocumentViewSession* session = host.sessionForTest();
@@ -1866,7 +1866,7 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -2157,7 +2157,7 @@ void EditorHostTest::translatePageBoxRefusesAMoveThatIntroducesABlockingFinding(
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
@@ -2220,7 +2220,7 @@ void EditorHostTest::fixRollbackReturnsToARecordedRevision()
         QCOMPARE(process.exitCode(), 0);
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(repairedPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -2327,7 +2327,7 @@ void EditorHostTest::preflightFencesCompletionsThatLostTheirRequestIdentity()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
@@ -2440,7 +2440,7 @@ void EditorHostTest::actionListFencesCompletionsThatLostTheirRequestIdentity()
         recipe.close();
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
@@ -2729,7 +2729,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
         QVERIFY(writer.write(path, &document, true));
     }
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
     QCOMPARE(host.previewFidelityStateName(), QStringLiteral("unavailable"));
@@ -2754,7 +2754,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
         preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
     QVERIFY2(QFileInfo::exists(overprintPath), qPrintable(overprintPath));
 
-    EditorHost overprintHost(nullptr, m_fixtureRecipes->path());
+    EditorHost overprintHost(nullptr, nullptr, m_fixtureRecipes->path());
     overprintHost.openFileUrl(QUrl::fromLocalFile(overprintPath));
     QTRY_VERIFY_WITH_TIMEOUT(overprintHost.hasDocument(), 30000);
     overprintHost.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
@@ -2779,7 +2779,7 @@ void EditorHostTest::previewFidelityNamesTheOriginAndSwitchesExplicitly()
 
 void EditorHostTest::refusedRenderCannotBecomeAuthoritativeEvidence()
 {
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(preflightFixturesDir() + QStringLiteral("/overprint-cmyk-mode1-on.pdf")));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
     auto* surfaces = host.sessionForTest()->surfaces();
@@ -2845,7 +2845,7 @@ void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
     const QByteArray sourceDigest = fileDigest(documentPath);
     QVERIFY(!sourceDigest.isEmpty());
 
-    EditorHost host(nullptr, m_fixtureRecipes->path());
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));
     host.openFileUrl(QUrl::fromLocalFile(documentPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
