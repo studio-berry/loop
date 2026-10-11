@@ -55,7 +55,9 @@
 
 #include "pdfblockingthreadguard.h"
 #include "pdfcms.h"
+#include "pdfdiagnostics.h"
 #include "pdfpage.h"
+#include "pdfrenderer.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QAccessible>
@@ -283,6 +285,20 @@ QString shellMenuGroupForAction(const QString& id, const QString& target)
     return QStringLiteral("Document");
 }
 
+pdf::PDFRenderer::Features featuresForOptions(const EditorSettings::RenderOptions& options)
+{
+    pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
+    features.setFlag(pdf::PDFRenderer::Antialiasing, options.antialiasing);
+    features.setFlag(pdf::PDFRenderer::TextAntialiasing, options.textAntialiasing);
+    features.setFlag(pdf::PDFRenderer::SmoothImages, options.smoothPictures);
+    features.setFlag(pdf::PDFRenderer::DisplayAnnotations, options.displayAnnotations);
+    features.setFlag(pdf::PDFRenderer::IgnoreOptionalContent, options.ignoreOptionalContentSettings);
+    features.setFlag(pdf::PDFRenderer::DisplayTimes, options.displayRenderTimes);
+    features.setFlag(pdf::PDFRenderer::DebugTextBlocks, options.showTextBlocks);
+    features.setFlag(pdf::PDFRenderer::DebugTextLines, options.showTextLines);
+    return features;
+}
+
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
 {
     QVariantMap entry;
@@ -292,7 +308,11 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     entry.insert(QStringLiteral("enabled"), enabled);
     entry.insert(QStringLiteral("target"), descriptor.target);
     entry.insert(QStringLiteral("disposition"), descriptor.disposition);
-    entry.insert(QStringLiteral("menuGroup"), shellMenuGroupForAction(descriptor.id, descriptor.target));
+    // Menu placement is the manifest's routing policy (menu_group); the prefix
+    // table is only the fallback for a descriptor that arrives without one.
+    entry.insert(QStringLiteral("menuGroup"),
+                 descriptor.menuGroup.isEmpty() ? shellMenuGroupForAction(descriptor.id, descriptor.target)
+                                                : descriptor.menuGroup);
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
@@ -314,7 +334,7 @@ struct EditorHost::PreflightWorkerOutcome
     QJsonObject auditSummary;
 };
 
-EditorHost::EditorHost(QObject* parent) :
+EditorHost::EditorHost(EditorSettings* settings, QObject* parent) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
     m_findingNavigator(std::make_unique<pdfinteraction::FindingCanvasNavigator>(
@@ -327,6 +347,16 @@ EditorHost::EditorHost(QObject* parent) :
     m_preflight(&m_session->scheduler(), this),
     m_actionListController(&m_session->scheduler(), this)
 {
+    if (settings)
+    {
+        m_settings = settings;
+    }
+    else
+    {
+        m_ownedSettings = std::make_unique<EditorSettings>(nullptr, this);
+        m_settings = m_ownedSettings.get();
+    }
+
     // Registers this constructing thread -- the one QML dispatches pointer
     // and frame callbacks on -- as the thread blocking service adapters
     // (PreflightEngine::run, and future OCR/AI/file-I/O adapters) must
@@ -355,6 +385,12 @@ EditorHost::EditorHost(QObject* parent) :
     connectSurfaces();
     registerShellHandlers();
     registerFeatureHandlers();
+
+    // One apply path for every option change, wherever it came from: the
+    // command handlers, the settings surface, or a factory reset.
+    connect(m_settings, &EditorSettings::optionsChanged, this, [this]
+            { applyRenderOptions(); });
+    connect(m_settings, &EditorSettings::noticeChanged, this, &EditorHost::bumpPresentation);
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
@@ -1656,6 +1692,101 @@ bool EditorHost::allowDeveloperDiagnostics() const
 #endif
 }
 
+QString EditorHost::settingsNotice()
+{
+    return m_settings->notice();
+}
+
+QVariantMap EditorHost::diagnosticsBundle() const
+{
+    QVariantMap bundle;
+    bundle.insert(QStringLiteral("status"), m_diagnosticsBundle.status);
+    bundle.insert(QStringLiteral("directory"), m_diagnosticsBundle.directory);
+    bundle.insert(QStringLiteral("error"), m_diagnosticsBundle.error);
+    bundle.insert(QStringLiteral("fileCount"), m_diagnosticsBundle.fileCount);
+    return bundle;
+}
+
+bool EditorHost::requestSettingsReset()
+{
+    m_settingsResetPending = true;
+    Q_EMIT settingsResetRequested();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::confirmSettingsReset()
+{
+    if (!m_settingsResetPending)
+    {
+        return false;
+    }
+    m_settingsResetPending = false;
+
+    // resetToFactory() reports its own failure through the store notice; the
+    // typed state is only replaced when every owned key was removed.
+    const bool reset = m_settings->resetToFactory();
+    bumpPresentation();
+    return reset;
+}
+
+void EditorHost::cancelSettingsReset()
+{
+    if (!m_settingsResetPending)
+    {
+        return;
+    }
+    m_settingsResetPending = false;
+    bumpPresentation();
+}
+
+bool EditorHost::collectDiagnosticsFileUrl(const QUrl& parentDirectory)
+{
+    if (!parentDirectory.isValid() || !parentDirectory.isLocalFile() || parentDirectory.toLocalFile().isEmpty())
+    {
+        m_diagnosticsBundle.status = QStringLiteral("failed");
+        m_diagnosticsBundle.directory.clear();
+        m_diagnosticsBundle.fileCount = 0;
+        m_diagnosticsBundle.error = tr("Choose a local folder for the diagnostics bundle.");
+        bumpPresentation();
+        return false;
+    }
+
+    pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("editor");
+    options.outputDirectory = parentDirectory.toLocalFile();
+    const pdf::PDFDiagnosticsResult result = pdf::PDFDiagnosticsCollector::collect(options);
+
+    if (!result.success)
+    {
+        m_diagnosticsBundle.status = QStringLiteral("failed");
+        m_diagnosticsBundle.directory.clear();
+        m_diagnosticsBundle.fileCount = 0;
+        m_diagnosticsBundle.error = result.errorMessage.isEmpty()
+                                        ? tr("The diagnostics bundle could not be written.")
+                                        : result.errorMessage;
+        bumpPresentation();
+        return false;
+    }
+
+    m_diagnosticsBundle.status = QStringLiteral("ready");
+    m_diagnosticsBundle.error.clear();
+    m_diagnosticsBundle.directory = result.bundleDirectory;
+    m_diagnosticsBundle.fileCount = static_cast<int>(result.files.size());
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::applyRenderOptions()
+{
+    m_session->setSurfaceRenderFeatures(featuresForOptions(m_settings->renderOptions()));
+    if (m_documentBound)
+    {
+        m_session->surfaces()->requestSurfaces();
+    }
+    bumpPresentation();
+}
+
 void EditorHost::acknowledgeSearchPanel()
 {
     if (!m_searchPanelVisible)
@@ -1858,6 +1989,13 @@ bool EditorHost::pageFidelityIsExact() const
         return true;
     }
 
+    if (m_settings->isOptionEnabled(EditorSettings::IgnoreOptionalContentOptionId))
+    {
+        // The optional-content override deliberately deviates from the
+        // document's own view state; no render under it is an exact render.
+        return false;
+    }
+
     const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
     return !diagnostics.has_value() || diagnostics->isExact();
 }
@@ -1869,13 +2007,20 @@ QString EditorHost::pageFidelityReason() const
         return QString();
     }
 
-    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
-    if (!diagnostics.has_value() || diagnostics->reasons.isEmpty())
+    QStringList reasons;
+    if (m_settings->isOptionEnabled(EditorSettings::IgnoreOptionalContentOptionId))
     {
-        return QString();
+        reasons.append(tr("The optional content override is enabled: this render shows all optional "
+                          "content regardless of the document's settings."));
     }
 
-    return diagnostics->reasons.join(QStringLiteral(" "));
+    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
+    if (diagnostics.has_value() && !diagnostics->reasons.isEmpty())
+    {
+        reasons.append(diagnostics->reasons);
+    }
+
+    return reasons.join(QStringLiteral(" "));
 }
 
 bool EditorHost::pageFidelityIsAuthoritative() const
@@ -4473,6 +4618,41 @@ void EditorHost::registerFeatureHandlers()
                                        : pdfquick::getCanvasDisplayColorModeName(mode)); });
     }
 
+    // Shell settings, render options and diagnostics (#239). Every one of these
+    // is ADVANCED-disposition and developer-gated; binding a handler does not
+    // make it reachable in a release profile.
+    bind(QStringLiteral("actionOptions"), [this]
+         { Q_EMIT settingsPanelRequested(); });
+    bind(QStringLiteral("actionResetToFactorySettings"), [this]
+         { requestSettingsReset(); });
+    bind(QStringLiteral("actionCollectDiagnostics"), [this]
+         { Q_EMIT diagnosticsCollectionRequested(); });
+
+    auto bindOptionToggle = [this](const QString& commandId, const QString& optionId)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, optionId](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            const bool enabled = !m_settings->isOptionEnabled(optionId);
+            const bool applied = m_settings->setOptionEnabled(optionId, enabled);
+            m_session->catalog().finishInvocation(invocation,
+                                                  applied ? pdfinteraction::CommandTerminalState::Completed
+                                                          : pdfinteraction::CommandTerminalState::Failed,
+                                                  applied ? QString() : QStringLiteral("settings/persist-failed"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(commandId, std::move(handler));
+    };
+
+    bindOptionToggle(QStringLiteral("actionRenderOptionAntialiasing"), EditorSettings::AntialiasingOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionTextAntialiasing"), EditorSettings::TextAntialiasingOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionSmoothPictures"), EditorSettings::SmoothPicturesOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionDisplayAnnotations"), EditorSettings::DisplayAnnotationsOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings"), EditorSettings::IgnoreOptionalContentOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionDisplayRenderTimes"), EditorSettings::DisplayRenderTimesOptionId);
+    bindOptionToggle(QStringLiteral("actionShow_Text_Blocks"), EditorSettings::ShowTextBlocksOptionId);
+    bindOptionToggle(QStringLiteral("actionShow_Text_Lines"), EditorSettings::ShowTextLinesOptionId);
+
     pdfinteraction::CommandCatalog::Handler move;
     move.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
     {
@@ -4517,6 +4697,25 @@ void EditorHost::refreshFeatureAvailability()
                                QStringLiteral("actionExtractImage") })
     {
         availability.insert(id, ready);
+    }
+
+    // The developer-diagnostics shell surfaces (#239): settings, render options
+    // and the diagnostics bundle. They follow the same flag the menu gate
+    // reads, so a release profile cannot reach them even by invocation.
+    const bool developerDiagnostics = allowDeveloperDiagnostics();
+    for (const QString& id : { QStringLiteral("actionOptions"),
+                               QStringLiteral("actionResetToFactorySettings"),
+                               QStringLiteral("actionCollectDiagnostics"),
+                               QStringLiteral("actionRenderOptionAntialiasing"),
+                               QStringLiteral("actionRenderOptionTextAntialiasing"),
+                               QStringLiteral("actionRenderOptionSmoothPictures"),
+                               QStringLiteral("actionRenderOptionDisplayAnnotations"),
+                               QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings"),
+                               QStringLiteral("actionRenderOptionDisplayRenderTimes"),
+                               QStringLiteral("actionShow_Text_Blocks"),
+                               QStringLiteral("actionShow_Text_Lines") })
+    {
+        availability.insert(id, developerDiagnostics);
     }
 
     m_session->catalog().setEnabledBatch(availability);
@@ -4577,6 +4776,9 @@ void EditorHost::bumpCommandEpoch()
 
 void EditorHost::onDocumentReady()
 {
+    // The persisted render options must be in force before the first surfaces
+    // are requested, so no page is rendered twice on open.
+    applyRenderOptions();
     m_session->prepareDocumentView();
 
     syncRevisionModels();

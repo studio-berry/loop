@@ -30,6 +30,19 @@ ApplicationWindow {
         host: window.host
     }
 
+    SettingsDialog {
+        id: settingsDialog
+        parent: Overlay.overlay
+        host: window.host
+    }
+
+    DiagnosticsDialog {
+        id: diagnosticsDialog
+        parent: Overlay.overlay
+        host: window.host
+        folderDialog: diagnosticsFolderDialog
+    }
+
     Shortcut {
         sequence: "F1"
         onActivated: {
@@ -260,6 +273,23 @@ ApplicationWindow {
         function onImageExtractionRequested() {
             extractImagesDialog.open()
         }
+        function onSettingsPanelRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onSettingsResetRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onDiagnosticsCollectionRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            diagnosticsDialog.open()
+        }
+    }
+
+    FolderDialog {
+        id: diagnosticsFolderDialog
+        title: qsTr("Choose a folder for the diagnostics bundle")
     }
 
     TextField {

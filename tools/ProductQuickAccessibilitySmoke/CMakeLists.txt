@@ -4,6 +4,8 @@ qt_add_executable(ProductQuickAccessibilitySmoke
     main.cpp
     ../../LoopEditor/editorhost.cpp
     ../../LoopEditor/editorhost.h
+    ../../LoopEditor/editorsettings.cpp
+    ../../LoopEditor/editorsettings.h
     ../../LoopEditor/focusrestoration.cpp
     ../../LoopEditor/focusrestoration.h
     ../../LoopEditor/quickdocumentmodel.cpp
@@ -26,6 +28,8 @@ qt_add_qml_module(ProductQuickAccessibilitySmoke
     QML_FILES
         qml/Main.qml
         qml/OperatorHelpDialog.qml
+        qml/SettingsDialog.qml
+        qml/DiagnosticsDialog.qml
         qml/Workspace.qml
         qml/PreflightPane.qml
         qml/ActionListPane.qml

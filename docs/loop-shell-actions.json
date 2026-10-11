@@ -166,9 +166,9 @@
       "command": {
         "label_key": "command.actionCollectDiagnostics.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -958,9 +958,9 @@
       "command": {
         "label_key": "command.actionOptions.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1137,27 +1137,27 @@
     },
     {
       "id": "actionRenderOptionAntialiasing",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionAntialiasing.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionDisplayAnnotations",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionDisplayAnnotations.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1168,48 +1168,48 @@
       "command": {
         "label_key": "command.actionRenderOptionDisplayRenderTimes.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionIgnoreOptionalContentSettings",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionIgnoreOptionalContentSettings.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionSmoothPictures",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionSmoothPictures.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionTextAntialiasing",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionTextAntialiasing.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1220,9 +1220,9 @@
       "command": {
         "label_key": "command.actionResetToFactorySettings.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1384,9 +1384,9 @@
       "command": {
         "label_key": "command.actionShow_Text_Blocks.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1397,9 +1397,9 @@
       "command": {
         "label_key": "command.actionShow_Text_Lines.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },

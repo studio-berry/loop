@@ -46,6 +46,7 @@
 
 #include "focusrestoration.h"
 #include "documentviewsession.h"
+#include "editorsettings.h"
 #include "quickdocumentmodel.h"
 
 #include "canvasdisplaycolor.h"
@@ -149,6 +150,16 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString productionStateName READ productionStateName NOTIFY presentationChanged)
     Q_PROPERTY(bool allowDeveloperDiagnostics READ allowDeveloperDiagnostics CONSTANT)
 
+    // ---- Shell settings and diagnostics (#239) -------------------------------------
+    // The settings store is the one typed home of the persisted render options;
+    // QML renders its rows and toggles them through its typed invokables. The
+    // diagnostics bundle projection names the last collection outcome, never a
+    // second copy of the bundle's content.
+    Q_PROPERTY(QObject* settings READ settings CONSTANT)
+    Q_PROPERTY(QString settingsNotice READ settingsNotice NOTIFY presentationChanged)
+    Q_PROPERTY(bool settingsResetPending READ settingsResetPending NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap diagnosticsBundle READ diagnosticsBundle NOTIFY presentationChanged)
+
     // ---- Workspace surfaces (#586) -------------------------------------------------
     // Every property below is a read-only projection of what Core, PdfTool or the
     // shell's own run already decided. QML renders these; it derives no state and
@@ -212,7 +223,10 @@ public:
     };
     Q_ENUM(LoopWorkspace)
 
-    explicit EditorHost(QObject* parent = nullptr);
+    /// `settings` is the one typed settings store. When null, the host opens
+    /// the application's own user-scope store on first use; an injected store
+    /// stays owned by the caller and must outlive the host.
+    explicit EditorHost(EditorSettings* settings = nullptr, QObject* parent = nullptr);
     ~EditorHost() override;
 
     EditorHost(const EditorHost&) = delete;
@@ -289,6 +303,35 @@ public:
 
     /// Production / plate model for the Pages and Production Preview surfaces.
     QObject* production() { return &m_production; }
+
+    /// The one typed settings store (#239). QML renders its option rows and
+    /// calls its typed invokables; nothing else owns a settings copy.
+    QObject* settings() { return m_settings; }
+
+    /// The settings store's visible notice: a persisted value that was rejected
+    /// and replaced, or the last refused settings operation. Empty when nothing
+    /// needs reporting.
+    QString settingsNotice();
+
+    /// True while a confirmed reset-to-factory is armed and awaiting the
+    /// operator's confirmation.
+    bool settingsResetPending() const noexcept { return m_settingsResetPending; }
+
+    /// Outcome of the last diagnostics collection: `status` is `idle`, `ready`
+    /// or `failed`, with the bundle directory and file count on success and a
+    /// typed error on failure.
+    QVariantMap diagnosticsBundle() const;
+
+    /// Arms the reset-to-factory confirmation and opens the settings surface.
+    /// The reset itself only runs through confirmSettingsReset().
+    Q_INVOKABLE bool requestSettingsReset();
+    Q_INVOKABLE bool confirmSettingsReset();
+    Q_INVOKABLE void cancelSettingsReset();
+
+    /// Collects the ADR-006 diagnostics bundle under the operator-chosen parent
+    /// directory and projects the outcome. QML passes a folder URL; paths stay
+    /// in C++.
+    Q_INVOKABLE bool collectDiagnosticsFileUrl(const QUrl& parentDirectory);
 
     /// Operator lifecycle of the governed-correction route (#586):
     /// `idle`, `planned`, `preview-ready`, `approved`, `executing`, `succeeded`,
@@ -598,6 +641,12 @@ signals:
     /// asks for one and answers with extractCurrentPageImagesFileUrl().
     void imageExtractionRequested();
 
+    /// The shell-side surfaces (#239). The commands emit these; QML owns the
+    /// dialogs and opens them.
+    void settingsPanelRequested();
+    void settingsResetRequested();
+    void diagnosticsCollectionRequested();
+
 private:
     void connectFacade();
     void connectViewport();
@@ -673,6 +722,9 @@ private:
     QVariantMap plateRow(const QString& id) const;
     QPointF currentPageCentre() const;
     void finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot);
+    /// Pushes the typed render options into the shared render presentation
+    /// policy and re-requests the surfaces whose keys the change superseded.
+    void applyRenderOptions();
 
     /// Operator review of the planned correction (#586). `fixPlanIsCurrent()` is the only
     /// authority on whether the reviewed plan still describes the open revision.
@@ -698,6 +750,23 @@ private:
     QuickDocumentModel m_documentModel;
     FocusRestoration m_focusRestoration;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
+
+    /// The settings store: injected by the caller, or owned here when the host
+    /// was constructed without one. See the constructor's contract.
+    std::unique_ptr<EditorSettings> m_ownedSettings;
+    EditorSettings* m_settings = nullptr;
+    bool m_settingsResetPending = false;
+
+    /// The last diagnostics collection's outcome. A projection of the
+    /// collector's own result, never a second copy of the bundle.
+    struct DiagnosticsBundleState
+    {
+        QString status = QStringLiteral("idle");
+        QString directory;
+        QString error;
+        int fileCount = 0;
+    };
+    DiagnosticsBundleState m_diagnosticsBundle;
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;

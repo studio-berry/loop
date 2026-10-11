@@ -32,6 +32,8 @@ qt_add_executable(LoopEditor
     documentviewsession.h
     editorhost.cpp
     editorhost.h
+    editorsettings.cpp
+    editorsettings.h
     focusrestoration.cpp
     focusrestoration.h
     quickdocumentmodel.cpp
@@ -45,6 +47,8 @@ qt_add_qml_module(LoopEditor
     QML_FILES
         qml/Main.qml
         qml/OperatorHelpDialog.qml
+        qml/SettingsDialog.qml
+        qml/DiagnosticsDialog.qml
         qml/Workspace.qml
         qml/DocumentPane.qml
         qml/CanvasPane.qml

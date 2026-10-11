@@ -98,6 +98,17 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionColorHighContrast",
         "actionColorBitonal",
         "actionColorCustom",
+        "actionOptions",
+        "actionResetToFactorySettings",
+        "actionCollectDiagnostics",
+        "actionRenderOptionAntialiasing",
+        "actionRenderOptionTextAntialiasing",
+        "actionRenderOptionSmoothPictures",
+        "actionRenderOptionDisplayAnnotations",
+        "actionRenderOptionIgnoreOptionalContentSettings",
+        "actionRenderOptionDisplayRenderTimes",
+        "actionShow_Text_Blocks",
+        "actionShow_Text_Lines",
     }
 )
 

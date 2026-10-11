@@ -25,6 +25,7 @@
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
+#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
@@ -48,8 +49,10 @@
 
 #include "documentviewsession.h"
 #include "editorhost.h"
+#include "editorsettings.h"
 #include "loopstatevisual.h"
 #include "looptokens.h"
+#include "pdfrenderer.h"
 
 #include "pdfapplicationidentity.h"
 #include "pdfblockingthreadguard.h"
@@ -313,6 +316,13 @@ private slots:
     void softProofWithoutAUsableOutputIntentIsAVisibleState();
     void platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument();
     void inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable();
+
+    // Shell settings, render options and diagnostics (#239).
+    void settingsRoundTripThroughTheOneStore();
+    void settingsFactoryResetIsConfirmedAndComplete();
+    void invalidPersistedRenderOptionIsReportedAndReplaced();
+    void renderOptionsReachTheRendererAndTheFidelityIndicator();
+    void collectDiagnosticsProducesTheAdrBundle();
 };
 
 void EditorHostTest::encryptedOpen_data()
@@ -2765,6 +2775,222 @@ void EditorHostTest::inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable
     // No document: the request is refused outright.
     EditorHost empty;
     QVERIFY(!empty.requestInkCoverageAtPoint(10.0, 10.0));
+}
+
+
+void EditorHostTest::settingsRoundTripThroughTheOneStore()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    // A fresh store starts every option at its typed default.
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("antialiasing")));
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+
+    // Toggling through the command handler persists immediately.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionSmoothPictures")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionAntialiasing")) != 0);
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The diagnostic-view commands toggle the same typed options.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionShow_Text_Blocks")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("showTextBlocks")));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionDisplayRenderTimes")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayRenderTimes")));
+
+    // The shared render presentation policy follows the store.
+    const pdf::PDFRenderer::Features features = host.sessionForTest()->surfaces()->renderSettings().features;
+    QVERIFY(features.testFlag(pdf::PDFRenderer::SmoothImages));
+    QVERIFY(!features.testFlag(pdf::PDFRenderer::Antialiasing));
+    QVERIFY(features.testFlag(pdf::PDFRenderer::DebugTextBlocks));
+    QVERIFY(features.testFlag(pdf::PDFRenderer::DisplayTimes));
+
+    // A second store over the same file reads the same typed state.
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/smoothPictures")).toString(), QStringLiteral("true"));
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/antialiasing")).toString(), QStringLiteral("false"));
+    EditorSettings restarted(&reread);
+    QVERIFY(restarted.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(!restarted.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The rows QML renders come from the same typed state.
+    const QVariantList rows = settings.options();
+    QCOMPARE(rows.size(), 8);
+    bool sawSmoothPictures = false;
+    for (const QVariant& row : rows)
+    {
+        const QVariantMap entry = row.toMap();
+        QVERIFY(!entry.value(QStringLiteral("id")).toString().isEmpty());
+        QVERIFY(!entry.value(QStringLiteral("label")).toString().isEmpty());
+        if (entry.value(QStringLiteral("id")).toString() == QStringLiteral("smoothPictures"))
+        {
+            sawSmoothPictures = entry.value(QStringLiteral("enabled")).toBool();
+        }
+    }
+    QVERIFY(sawSmoothPictures);
+}
+
+void EditorHostTest::settingsFactoryResetIsConfirmedAndComplete()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionSmoothPictures")) != 0);
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionDisplayAnnotations")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+
+    // Nothing runs without the confirmation the command arms first.
+    QVERIFY(!host.confirmSettingsReset());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionResetToFactorySettings")) != 0);
+    QVERIFY(host.settingsResetPending());
+    host.cancelSettingsReset();
+    QVERIFY(!host.settingsResetPending());
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionResetToFactorySettings")) != 0);
+    QVERIFY(host.settingsResetPending());
+    QVERIFY(host.confirmSettingsReset());
+    QVERIFY(!host.settingsResetPending());
+
+    // Every option is back at its default and the owned keys are gone.
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+    QVERIFY(host.settingsNotice().contains(QStringLiteral("factory")));
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QVERIFY(!reread.contains(QStringLiteral("renderOptions/smoothPictures")));
+    QVERIFY(!reread.contains(QStringLiteral("renderOptions/displayAnnotations")));
+
+    const pdf::PDFRenderer::Features features = host.sessionForTest()->surfaces()->renderSettings().features;
+    QVERIFY(features.testFlag(pdf::PDFRenderer::Antialiasing));
+    QVERIFY(!features.testFlag(pdf::PDFRenderer::SmoothImages));
+}
+
+void EditorHostTest::invalidPersistedRenderOptionIsReportedAndReplaced()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString settingsPath = directory.filePath(QStringLiteral("shell-settings.ini"));
+
+    {
+        QSettings seed(settingsPath, QSettings::IniFormat);
+        seed.setValue(QStringLiteral("renderOptions/displayAnnotations"), QStringLiteral("sometimes"));
+        seed.setValue(QStringLiteral("renderOptions/antialiasing"), QStringLiteral("false"));
+        seed.sync();
+        QCOMPARE(seed.status(), QSettings::NoError);
+    }
+
+    QSettings backing(settingsPath, QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    // The invalid value is replaced by its default, never coerced ...
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("displayAnnotations")));
+    // ... while a valid persisted value is honoured.
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("antialiasing")));
+
+    // The notice names the setting and the rejected value, and the surface
+    // that renders it reads the same notice through the host.
+    QVERIFY(settings.notice().contains(QStringLiteral("displayAnnotations")));
+    QVERIFY(settings.notice().contains(QStringLiteral("sometimes")));
+    QVERIFY(host.settingsNotice().contains(QStringLiteral("displayAnnotations")));
+
+    // The store is repaired on disk, not left invalid.
+    QSettings reread(settingsPath, QSettings::IniFormat);
+    QCOMPARE(reread.value(QStringLiteral("renderOptions/displayAnnotations")).toString(), QStringLiteral("true"));
+}
+
+void EditorHostTest::renderOptionsReachTheRendererAndTheFidelityIndicator()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("render-options.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    QSettings backing(directory.filePath(QStringLiteral("shell-settings.ini")), QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+    QVERIFY(host.pageFidelityIsExact());
+
+    // The override that deviates from the document's own view state is
+    // reflected in the fidelity indicator and its reason ...
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings")) != 0);
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("ignoreOptionalContentSettings")));
+    QVERIFY(host.sessionForTest()->surfaces()->renderSettings().features.testFlag(pdf::PDFRenderer::IgnoreOptionalContent));
+    QVERIFY(!host.pageFidelityIsExact());
+    QVERIFY(host.pageFidelityReason().contains(QStringLiteral("optional content")));
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("approximate"), 30000);
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("optional content")));
+
+    // ... and turning it off restores the exact render.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings")) != 0);
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("ignoreOptionalContentSettings")));
+    QVERIFY(!host.sessionForTest()->surfaces()->renderSettings().features.testFlag(pdf::PDFRenderer::IgnoreOptionalContent));
+    QVERIFY(host.pageFidelityIsExact());
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Presentation only: no option changed the document.
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("OPEN"));
+    QVERIFY(!host.sessionForTest()->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+}
+
+void EditorHostTest::collectDiagnosticsProducesTheAdrBundle()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    EditorHost host;
+    QCOMPARE(host.diagnosticsBundle().value(QStringLiteral("status")).toString(), QStringLiteral("idle"));
+
+    // A non-local parent is refused with a typed failure; nothing is written.
+    QVERIFY(!host.collectDiagnosticsFileUrl(QUrl(QStringLiteral("https://example.test/bundles"))));
+    QCOMPARE(host.diagnosticsBundle().value(QStringLiteral("status")).toString(), QStringLiteral("failed"));
+    QVERIFY(!host.diagnosticsBundle().value(QStringLiteral("error")).toString().isEmpty());
+
+    QVERIFY(host.collectDiagnosticsFileUrl(QUrl::fromLocalFile(directory.path())));
+    const QVariantMap bundle = host.diagnosticsBundle();
+    QCOMPARE(bundle.value(QStringLiteral("status")).toString(), QStringLiteral("ready"));
+    QVERIFY(bundle.value(QStringLiteral("fileCount")).toInt() > 0);
+
+    const QString bundleDirectory = bundle.value(QStringLiteral("directory")).toString();
+    QVERIFY(QDir(bundleDirectory).exists());
+    QVERIFY(QDir(bundleDirectory).dirName().startsWith(QStringLiteral("loop-diagnostics-editor-")));
+
+    QFile manifestFile(QDir(bundleDirectory).filePath(QStringLiteral("manifest.json")));
+    QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+    const QJsonObject manifest = QJsonDocument::fromJson(manifestFile.readAll()).object();
+    QCOMPARE(manifest.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("application")).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("editor"));
+    QVERIFY(!manifest.value(QStringLiteral("files")).toArray().isEmpty());
+    QVERIFY(QFile::exists(QDir(bundleDirectory).filePath(QStringLiteral("README.txt"))));
+
+    // The bundle never carries a PDF, however the collection was started.
+    QDirIterator pdfs(bundleDirectory, QStringList{ QStringLiteral("*.pdf") }, QDir::Files, QDirIterator::Subdirectories);
+    QVERIFY(!pdfs.hasNext());
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)
