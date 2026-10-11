@@ -407,7 +407,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // library that lost its resource would present an empty command set as a
     // working one, so this also pins the resource wiring.
     QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
-    QCOMPARE(catalog.descriptors().size(), 108);
+    QCOMPARE(catalog.descriptors().size(), 109);
 
     const pdfinteraction::CommandDescriptor* open =
         catalog.descriptor(pdfinteraction::DocumentFacade::OpenCommandId);
@@ -442,7 +442,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // The display colour modes (#235), the select/copy/capture commands (#232),
     // the measure commands (#238) and the shell settings/diagnostics surfaces
     // (#239) joined the implemented set in epic #231 PR1.
-    QCOMPARE(implemented, 53);
+    QCOMPARE(implemented, 55);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()

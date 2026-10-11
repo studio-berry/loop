@@ -6,6 +6,8 @@ qt_add_executable(ProductQuickAccessibilitySmoke
     ../../LoopEditor/operatorhelp.h
     ../../LoopEditor/app.qrc
     ../../LoopEditor/editorhost.cpp
+    ../../LoopEditor/quickoutput.cpp
+    ../../LoopEditor/quickoutput.h
     ../../LoopEditor/editorhost.h
     ../../LoopEditor/editorsettings.cpp
     ../../LoopEditor/editorsettings.h

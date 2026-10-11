@@ -41,7 +41,6 @@
     "actionOptimize",
     "actionOptimizeImages",
     "actionPageGeometry",
-    "actionPrint",
     "actionRemoveExternalLinks",
     "actionRender_to_Images",
     "actionSanitize",
