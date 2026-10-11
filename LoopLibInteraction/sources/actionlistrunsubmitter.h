@@ -66,7 +66,8 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             QString preflightProfilePath = {},
                                             QJsonObject preflightProfile = {},
                                             QJsonObject preflightProfileBindings = {},
-                                            QString publicationSourcePath = {});
+                                            QString publicationSourcePath = {},
+                                            bool signatureInvalidationAcknowledged = false);
 
 bool retainHistoryForArtifact(const QString& sourcePath, const QString& destinationPath, QString* error);
 

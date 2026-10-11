@@ -106,10 +106,20 @@ Pane {
                     objectName: "fixApprovePlanButton"
                     text: qsTr("Approve plan")
                     enabled: root.host !== null && root.host.correctionsAllowed && root.lifecycleState === "preview-ready"
-                    onClicked: if (root.host && root.planIdentity)
+                    onClicked: {
+                        if (!root.host || !root.planIdentity)
+                            return
+                        // A plan that invalidates signatures is approved through the
+                        // explicit acknowledgement, so the invalidation was shown in
+                        // the approval and not only in the preview.
+                        if (root.planIdentity.signatureInvalidationApplies) {
+                            signatureInvalidationDialog.open()
+                            return
+                        }
                         root.host.approveActionListPlan(root.planIdentity.planDigest,
-                                                       root.planIdentity.sourceSha256,
-                                                       root.planIdentity.plannedRevision)
+                                                        root.planIdentity.sourceSha256,
+                                                        root.planIdentity.plannedRevision)
+                    }
                     Accessible.name: qsTr("Approve the planned correction")
                     Accessible.description: qsTr("Binds the approval to this plan digest and revision.")
                 }
@@ -184,6 +194,17 @@ Pane {
                         visible: root.preview !== null && root.preview.available && root.preview.incomplete
                         text: qsTr("The preview is incomplete. It is not approval evidence.")
                         Accessible.name: qsTr("Preview incomplete")
+                    }
+
+                    Label {
+                        objectName: "fixSignatureInvalidationNotice"
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        visible: root.preview !== null && root.preview.signatureInvalidation !== undefined
+                                 && root.preview.signatureInvalidation.applies
+                        text: visible ? root.preview.signatureInvalidation.summary : ""
+                        Accessible.name: qsTr("Signature invalidation")
+                        Accessible.description: text
                     }
                 }
             }
@@ -410,6 +431,36 @@ Pane {
 
                 onAccepted: if (root.host) root.host.requestFixRollback(root.pendingRollbackId)
                 onRejected: root.pendingRollbackId = ""
+            }
+
+            Dialog {
+                id: signatureInvalidationDialog
+                objectName: "fixSignatureInvalidationDialog"
+                title: qsTr("Approve and accept signature invalidation")
+                modal: true
+                anchors.centerIn: parent
+                standardButtons: Dialog.Ok | Dialog.Cancel
+
+                Label {
+                    width: 360
+                    wrapMode: Text.Wrap
+                    text: root.preview !== null && root.preview.signatureInvalidation !== undefined
+                          && root.preview.signatureInvalidation.applies
+                          ? root.preview.signatureInvalidation.summary
+                          : qsTr("This plan invalidates document signatures.")
+                    Accessible.name: qsTr("Signature invalidation notice")
+                    Accessible.description: text
+                }
+
+                onAccepted: {
+                    if (!root.host || !root.planIdentity)
+                        return
+                    if (!root.host.acknowledgePlanSignatureInvalidation(root.planIdentity.planDigest))
+                        return
+                    root.host.approveActionListPlan(root.planIdentity.planDigest,
+                                                    root.planIdentity.sourceSha256,
+                                                    root.planIdentity.plannedRevision)
+                }
             }
 
             RowLayout {

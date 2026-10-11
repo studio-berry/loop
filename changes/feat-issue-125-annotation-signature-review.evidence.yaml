@@ -1,0 +1,38 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: annotation-review-overlay-and-navigation
+    evidence:
+      - unit:UnitTests/tst_overlayframetest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+  - id: signature-status-reduction-and-fencing
+    evidence:
+      - unit:UnitTests/tst_documentfacadetest.cpp
+      - unit:UnitTests/tst_loopstatevisualtest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+  - id: signature-invalidation-publish-gate
+    evidence:
+      - unit:UnitTests/tst_actionlisttest.cpp
+      - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:agent-policy:interaction
+      - unit:agent-policy:quick
+  - id: quick-document-model-annotation-rows
+    evidence:
+      - unit:UnitTests/tst_quickdocumentmodeltest.cpp
+      - unit:UnitTestsQuickDocumentModel
+      - architecture:scripts/ci/check_search_budget_gate.py
+      - architecture:agent-policy:quick
+      - fixture:regression:search-budget-independence
+  - id: document-search-regression-lanes
+    evidence:
+      - unit:UnitTestsDocumentSearch
+      - unit:agent-policy:quick
+      - packaging:linux-build
+      - packaging:windows-build
+unresolved:
+  - Linux and Windows packaging lanes are hosted proof lanes; local focused tests do not establish those results.
+  - The Quick accessibility smoke mirrors the changed QML byte-for-byte; the mirror directory is not a mapped subsystem path, so no additional lane is bound to it.

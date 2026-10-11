@@ -44,6 +44,49 @@
 namespace
 {
 
+/// True when the document declares at least one signature. Mirrors the writer's
+/// own notion of a signed document (`isSignedDocument` in pdfdocumentwriter.cpp:
+/// a `Type /Sig` or `FT /Sig` dictionary anywhere in the storage), so the
+/// disclosure gate (issue #125) fires on exactly the documents the save policy
+/// world already treats as signed.
+bool documentHasSignatures(const pdf::PDFDocument& document)
+{
+    try
+    {
+        const auto dictionaryHasName = [&document](const pdf::PDFDictionary* dictionary, const char* key, const char* value)
+        {
+            if (!dictionary || !dictionary->hasKey(key))
+            {
+                return false;
+            }
+            const pdf::PDFObject& object = document.getObject(dictionary->get(key));
+            return object.isName() && object.getString() == value;
+        };
+
+        for (const pdf::PDFObjectStorage::Entry& entry : document.getStorage().getObjects())
+        {
+            if (!entry.object.isDictionary())
+            {
+                continue;
+            }
+
+            const pdf::PDFDictionary* dictionary = entry.object.getDictionary();
+            if (dictionaryHasName(dictionary, "Type", "Sig") ||
+                dictionaryHasName(dictionary, "FT", "Sig"))
+            {
+                return true;
+            }
+        }
+    }
+    catch (const std::exception&)
+    {
+        // A storage that cannot be walked is not known to be signed; Core's own
+        // execution refusals govern a damaged document instead of this gate.
+    }
+
+    return false;
+}
+
 void appendValidationDiagnostic(pdf::PDFActionListStepResult* step, const QString& message)
 {
     step->status = pdf::PDFActionListStepStatus::Failed;
@@ -150,9 +193,10 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
                                             QString preflightProfilePath,
                                             QJsonObject preflightProfile,
                                             QJsonObject preflightProfileBindings,
-                                            QString publicationSourcePath)
+                                            QString publicationSourcePath,
+                                            bool signatureInvalidationAcknowledged)
 {
-    return [phase, actionList = std::move(actionList), document = std::move(document), bindings = std::move(bindings), outcome = std::move(outcome), preflightProfilePath = std::move(preflightProfilePath), preflightProfile = std::move(preflightProfile), preflightProfileBindings = std::move(preflightProfileBindings), publicationSourcePath = std::move(publicationSourcePath)](pdf::PDFJobContext& context)
+    return [phase, actionList = std::move(actionList), document = std::move(document), bindings = std::move(bindings), outcome = std::move(outcome), preflightProfilePath = std::move(preflightProfilePath), preflightProfile = std::move(preflightProfile), preflightProfileBindings = std::move(preflightProfileBindings), publicationSourcePath = std::move(publicationSourcePath), signatureInvalidationAcknowledged](pdf::PDFJobContext& context)
     {
         if (!outcome || !document)
         {
@@ -236,6 +280,28 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         {
             return;
         }
+
+        // Issue #125: a plan whose merged save policy invalidates signatures may
+        // not be published over a signed source unless the operator acknowledged
+        // that invalidation in the approval. This is the one point in the Fix
+        // route that holds both the source document and the executed plan's
+        // policy, and refusing here is before anything is staged or published:
+        // the candidate is discarded with the outcome, so nothing reaches the
+        // governed mutation gateway. The check runs whether or not the run
+        // succeeded, because a plan that merged an invalidating policy may not
+        // publish either way.
+        if (!signatureInvalidationAcknowledged &&
+            outcome->executionResult.savePolicy.invalidatesSignatures && documentHasSignatures(*document))
+        {
+            outcome->ok = false;
+            outcome->executionResult.status = QStringLiteral("failed");
+            outcome->executionResult.diagnostics.append(QJsonObject{
+                { QStringLiteral("code"), QStringLiteral("action-list.signature-invalidation-unacknowledged") },
+                { QStringLiteral("severity"), QStringLiteral("error") },
+                { QStringLiteral("message"), QStringLiteral("The plan invalidates document signatures and the invalidation was not acknowledged in the approval.") } });
+            return;
+        }
+
         if (outcome->ok && candidate != pdf::PDFDocument())
         {
             if (!effectivePreflightProfile.isEmpty())
