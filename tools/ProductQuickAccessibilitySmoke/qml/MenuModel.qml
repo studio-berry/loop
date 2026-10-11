@@ -78,6 +78,8 @@ QtObject {
     }
 
     function labelForEntry(entry) {
+        if (entry && entry.id === "actionPrint") return qsTr("Print to PDF…")
+        if (entry && entry.id === "actionExportDocument") return qsTr("Export document…")
         if (!entry || !entry.labelKey) {
             return entry && entry.id ? entry.id : ""
         }

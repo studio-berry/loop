@@ -218,6 +218,8 @@
         "LoopLibQuick/**",
         "LoopEditor/editorhost.cpp",
         "LoopEditor/editorhost.h",
+        "LoopEditor/quickoutput.cpp",
+        "LoopEditor/quickoutput.h",
         "LoopEditor/quickdocumentmodel.cpp",
         "LoopEditor/quickdocumentmodel.h",
         "UnitTests/tst_quickdocumentmodeltest.cpp",

@@ -69,6 +69,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             tst_editorhosttest.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
@@ -105,6 +107,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         add_executable(UnitTestsProductOperatorLoop
             tst_productoperatorloop.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
@@ -309,6 +313,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         add_executable(UnitTestsShellKeyboard
             tst_shellkeyboardtest.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
@@ -336,6 +342,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/operatorhelp.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
@@ -364,6 +372,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         add_executable(UnitTestsShellInspectorDispatch
             tst_shellinspectordispatch.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
