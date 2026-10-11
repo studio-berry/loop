@@ -67,8 +67,14 @@ def check(root=ROOT, project_json=None):
 
         collect(project)
         required = list((root / "LoopEditor/qml").glob("*.qml")) + [
-            root / "LoopEditor/editorhost.cpp", root / "LoopEditor/operatorhelp.cpp",
-            root / "LoopEditor/operatorhelpstrings.h", root / "LoopLibInteraction/sources/shellglossary.h"]
+            root / "LoopEditor/editorhost.cpp", root / "LoopEditor/editorhost.h",
+            root / "LoopEditor/operatorhelp.cpp", root / "LoopEditor/operatorhelpstrings.h",
+            root / "LoopLibInteraction/sources/shellglossary.h",
+            root / "LoopLibInteraction/sources/inspectormodel.cpp",
+            root / "LoopLibInteraction/sources/preflightcontroller.cpp",
+            root / "LoopLibInteraction/sources/actionlistcontroller.cpp",
+            root / "LoopLibQuick/sources/loopcanvasaccessible.cpp",
+            root / "LoopLibQuick/sources/loopstatevisual.cpp"]
         for path in required:
             if path.as_posix() not in sources:
                 errors.append("Not extracted by configured lupdate: " + str(path))

@@ -238,27 +238,27 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     selection.title = finding->message;
     selection.kind = SelectionKind::Finding;
 
-    addProperty(selection.properties, QStringLiteral("severity"), QStringLiteral("Severity"),
+    addProperty(selection.properties, QStringLiteral("severity"), QCoreApplication::translate("LoopInspector", "Severity"),
                 finding->severity, QStringLiteral("identity"));
-    addProperty(selection.properties, QStringLiteral("check"), QStringLiteral("Check"),
+    addProperty(selection.properties, QStringLiteral("check"), QCoreApplication::translate("LoopInspector", "Check"),
                 finding->checkId, QStringLiteral("identity"));
-    addProperty(selection.properties, QStringLiteral("type"), QStringLiteral("Type"),
+    addProperty(selection.properties, QStringLiteral("type"), QCoreApplication::translate("LoopInspector", "Type"),
                 finding->type, QStringLiteral("identity"));
-    addProperty(selection.properties, QStringLiteral("scope"), QStringLiteral("Scope"),
+    addProperty(selection.properties, QStringLiteral("scope"), QCoreApplication::translate("LoopInspector", "Scope"),
                 finding->scope, QStringLiteral("identity"));
     if (finding->page > 0)
     {
-        addProperty(selection.properties, QStringLiteral("page"), QStringLiteral("Page"),
+        addProperty(selection.properties, QStringLiteral("page"), QCoreApplication::translate("LoopInspector", "Page"),
                     QString::number(finding->page), QStringLiteral("identity"));
     }
     if (!finding->objectId.isNull() && !finding->objectId.isEmpty())
     {
-        addProperty(selection.properties, QStringLiteral("object"), QStringLiteral("Object"),
+        addProperty(selection.properties, QStringLiteral("object"), QCoreApplication::translate("LoopInspector", "Object"),
                     finding->objectId, QStringLiteral("identity"));
     }
     if (finding->bbox.isValid() && !finding->bbox.isEmpty())
     {
-        addProperty(selection.properties, QStringLiteral("bounds"), QStringLiteral("Bounds"),
+        addProperty(selection.properties, QStringLiteral("bounds"), QCoreApplication::translate("LoopInspector", "Bounds"),
                     rectText(finding->bbox), QStringLiteral("geometry"));
     }
     if (!finding->evidenceIds.isEmpty())
@@ -268,7 +268,7 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     }
     addProperty(selection.properties, QStringLiteral("document-revision"), QCoreApplication::translate("LoopInspector", "Document revision"),
                 finding->documentRevision, QStringLiteral("identity"));
-    addProperty(selection.properties, QStringLiteral("profile-name"), QStringLiteral("Profile"),
+    addProperty(selection.properties, QStringLiteral("profile-name"), QCoreApplication::translate("LoopInspector", "Profile"),
                 finding->profileName, QStringLiteral("identity"));
     addProperty(selection.properties, QStringLiteral("profile-digest"), QCoreApplication::translate("LoopInspector", "Effective profile digest"),
                 finding->effectiveProfileDigest.isEmpty() ? QCoreApplication::translate("LoopInspector", "Unavailable in report") : finding->effectiveProfileDigest,
@@ -305,7 +305,7 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     {
         targeting = QCoreApplication::translate("LoopInspector", "Page and object location available from the report.");
     }
-    addProperty(selection.properties, QStringLiteral("targeting"), QStringLiteral("Navigation"),
+    addProperty(selection.properties, QStringLiteral("targeting"), QCoreApplication::translate("LoopInspector", "Navigation"),
                 targeting, QStringLiteral("navigation"));
 
     QJsonObject displayEvidence = finding->evidence;
@@ -338,9 +338,9 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
 
     if (const pdf::PreflightCheckStatus* status = findings.checkStatus(finding->checkId))
     {
-        addProperty(selection.properties, QStringLiteral("check-status"), QStringLiteral("Status"),
+        addProperty(selection.properties, QStringLiteral("check-status"), QCoreApplication::translate("LoopInspector", "Status"),
                     status->status, QStringLiteral("check-status"));
-        addProperty(selection.properties, QStringLiteral("check-reason"), QStringLiteral("Reason"),
+        addProperty(selection.properties, QStringLiteral("check-reason"), QCoreApplication::translate("LoopInspector", "Reason"),
                     status->reason, QStringLiteral("check-status"));
         addProperty(selection.properties, QStringLiteral("budget-kind"), QCoreApplication::translate("LoopInspector", "Budget kind"),
                     status->budgetKind, QStringLiteral("check-status"));
@@ -390,7 +390,7 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
                         QCoreApplication::translate("LoopInspector", "Automated fix"), QCoreApplication::translate("LoopInspector", "No automated fix available"),
                         QStringLiteral("corrective-availability"));
             addProperty(selection.properties, QStringLiteral("corrective-unavailable-reason.%1").arg(fixup.id),
-                        QStringLiteral("Reason"),
+                        QCoreApplication::translate("LoopInspector", "Reason"),
                         QCoreApplication::translate("LoopInspector", "The report-advertised operation is not implemented in this build."),
                         QStringLiteral("corrective-availability"));
         }
@@ -399,11 +399,11 @@ bool InspectorModel::setFindingSelection(const PreflightFindingsModel& findings,
     {
         addProperty(selection.properties, QStringLiteral("corrective-none"), QCoreApplication::translate("LoopInspector", "Automated fix"),
                     QCoreApplication::translate("LoopInspector", "No automated fix available"), QStringLiteral("corrective-availability"));
-        addProperty(selection.properties, QStringLiteral("corrective-none-reason"), QStringLiteral("Reason"),
+        addProperty(selection.properties, QStringLiteral("corrective-none-reason"), QCoreApplication::translate("LoopInspector", "Reason"),
                     QCoreApplication::translate("LoopInspector", "The preflight report advertises no corrective operation for this finding."),
                     QStringLiteral("corrective-availability"));
     }
-    addProperty(selection.properties, QStringLiteral("message"), QStringLiteral("Finding"),
+    addProperty(selection.properties, QStringLiteral("message"), QCoreApplication::translate("LoopInspector", "Finding"),
                 finding->message, QStringLiteral("identity"));
     m_correctiveParameters = std::move(correctiveParameters);
     m_correctiveOperationIds = m_correctiveParameters.keys();

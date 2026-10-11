@@ -1783,14 +1783,47 @@ Reported messages: %4</translation>
         <translation>Document canvas</translation>
     </message>
     <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4336"/>
+        <source>Document</source>
+        <translation type="unfinished">Document</translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4337"/>
+        <source>Pages</source>
+        <translation type="unfinished">Pages</translation>
+    </message>
+    <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4338"/>
         <source>Document status</source>
         <translation type="unfinished">Document status</translation>
     </message>
     <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4339"/>
+        <source>Preflight</source>
+        <translation type="unfinished">Preflight</translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4340"/>
+        <source>Production</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4379"/>
+        <location filename="../LoopEditor/editorhost.cpp" line="4382"/>
         <source>Image</source>
         <translation>Image</translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4383"/>
+        <location filename="../LoopEditor/editorhost.cpp" line="4409"/>
+        <location filename="../LoopEditor/editorhost.cpp" line="4429"/>
+        <source>Page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4384"/>
+        <source>Bounds</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4390"/>
@@ -1813,9 +1846,24 @@ Reported messages: %4</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4392"/>
+        <source>Compression</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4393"/>
+        <source>Mask</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4405"/>
         <source>Separation</source>
         <translation>Separation</translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4408"/>
+        <source>Ink</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4410"/>
@@ -1836,6 +1884,21 @@ Reported messages: %4</translation>
         <location filename="../LoopEditor/editorhost.cpp" line="4426"/>
         <source>Page %1</source>
         <translation>Page %1</translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4430"/>
+        <source>Box</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4431"/>
+        <source>Size</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopEditor/editorhost.cpp" line="4434"/>
+        <source>Rotation</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../LoopEditor/editorhost.cpp" line="4435"/>
@@ -2569,6 +2632,41 @@ Reported messages: %4</translation>
 <context>
     <name>LoopInspector</name>
     <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="241"/>
+        <source>Severity</source>
+        <translation type="unfinished">Severity</translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="243"/>
+        <source>Check</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="245"/>
+        <source>Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="247"/>
+        <source>Scope</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="251"/>
+        <source>Page</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="256"/>
+        <source>Object</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="261"/>
+        <source>Bounds</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="266"/>
         <source>Evidence IDs</source>
         <translation type="unfinished"></translation>
@@ -2577,6 +2675,11 @@ Reported messages: %4</translation>
         <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="269"/>
         <source>Document revision</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="271"/>
+        <source>Profile</source>
+        <translation type="unfinished">Profile</translation>
     </message>
     <message>
         <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="273"/>
@@ -2622,6 +2725,23 @@ Reported messages: %4</translation>
     <message>
         <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="306"/>
         <source>Page and object location available from the report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="308"/>
+        <source>Navigation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="341"/>
+        <source>Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="343"/>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="393"/>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="402"/>
+        <source>Reason</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -2684,6 +2804,11 @@ Reported messages: %4</translation>
     <message>
         <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="403"/>
         <source>The preflight report advertises no corrective operation for this finding.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../LoopLibInteraction/sources/inspectormodel.cpp" line="406"/>
+        <source>Finding</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

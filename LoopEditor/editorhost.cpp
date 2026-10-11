@@ -4333,11 +4333,11 @@ void EditorHost::applyEmptyCanvasInspectorSelection()
     selection.title = tr("Document canvas");
     selection.kind = pdfinteraction::InspectorModel::SelectionKind::EmptyCanvas;
     selection.properties = {
-        { QStringLiteral("document"), QStringLiteral("Document"), displayTitle() },
-        { QStringLiteral("pages"), QStringLiteral("Pages"), QString::number(pageCount()) },
+        { QStringLiteral("document"), tr("Document"), displayTitle() },
+        { QStringLiteral("pages"), tr("Pages"), QString::number(pageCount()) },
         { QStringLiteral("document-status"), tr("Document status"), documentShellStatus() },
-        { QStringLiteral("preflight"), QStringLiteral("Preflight"), preflightStateName() },
-        { QStringLiteral("production"), QStringLiteral("Production"), productionStateName() },
+        { QStringLiteral("preflight"), tr("Preflight"), preflightStateName() },
+        { QStringLiteral("production"), tr("Production"), productionStateName() },
     };
     m_inspector.setSelection(selection);
 }
@@ -4379,9 +4379,9 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
         selection.title = tr("Image");
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Image;
         selection.properties = {
-            { QStringLiteral("id"), QStringLiteral("Image"), target.id.mid(6) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("bounds"), QStringLiteral("Bounds"),
+            { QStringLiteral("id"), tr("Image"), target.id.mid(6) },
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("bounds"), tr("Bounds"),
               QStringLiteral("%1,%2 %3x%4")
                   .arg(QString::number(target.pageBounds.x()),
                        QString::number(target.pageBounds.y()),
@@ -4389,8 +4389,8 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
                        QString::number(target.pageBounds.height())) },
             { QStringLiteral("dpi"), tr("Effective DPI"), tr("pending") },
             { QStringLiteral("colour-space"), tr("Colour space"), tr("pending") },
-            { QStringLiteral("compression"), QStringLiteral("Compression"), tr("pending") },
-            { QStringLiteral("mask"), QStringLiteral("Mask"), tr("pending") },
+            { QStringLiteral("compression"), tr("Compression"), tr("pending") },
+            { QStringLiteral("mask"), tr("Mask"), tr("pending") },
         };
         m_inspector.setSelection(selection);
         return;
@@ -4405,8 +4405,8 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
         selection.title = tr("Separation");
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Separation;
         selection.properties = {
-            { QStringLiteral("name"), QStringLiteral("Ink"), target.id.mid(11) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("name"), tr("Ink"), target.id.mid(11) },
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
             { QStringLiteral("coverage"), tr("Ink coverage"), tr("pending") },
             { QStringLiteral("kind"), tr("Process / spot"), tr("pending") },
         };
@@ -4426,12 +4426,12 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
                               : tr("Page %1").arg(target.pageIndex + 1);
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Page;
         selection.properties = {
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("box"), QStringLiteral("Box"), target.id },
-            { QStringLiteral("size"), QStringLiteral("Size"),
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("box"), tr("Box"), target.id },
+            { QStringLiteral("size"), tr("Size"),
               QStringLiteral("%1 x %2")
                   .arg(QString::number(target.pageBounds.width()), QString::number(target.pageBounds.height())) },
-            { QStringLiteral("rotation"), QStringLiteral("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
+            { QStringLiteral("rotation"), tr("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
             { QStringLiteral("ocg"), tr("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
         };
         m_inspector.setSelection(selection);
