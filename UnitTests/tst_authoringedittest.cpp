@@ -89,13 +89,17 @@ std::vector<pdf::PDFAnnotationPtr> annotationsOnPage(const pdf::PDFDocument& doc
     return annotations;
 }
 
-const pdf::PDFLinkAnnotation* firstLinkOnPage(const pdf::PDFDocument& document, int pageIndex)
+pdf::PDFAnnotationPtr firstLinkOnPage(const pdf::PDFDocument& document, int pageIndex)
 {
     for (const pdf::PDFAnnotationPtr& annotation : annotationsOnPage(document, pageIndex))
     {
-        if (const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(annotation.data()))
+        if (dynamic_cast<const pdf::PDFLinkAnnotation*>(annotation.data()))
         {
-            return link;
+            // Return the owning pointer: the annotations list is a temporary, so
+            // a raw pointer into it dangles as soon as the loop ends (glibc's
+            // freed-chunk metadata then clobbers the vtable and the next
+            // dynamic_cast crashes; MSVC happened to survive).
+            return annotation;
         }
     }
     return nullptr;
@@ -414,7 +418,8 @@ void AuthoringEditTest::destinationVariantWritesItsPdfDestinationType()
     const std::optional<pdf::PDFDocument> parsed = writeAndRead(*applied.document);
     QVERIFY(parsed.has_value());
 
-    const pdf::PDFLinkAnnotation* link = firstLinkOnPage(*parsed, 0);
+    const pdf::PDFAnnotationPtr linkAnnotation = firstLinkOnPage(*parsed, 0);
+    const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(linkAnnotation.data());
     QVERIFY(link);
     QCOMPARE(link->getRectangle(), linkRectangle);
 
@@ -482,7 +487,8 @@ void AuthoringEditTest::uriLinkWritesTheUriAction()
     const std::optional<pdf::PDFDocument> parsed = writeAndRead(*applied.document);
     QVERIFY(parsed.has_value());
 
-    const pdf::PDFLinkAnnotation* link = firstLinkOnPage(*parsed, 0);
+    const pdf::PDFAnnotationPtr linkAnnotation = firstLinkOnPage(*parsed, 0);
+    const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(linkAnnotation.data());
     QVERIFY(link);
     QCOMPARE(link->getRectangle(), edit.rectangle);
 

@@ -126,7 +126,7 @@ void waitForSurfacesToSettle(EditorHost& host)
     QTRY_VERIFY_WITH_TIMEOUT(surfaces->counters().inFlight == 0, 15000);
 }
 
-const pdf::PDFLinkAnnotation* linkOnPage(const pdf::PDFDocument* document, int pageIndex)
+pdf::PDFAnnotationPtr linkOnPage(const pdf::PDFDocument* document, int pageIndex)
 {
     if (!document)
     {
@@ -141,10 +141,12 @@ const pdf::PDFLinkAnnotation* linkOnPage(const pdf::PDFDocument* document, int p
 
     for (const pdf::PDFObjectReference& reference : page->getAnnotations())
     {
-        const pdf::PDFAnnotationPtr annotation = pdf::PDFAnnotation::parse(&document->getStorage(), reference);
-        if (const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(annotation.data()))
+        pdf::PDFAnnotationPtr annotation = pdf::PDFAnnotation::parse(&document->getStorage(), reference);
+        if (dynamic_cast<const pdf::PDFLinkAnnotation*>(annotation.data()))
         {
-            return link;
+            // Return the owning pointer; the local parse result would free the
+            // annotation at return and hand the caller a dangling raw pointer.
+            return annotation;
         }
     }
     return nullptr;
@@ -4393,7 +4395,8 @@ void EditorHostTest::hyperlinkCommandsWriteEveryDestinationVariant()
     // Read back through Core: the link annotation carries the destination the
     // command named, and the destination carries its own payload.
     const pdf::PDFDocumentPointer document = host.sessionForTest()->context().getDocumentPointer();
-    const pdf::PDFLinkAnnotation* link = linkOnPage(document.data(), 0);
+    const pdf::PDFAnnotationPtr linkAnnotation = linkOnPage(document.data(), 0);
+    const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(linkAnnotation.data());
     QVERIFY(link);
     QCOMPARE(link->getRectangle(), QRectF(QPointF(10, 20), QPointF(60, 40)));
 
