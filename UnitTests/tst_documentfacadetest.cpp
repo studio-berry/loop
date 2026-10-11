@@ -436,9 +436,10 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    // The five display colour modes joined the implemented set in epic #231 PR1
-    // (issue #235 display half), each with the `none` capability.
-    QCOMPARE(implemented, 31);
+    // The display colour modes (#235), the select/copy/capture commands (#232),
+    // the measure commands (#238) and the shell settings/diagnostics surfaces
+    // (#239) joined the implemented set in epic #231 PR1.
+    QCOMPARE(implemented, 51);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
