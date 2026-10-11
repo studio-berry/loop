@@ -29,6 +29,7 @@
 #include "jobrelay.h"
 #include "jobsubmitter.h"
 #include "pdfpreflightverdict.h"
+#include "pdfsignaturehandler.h"
 
 #include <QFlags>
 #include <QObject>
@@ -120,6 +121,47 @@ struct DocumentInspectionToken
     pdf::PDFRevisionIdentity revision;
 
     bool operator==(const DocumentInspectionToken&) const = default;
+};
+
+/// Verification status of the open document's signatures (issue #125). The
+/// operator-facing vocabulary is `valid`, `invalid`, `unknown` and
+/// `modified-after-signing`; `None` is the distinct "no signature is present"
+/// case and is never folded into one of them.
+enum class DocumentSignatureState
+{
+    None,
+    Valid,
+    Invalid,
+    Unknown,
+    ModifiedAfterSigning
+};
+
+const char* getDocumentSignatureStateName(DocumentSignatureState state);
+
+/// One signature check's identity, mirroring DocumentInspectionToken: a
+/// completion carrying a different request, generation or revision is refused
+/// rather than presented as the current document's status.
+struct DocumentSignatureCheckToken
+{
+    quint64 request = 0;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+
+    bool operator==(const DocumentSignatureCheckToken&) const = default;
+};
+
+/// The reduced signature facts a host presents.
+///
+/// They describe the source bytes the open document was loaded from: the check
+/// verifies those bytes and refuses results that belong to another revision, so
+/// an in-session revision change does not retract them. They are cleared when
+/// the document is replaced or closed. `detail` is a policy-safe explanation
+/// when a check could not complete, never document content or a path.
+struct DocumentSignatureFacts
+{
+    DocumentSignatureState state = DocumentSignatureState::None;
+    int signatureCount = 0;
+    QString detail;
 };
 
 struct DocumentPlanIntent
@@ -241,6 +283,26 @@ public:
     bool requestPlan(const QString& operationId, QString& error);
     void clearPlanIntent();
 
+    /// Begins a signature check for the current revision. One check at a time.
+    /// The host runs Core's verification on a scheduler worker and admits the
+    /// result through completeSignatureCheck/failSignatureCheck.
+    std::optional<DocumentSignatureCheckToken> beginSignatureCheck(QString& error);
+    bool completeSignatureCheck(const DocumentSignatureCheckToken& token,
+                                const std::vector<pdf::PDFSignatureVerificationResult>& results,
+                                QString& error);
+    bool failSignatureCheck(const DocumentSignatureCheckToken& token, const QString& detail, QString& error);
+    DocumentSignatureFacts signatureFacts() const { return m_signatureFacts; }
+
+    /// Reduces Core's per-signature verification results to the operator-facing
+    /// state. Pure, so the mapping is pinned by a test rather than re-derived by
+    /// every host. Precedence: a signature error (or a revoked or invalid
+    /// certificate) is Invalid; otherwise a signature that verifies but does not
+    /// cover the whole source is ModifiedAfterSigning; otherwise an
+    /// unestablished trust chain, a missing handler or any indeterminate result
+    /// is Unknown; only results that are fully valid are Valid. Empty results
+    /// mean no signature is present.
+    static DocumentSignatureState reduceSignatureState(const std::vector<pdf::PDFSignatureVerificationResult>& results);
+
     /// Advances on every document replacement and on every close. A completion
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
@@ -278,6 +340,7 @@ signals:
     void stateChanged(pdfinteraction::DocumentState state);
     void facetsChanged(pdfinteraction::DocumentFacets facets);
     void operationChanged();
+    void signatureFactsChanged();
 
     /// Emitted after the new identity is established and the old one dropped.
     void documentReplaced(quint64 generation);
@@ -309,6 +372,8 @@ private:
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();
+    bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;
+    void invalidateSignatureCheck();
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a
@@ -333,6 +398,10 @@ private:
     pdf::PreflightProfileData m_inspectionProfile;
     QString m_inspectionInputDigest;
     quint64 m_inspectionRequest = 0;
+    DocumentSignatureFacts m_signatureFacts;
+    DocumentSignatureCheckToken m_signatureCheckToken;
+    quint64 m_signatureCheckRequest = 0;
+    bool m_signatureCheckRunning = false;
 
     quint64 m_generation = 0;
     int m_rejectedCompletions = 0;

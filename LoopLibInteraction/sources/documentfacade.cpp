@@ -63,7 +63,8 @@ DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
             [this]()
             { invalidateInspection(); });
     connect(&context, &QObject::destroyed, this, [this]()
-            { invalidateInspection(); });
+            { invalidateInspection();
+              invalidateSignatureCheck(); });
     m_handlersRegistered = registerHandlers();
     updateAvailability();
 }
@@ -665,6 +666,12 @@ void DocumentFacade::detachDocument()
 
     ++m_generation;
     m_inspection = {};
+
+    // Signature facts describe the source bytes of the document that was open;
+    // nothing about the next document is evidence, and a check still running
+    // can no longer complete against this generation.
+    m_signatureFacts = {};
+    m_signatureCheckRunning = false;
 
     // Availability computed against the previous document is not evidence about
     // the next one.

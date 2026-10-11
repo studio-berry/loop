@@ -63,6 +63,16 @@ void OverlayBuilder::setFindings(QList<InteractionTarget> findings)
     m_findings = std::move(findings);
 }
 
+void OverlayBuilder::setAnnotations(QList<InteractionTarget> annotations)
+{
+    m_annotations = std::move(annotations);
+}
+
+void OverlayBuilder::setSelectedAnnotationId(QString annotationId)
+{
+    m_selectedAnnotationId = std::move(annotationId);
+}
+
 void OverlayBuilder::setEvidence(QList<InteractionTarget> evidence)
 {
     m_evidence = std::move(evidence);
@@ -163,6 +173,7 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     };
 
     int findingCount = 0;
+    int annotationCount = 0;
     quint32 sequence = 0;
 
     // `id` is the primitive's identity, which is not always the target's: the
@@ -170,7 +181,7 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     // object that already has one, and a host keys retained nodes on the id. The
     // target keeps its own id so a click routed back from a primitive still names
     // the real object.
-    const auto emitPrimitive = [&](const InteractionTarget& target, const QString& id, QRectF pageBounds, OverlayLayer layer, OverlayPrimitiveKind kind, OverlaySeverity severity) -> bool
+    const auto emitPrimitive = [&](const InteractionTarget& target, const QString& id, QRectF pageBounds, OverlayLayer layer, OverlayPrimitiveKind kind, OverlaySeverity severity, bool annotationSelected = false) -> bool
     {
         if (frame.primitives.size() >= m_bounds.maxPrimitives)
         {
@@ -179,6 +190,12 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
         }
 
         if (layer == OverlayLayer::Findings && findingCount >= m_bounds.maxFindingPrimitives)
+        {
+            ++frame.droppedPrimitives;
+            return false;
+        }
+
+        if (layer == OverlayLayer::Annotations && annotationCount >= m_bounds.maxAnnotationPrimitives)
         {
             ++frame.droppedPrimitives;
             return false;
@@ -194,7 +211,8 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
         primitive.target = target;
         primitive.sequence = sequence++;
         primitive.hovered = state.hovered().isValid() && state.hovered().id == target.id && state.hovered().pageIndex == target.pageIndex;
-        primitive.selected = state.selected().isValid() && state.selected().id == target.id && state.selected().pageIndex == target.pageIndex;
+        primitive.selected = annotationSelected ||
+                             (state.selected().isValid() && state.selected().id == target.id && state.selected().pageIndex == target.pageIndex);
         primitive.focused = !m_focusedId.isEmpty() && m_focusedId == target.id;
 
         const QRectF clip = clipFor(target.pageIndex);
@@ -223,6 +241,10 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
         if (layer == OverlayLayer::Findings)
         {
             ++findingCount;
+        }
+        if (layer == OverlayLayer::Annotations)
+        {
+            ++annotationCount;
         }
 
         frame.primitives.push_back(primitive);
@@ -273,6 +295,28 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
                       OverlayLayer::Findings,
                       OverlayPrimitiveKind::Rectangle,
                       OverlaySeverity::Info);
+    }
+
+    // Annotation review marks (issue #125). Their own band so findings paint
+    // over them, and their own bound so a heavily annotated document cannot
+    // crowd the findings, selection and steering primitives out of the frame.
+    // The one annotation the review list has focused carries the selection
+    // treatment; nothing here reads InteractionState, because annotations are
+    // never interaction targets.
+    for (const InteractionTarget& annotation : m_annotations)
+    {
+        if (suppressExtraGraphics || !isVisiblePage(annotation.pageIndex))
+        {
+            continue;
+        }
+
+        emitPrimitive(annotation,
+                      annotation.id,
+                      annotation.pageBounds,
+                      OverlayLayer::Annotations,
+                      OverlayPrimitiveKind::Rectangle,
+                      OverlaySeverity::None,
+                      annotation.id == m_selectedAnnotationId);
     }
 
     const InteractionTarget& hovered = state.hovered();
