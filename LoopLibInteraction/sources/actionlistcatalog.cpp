@@ -23,6 +23,7 @@
 #include "actionlistcatalog.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <QDir>
 #include <QFile>
@@ -61,15 +62,17 @@ const QList<BuiltInRecipe>& builtInRecipes()
 
 }   // namespace
 
-ActionListCatalog::ActionListCatalog(QObject* parent) :
-    QObject(parent)
+ActionListCatalog::ActionListCatalog(QObject* parent, QString recipesDirectory) :
+    QObject(parent),
+    m_recipesDirectory(std::move(recipesDirectory))
 {
 }
 
 QString ActionListCatalog::recipesDirectory() const
 {
-    return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
-        .filePath(QStringLiteral("recipes"));
+    return m_recipesDirectory.isEmpty()
+               ? QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes"))
+               : m_recipesDirectory;
 }
 
 bool ActionListCatalog::ensureRecipesDirectory(QString* error) const

@@ -69,6 +69,8 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionPageLayoutTwoColumns",
         "actionPageLayoutTwoPages",
         "actionProperties",
+        "actionUndo",
+        "actionRedo",
     }
 )
 

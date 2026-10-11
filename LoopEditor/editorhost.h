@@ -138,6 +138,11 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool pageFidelityIsExact READ pageFidelityIsExact NOTIFY presentationChanged)
     Q_PROPERTY(QString pageFidelityReason READ pageFidelityReason NOTIFY presentationChanged)
     Q_PROPERTY(bool pageFidelityIsAuthoritative READ pageFidelityIsAuthoritative NOTIFY presentationChanged)
+    Q_PROPERTY(QString governedArtifactPath READ governedArtifactPath NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList revisionHistory READ revisionHistory NOTIFY presentationChanged)
+    Q_PROPERTY(QString revisionHistorySummary READ revisionHistorySummary NOTIFY presentationChanged)
+    Q_PROPERTY(bool historyUndoAvailable READ historyUndoAvailable NOTIFY presentationChanged)
+    Q_PROPERTY(bool historyRedoAvailable READ historyRedoAvailable NOTIFY presentationChanged)
     Q_PROPERTY(bool searchPanelVisible READ searchPanelVisible NOTIFY presentationChanged)
     Q_PROPERTY(bool fullscreenRequested READ fullscreenRequested NOTIFY presentationChanged)
     Q_PROPERTY(int workspaceRequest READ workspaceRequest NOTIFY presentationChanged)
@@ -195,7 +200,7 @@ public:
     };
     Q_ENUM(LoopWorkspace)
 
-    explicit EditorHost(QObject* parent = nullptr);
+    explicit EditorHost(QObject* parent = nullptr, QString recipesDirectory = QString());
     ~EditorHost() override;
 
     EditorHost(const EditorHost&) = delete;
@@ -307,6 +312,13 @@ public:
 
     /// Recorded rollback points for the open document (read-only).
     QVariantList fixRollbackPoints() const;
+    QString governedArtifactPath() const { return historyDocumentPath(); }
+    Q_INVOKABLE void openGovernedArtifact() { openFileUrl(QUrl::fromLocalFile(historyDocumentPath())); }
+    QVariantList revisionHistory() const { return m_revisionHistory; }
+    QString revisionHistorySummary() const;
+    bool historyUndoAvailable() const;
+    bool historyRedoAvailable() const;
+
 
     /// Why the rollback affordance is enabled or unavailable, in the operator's words.
     QString fixRollbackSummary() const;
@@ -503,6 +515,7 @@ public:
     const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
 
 signals:
+    void historyNavigationRequested(const QString& commandId, const QString& rollbackId, const QString& revision);
     void passwordRequestChanged();
     /// A completed drag was refused rather than committed (#206). Both values are the
     /// target's stable names so a surface can explain the refusal.
@@ -580,8 +593,9 @@ private:
     void clearFixReview();
     pdf::PDFActionListExecutionResult fixRunResult() const;
     QVariantMap fixPreviewFromResult() const;
-    QList<pdf::PDFRollbackPoint> documentRollbackPoints() const;
     void refreshFixRollbackPointsFromHistory();
+    QString historyDocumentPath() const;
+    QString historyArtifactDigest() const;
 
     /// Signature invalidation disclosure (#125). `applies` means the plan's
     /// merged save policy invalidates signatures and the open document has some.
@@ -623,6 +637,13 @@ private:
         QString retentionError;
     };
     QHash<QString, std::shared_ptr<RollbackJobOutcome>> m_rollbackOutcomes;
+    QVariantList m_revisionHistory;
+    QString m_historyError;
+    QString m_historyUndoId;
+    QString m_historyRedoId;
+    QString m_publishedHistoryPath;
+    QString m_publishedHistoryRevision;
+
     struct PreflightProfileChoice
     {
         QString id;
@@ -676,7 +697,6 @@ private:
     QString m_fixPlannedDocumentRevision;
     QString m_fixPlannedPlanDigest;
     QVariantList m_fixRollbackPoints;
-    QString m_fixRollbackSummary;
     QString m_fixSignatureInvalidationAcknowledgedDigest;
 
     /// One signature check at a time, fenced by the facade token it began with.
