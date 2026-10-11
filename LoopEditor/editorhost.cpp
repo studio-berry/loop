@@ -2973,6 +2973,7 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
     targetExecutionId = event->executionId;
+    history.close();
 
     // P2: a rollback revalidates the restored revision through the #38 path, so the
     // Editor must supply the effective profile it already holds. Without a validated

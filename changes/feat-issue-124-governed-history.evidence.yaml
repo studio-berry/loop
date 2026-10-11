@@ -13,6 +13,7 @@ claims:
       - architecture:scripts/agent/check-architecture.py
       - unit:UnitTests/tst_operationhistorytest.cpp
       - unit:UnitTests/tst_editorhosttest.cpp
+      - unit:UnitTests/tst_shellworkspacetest.cpp
       - unit:UnitTestsGovernedExecution
       - unit:UnitTestsProductOperatorLoop
       - unit:scripts/ci/test_check_governed_parity.py

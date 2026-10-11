@@ -8,8 +8,11 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QSet>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QQmlComponent>
@@ -44,7 +47,12 @@ class ShellWorkspaceTest : public QObject
 {
     Q_OBJECT
 
+private:
+    std::unique_ptr<QTemporaryDir> m_fixtureConfiguration;
+
 private slots:
+    void init();
+    void cleanup();
     void workspaceTransitionsPreserveClosedDocumentState();
     void workspaceTransitionsPreserveOpenDocumentAndPreflightState();
     void compareWorkspaceIsReachable();
@@ -57,6 +65,25 @@ private slots:
     void correctionSampleRunsGovernedCore();
     void helpDialogShowsCatalogLimitsAndWelcome();
 };
+
+void ShellWorkspaceTest::init()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    QCoreApplication::setOrganizationName(QString());
+    QCoreApplication::setOrganizationDomain(QString());
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    QVERIFY(!configRoot.isEmpty());
+    QVERIFY(QDir().mkpath(configRoot));
+    m_fixtureConfiguration = std::make_unique<QTemporaryDir>(QDir(configRoot).filePath(QStringLiteral("loop-shell-workspace-test-XXXXXX")));
+    QVERIFY(m_fixtureConfiguration->isValid());
+    QCoreApplication::setApplicationName(QFileInfo(m_fixtureConfiguration->path()).fileName());
+    QCOMPARE(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation), m_fixtureConfiguration->path());
+}
+
+void ShellWorkspaceTest::cleanup()
+{
+    m_fixtureConfiguration.reset();
+}
 
 void ShellWorkspaceTest::workspaceTransitionsPreserveClosedDocumentState()
 {
@@ -257,7 +284,6 @@ void ShellWorkspaceTest::sampleCopiesPreserveOperatorEdits()
 
 void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
 {
-    QStandardPaths::setTestModeEnabled(true);
     QTemporaryDir directory;
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
@@ -284,7 +310,6 @@ void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
 
 void ShellWorkspaceTest::correctionSampleRunsGovernedCore()
 {
-    QStandardPaths::setTestModeEnabled(true);
     QTemporaryDir directory;
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));

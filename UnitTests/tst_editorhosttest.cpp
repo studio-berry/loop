@@ -23,6 +23,7 @@
 #include <QtTest>
 
 #include <QCryptographicHash>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
@@ -268,7 +269,12 @@ class EditorHostTest : public QObject
 {
     Q_OBJECT
 
+private:
+    std::unique_ptr<QTemporaryDir> m_fixtureConfiguration;
+
 private slots:
+    void init();
+    void cleanup();
     void encryptedOpen_data();
     void encryptedOpen();
     void passwordFailureIsTypedAndRetryable();
@@ -308,6 +314,25 @@ private slots:
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
 };
+
+void EditorHostTest::init()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    QCoreApplication::setOrganizationName(QString());
+    QCoreApplication::setOrganizationDomain(QString());
+    const QString configRoot = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    QVERIFY(!configRoot.isEmpty());
+    QVERIFY(QDir().mkpath(configRoot));
+    m_fixtureConfiguration = std::make_unique<QTemporaryDir>(QDir(configRoot).filePath(QStringLiteral("loop-editor-host-test-XXXXXX")));
+    QVERIFY(m_fixtureConfiguration->isValid());
+    QCoreApplication::setApplicationName(QFileInfo(m_fixtureConfiguration->path()).fileName());
+    QCOMPARE(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation), m_fixtureConfiguration->path());
+}
+
+void EditorHostTest::cleanup()
+{
+    m_fixtureConfiguration.reset();
+}
 
 void EditorHostTest::encryptedOpen_data()
 {
@@ -904,7 +929,6 @@ void EditorHostTest::importValidProfileAddsDigest()
 {
     QTemporaryDir temp;
     QVERIFY(temp.isValid());
-    QStandardPaths::setTestModeEnabled(true);
     pdf::PDFSettings::setSettingsPath(temp.path());
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 
@@ -1422,15 +1446,6 @@ QString shippedTranslatePageBoxRecipeId()
     return QStringLiteral(":/loop/builtin-recipe-translate-page-box.json");
 }
 
-// The operator recipe directory is shared by every test in the process, so each recipe test
-// starts from an empty one; the shipped recipe is compiled in and is unaffected.
-void clearOperatorActionListRecipes()
-{
-    QStandardPaths::setTestModeEnabled(true);
-    QDir(QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes")))
-        .removeRecursively();
-}
-
 QString recipesDirectory()
 {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("recipes"));
@@ -1473,8 +1488,6 @@ bool writeTrimmedPageDocument(const QString& path)
 
 void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
 {
-    clearOperatorActionListRecipes();
-
     EditorHost host;
     bool listed = false;
     for (const QVariant& entry : host.actionListRecipes())
@@ -1493,7 +1506,6 @@ void EditorHostTest::shippedRecipeIsListedButNeverSelectedByDefault()
 
 void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRevalidation()
 {
-    clearOperatorActionListRecipes();
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
 
@@ -1552,7 +1564,6 @@ void EditorHostTest::shippedPageBoxRecipeRunsDefaultMoveThroughPlanApprovalAndRe
 
 void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
 {
-    clearOperatorActionListRecipes();
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
 
@@ -1581,7 +1592,6 @@ void EditorHostTest::operatorRecipeWinsOverShippedRecipe()
 
 void EditorHostTest::invalidOperatorRecipeStopsMoveWithoutShippedFallback()
 {
-    clearOperatorActionListRecipes();
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
 
@@ -1817,9 +1827,7 @@ void EditorHostTest::fixJourneyPublishesOnlyAnApprovedPlanBoundToTheDisplayedIde
     QCOMPARE(host.fixLifecycleStateName(), QStringLiteral("succeeded"));
 
     // Completion presents the revalidated result and the artifact Core signed, distinct
-    // from the as-received input and bound to the plan the operator approved. The run
-    // presents the published bytes; materializing them as a file is the export slice, so
-    // this asserts the presentation rather than a filesystem write.
+    // from the as-received input and bound to the plan the operator approved.
     const QVariantMap recheck = host.fixRecheck();
     QVERIFY(recheck.value(QStringLiteral("available")).toBool());
     const QString verdictState = recheck.value(QStringLiteral("verdictState")).toString();
