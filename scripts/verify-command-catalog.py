@@ -109,6 +109,8 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionRenderOptionDisplayRenderTimes",
         "actionShow_Text_Blocks",
         "actionShow_Text_Lines",
+        "actionUndo",
+        "actionRedo",
     }
 )
 

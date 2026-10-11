@@ -1371,6 +1371,7 @@ void ActionListTest::signatureInvalidatingExecutionRefusesWithoutAcknowledgement
                                                 defaultPreflightProfilePath(),
                                                 QJsonObject(),
                                                 QJsonObject(),
+                                                QString(),
                                                 acknowledged)(local.context);
         return outcome;
     };

@@ -442,7 +442,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // The display colour modes (#235), the select/copy/capture commands (#232),
     // the measure commands (#238) and the shell settings/diagnostics surfaces
     // (#239) joined the implemented set in epic #231 PR1.
-    QCOMPARE(implemented, 51);
+    QCOMPARE(implemented, 53);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()

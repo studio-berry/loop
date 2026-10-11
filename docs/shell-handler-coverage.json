@@ -42,7 +42,6 @@
     "actionOptimizeImages",
     "actionPageGeometry",
     "actionPrint",
-    "actionRedo",
     "actionRemoveExternalLinks",
     "actionRender_to_Images",
     "actionSanitize",
@@ -53,7 +52,6 @@
     "actionStickyNoteKey",
     "actionStickyNoteNewParagraph",
     "actionStickyNoteNote",
-    "actionStickyNoteParagraph",
-    "actionUndo"
+    "actionStickyNoteParagraph"
   ]
 }
