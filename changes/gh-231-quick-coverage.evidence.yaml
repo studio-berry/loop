@@ -21,4 +21,13 @@ claims:
     evidence:
       - unit:agent-policy:quick
       - unit:agent-policy:interaction
+  - id: build-and-plugin-contracts
+    evidence:
+      - unit:agent-policy:build_policy
+      - unit:agent-policy:plugins
+  - id: operator-onboarding-lanes
+    evidence:
+      - unit:UnitTestsShellWorkspace
+      - unit:scripts/ci/test_check_operator_help.py
+      - architecture:scripts/ci/check_operator_help.py
 unresolved: []

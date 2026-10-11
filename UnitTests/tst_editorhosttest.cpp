@@ -323,6 +323,9 @@ private slots:
     void invalidPersistedRenderOptionIsReportedAndReplaced();
     void renderOptionsReachTheRendererAndTheFidelityIndicator();
     void collectDiagnosticsProducesTheAdrBundle();
+
+    /// Issue #232: extraction refuses to overwrite an existing file up front.
+    void imageExtractionRefusesToOverwriteAnExistingFile();
 };
 
 void EditorHostTest::encryptedOpen_data()
@@ -2991,6 +2994,82 @@ void EditorHostTest::collectDiagnosticsProducesTheAdrBundle()
     // The bundle never carries a PDF, however the collection was started.
     QDirIterator pdfs(bundleDirectory, QStringList{ QStringLiteral("*.pdf") }, QDir::Files, QDirIterator::Subdirectories);
     QVERIFY(!pdfs.hasNext());
+}
+
+/// Issue #232. Extraction must refuse to overwrite an existing file up front and
+/// leave that file byte-identical; a silent clobber would destroy the operator's
+/// own file.
+void EditorHostTest::imageExtractionRefusesToOverwriteAnExistingFile()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    // A one-page document carrying one 2x2 RGB image XObject and no text.
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    QByteArray imageData;
+    for (int pixel = 0; pixel < 4; ++pixel)
+    {
+        imageData.append('\xff');
+        imageData.append('\0');
+        imageData.append('\0');
+    }
+
+    pdf::PDFDictionary imageDictionary;
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Image"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Width"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Height"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"), pdf::PDFObject::createName("DeviceRGB"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("BitsPerComponent"), pdf::PDFObject::createInteger(8));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(imageData.size()));
+    pdf::PDFStream imageStream(std::move(imageDictionary), std::move(imageData));
+    const pdf::PDFObjectReference imageReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(imageStream)));
+
+    const QByteArray content = "q 40 0 0 40 80 80 cm /Im0 Do Q";
+    pdf::PDFDictionary contentDictionary;
+    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                               pdf::PDFObject::createInteger(content.size()));
+    pdf::PDFStream contentStream(std::move(contentDictionary), QByteArray(content));
+    const pdf::PDFObjectReference contentReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(contentStream)));
+
+    pdf::PDFDictionary xObjects;
+    xObjects.addEntry(pdf::PDFInplaceOrMemoryString("Im0"), pdf::PDFObject::createReference(imageReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
+
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+
+    const QString path = directory.filePath(QStringLiteral("extract-source.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    const QString existing = directory.filePath(QStringLiteral("page-1-image-1.png"));
+    QFile planted(existing);
+    QVERIFY(planted.open(QIODevice::WriteOnly));
+    planted.write("keep-me");
+    planted.close();
+
+    QVERIFY(!host.extractCurrentPageImagesFileUrl(QUrl::fromLocalFile(directory.path())));
+
+    QFile untouched(existing);
+    QVERIFY(untouched.open(QIODevice::ReadOnly));
+    QCOMPARE(untouched.readAll(), QByteArray("keep-me"));
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)
