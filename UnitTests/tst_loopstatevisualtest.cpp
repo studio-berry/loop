@@ -23,7 +23,11 @@
 #include "loopstatevisual.h"
 #include "preflightengine.h"
 
+#include "../LoopLibInteraction/sources/shellglossary.h"
+
 #include <QSet>
+#include <QDir>
+#include <QTranslator>
 #include <QtTest>
 
 #include <cmath>
@@ -194,6 +198,9 @@ class LoopStateVisualTest : public QObject
     Q_OBJECT
 
 private slots:
+    void glossaryTranslatesPresentationWithoutChangingState();
+    void shippingCatalogs_data();
+    void shippingCatalogs();
     void severityMapping_data();
     void severityMapping();
 
@@ -945,6 +952,69 @@ void LoopStateVisualTest::previewFidelityNeverClaimsAPass()
     QVERIFY(visual.colorRole != ColorRole::Success);
 }
 
+void LoopStateVisualTest::glossaryTranslatesPresentationWithoutChangingState()
+{
+    class GlossaryTranslator final : public QTranslator
+    {
+    public:
+        bool isEmpty() const override { return false; }
+        QString translate(const char* context, const char* source, const char*, int) const override
+        {
+            return QByteArray(context) == "LoopGlossary"
+                       ? QStringLiteral("[translated %1]").arg(QString::fromUtf8(source))
+                       : QString();
+        }
+    } translator;
+    QVERIFY(QCoreApplication::installTranslator(&translator));
+    for (const QString& code : { QStringLiteral("pass"), QStringLiteral("fail"),
+                                 QStringLiteral("incomplete"), QStringLiteral("error"),
+                                 QStringLiteral("image-resolution") })
+    {
+        QVERIFY(pdfinteraction::glossary::term(code).startsWith(QStringLiteral("[translated ")));
+    }
+    QCOMPARE(pdfinteraction::glossary::term(QStringLiteral("future-finding-code")),
+             QStringLiteral("future-finding-code"));
+    const auto visual = pdfquick::tokens::resolvePreflightStateVisual(QStringLiteral("pass"));
+    QCOMPARE(visual.kind, StateKind::Passed);
+    QCOMPARE(pdfquick::tokens::stateKindName(visual.kind), QStringLiteral("Passed"));
+    QCOMPARE(visual.accessibleName, QStringLiteral("[translated Passed]"));
+    QVERIFY(QCoreApplication::removeTranslator(&translator));
+    QCOMPARE(pdfinteraction::glossary::term(QStringLiteral("pass")), QStringLiteral("Pass"));
+}
+
+void LoopStateVisualTest::shippingCatalogs_data()
+{
+    QTest::addColumn<QString>("language");
+    QTest::addColumn<QString>("passLabel");
+    QTest::newRow("en") << QStringLiteral("en") << QStringLiteral("Pass");
+    QTest::newRow("cs") << QStringLiteral("cs") << QStringLiteral("Vyhovuje");
+    QTest::newRow("de") << QStringLiteral("de") << QStringLiteral("Bestanden");
+    QTest::newRow("es") << QStringLiteral("es") << QStringLiteral("Aprobado");
+    QTest::newRow("fr") << QStringLiteral("fr") << QStringLiteral("R\u00E9ussite");
+    QTest::newRow("ko") << QStringLiteral("ko") << QStringLiteral("\uD1B5\uACFC");
+    QTest::newRow("ru") << QStringLiteral("ru") << QStringLiteral("\u041F\u0440\u043E\u0439\u0434\u0435\u043D\u043E");
+    QTest::newRow("tr") << QStringLiteral("tr") << QStringLiteral("Ge\u00E7ti");
+    QTest::newRow("zh_CN") << QStringLiteral("zh_CN") << QStringLiteral("\u901A\u8FC7");
+    QTest::newRow("zh_TW") << QStringLiteral("zh_TW") << QStringLiteral("\u901A\u904E");
+}
+
+void LoopStateVisualTest::shippingCatalogs()
+{
+    QFETCH(QString, language);
+    QFETCH(QString, passLabel);
+    const QString directory = qEnvironmentVariable("LOOP_TRANSLATION_TEST_DIRECTORY");
+    if (directory.isEmpty())
+    {
+        QSKIP("Compiled catalog integration requires LOOP_TRANSLATION_TEST_DIRECTORY.");
+    }
+    QTranslator translator;
+    QVERIFY(translator.load(QDir(directory).filePath(QStringLiteral("LOOP_%1.qm").arg(language))));
+    QVERIFY(QCoreApplication::installTranslator(&translator));
+    QCOMPARE(pdfinteraction::glossary::term(QStringLiteral("pass")), passLabel);
+    QCOMPARE(QCoreApplication::translate("LoopGlossary", "Output intent profile missing"), QStringLiteral("Output intent profile missing"));
+    QVERIFY(QCoreApplication::removeTranslator(&translator));
+}
+
 void LoopStateVisualTest::signatureStateMapping_data()
 {
     QTest::addColumn<QString>("stateName");
@@ -1028,6 +1098,7 @@ void LoopStateVisualTest::signatureStatesOnlyValidClaimsAPass()
     QVERIFY(visual.icon != StateIcon::Checkmark);
 }
 
-QTEST_APPLESS_MAIN(LoopStateVisualTest)
+
+QTEST_GUILESS_MAIN(LoopStateVisualTest)
 
 #include "tst_loopstatevisualtest.moc"

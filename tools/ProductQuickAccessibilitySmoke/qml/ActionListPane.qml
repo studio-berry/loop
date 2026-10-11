@@ -259,7 +259,7 @@ Pane {
                             return qsTr("Run status %1 · postflight %2 · recheck verdict: %3 · cleared %4 · remaining %5 · introduced %6 · not fully rechecked %7")
                                 .arg(root.recheck.status)
                                 .arg(root.recheck.pass ? qsTr("passed") : qsTr("not passed"))
-                                .arg(root.recheck.verdictState === "" ? qsTr("not reduced") : root.recheck.verdictState)
+                                .arg(root.recheck.verdictState === "" ? qsTr("not reduced") : root.host.localizedTerm(root.recheck.verdictState))
                                 .arg(root.recheck.resolved.length)
                                 .arg(root.recheck.unchanged.length)
                                 .arg(root.recheck.introduced.length)

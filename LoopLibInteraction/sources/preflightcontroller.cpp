@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightcontroller.h"
+#include "shellglossary.h"
 
 #include "findingnavigation.h"
 #include "pdfpreflightverdict.h"
@@ -92,7 +93,7 @@ QString PreflightController::selectedFindingDescription() const
     }
     const PreflightFindingView* finding = m_findings.finding(id);
     return tr("Selected finding %1. %2. Severity %3. Scope %4. Page %5.")
-        .arg(finding->id, finding->message, finding->severity, finding->scope)
+        .arg(finding->id, finding->message, glossary::term(finding->severity), finding->scope)
         .arg(finding->page);
 }
 
@@ -152,7 +153,7 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     m_documentRevision = std::move(documentRevision);
     if (changed && (m_hasResult || m_state == State::Running))
     {
-        markStale(QStringLiteral("Preflight is stale for the current revision."));
+        markStale(tr("Preflight is stale for the current revision."));
     }
     Q_EMIT operatorSemanticsChanged();
 }
@@ -185,7 +186,7 @@ void PreflightController::beginRun(QString documentKey,
     m_jobId = std::move(jobId);
     m_cancelRequested = false;
     m_progress = 0;
-    m_operatorSummary = QStringLiteral("Preflight is running.");
+    m_operatorSummary = tr("Preflight is running.");
     m_jobState = JobState::Running;
     setState(State::Running);
     Q_EMIT progressChanged(m_progress);
@@ -211,7 +212,7 @@ bool PreflightController::acceptResult(const QString& jobId,
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
-    m_verdictSummary = tr("%1. %2").arg(pdf::preflightVerdictStateToString(verdict.state), m_operatorSummary);
+    m_verdictSummary = tr("%1. %2").arg(glossary::term(pdf::preflightVerdictStateToString(verdict.state)), m_operatorSummary);
     m_jobState = JobState::Completed;
     switch (verdict.state)
     {
@@ -240,7 +241,7 @@ bool PreflightController::failRun(const QString& jobId, const QString& documentR
         return false;
     }
 
-    m_operatorSummary = QStringLiteral("Preflight failed: %1").arg(std::move(errorMessage));
+    m_operatorSummary = tr("Preflight failed: %1").arg(std::move(errorMessage));
     m_jobState = JobState::Failed;
     restoreRetainedState(State::Error);
     Q_EMIT operatorSemanticsChanged();
@@ -255,7 +256,7 @@ bool PreflightController::cancelRun(const QString& jobId)
     }
     m_cancelRequested = true;
     cancelSchedulerJob();
-    m_operatorSummary = QStringLiteral("Preflight was cancelled.");
+    m_operatorSummary = tr("Preflight was cancelled.");
     m_jobState = JobState::Cancelled;
     restoreRetainedState(State::Cancelled);
     Q_EMIT operatorSemanticsChanged();
@@ -264,12 +265,12 @@ bool PreflightController::cancelRun(const QString& jobId)
 
 void PreflightController::markProfileStale()
 {
-    markStale(QStringLiteral("Preflight is stale because the selected profile changed."));
+    markStale(tr("Preflight is stale because the selected profile changed."));
 }
 
 void PreflightController::markCheckSetStale()
 {
-    markStale(QStringLiteral("Preflight is stale because the selected check set changed."));
+    markStale(tr("Preflight is stale because the selected check set changed."));
 }
 
 void PreflightController::cancelSchedulerJob()
@@ -324,7 +325,7 @@ void PreflightController::restoreRetainedState(State terminalState)
     // A retained result still wins, so the last good verdict stays on screen.
     if (m_hasResult && m_retainedState == State::Stale)
     {
-        m_operatorSummary = QStringLiteral("Previous preflight remains stale. %1").arg(m_operatorSummary);
+        m_operatorSummary = tr("Previous preflight remains stale. %1").arg(m_operatorSummary);
     }
     setState(m_hasResult ? m_retainedState : terminalState);
 }

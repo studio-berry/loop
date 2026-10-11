@@ -42,16 +42,43 @@ Item {
                     TabButton {
                         objectName: "pagesTabButton"
                         text: qsTr("Pages")
+                        contentItem: Text {
+                            text: parent.text
+                            font: parent.font
+                            color: parent.palette.buttonText
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            Accessible.ignored: true
+                        }
                         Accessible.name: qsTr("Pages tab")
                     }
                     TabButton {
                         objectName: "outlineTabButton"
                         text: qsTr("Outline")
+                        contentItem: Text {
+                            text: parent.text
+                            font: parent.font
+                            color: parent.palette.buttonText
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            Accessible.ignored: true
+                        }
                         Accessible.name: qsTr("Outline tab")
                     }
                     TabButton {
                         objectName: "searchTabButton"
                         text: qsTr("Search")
+                        contentItem: Text {
+                            text: parent.text
+                            font: parent.font
+                            color: parent.palette.buttonText
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            Accessible.ignored: true
+                        }
                         Accessible.name: qsTr("Search tab")
                     }
                     TabButton {

@@ -10,6 +10,7 @@ ToolBar {
     Accessible.name: qsTr("Document toolbar")
     Accessible.description: qsTr("Commands for opening, editing, viewing, and moving through the document.")
     activeFocusOnTab: true
+    implicitHeight: toolbarCommands.implicitHeight + topPadding + bottomPadding
 
     property var host: editorHost
     property var window: null
@@ -71,8 +72,9 @@ ToolBar {
         }
     }
 
-    RowLayout {
-        anchors.fill: parent
+    Flow {
+        id: toolbarCommands
+        width: parent.width
         spacing: 6
 
         ToolButton {
@@ -224,6 +226,5 @@ ToolBar {
             Accessible.name: qsTr("Open production preview workspace")
         }
 
-        Item { Layout.fillWidth: true }
     }
 }
