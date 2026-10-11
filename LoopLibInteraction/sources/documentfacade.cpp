@@ -334,6 +334,8 @@ DocumentEditOutcome DocumentFacade::applyAuthoringEdit(const DocumentEditRequest
     outcome.affectedCount = result.affectedCount;
     outcome.revision = m_revisionSource.currentRevision();
     return outcome;
+}
+
 DocumentDirectEditResult DocumentFacade::applyDirectEdit(const DocumentDirectEditRequest& request)
 {
     DocumentDirectEditResult result;

@@ -61,6 +61,7 @@
 #include "pdfannotation.h"
 #include "pdfblockingthreadguard.h"
 #include "pdfcatalog.h"
+#include "pdfannotation.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "pdfdocumentreader.h"
@@ -621,6 +622,7 @@ private slots:
     void hyperlinkCommandsWriteEveryDestinationVariant_data();
     void hyperlinkCommandsWriteEveryDestinationVariant();
     void restrictedDocumentCannotEditBookmarksOrLinks();
+
     // Direct authoring edits (ADR-014, issue #242): the catalog route into Core,
     // the revision fence, the XFA refusal, the attachment path and the
     // send-by-email hand-off.
@@ -4129,12 +4131,6 @@ void EditorHostTest::bookmarkCommandsWriteTheOutlineThroughTheCatalog()
     QVERIFY(directory.isValid());
     const QString path = writePagesFixture(directory.filePath(QStringLiteral("bookmarks.pdf")), 3);
     QVERIFY(!path.isEmpty());
-void EditorHostTest::formValueEditRoutesThroughTheCatalogIntoCoreAndProducesANewRevision()
-{
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    const QString path = directory.filePath(QStringLiteral("form.pdf"));
-    QVERIFY(writeFormFixtureDocument(path));
 
     EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
@@ -4370,83 +4366,6 @@ void EditorHostTest::hyperlinkCommandsWriteEveryDestinationVariant()
     QVERIFY(directory.isValid());
     const QString path = writePagesFixture(directory.filePath(QStringLiteral("hyperlinks.pdf")), 2);
     QVERIFY(!path.isEmpty());
-    DocumentViewSession* session = host.sessionForTest();
-    QVERIFY(session != nullptr);
-    const pdf::PDFRevisionIdentity before = session->facade().currentRevision();
-    QVERIFY(before.isValid());
-    QVERIFY(host.isCommandEnabled(QStringLiteral("actionSetFormFieldValue")));
-    QVERIFY(host.isCommandEnabled(QStringLiteral("actionEditDocumentMetadata")));
-    QVERIFY(host.isCommandEnabled(QStringLiteral("actionAddAttachment")));
-
-    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
-    QVERIFY(model);
-    QVERIFY(model->hasForm());
-    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("original"));
-
-    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
-
-    // Text value: the catalog route into Core, one new revision, one dirty document.
-    QVariantMap parameters;
-    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
-    parameters.insert(QStringLiteral("value"), QStringLiteral("typed in the shell"));
-    parameters.insert(QStringLiteral("revision"), before.toString());
-    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
-    QCOMPARE(finished.count(), 1);
-    const pdfinteraction::CommandResult textResult = finished.last().at(0).value<pdfinteraction::CommandResult>();
-    QCOMPARE(textResult.state, pdfinteraction::CommandTerminalState::Completed);
-    QCOMPARE(textResult.typedError, QString());
-
-    const pdf::PDFRevisionIdentity afterText = session->facade().currentRevision();
-    QVERIFY(afterText != before);
-    QCOMPARE(session->facade().state(), pdfinteraction::DocumentState::Ready);
-    QVERIFY(session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
-    QCOMPARE(host.documentShellStatus(), QStringLiteral("MODIFIED"));
-    QCOMPARE(model->revision(), afterText.toString());
-    QVERIFY(model->modified());
-    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("typed in the shell"));
-
-    // Checkbox: the same route, and the value lands as the widget's on-state name.
-    parameters.clear();
-    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopCheck"));
-    parameters.insert(QStringLiteral("checked"), true);
-    parameters.insert(QStringLiteral("revision"), afterText.toString());
-    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
-    QCOMPARE(finished.count(), 2);
-    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
-    bool isName = false;
-    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopCheck"), &isName), QStringLiteral("Yes"));
-    QVERIFY(isName);
-
-    // Metadata: the same gateway, and the properties the model presents follow.
-    parameters.clear();
-    parameters.insert(QStringLiteral("title"), QStringLiteral("Shell title"));
-    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
-    QVERIFY(host.invokeCommand(QStringLiteral("actionEditDocumentMetadata"), parameters) != 0);
-    QCOMPARE(finished.count(), 3);
-    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
-    QCOMPARE(model->title(), QStringLiteral("Shell title"));
-    QCOMPARE(session->context().getDocument()->getInfo()->title, QStringLiteral("Shell title"));
-
-    // A signature field is refused, and a refusal changes nothing at all.
-    const pdf::PDFRevisionIdentity beforeRefusal = session->facade().currentRevision();
-    parameters.clear();
-    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopSignature"));
-    parameters.insert(QStringLiteral("value"), QStringLiteral("not a signature"));
-    parameters.insert(QStringLiteral("revision"), beforeRefusal.toString());
-    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
-    QCOMPARE(finished.count(), 4);
-    const pdfinteraction::CommandResult refused = finished.last().at(0).value<pdfinteraction::CommandResult>();
-    QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
-    QCOMPARE(refused.typedError, QStringLiteral("form/unsupported-field-type"));
-    QCOMPARE(session->facade().currentRevision(), beforeRefusal);
-}
-
-void EditorHostTest::authoringEditRefusesAStaleRevisionAndChangesNothing()
-{
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    const QString path = directory.filePath(QStringLiteral("stale-form.pdf"));
-    QVERIFY(writeFormFixtureDocument(path));
 
     EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
@@ -4555,6 +4474,100 @@ void EditorHostTest::restrictedDocumentCannotEditBookmarksOrLinks()
     QCOMPARE(host.invokeCommand(QStringLiteral("actionCreateHyperlink"),
                                 { { QStringLiteral("uri"), QStringLiteral("https://example.org") } }),
              quint64(0));
+}
+
+void EditorHostTest::formValueEditRoutesThroughTheCatalogIntoCoreAndProducesANewRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("form.pdf"));
+    QVERIFY(writeFormFixtureDocument(path));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    const pdf::PDFRevisionIdentity before = session->facade().currentRevision();
+    QVERIFY(before.isValid());
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionSetFormFieldValue")));
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionEditDocumentMetadata")));
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionAddAttachment")));
+
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(model->hasForm());
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("original"));
+
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    // Text value: the catalog route into Core, one new revision, one dirty document.
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("typed in the shell"));
+    parameters.insert(QStringLiteral("revision"), before.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    const pdfinteraction::CommandResult textResult = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(textResult.state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(textResult.typedError, QString());
+
+    const pdf::PDFRevisionIdentity afterText = session->facade().currentRevision();
+    QVERIFY(afterText != before);
+    QCOMPARE(session->facade().state(), pdfinteraction::DocumentState::Ready);
+    QVERIFY(session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("MODIFIED"));
+    QCOMPARE(model->revision(), afterText.toString());
+    QVERIFY(model->modified());
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("typed in the shell"));
+
+    // Checkbox: the same route, and the value lands as the widget's on-state name.
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopCheck"));
+    parameters.insert(QStringLiteral("checked"), true);
+    parameters.insert(QStringLiteral("revision"), afterText.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 2);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    bool isName = false;
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopCheck"), &isName), QStringLiteral("Yes"));
+    QVERIFY(isName);
+
+    // Metadata: the same gateway, and the properties the model presents follow.
+    parameters.clear();
+    parameters.insert(QStringLiteral("title"), QStringLiteral("Shell title"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionEditDocumentMetadata"), parameters) != 0);
+    QCOMPARE(finished.count(), 3);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(model->title(), QStringLiteral("Shell title"));
+    QCOMPARE(session->context().getDocument()->getInfo()->title, QStringLiteral("Shell title"));
+
+    // A signature field is refused, and a refusal changes nothing at all.
+    const pdf::PDFRevisionIdentity beforeRefusal = session->facade().currentRevision();
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopSignature"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("not a signature"));
+    parameters.insert(QStringLiteral("revision"), beforeRefusal.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 4);
+    const pdfinteraction::CommandResult refused = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(refused.typedError, QStringLiteral("form/unsupported-field-type"));
+    QCOMPARE(session->facade().currentRevision(), beforeRefusal);
+}
+
+void EditorHostTest::authoringEditRefusesAStaleRevisionAndChangesNothing()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("stale-form.pdf"));
+    QVERIFY(writeFormFixtureDocument(path));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
 
     DocumentViewSession* session = host.sessionForTest();
     QVERIFY(session != nullptr);

@@ -1,0 +1,32 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: authoring-edit-gateway
+    evidence:
+      - unit:UnitTestsAuthoringEdit
+      - unit:UnitTestsAnnotationAuthoring
+      - unit:UnitTestsDirectEdit
+      - unit:UnitTestsDocumentFacade
+      - unit:agent-policy:interaction
+      - unit:agent-policy:core
+  - id: quick-authoring-surfaces
+    evidence:
+      - unit:UnitTestsEditorHost
+      - unit:UnitTestsShellWorkspace
+      - unit:UnitTestsShellKeyboard
+      - unit:UnitTestsProductOperatorLoop
+      - unit:agent-policy:quick
+  - id: catalog-contract
+    evidence:
+      - unit:scripts/ci/test_command_catalog.py
+      - architecture:scripts/verify-command-catalog.py
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: documentation-and-catalogs
+    evidence:
+      - unit:agent-policy:documentation
+unresolved: []

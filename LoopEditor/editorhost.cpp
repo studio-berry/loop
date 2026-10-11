@@ -4550,6 +4550,7 @@ bool EditorHost::commandPermissionAllowed(const QString& commandId) const
         {
             return permissions.modifyAnnotations;
         }
+    }
     if (commandId == QLatin1String("actionSetFormFieldValue"))
     {
         return m_documentModel.canFillForms();
@@ -5209,39 +5210,6 @@ void EditorHost::registerFeatureHandlers()
             QString typedError;
             const std::optional<pdf::PDFAuthoringEdit> edit = build(parameters, typedError);
             runAuthoringEdit(invocation, edit, typedError, parameters);
-    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
-    // Form values, attachments and metadata are mutations through this catalog
-    // into Core: each handler maps its declared scalars into the facade's typed
-    // direct-edit request, and the facade checks the revision fence and the
-    // document's permission before any writer runs. A refusal finishes Failed
-    // with the facade's own stable code, so a stale, unauthorized, XFA or
-    // unsupported edit is reported rather than silently dropped.
-    auto bindAuthoringEdit = [this](const QString& id, pdfinteraction::DocumentDirectEditRequest::Kind kind)
-    {
-        pdfinteraction::CommandCatalog::Handler handler;
-        handler.invoke = [this, kind](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
-        {
-            const pdfinteraction::DocumentDirectEditResult result = applyAuthoringEdit(kind, parameters);
-            m_session->catalog().finishInvocation(invocation,
-                                                  result.applied ? pdfinteraction::CommandTerminalState::Completed
-                                                                 : pdfinteraction::CommandTerminalState::Failed,
-                                                  result.applied ? QString() : result.typedError);
-            if (result.applied)
-            {
-                announceDocumentState(tr("The document was edited. Save to publish the new revision."));
-                // The document was replaced in place, so the surfaces the new
-                // revision needs are requested now rather than at the next
-                // viewport change.
-                if (m_documentBound)
-                {
-                    m_session->surfaces()->requestSurfaces();
-                }
-            }
-            else
-            {
-                announceDocumentState(tr("The edit was refused: %1").arg(result.typedError));
-            }
-            bumpPresentation();
         };
         m_session->catalog().setHandler(id, std::move(handler));
     };
@@ -5452,6 +5420,9 @@ void EditorHost::registerFeatureHandlers()
             bumpPresentation();
         };
         m_session->catalog().setHandler(id, std::move(navigation));
+    }
+
+
     // ---- Annotation authoring (issue #234) ---------------------------------
     // One handler per declared annotation command. The handler parses geometry
     // at this boundary, submits the typed request to the facade's direct-edit
@@ -5498,10 +5469,49 @@ void EditorHost::registerFeatureHandlers()
         };
         m_session->catalog().setHandler(entry.first, std::move(authoring));
     }
-    bindAuthoringEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DocumentDirectEditRequest::Kind::SetFormFieldValue);
-    bindAuthoringEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment);
-    bindAuthoringEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::RemoveAttachment);
-    bindAuthoringEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DocumentDirectEditRequest::Kind::EditMetadata);
+
+
+    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
+    // Form values, attachments and metadata are mutations through this catalog
+    // into Core: each handler maps its declared scalars into the facade's typed
+    // direct-edit request, and the facade checks the revision fence and the
+    // document's permission before any writer runs. A refusal finishes Failed
+    // with the facade's own stable code, so a stale, unauthorized, XFA or
+    // unsupported edit is reported rather than silently dropped.
+    auto bindDocumentDirectEdit = [this](const QString& id, pdfinteraction::DocumentDirectEditRequest::Kind kind)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, kind](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            const pdfinteraction::DocumentDirectEditResult result = applyAuthoringEdit(kind, parameters);
+            m_session->catalog().finishInvocation(invocation,
+                                                  result.applied ? pdfinteraction::CommandTerminalState::Completed
+                                                                 : pdfinteraction::CommandTerminalState::Failed,
+                                                  result.applied ? QString() : result.typedError);
+            if (result.applied)
+            {
+                announceDocumentState(tr("The document was edited. Save to publish the new revision."));
+                // The document was replaced in place, so the surfaces the new
+                // revision needs are requested now rather than at the next
+                // viewport change.
+                if (m_documentBound)
+                {
+                    m_session->surfaces()->requestSurfaces();
+                }
+            }
+            else
+            {
+                announceDocumentState(tr("The edit was refused: %1").arg(result.typedError));
+            }
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindDocumentDirectEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DocumentDirectEditRequest::Kind::SetFormFieldValue);
+    bindDocumentDirectEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::RemoveAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DocumentDirectEditRequest::Kind::EditMetadata);
 
     // Send by e-mail hands the current published revision to the mail client and
     // writes nothing. An unsaved document is refused with a typed reason: the
@@ -5700,6 +5710,28 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionPrint"), ready && !outputBusy() && m_documentModel.canPrint());
     availability.insert(QStringLiteral("actionExportDocument"), ready && !outputBusy() && m_documentModel.canCopy());
 
+    // Annotation authoring (issue #234): available with a document whose
+    // modify-annotations permission is granted, so a restricted document cannot
+    // offer an edit the gateway would refuse. The ids come from the one table
+    // the handlers were registered from.
+    const bool annotationAuthoring = ready && m_session->facade().permissions().modifyAnnotations;
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        availability.insert(entry.first, annotationAuthoring);
+    }
+
+    // Direct authoring edits (ADR-014, issue #242). Each is enabled exactly when
+    // the open document grants the permission its family needs, so an
+    // unauthorized edit is unreachable rather than refused after the fact.
+    availability.insert(QStringLiteral("actionSetFormFieldValue"), ready && m_documentModel.canFillForms());
+    availability.insert(QStringLiteral("actionAddAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionRemoveAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionEditDocumentMetadata"), ready && m_documentModel.canModify());
+    // Send by e-mail stays enabled with a document even when it has unsaved
+    // changes, so its typed refusal is reachable and visible rather than the
+    // command silently disappearing from the menu.
+    availability.insert(QStringLiteral("actionSend_by_E_Mail"), ready && !outputBusy());
+
     // Bookmarks and hyperlinks (#233). The edits are document mutations, so they
     // follow the document's modify permission; navigation needs an outline to
     // move through, and export follows the same copy permission the document
@@ -5725,26 +5757,7 @@ void EditorHost::refreshFeatureAvailability()
     for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
     {
         availability.insert(id, ready && m_documentModel.hasOutline());
-    // Annotation authoring (issue #234): available with a document whose
-    // modify-annotations permission is granted, so a restricted document cannot
-    // offer an edit the gateway would refuse. The ids come from the one table
-    // the handlers were registered from.
-    const bool annotationAuthoring = ready && m_session->facade().permissions().modifyAnnotations;
-    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
-    {
-        availability.insert(entry.first, annotationAuthoring);
     }
-    // Direct authoring edits (ADR-014, issue #242). Each is enabled exactly when
-    // the open document grants the permission its family needs, so an
-    // unauthorized edit is unreachable rather than refused after the fact.
-    availability.insert(QStringLiteral("actionSetFormFieldValue"), ready && m_documentModel.canFillForms());
-    availability.insert(QStringLiteral("actionAddAttachment"), ready && m_documentModel.canModify());
-    availability.insert(QStringLiteral("actionRemoveAttachment"), ready && m_documentModel.canModify());
-    availability.insert(QStringLiteral("actionEditDocumentMetadata"), ready && m_documentModel.canModify());
-    // Send by e-mail stays enabled with a document even when it has unsaved
-    // changes, so its typed refusal is reachable and visible rather than the
-    // command silently disappearing from the menu.
-    availability.insert(QStringLiteral("actionSend_by_E_Mail"), ready && !outputBusy());
 
     m_session->catalog().setEnabledBatch(availability);
 }

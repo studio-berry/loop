@@ -401,6 +401,7 @@
     "UnitTestsActionList",
     "UnitTestsAnnotationAuthoring",
     "UnitTestsApplicationIdentity",
+    "UnitTestsAuthoringEdit",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
