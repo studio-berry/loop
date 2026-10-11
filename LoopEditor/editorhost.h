@@ -190,7 +190,7 @@ public:
     };
     Q_ENUM(LoopWorkspace)
 
-    explicit EditorHost(QObject* parent = nullptr);
+    explicit EditorHost(QObject* parent = nullptr, QString recipesDirectory = QString());
     ~EditorHost() override;
 
     EditorHost(const EditorHost&) = delete;

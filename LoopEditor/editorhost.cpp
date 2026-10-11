@@ -302,7 +302,7 @@ struct EditorHost::PreflightWorkerOutcome
     QJsonObject auditSummary;
 };
 
-EditorHost::EditorHost(QObject* parent) :
+EditorHost::EditorHost(QObject* parent, QString recipesDirectory) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
     m_findingNavigator(std::make_unique<pdfinteraction::FindingCanvasNavigator>(
@@ -313,7 +313,8 @@ EditorHost::EditorHost(QObject* parent) :
         pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry(),
         this)),
     m_preflight(&m_session->scheduler(), this),
-    m_actionListController(&m_session->scheduler(), this)
+    m_actionListController(&m_session->scheduler(), this),
+    m_actionListCatalog(nullptr, std::move(recipesDirectory))
 {
     // Registers this constructing thread -- the one QML dispatches pointer
     // and frame callbacks on -- as the thread blocking service adapters
