@@ -54,6 +54,7 @@
 #include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"
+#include "pdfcms.h"
 #include "pdfpage.h"
 #include "pdftransparencyrenderer.h"
 
@@ -168,6 +169,15 @@ int rotationToDegrees(pdf::PageRotation rotation)
 
     return 0;
 }
+
+/// Rasterization resolution of the ink-coverage point readout. It samples one
+/// point, not a page: the value only has to be fine enough that the pixel under
+/// the point is that point, and the job is charged for the pixels it renders.
+constexpr int InkCoverageReadoutDpi = 150;
+
+/// Ceiling on the readout raster's longest edge. A huge page samples the same
+/// point at a coarser resolution instead of rasterizing an unbounded image.
+constexpr int InkCoverageMaxRasterPixels = 4096;
 
 QString actionListStateToString(pdfinteraction::ActionListController::State state)
 {
@@ -418,6 +428,7 @@ EditorHost::EditorHost(QObject* parent) :
                 finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
+                finishInkCoverageJob(snapshot);
                 refreshCanvasTrace(); });
 }
 
@@ -1257,10 +1268,28 @@ QString EditorHost::previewFidelityStateName() const
     {
         return QStringLiteral("unavailable");
     }
+    // A display simulation outranks the render underneath it: the operator is
+    // looking at a transformed page, so the indicator may not report the render
+    // path's own fidelity as if that were what is on screen (issue #235 display
+    // half, issue #237).
     return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
                                                           stale,
                                                           pageFidelityIsAuthoritative(),
-                                                          pageFidelityIsExact());
+                                                          pageFidelityIsExact(),
+                                                          displaySimulationName());
+}
+
+QString EditorHost::displaySimulationName() const
+{
+    if (softProofActive())
+    {
+        return QStringLiteral("soft-proof");
+    }
+    if (m_displayColor.isActive())
+    {
+        return QStringLiteral("display-filter");
+    }
+    return QString();
 }
 
 QVariantMap EditorHost::previewFidelityVisual() const
@@ -1331,6 +1360,20 @@ QString EditorHost::previewFidelitySummary() const
                   "canvas pixels cannot stand as proof of print-safe output; switch this page to the "
                   "authoritative overprint render before any print claim.")
             .arg(pageFidelityReason());
+    }
+    if (state == QLatin1String("display-filter"))
+    {
+        return tr("Display colour simulation (%1): a display colour mode is filtering the canvas, so "
+                  "these pixels are a presentation of the page and not a production render. They are "
+                  "never recorded as approval evidence.")
+            .arg(displayColorModeName());
+    }
+    if (state == QLatin1String("soft-proof"))
+    {
+        return tr("Soft-proof simulation of the output intent through colour management (profile %1). "
+                  "It is a simulation of print, not the print's evidence, and it is never recorded as "
+                  "approval.")
+            .arg(m_softProofProfile.name.isEmpty() ? m_softProofProfile.id : m_softProofProfile.name);
     }
     return tr("Fidelity exact, origin fast-canvas: this page reports no overprint-sensitive content. "
               "The interactive preview still does not certify print-safe output.");
@@ -1868,6 +1911,607 @@ bool EditorHost::ensureAuthoritativePreview()
     m_session->surfaces()->setPageAuthoritativeOverprint(currentPage(), true);
     bumpPresentation();
     return true;
+}
+
+QString EditorHost::displayColorModeName() const
+{
+    return pdfquick::getCanvasDisplayColorModeName(m_displayColor.mode);
+}
+
+bool EditorHost::displayColorModeActive() const
+{
+    return m_displayColor.isActive();
+}
+
+QColor EditorHost::displayColorCustomForeground() const
+{
+    return m_displayColor.customForeground;
+}
+
+QColor EditorHost::displayColorCustomBackground() const
+{
+    return m_displayColor.customBackground;
+}
+
+int EditorHost::displayColorBitonalThreshold() const
+{
+    return m_displayColor.bitonalThreshold;
+}
+
+bool EditorHost::setDisplayColorMode(const QString& modeName)
+{
+    const std::optional<pdfquick::CanvasDisplayColorMode> mode =
+        pdfquick::canvasDisplayColorModeFromName(modeName);
+    if (!mode)
+    {
+        return false;
+    }
+
+    m_displayColor.mode = *mode;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setDisplayColorCustomColors(const QColor& foreground, const QColor& background)
+{
+    if (!foreground.isValid() || !background.isValid())
+    {
+        return false;
+    }
+
+    m_displayColor.customForeground = foreground;
+    m_displayColor.customBackground = background;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setDisplayColorBitonalThreshold(int threshold)
+{
+    if (threshold < 1 || threshold > 254)
+    {
+        return false;
+    }
+
+    m_displayColor.bitonalThreshold = threshold;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::applyDisplayColorToCanvas()
+{
+    if (m_canvas)
+    {
+        m_canvas->setDisplayColorMode(pdfquick::getCanvasDisplayColorModeName(m_displayColor.mode));
+        m_canvas->setDisplayColorCustomForeground(m_displayColor.customForeground);
+        m_canvas->setDisplayColorCustomBackground(m_displayColor.customBackground);
+        m_canvas->setDisplayColorBitonalThreshold(m_displayColor.bitonalThreshold);
+    }
+}
+
+bool EditorHost::softProofActive() const
+{
+    return m_softProofEnabled && !m_softProofProfile.id.isEmpty();
+}
+
+QString EditorHost::softProofStateName() const
+{
+    return m_softProofStateName;
+}
+
+QString EditorHost::softProofProfileName() const
+{
+    return m_softProofProfile.name;
+}
+
+QString EditorHost::softProofProfileId() const
+{
+    return m_softProofProfile.id;
+}
+
+QString EditorHost::softProofProfileTypeName() const
+{
+    return m_softProofProfile.typeName;
+}
+
+QString EditorHost::softProofSummary() const
+{
+    if (!hasDocument())
+    {
+        return tr("No document is open, so there is no output intent to simulate.");
+    }
+    if (softProofActive())
+    {
+        return tr("Soft proof of the output intent through colour management. The profile is %1. "
+                  "This is a simulation of print, not the print's evidence: it is never recorded "
+                  "as approval.")
+            .arg(m_softProofProfile.name.isEmpty() ? m_softProofProfile.id : m_softProofProfile.name);
+    }
+    if (m_softProofStateName == QLatin1String("profile-missing"))
+    {
+        return tr("Soft proof is unavailable: this document declares no output-intent profile. "
+                  "Nothing is simulated and the canvas keeps the unproofed render.");
+    }
+    if (m_softProofStateName == QLatin1String("profile-invalid"))
+    {
+        return tr("Soft proof is unavailable: the document's output-intent profile could not be "
+                  "read. Nothing is simulated and the canvas keeps the unproofed render.");
+    }
+    return tr("Soft proof is off. The canvas shows the unproofed render.");
+}
+
+std::optional<EditorHost::SoftProofProfile> EditorHost::resolveOutputIntentProfile(bool* documentDeclaresOutputIntent) const
+{
+    if (documentDeclaresOutputIntent)
+    {
+        *documentDeclaresOutputIntent = false;
+    }
+
+    if (!hasDocument())
+    {
+        return std::nullopt;
+    }
+
+    pdf::PDFDocumentSession* session = m_session->context().tryGetSession();
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    if (!session || !document)
+    {
+        return std::nullopt;
+    }
+
+    if (documentDeclaresOutputIntent)
+    {
+        *documentDeclaresOutputIntent = !document->getCatalog()->getOutputIntents().empty();
+    }
+
+    // Core resolves the output intent: PDFCMSManager decodes the profile stream
+    // under the session's operation budget and refuses one it cannot open, so an
+    // unreadable profile is absent here rather than guessed at. A budget failure
+    // is the same kind of answer -- the profile could not be read -- and is
+    // reported as one instead of escaping a presentation call.
+    try
+    {
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document, session->getProcessingBudget());
+
+        for (const pdf::PDFColorProfileIdentifier& identifier : cmsManager.getCMYKProfiles())
+        {
+            if (!identifier.isOutputIntentProfile)
+            {
+                continue;
+            }
+
+            SoftProofProfile profile;
+            profile.id = identifier.id;
+            profile.name = identifier.name;
+            profile.typeName = QStringLiteral("output-intent");
+            return profile;
+        }
+    }
+    catch (const pdf::PDFException&)
+    {
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+bool EditorHost::setSoftProofEnabled(bool enabled)
+{
+    if (!enabled)
+    {
+        const bool wasActive = softProofActive();
+        m_softProofEnabled = false;
+        m_softProofStateName = QStringLiteral("off");
+        m_softProofProfile = SoftProofProfile();
+        if (m_session)
+        {
+            m_session->setSoftProofProfile(QString());
+        }
+        if (wasActive)
+        {
+            bumpPresentation();
+        }
+        return wasActive;
+    }
+
+    if (!hasDocument())
+    {
+        m_softProofEnabled = false;
+        m_softProofStateName = QStringLiteral("profile-missing");
+        bumpPresentation();
+        return false;
+    }
+
+    bool declaresOutputIntent = false;
+    const std::optional<SoftProofProfile> profile = resolveOutputIntentProfile(&declaresOutputIntent);
+    if (!profile)
+    {
+        m_softProofEnabled = false;
+        m_softProofStateName = declaresOutputIntent ? QStringLiteral("profile-invalid")
+                                                    : QStringLiteral("profile-missing");
+        bumpPresentation();
+        return false;
+    }
+
+    m_softProofProfile = *profile;
+    m_softProofEnabled = true;
+    m_softProofStateName = QStringLiteral("simulating");
+    m_session->setSoftProofProfile(m_softProofProfile.id);
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::toggleSoftProof()
+{
+    if (softProofActive())
+    {
+        setSoftProofEnabled(false);
+        return false;
+    }
+    return setSoftProofEnabled(true);
+}
+
+QVariantMap EditorHost::plateRow(const QString& id) const
+{
+    for (const QVariant& entry : m_plates)
+    {
+        const QVariantMap row = entry.toMap();
+        if (row.value(QStringLiteral("id")).toString() == id)
+        {
+            return row;
+        }
+    }
+    return QVariantMap();
+}
+
+QVariantList EditorHost::productionPlates() const
+{
+    return m_plates;
+}
+
+QString EditorHost::plateIsolationSummary() const
+{
+    if (m_plates.isEmpty())
+    {
+        return tr("No separations are known for this document.");
+    }
+    if (!m_isolatedPlateId.isEmpty())
+    {
+        const QVariantMap isolated = plateRow(m_isolatedPlateId);
+        return tr("Isolated plate: %1. The other plates are hidden.")
+            .arg(isolated.value(QStringLiteral("displayName")).toString());
+    }
+
+    QStringList hidden;
+    for (const QVariant& entry : m_plates)
+    {
+        const QVariantMap row = entry.toMap();
+        if (!row.value(QStringLiteral("visible")).toBool())
+        {
+            hidden.append(row.value(QStringLiteral("displayName")).toString());
+        }
+    }
+    if (hidden.isEmpty())
+    {
+        return tr("Every plate is shown.");
+    }
+    return tr("Hidden plates: %1.").arg(hidden.join(QStringLiteral(", ")));
+}
+
+bool EditorHost::setPlateVisible(const QString& plateId, bool visible)
+{
+    if (plateRow(plateId).isEmpty())
+    {
+        return false;
+    }
+
+    m_plateVisible.insert(plateId, visible);
+    if (!visible && m_isolatedPlateId == plateId)
+    {
+        m_isolatedPlateId.clear();
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::isolatePlate(const QString& plateId)
+{
+    if (plateRow(plateId).isEmpty())
+    {
+        return false;
+    }
+
+    m_isolatedPlateId = plateId;
+    for (const QVariant& entry : m_plates)
+    {
+        const QString id = entry.toMap().value(QStringLiteral("id")).toString();
+        m_plateVisible.insert(id, id == plateId);
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::showAllPlates()
+{
+    m_isolatedPlateId.clear();
+    for (const QVariant& entry : m_plates)
+    {
+        m_plateVisible.insert(entry.toMap().value(QStringLiteral("id")).toString(), true);
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::reloadProductionPlates()
+{
+    m_plates.clear();
+
+    if (!hasDocument())
+    {
+        return;
+    }
+
+    pdf::PDFDocumentSession* session = m_session->context().tryGetSession();
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    if (!session || !document)
+    {
+        return;
+    }
+
+    // The press separations Core resolves for this document: the four process
+    // plates the preview simulates plus the document's own spot inks. This is
+    // the same PDFInkMapper recipe PdfTool's ink tools and the authoritative
+    // renderer use, so the list names the inks the render path actually knows.
+    try
+    {
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document, session->getProcessingBudget());
+        pdf::PDFInkMapper inkMapper(&cmsManager, document);
+        inkMapper.createSpotColors(true);
+
+        for (const pdf::PDFInkMapper::ColorInfo& info : inkMapper.getSeparations(4, true))
+        {
+            const QString id = QString::fromLatin1(info.name);
+            QVariantMap row;
+            row.insert(QStringLiteral("id"), id);
+            row.insert(QStringLiteral("displayName"), info.textName.isEmpty() ? id : info.textName);
+            row.insert(QStringLiteral("kind"), info.isSpot ? QStringLiteral("spot") : QStringLiteral("process"));
+            row.insert(QStringLiteral("spotColorName"), info.isSpot ? id : QString());
+            row.insert(QStringLiteral("color"), info.color.name());
+            row.insert(QStringLiteral("visible"), m_plateVisible.value(id, true));
+            row.insert(QStringLiteral("isolated"), m_isolatedPlateId == id);
+            m_plates.append(row);
+        }
+    }
+    catch (const pdf::PDFException&)
+    {
+        // A document whose inks could not be enumerated says so through the
+        // empty list and its summary rather than presenting an invented one.
+        m_plates.clear();
+    }
+}
+
+bool EditorHost::requestInkCoverageAtPoint(qreal pageX, qreal pageY)
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return false;
+    }
+
+    const int pageIndex = currentPage();
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document || pageIndex < 0)
+    {
+        return false;
+    }
+
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("ink-coverage.point");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    auto outcome = std::make_shared<InkCoverageOutcome>();
+    outcome->pageIndex = pageIndex;
+    m_inkCoverageOutcomes.insert(jobId, outcome);
+
+    m_session->scheduler().submit(spec, [document, outcome, pageIndex, pageX, pageY](pdf::PDFJobContext& context)
+                                  {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+
+        const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+        if (!page)
+        {
+            outcome->reason = QStringLiteral("ink-coverage/no-such-page");
+            return;
+        }
+
+        // The readout is rendered through Core's separation-accurate path, so the
+        // coverage it reports is the coverage of the separated inks rather than
+        // of the display raster.
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document.data(), nullptr);
+        pdf::PDFInkMapper inkMapper(&cmsManager, document.data());
+        inkMapper.createSpotColors(true);
+
+        pdf::PDFFontCache fontCache(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+        pdf::PDFOptionalContentActivity optionalContent(document.data(), pdf::OCUsage::Print, nullptr);
+        pdf::PDFModifiedDocument modifiedDocument(document.data(), &optionalContent);
+        fontCache.setDocument(modifiedDocument);
+        fontCache.setCacheShrinkEnabled(nullptr, false);
+
+        pdf::PDFTransparencyRendererSettings rendererSettings;
+        rendererSettings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, true);
+        rendererSettings.renderPolicy = pdf::PDFRenderPolicy::forSeparationPreview();
+
+        // The readout raster is chosen for the point query, not for display: it
+        // only has to be fine enough that one pixel is a point sample, and the
+        // job is charged for every pixel it rasterizes.
+        const QRectF cropBox = page->getCropBox();
+        if (!cropBox.isValid() || cropBox.width() <= 0.0 || cropBox.height() <= 0.0)
+        {
+            outcome->reason = QStringLiteral("ink-coverage/page-has-no-box");
+            return;
+        }
+
+        const qreal scale = static_cast<qreal>(InkCoverageReadoutDpi) / 72.0;
+        QSize pixelSize(qRound(cropBox.width() * scale), qRound(cropBox.height() * scale));
+        pixelSize = pixelSize.boundedTo(QSize(InkCoverageMaxRasterPixels, InkCoverageMaxRasterPixels));
+        if (pixelSize.isEmpty())
+        {
+            outcome->reason = QStringLiteral("ink-coverage/raster-too-small");
+            return;
+        }
+
+        context.processingBudget().chargeRenderPixels(static_cast<std::uint64_t>(pixelSize.width()) * static_cast<std::uint64_t>(pixelSize.height()),
+                                                      QStringLiteral("ink coverage readout"));
+
+        const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));
+        const QTransform pagePointToDevice = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, pdf::PageRotation::None);
+        const QPointF devicePoint = pagePointToDevice.map(QPointF(pageX, pageY));
+        const int pixelX = qFloor(devicePoint.x());
+        const int pixelY = qFloor(devicePoint.y());
+        if (pixelX < 0 || pixelY < 0 || pixelX >= pixelSize.width() || pixelY >= pixelSize.height())
+        {
+            outcome->reason = QStringLiteral("ink-coverage/point-outside-page");
+            return;
+        }
+
+        pdf::PDFTransparencyRenderer renderer(page,
+                                              document.data(),
+                                              &fontCache,
+                                              cmsManager.getCurrentCMS().data(),
+                                              &optionalContent,
+                                              &inkMapper,
+                                              rendererSettings,
+                                              pagePointToDevice);
+        renderer.setOperationControl(context.operationControl());
+        renderer.beginPaint(pixelSize);
+        renderer.processContents();
+        const pdf::PDFFloatBitmap& separated = renderer.endPaint();
+
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+
+        const pdf::PDFConstColorBuffer channels = separated.getPixel(static_cast<size_t>(pixelX), static_cast<size_t>(pixelY));
+        const pdf::PDFPixelFormat format = separated.getPixelFormat();
+
+        QVariantList channelRows;
+        const std::vector<pdf::PDFInkMapper::ColorInfo> separations = inkMapper.getSeparations(4, true);
+        const int channelCount = format.getColorChannelCount();
+        for (int channel = 0; channel < channelCount; ++channel)
+        {
+            QVariantMap row;
+            const size_t separationIndex = static_cast<size_t>(channel);
+            if (separationIndex < separations.size())
+            {
+                row.insert(QStringLiteral("name"), QString::fromLatin1(separations[separationIndex].name));
+                row.insert(QStringLiteral("displayName"), separations[separationIndex].textName);
+                row.insert(QStringLiteral("isSpot"), separations[separationIndex].isSpot);
+            }
+            else
+            {
+                row.insert(QStringLiteral("name"), QStringLiteral("channel-%1").arg(channel));
+                row.insert(QStringLiteral("displayName"), QStringLiteral("Channel %1").arg(channel));
+                row.insert(QStringLiteral("isSpot"), false);
+            }
+            row.insert(QStringLiteral("coverage"), double(channels[static_cast<uint8_t>(channel)]));
+            channelRows.append(row);
+        }
+
+        outcome->ok = true;
+        outcome->readout.insert(QStringLiteral("available"), true);
+        outcome->readout.insert(QStringLiteral("pageIndex"), pageIndex);
+        outcome->readout.insert(QStringLiteral("pageX"), pageX);
+        outcome->readout.insert(QStringLiteral("pageY"), pageY);
+        outcome->readout.insert(QStringLiteral("totalInkCoverage"), double(separated.getPixelInkCoverage(static_cast<size_t>(pixelX), static_cast<size_t>(pixelY))));
+        outcome->readout.insert(QStringLiteral("channelCount"), channelCount);
+        outcome->readout.insert(QStringLiteral("channels"), channelRows);
+        outcome->readout.insert(QStringLiteral("rasterSize"), pixelSize);
+        outcome->readout.insert(QStringLiteral("reason"), QString()); });
+
+    return true;
+}
+
+QVariantMap EditorHost::inkCoverageReadout() const
+{
+    return m_inkCoverageReadout;
+}
+
+qreal EditorHost::currentPageCentreX() const
+{
+    return currentPageCentre().x();
+}
+
+qreal EditorHost::currentPageCentreY() const
+{
+    return currentPageCentre().y();
+}
+
+QPointF EditorHost::currentPageCentre() const
+{
+    if (!hasDocument())
+    {
+        return QPointF();
+    }
+
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    const int pageIndex = currentPage();
+    if (!document || pageIndex < 0 || pageIndex >= static_cast<int>(document->getCatalog()->getPageCount()))
+    {
+        return QPointF();
+    }
+
+    const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+    if (!page)
+    {
+        return QPointF();
+    }
+
+    const QRectF cropBox = page->getCropBox();
+    return cropBox.isValid() ? cropBox.center() : QPointF();
+}
+
+void EditorHost::finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const auto outcome = m_inkCoverageOutcomes.take(snapshot.jobId);
+    if (!outcome)
+    {
+        return;
+    }
+
+    if (!outcome->ok)
+    {
+        // A readout that could not be produced is a visible state, never a zero:
+        // "0% ink" and "not measured" are different facts.
+        QVariantMap readout;
+        readout.insert(QStringLiteral("available"), false);
+        readout.insert(QStringLiteral("pageIndex"), outcome->pageIndex);
+        readout.insert(QStringLiteral("reason"), outcome->reason.isEmpty()
+                                                     ? QStringLiteral("ink-coverage/not-measured")
+                                                     : outcome->reason);
+        readout.insert(QStringLiteral("channels"), QVariantList());
+        m_inkCoverageReadout = readout;
+    }
+    else
+    {
+        m_inkCoverageReadout = outcome->readout;
+    }
+    bumpPresentation();
 }
 
 void EditorHost::selectFinding(const QString& findingId)
@@ -3811,6 +4455,24 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionExtractImage"), [this]
          { Q_EMIT imageExtractionRequested(); });
 
+    // Display colour modes (#235 display half). Presentation-only: each filters
+    // the pixels the canvas already holds and asks for no render. Invoking the
+    // mode that is already in force returns the display to normal, which is the
+    // toggle a checkable action used to provide -- there is no sixth action for
+    // "normal", and a mode with no way back is a trap.
+    for (const pdfquick::CanvasDisplayColorMode mode : { pdfquick::CanvasDisplayColorMode::Invert,
+                                                         pdfquick::CanvasDisplayColorMode::Grayscale,
+                                                         pdfquick::CanvasDisplayColorMode::HighContrast,
+                                                         pdfquick::CanvasDisplayColorMode::Bitonal,
+                                                         pdfquick::CanvasDisplayColorMode::Custom })
+    {
+        const QString actionId = pdfquick::getCanvasDisplayColorModeActionId(mode);
+        bind(actionId, [this, mode]
+             { setDisplayColorMode(m_displayColor.mode == mode
+                                       ? QStringLiteral("normal")
+                                       : pdfquick::getCanvasDisplayColorModeName(mode)); });
+    }
+
     pdfinteraction::CommandCatalog::Handler move;
     move.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
     {
@@ -3831,7 +4493,10 @@ void EditorHost::refreshFeatureAvailability()
     QHash<pdfinteraction::CommandId, bool> availability;
     for (const QString& id : { QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
                                QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
-                               QStringLiteral("actionFind"), QStringLiteral("actionProperties"), MoveSelectionCommandId })
+                               QStringLiteral("actionFind"), QStringLiteral("actionProperties"), MoveSelectionCommandId,
+                               QStringLiteral("actionColorInvert"), QStringLiteral("actionColorGrayscale"),
+                               QStringLiteral("actionColorHighContrast"), QStringLiteral("actionColorBitonal"),
+                               QStringLiteral("actionColorCustom") })
     {
         availability.insert(id, ready);
     }
@@ -3900,6 +4565,7 @@ void EditorHost::bumpPresentation()
     {
         m_canvas->setHighContrast(highContrast());
     }
+    applyDisplayColorToCanvas();
     Q_EMIT presentationChanged();
 }
 
@@ -3918,6 +4584,7 @@ void EditorHost::onDocumentReady()
     syncDocumentLifecycle();
     m_searchRow = -1;
     refreshHitTestSources();
+    reloadProductionPlates();
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
@@ -3966,6 +4633,16 @@ void EditorHost::onDocumentGone()
     m_searchRow = -1;
     m_preview.clear();
     m_production.clear();
+    // Proofing and the plate list describe the document that just closed, so
+    // neither may outlive it: a soft proof of a document nobody has open would
+    // keep the canvas on a simulation with no revision behind it.
+    m_softProofEnabled = false;
+    m_softProofStateName = QStringLiteral("off");
+    m_softProofProfile = SoftProofProfile();
+    m_plates.clear();
+    m_plateVisible.clear();
+    m_isolatedPlateId.clear();
+    m_inkCoverageReadout = QVariantMap();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
     m_preflightCertificateStateName = QStringLiteral("not-certified");

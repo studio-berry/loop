@@ -48,6 +48,8 @@
 #include "documentviewsession.h"
 #include "quickdocumentmodel.h"
 
+#include "canvasdisplaycolor.h"
+
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistory.h"
@@ -63,6 +65,7 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <optional>
 
 namespace pdfinteraction
 {
@@ -172,6 +175,29 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString previewFidelitySummary READ previewFidelitySummary NOTIFY presentationChanged)
     Q_PROPERTY(bool previewRequiresAuthoritative READ previewRequiresAuthoritative NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap compareReview READ compareReview NOTIFY presentationChanged)
+
+    // ---- Display colour modes (#235 display half) -----------------------------------
+    // Presentation-only display modes. They filter the pixels the canvas already
+    // holds; they ask for no render, they join no surface identity, and the
+    // fidelity indicator reports them as a simulation.
+    Q_PROPERTY(QString displayColorModeName READ displayColorModeName NOTIFY presentationChanged)
+    Q_PROPERTY(bool displayColorModeActive READ displayColorModeActive NOTIFY presentationChanged)
+    Q_PROPERTY(QColor displayColorCustomForeground READ displayColorCustomForeground NOTIFY presentationChanged)
+    Q_PROPERTY(QColor displayColorCustomBackground READ displayColorCustomBackground NOTIFY presentationChanged)
+    Q_PROPERTY(int displayColorBitonalThreshold READ displayColorBitonalThreshold NOTIFY presentationChanged)
+
+    // ---- Soft proof, plates and ink coverage (#237) ---------------------------------
+    Q_PROPERTY(bool softProofActive READ softProofActive NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofStateName READ softProofStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileName READ softProofProfileName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileId READ softProofProfileId NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofProfileTypeName READ softProofProfileTypeName NOTIFY presentationChanged)
+    Q_PROPERTY(QString softProofSummary READ softProofSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList productionPlates READ productionPlates NOTIFY presentationChanged)
+    Q_PROPERTY(QString plateIsolationSummary READ plateIsolationSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap inkCoverageReadout READ inkCoverageReadout NOTIFY presentationChanged)
+    Q_PROPERTY(qreal currentPageCentreX READ currentPageCentreX NOTIFY presentationChanged)
+    Q_PROPERTY(qreal currentPageCentreY READ currentPageCentreY NOTIFY presentationChanged)
 
 public:
     enum LoopWorkspace
@@ -309,19 +335,77 @@ public:
 
     /// Render fidelity and origin of the interactive preview (#28), the same fact on the
     /// ordinary canvas and in the Production Preview. `previewFidelityStateName` is one of
-    /// `unavailable`, `stale`, `exact`, `approximate` or `authoritative`, derived by
-    /// `pdfquick::tokens::classifyPreviewFidelityState()` from the preview state and the
-    /// current page's render diagnostics; `previewFidelityOriginName` names the render path
-    /// (`none`, `fast-canvas`, `output-preview`). `previewRequiresAuthoritative` is true for
-    /// the overprint-sensitive fast render (`approximate`), whose pixels are not proof of
-    /// print-safe output. The interactive preview never certifies publication safety: only
-    /// `authoritative` names the output-preview origin, and no state reaches a pass.
+    /// `unavailable`, `stale`, `exact`, `approximate`, `authoritative`, `display-filter` or
+    /// `soft-proof`, derived by `pdfquick::tokens::classifyPreviewFidelityState()` from the
+    /// preview state, the display simulation in force and the current page's render
+    /// diagnostics; `previewFidelityOriginName` names the render path (`none`, `fast-canvas`,
+    /// `output-preview`, `display-filter`, `soft-proof`). `previewRequiresAuthoritative` is
+    /// true for the overprint-sensitive fast render (`approximate`), whose pixels are not
+    /// proof of print-safe output. The interactive preview never certifies publication
+    /// safety: only `authoritative` names the output-preview origin, and no state reaches a
+    /// pass.
     QString previewFidelityStateName() const;
     QVariantMap previewFidelityVisual() const;
     QColor previewFidelityColor() const;
     QString previewFidelityOriginName() const;
     QString previewFidelitySummary() const;
     bool previewRequiresAuthoritative() const;
+
+    // ---- Display colour modes (#235 display half) -----------------------------------
+    /// The display colour mode in force, by vocabulary name, and the settings the
+    /// custom mode reads. A display mode is a presentation filter: it changes what
+    /// the canvas shows, never what the document is, and it is reported as a
+    /// simulation by the fidelity indicator.
+    QString displayColorModeName() const;
+    bool displayColorModeActive() const;
+    QColor displayColorCustomForeground() const;
+    QColor displayColorCustomBackground() const;
+    int displayColorBitonalThreshold() const;
+    /// Parses the mode name once at this boundary. An unknown name is refused and
+    /// changes nothing.
+    Q_INVOKABLE bool setDisplayColorMode(const QString& modeName);
+    Q_INVOKABLE bool setDisplayColorCustomColors(const QColor& foreground, const QColor& background);
+    Q_INVOKABLE bool setDisplayColorBitonalThreshold(int threshold);
+
+    // ---- Soft proof (#237) -----------------------------------------------------------
+    /// True while the canvas is showing the proofing simulation.
+    bool softProofActive() const;
+    /// `off`, `simulating`, `profile-missing` or `profile-invalid`. A document
+    /// whose output-intent profile is absent or unreadable is a visible state: the
+    /// proof is refused with the reason, never silently rendered as sRGB.
+    QString softProofStateName() const;
+    QString softProofProfileName() const;
+    QString softProofProfileId() const;
+    QString softProofProfileTypeName() const;
+    QString softProofSummary() const;
+    /// Enables or disables the proofing simulation. Enabling resolves the
+    /// document's output-intent profile through Core's colour management; a
+    /// document without a usable one returns false and reports `profile-missing`
+    /// or `profile-invalid`.
+    Q_INVOKABLE bool setSoftProofEnabled(bool enabled);
+    Q_INVOKABLE bool toggleSoftProof();
+
+    // ---- Plates and ink coverage (#237) ----------------------------------------------
+    /// The separations Core resolves for the open document: the process plates and
+    /// the document's spot plates, each with its visibility and whether it is the
+    /// isolated plate. Presentation state: hiding or isolating a plate changes what
+    /// the preview shows, never the document.
+    QVariantList productionPlates() const;
+    QString plateIsolationSummary() const;
+    Q_INVOKABLE bool setPlateVisible(const QString& plateId, bool visible);
+    /// Shows exactly one plate and hides the others. An unknown plate id is refused.
+    Q_INVOKABLE bool isolatePlate(const QString& plateId);
+    Q_INVOKABLE bool showAllPlates();
+    /// Renders the current page through Core's separation-accurate path and reports
+    /// the ink coverage at one page-space point. Asynchronous: the readout lands in
+    /// inkCoverageReadout() when the job finishes.
+    Q_INVOKABLE bool requestInkCoverageAtPoint(qreal pageX, qreal pageY);
+    QVariantMap inkCoverageReadout() const;
+    /// The centre of the current page's crop box in page space (PDF user space, the
+    /// same space requestInkCoverageAtPoint takes). The host computes it so a
+    /// surface can offer a point readout without deriving document geometry.
+    qreal currentPageCentreX() const;
+    qreal currentPageCentreY() const;
 
     /// Read-only composition of the Core comparison facts for the Compare workspace:
     /// the before/after artifact identities, the technical finding delta, the attributes
@@ -566,6 +650,29 @@ private:
     /// The visible canvas region as one image, or a null image when no admitted
     /// tile intersects it or the snapshot is stale.
     QImage composeVisibleCanvasImage() const;
+    // ---- Display colour modes, soft proof and plates (#235 display half, #237) -------
+    void applyDisplayColorToCanvas();
+    /// The simulation the fidelity indicator must name, or empty when the display
+    /// shows the render path's own pixels: `soft-proof` or `display-filter`.
+    QString displaySimulationName() const;
+    struct SoftProofProfile
+    {
+        QString id;
+        QString name;
+        QString typeName;
+    };
+    /// Resolves the document's output-intent profile through Core's colour
+    /// management. `documentDeclaresOutputIntent` distinguishes "the document
+    /// names no output intent" from "the one it names could not be read", which
+    /// are two different visible states. Nothing is resolved without a document.
+    std::optional<SoftProofProfile> resolveOutputIntentProfile(bool* documentDeclaresOutputIntent) const;
+    /// Caches the separations Core resolves for the open document, keyed by
+    /// colorant name, keeping the operator's visibility state for plates that
+    /// are still present.
+    void reloadProductionPlates();
+    QVariantMap plateRow(const QString& id) const;
+    QPointF currentPageCentre() const;
+    void finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot);
 
     /// Operator review of the planned correction (#586). `fixPlanIsCurrent()` is the only
     /// authority on whether the reviewed plan still describes the open revision.
@@ -610,6 +717,35 @@ private:
         QString retentionError;
     };
     QHash<QString, std::shared_ptr<RollbackJobOutcome>> m_rollbackOutcomes;
+
+    /// Display colour mode in force (issue #235 display half). Presentation state:
+    /// pushed to the canvas item, never to a render request.
+    pdfquick::CanvasDisplayColorSettings m_displayColor;
+
+    /// Soft proof state (issue #237). The profile is the document's output-intent
+    /// profile Core resolved; `m_softProofStateName` is `off`, `simulating`,
+    /// `profile-missing` or `profile-invalid`.
+    bool m_softProofEnabled = false;
+    QString m_softProofStateName = QStringLiteral("off");
+    SoftProofProfile m_softProofProfile;
+
+    /// Separations Core resolved for the open document, and the operator's own
+    /// presentation state over them. Visibility is keyed by colorant name so a
+    /// plate that is still present keeps its state across a reload.
+    QVariantList m_plates;
+    QHash<QString, bool> m_plateVisible;
+    QString m_isolatedPlateId;
+
+    /// The last ink-coverage readout, and the worker outcomes still in flight.
+    QVariantMap m_inkCoverageReadout;
+    struct InkCoverageOutcome
+    {
+        bool ok = false;
+        QString reason;
+        int pageIndex = -1;
+        QVariantMap readout;
+    };
+    QHash<QString, std::shared_ptr<InkCoverageOutcome>> m_inkCoverageOutcomes;
     struct PreflightProfileChoice
     {
         QString id;

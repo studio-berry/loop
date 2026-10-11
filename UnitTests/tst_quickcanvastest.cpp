@@ -56,6 +56,7 @@
 
 #include "canvaspalette.h"
 #include "canvaspresentmetrics.h"
+#include "canvasdisplaycolor.h"
 #include "canvastraceoverlay.h"
 #include "loopcanvasitem.h"
 
@@ -297,6 +298,10 @@ private Q_SLOTS:
     void zoomReissuesSurfaceDemand();
     void firstViewIsUnavailableUntilAPageIsOnScreen();
 
+    void displayColorModesFilterTheCanvasWithoutARender();
+    void displayColorModeNamesRoundTripAndUnknownNamesAreRefused();
+    void displayColorModesAreDistinctPixelTransforms();
+
 private:
     void bindItem();
     void bindItemWithSurfaces();
@@ -317,7 +322,12 @@ private:
     /// software and native smoke runs are for -- but it is exactly what these
     /// assertions need, because they are about node and texture lifetime rather
     /// than about which backend drew them.
-    void showItemInWindow();
+    ///
+    /// `tileFill`, when valid, is what the fake renderer paints the page with. It
+    /// is applied before the window is shown, because publishing the item's
+    /// geometry is what makes the coordinator request its first surfaces: a fill
+    /// set after the expose would arrive after the tile was already rendered.
+    void showItemInWindow(const QColor& tileFill = QColor());
 
     /// Submits surface demand and drains the coordinator relay until at least one
     /// surface is admitted. The relay is always queued, even for inline work.
@@ -420,9 +430,14 @@ void QuickCanvasTest::buildCoordinator()
     m_surfaces->setDocumentKey(QStringLiteral("doc-1"));
 }
 
-void QuickCanvasTest::showItemInWindow()
+void QuickCanvasTest::showItemInWindow(const QColor& tileFill)
 {
     buildCoordinator();
+
+    if (tileFill.isValid())
+    {
+        m_renderer->fill = tileFill;
+    }
 
     m_window = std::make_unique<TestQuickWindow>();
     m_window->resize(400, 400);
@@ -1305,6 +1320,162 @@ void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
     QVERIFY(after.value(QStringLiteral("ms")).toDouble(-1.0) >= 0.0);
 }
 
-QTEST_MAIN(QuickCanvasTest)
+void QuickCanvasTest::displayColorModesFilterTheCanvasWithoutARender()
+{
+    const QColor tileColor(30, 90, 210);
+    showItemInWindow(tileColor);
+    requestSurfacesAndDrain();
 
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+    const QPoint sample = placed.center();
+
+    const QImage normal = renderFrame();
+    QVERIFY(!normal.isNull());
+    QCOMPARE(normal.pixelColor(sample), tileColor);
+
+    // The mode is set on the item the way the host sets it: by name, parsed at the
+    // boundary. The pixels change; nothing is rendered, and nothing is asked of the
+    // coordinator -- a display colour mode is a presentation filter (issue #235
+    // display half), and the failure case it must not have is a page render.
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("invert")));
+    const QImage inverted = renderFrame();
+    QCOMPARE(inverted.pixelColor(sample), QColor(255 - tileColor.red(), 255 - tileColor.green(), 255 - tileColor.blue()));
+
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
+
+    // Leaving the mode restores the render path's own pixels, from the same
+    // retained surface: the filter never replaced them.
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("normal")));
+    const QImage restored = renderFrame();
+    QCOMPARE(restored.pixelColor(sample), tileColor);
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+}
+
+void QuickCanvasTest::displayColorModeNamesRoundTripAndUnknownNamesAreRefused()
+{
+    const QList<pdfquick::CanvasDisplayColorMode> modes = {
+        pdfquick::CanvasDisplayColorMode::Normal,
+        pdfquick::CanvasDisplayColorMode::Invert,
+        pdfquick::CanvasDisplayColorMode::Grayscale,
+        pdfquick::CanvasDisplayColorMode::HighContrast,
+        pdfquick::CanvasDisplayColorMode::Bitonal,
+        pdfquick::CanvasDisplayColorMode::Custom,
+    };
+
+    QSet<QString> names;
+    for (const pdfquick::CanvasDisplayColorMode mode : modes)
+    {
+        const QString name = pdfquick::getCanvasDisplayColorModeName(mode);
+        names.insert(name);
+        const std::optional<pdfquick::CanvasDisplayColorMode> parsed =
+            pdfquick::canvasDisplayColorModeFromName(name);
+        QVERIFY(parsed.has_value());
+        QCOMPARE(*parsed, mode);
+    }
+    QCOMPARE(names.size(), modes.size());
+
+    // Every mode but Normal names the shell action that selects it.
+    for (const pdfquick::CanvasDisplayColorMode mode : modes)
+    {
+        const QString actionId = pdfquick::getCanvasDisplayColorModeActionId(mode);
+        if (mode == pdfquick::CanvasDisplayColorMode::Normal)
+        {
+            QVERIFY(actionId.isEmpty());
+        }
+        else
+        {
+            QVERIFY(actionId.startsWith(QStringLiteral("actionColor")));
+        }
+    }
+
+    // A name outside the vocabulary is refused and changes nothing.
+    QVERIFY(!m_item->setDisplayColorMode(QStringLiteral("sepia")));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("normal"));
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("GRAYSCALE")));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("grayscale"));
+    QVERIFY(!m_item->setDisplayColorMode(QString()));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("grayscale"));
+}
+
+void QuickCanvasTest::displayColorModesAreDistinctPixelTransforms()
+{
+    QImage source(8, 8, QImage::Format_ARGB32_Premultiplied);
+    source.fill(QColor(30, 90, 210));
+
+    pdfquick::CanvasDisplayColorSettings settings;
+
+    // Normal is the identity: the transform is a filter, not a re-render.
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(source, settings), source);
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Invert;
+    const QImage inverted = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QCOMPARE(inverted.pixelColor(4, 4), QColor(225, 165, 45));
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Grayscale;
+    const QImage grayscale = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    const QColor gray = grayscale.pixelColor(4, 4);
+    QCOMPARE(gray.red(), gray.green());
+    QCOMPARE(gray.green(), gray.blue());
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Bitonal;
+    settings.bitonalThreshold = 128;
+    const QImage bitonal = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QSet<QRgb> bitonalColors;
+    for (int y = 0; y < bitonal.height(); ++y)
+    {
+        for (int x = 0; x < bitonal.width(); ++x)
+        {
+            bitonalColors.insert(bitonal.pixel(x, y) | 0xff000000u);
+        }
+    }
+    QVERIFY(bitonalColors.size() <= 2);
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::HighContrast;
+    const QImage highContrast = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QVERIFY(highContrast.pixelColor(4, 4) != source.pixelColor(4, 4));
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Custom;
+    settings.customForeground = QColor(10, 20, 30);
+    settings.customBackground = QColor(200, 210, 220);
+    const QImage custom = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    const QColor customPixel = custom.pixelColor(4, 4);
+    QVERIFY(customPixel != source.pixelColor(4, 4));
+
+    // Custom mode maps the source onto the configured foreground/background scale
+    // rather than replacing every pixel with one of the two: a mid-tone stays
+    // between them, and the two extremes are exactly the configured colours.
+    const auto between = [](int value, int first, int second)
+    { return value >= qMin(first, second) && value <= qMax(first, second); };
+    QVERIFY(between(customPixel.red(), settings.customForeground.red(), settings.customBackground.red()));
+    QVERIFY(between(customPixel.green(), settings.customForeground.green(), settings.customBackground.green()));
+    QVERIFY(between(customPixel.blue(), settings.customForeground.blue(), settings.customBackground.blue()));
+
+    QImage blackSource(2, 2, QImage::Format_ARGB32_Premultiplied);
+    blackSource.fill(Qt::black);
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(blackSource, settings).pixelColor(0, 0), settings.customForeground);
+
+    QImage whiteSource(2, 2, QImage::Format_ARGB32_Premultiplied);
+    whiteSource.fill(Qt::white);
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(whiteSource, settings).pixelColor(0, 0), settings.customBackground);
+
+    // Every active mode produces its own pixels for the same source, so no two
+    // modes can be mistaken for one another by their output.
+    const QList<QImage> outputs = { inverted, grayscale, bitonal, highContrast, custom };
+    for (int first = 0; first < outputs.size(); ++first)
+    {
+        for (int second = first + 1; second < outputs.size(); ++second)
+        {
+            QVERIFY(outputs.at(first) != outputs.at(second));
+        }
+    }
+}
+
+QTEST_MAIN(QuickCanvasTest)
 #include "tst_quickcanvastest.moc"

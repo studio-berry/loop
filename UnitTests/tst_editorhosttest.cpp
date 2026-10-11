@@ -307,6 +307,12 @@ private slots:
     void fixRollbackReturnsToARecordedRevision();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
     void refusedRenderCannotBecomeAuthoritativeEvidence();
+    void displayColorModesChangePresentationAndAreNeverProductionEvidence();
+    void displayColorModeNamesAreParsedOnceAtTheBoundary();
+    void softProofSimulatesThroughCoreColourManagementAndNeverBecomesEvidence();
+    void softProofWithoutAUsableOutputIntentIsAVisibleState();
+    void platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument();
+    void inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable();
 };
 
 void EditorHostTest::encryptedOpen_data()
@@ -2392,6 +2398,374 @@ void EditorHostTest::executeApprovedActionListPlanRefusesAnUnreviewedPlan()
     QVERIFY(host.executeApprovedActionListPlan());
 }
 
-QTEST_GUILESS_MAIN(EditorHostTest)
+/// Issue #235, display half. A display colour mode changes what the canvas shows and
+/// nothing else: it is marked a simulation by the fidelity indicator, and neither the
+/// Compare workspace nor the production identity can see it. The failure case is a
+/// display mode mistaken for a production render.
+void EditorHostTest::displayColorModesChangePresentationAndAreNeverProductionEvidence()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
 
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("display-modes.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Every display mode is a bound command with a document open.
+    const QStringList actions = { QStringLiteral("actionColorInvert"), QStringLiteral("actionColorGrayscale"),
+                                  QStringLiteral("actionColorHighContrast"), QStringLiteral("actionColorBitonal"),
+                                  QStringLiteral("actionColorCustom") };
+    for (const QString& action : actions)
+    {
+        QVERIFY2(host.isCommandEnabled(action), qPrintable(action));
+    }
+
+    const QVariantMap compareBefore = host.compareReview();
+    const QVariantMap identityBefore = host.previewIdentity();
+    const QVariantMap signOffBefore = host.fixSignOff();
+    const QString revisionBefore = host.sessionForTest()->facade().currentRevision().toString();
+
+    // The menu entry works, and what it produces is a simulation -- not the render
+    // path's fidelity, and never a pass.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorInvert")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("invert"));
+    QVERIFY(host.displayColorModeActive());
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("display-filter"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("display-filter"));
+    QVERIFY(host.previewFidelitySummary().contains(QStringLiteral("never recorded as approval evidence")));
+
+    const QVariantMap visual = host.previewFidelityVisual();
+    QCOMPARE(visual.value(QStringLiteral("kind")).toString(), QStringLiteral("Warning"));
+    QVERIFY(visual.value(QStringLiteral("kind")).toString() != QStringLiteral("Passed"));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+    QVERIFY(!visual.value(QStringLiteral("accessibleName")).toString().trimmed().isEmpty());
+
+    // The failure case: nothing in Compare or sign-off may mistake it for a production
+    // render. The comparison, the preview identity and the sign-off are the same facts
+    // they were before the mode existed.
+    QCOMPARE(host.compareReview(), compareBefore);
+    QCOMPARE(host.previewIdentity(), identityBefore);
+    QCOMPARE(host.fixSignOff(), signOffBefore);
+    QVERIFY(!host.fixPreview().value(QStringLiteral("available")).toBool());
+    QCOMPARE(host.sessionForTest()->facade().currentRevision().toString(), revisionBefore);
+
+    // Invoking the mode already in force returns to normal: there is no sixth action,
+    // and a display mode with no way back is a trap.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorInvert")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+    QVERIFY(!host.displayColorModeActive());
+    QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+    // Each of the remaining modes is reachable and distinct.
+    for (const QString& action : { QStringLiteral("actionColorGrayscale"), QStringLiteral("actionColorHighContrast"),
+                                   QStringLiteral("actionColorBitonal"), QStringLiteral("actionColorCustom") })
+    {
+        QVERIFY(host.invokeCommand(action) != 0);
+        QVERIFY(host.displayColorModeActive());
+        QCOMPARE(host.previewFidelityStateName(), QStringLiteral("display-filter"));
+    }
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("custom"));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionColorCustom")) != 0);
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+}
+
+void EditorHostTest::displayColorModeNamesAreParsedOnceAtTheBoundary()
+{
+    EditorHost host;
+
+    QVERIFY(!host.setDisplayColorMode(QStringLiteral("sepia")));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+    QVERIFY(!host.setDisplayColorMode(QString()));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("normal"));
+
+    QVERIFY(host.setDisplayColorMode(QStringLiteral("Grayscale")));
+    QCOMPARE(host.displayColorModeName(), QStringLiteral("grayscale"));
+    QVERIFY(host.setDisplayColorMode(QStringLiteral("normal")));
+
+    // The custom mode's settings are validated at the boundary too: an invalid colour
+    // or an out-of-range threshold is refused rather than coerced.
+    QVERIFY(host.setDisplayColorCustomColors(QColor(10, 20, 30), QColor(200, 210, 220)));
+    QCOMPARE(host.displayColorCustomForeground(), QColor(10, 20, 30));
+    QCOMPARE(host.displayColorCustomBackground(), QColor(200, 210, 220));
+    QVERIFY(!host.setDisplayColorCustomColors(QColor(), QColor(200, 210, 220)));
+    QVERIFY(!host.setDisplayColorCustomColors(QColor(10, 20, 30), QColor()));
+
+    QVERIFY(host.setDisplayColorBitonalThreshold(200));
+    QCOMPARE(host.displayColorBitonalThreshold(), 200);
+    QVERIFY(!host.setDisplayColorBitonalThreshold(0));
+    QVERIFY(!host.setDisplayColorBitonalThreshold(255));
+    QCOMPARE(host.displayColorBitonalThreshold(), 200);
+}
+
+/// Issue #237. The soft proof renders through Core's colour management under proofing
+/// settings, shows the profile identity, and is marked a simulation. It is never
+/// recorded as approval evidence, and it never replaces the document session's own CMS.
+void EditorHostTest::softProofSimulatesThroughCoreColourManagementAndNeverBecomesEvidence()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-cmyk.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    // A page's fidelity is only reported once the shell has a layout and the
+    // page's surface has been requested.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 30000);
+
+    QCOMPARE(host.softProofStateName(), QStringLiteral("off"));
+    QVERIFY(!host.softProofActive());
+    QVERIFY(!host.softProofSummary().trimmed().isEmpty());
+
+    QVERIFY(host.setSoftProofEnabled(true));
+    QCOMPARE(host.softProofStateName(), QStringLiteral("simulating"));
+    QVERIFY(host.softProofActive());
+    QVERIFY(!host.softProofProfileId().isEmpty());
+    QCOMPARE(host.softProofProfileTypeName(), QStringLiteral("output-intent"));
+    // The identity shown is the profile's: its Core-issued identifier always, and
+    // its name when the profile carries one.
+    QVERIFY(host.softProofSummary().contains(host.softProofProfileId()));
+    QVERIFY(host.softProofSummary().contains(host.softProofProfileName().isEmpty()
+                                                 ? host.softProofProfileId()
+                                                 : host.softProofProfileName()));
+
+    // The proof is its own render identity: the surfaces re-render as proofs, through
+    // Core's colour management, and the diagnostics carry the simulation's reason.
+    // Until that render is admitted the indicator honestly says `unavailable`, so the
+    // simulation state is asserted once the proof is on screen.
+    auto* surfaces = host.sessionForTest()->surfaces();
+    QVERIFY(surfaces->isSoftProofing());
+    QCOMPARE(surfaces->softProofProfile(), host.softProofProfileId());
+    QTRY_VERIFY_WITH_TIMEOUT(surfaces->diagnosticsForPage(0).has_value() && surfaces->diagnosticsForPage(0)->reasons.contains(QStringLiteral("soft-proof/simulation")),
+                             30000);
+    QVERIFY(!host.pageFidelityIsExact());
+
+    // The indicator says simulation, and the origin names the proofing path rather
+    // than the fast canvas or the output-preview render.
+    QCOMPARE(host.previewFidelityStateName(), QStringLiteral("soft-proof"));
+    QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("soft-proof"));
+    const QVariantMap visual = host.previewFidelityVisual();
+    QVERIFY(visual.value(QStringLiteral("kind")).toString() != QStringLiteral("Passed"));
+    QVERIFY(visual.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+
+    // Never approval evidence: no correction preview, no sign-off, no comparison.
+    QVERIFY(!host.fixPreview().value(QStringLiteral("available")).toBool());
+    QVERIFY(host.fixSignOff().value(QStringLiteral("planDigest")).toString().isEmpty());
+
+    // Turning it off restores the unproofed identity.
+    QVERIFY(!host.toggleSoftProof());
+    QCOMPARE(host.softProofStateName(), QStringLiteral("off"));
+    QVERIFY(!host.softProofActive());
+    QVERIFY(!surfaces->isSoftProofing());
+    QVERIFY(host.softProofProfileId().isEmpty());
+    QVERIFY(!host.previewFidelityStateName().contains(QStringLiteral("soft-proof")));
+}
+
+void EditorHostTest::softProofWithoutAUsableOutputIntentIsAVisibleState()
+{
+    // A document that names no output intent at all.
+    {
+        const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-missing.pdf");
+        QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(path));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+        host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+        QTRY_COMPARE_WITH_TIMEOUT(host.previewFidelityStateName(), QStringLiteral("exact"), 30000);
+
+        QVERIFY(!host.setSoftProofEnabled(true));
+        QCOMPARE(host.softProofStateName(), QStringLiteral("profile-missing"));
+        QVERIFY(!host.softProofActive());
+        QVERIFY(host.softProofProfileId().isEmpty());
+        QVERIFY(host.softProofSummary().contains(QStringLiteral("no output-intent profile")));
+
+        // Never a silent sRGB fallback: the surfaces keep the unproofed identity, and
+        // the indicator still describes the render path, not a simulation.
+        QVERIFY(!host.sessionForTest()->surfaces()->isSoftProofing());
+        QVERIFY(host.previewFidelityStateName() != QStringLiteral("soft-proof"));
+        QCOMPARE(host.previewFidelityOriginName(), QStringLiteral("fast-canvas"));
+    }
+
+    // A document that names one Core cannot read.
+    {
+        const QString path = preflightFixturesDir() + QStringLiteral("/output-intent-profile-invalid.pdf");
+        QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+        EditorHost host;
+        host.openFileUrl(QUrl::fromLocalFile(path));
+        QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+        QVERIFY(!host.setSoftProofEnabled(true));
+        QCOMPARE(host.softProofStateName(), QStringLiteral("profile-invalid"));
+        QVERIFY(!host.softProofActive());
+        QVERIFY(host.softProofSummary().contains(QStringLiteral("could not be read")));
+        QVERIFY(!host.sessionForTest()->surfaces()->isSoftProofing());
+    }
+}
+
+/// Issue #237. The plates are Core's own separations for the document, and the
+/// operator's visibility and isolation over them is presentation state: the document
+/// revision does not move.
+void EditorHostTest::platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/color-inventory-spot.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    const QVariantList plates = host.productionPlates();
+    QVERIFY(plates.size() >= 5);
+
+    QSet<QString> ids;
+    bool sawProcess = false;
+    bool sawSpot = false;
+    for (const QVariant& entry : plates)
+    {
+        const QVariantMap row = entry.toMap();
+        const QString id = row.value(QStringLiteral("id")).toString();
+        QVERIFY(!id.isEmpty());
+        QVERIFY(!row.value(QStringLiteral("displayName")).toString().isEmpty());
+        QVERIFY(row.value(QStringLiteral("visible")).toBool());
+        ids.insert(id);
+        if (row.value(QStringLiteral("kind")).toString() == QStringLiteral("spot"))
+        {
+            sawSpot = true;
+            QCOMPARE(row.value(QStringLiteral("spotColorName")).toString(), id);
+        }
+        else
+        {
+            sawProcess = true;
+        }
+    }
+    QVERIFY(sawProcess);
+    QVERIFY(sawSpot);
+    QVERIFY(ids.contains(QStringLiteral("Cyan")));
+    QVERIFY(ids.contains(QStringLiteral("Black")));
+    QVERIFY(ids.contains(QStringLiteral("PANTONE 185 C")));
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Every plate is shown")));
+
+    const QString revisionBefore = host.sessionForTest()->facade().currentRevision().toString();
+    const QString spotId = QStringLiteral("PANTONE 185 C");
+
+    const auto rowFor = [&host](const QString& id)
+    {
+        for (const QVariant& entry : host.productionPlates())
+        {
+            const QVariantMap row = entry.toMap();
+            if (row.value(QStringLiteral("id")).toString() == id)
+            {
+                return row;
+            }
+        }
+        return QVariantMap();
+    };
+
+    // Hiding a plate is presentation state, and it is visible in the summary.
+    QVERIFY(host.setPlateVisible(spotId, false));
+    QVERIFY(!rowFor(spotId).value(QStringLiteral("visible")).toBool());
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Hidden plates")));
+    QVERIFY(host.plateIsolationSummary().contains(spotId));
+
+    // Isolating one shows exactly one.
+    QVERIFY(host.isolatePlate(QStringLiteral("Cyan")));
+    for (const QVariant& entry : host.productionPlates())
+    {
+        const QVariantMap row = entry.toMap();
+        QCOMPARE(row.value(QStringLiteral("visible")).toBool(),
+                 row.value(QStringLiteral("id")).toString() == QStringLiteral("Cyan"));
+        QCOMPARE(row.value(QStringLiteral("isolated")).toBool(),
+                 row.value(QStringLiteral("id")).toString() == QStringLiteral("Cyan"));
+    }
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Isolated plate: Cyan")));
+
+    QVERIFY(host.showAllPlates());
+    QVERIFY(host.plateIsolationSummary().contains(QStringLiteral("Every plate is shown")));
+
+    // An unknown plate id is refused rather than inventing a plate.
+    QVERIFY(!host.setPlateVisible(QStringLiteral("No Such Ink"), false));
+    QVERIFY(!host.isolatePlate(QStringLiteral("No Such Ink")));
+
+    // Presentation state: the document revision never moved.
+    QCOMPARE(host.sessionForTest()->facade().currentRevision().toString(), revisionBefore);
+}
+
+/// Issue #237. The readout is measured through Core's separation-accurate path, and a
+/// readout that could not be produced is a visible reason -- never a zero, which would
+/// read as "no ink here".
+void EditorHostTest::inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/color-cmyk.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    // A point on the current page is only meaningful once the shell has a layout.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 30000);
+
+    // Nothing has been measured yet.
+    QVERIFY(!host.inkCoverageReadout().value(QStringLiteral("available")).toBool());
+
+    // Inside the page: a real measurement with per-plate channels. The channel count
+    // is whatever the page's separated device space has -- three for this fixture --
+    // so the assertion is on the shape of the answer, not on a number: named plates,
+    // coverage in [0, 1] each, and a total that is their sum.
+    QVERIFY(host.requestInkCoverageAtPoint(150.0, 150.0));
+    QTRY_VERIFY_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("available")).toBool(), 30000);
+    const QVariantMap readout = host.inkCoverageReadout();
+    QCOMPARE(readout.value(QStringLiteral("pageIndex")).toInt(), 0);
+    const int channelCount = readout.value(QStringLiteral("channelCount")).toInt();
+    QVERIFY2(channelCount >= 1,
+             qPrintable(QStringLiteral("channelCount=%1").arg(channelCount)));
+    const QVariantList channels = readout.value(QStringLiteral("channels")).toList();
+    QCOMPARE(channels.size(), channelCount);
+
+    double channelSum = 0.0;
+    for (const QVariant& entry : channels)
+    {
+        const QVariantMap channel = entry.toMap();
+        QVERIFY(!channel.value(QStringLiteral("name")).toString().isEmpty());
+        QVERIFY(!channel.value(QStringLiteral("displayName")).toString().isEmpty());
+        const double coverage = channel.value(QStringLiteral("coverage")).toDouble();
+        QVERIFY(coverage >= 0.0 && coverage <= 1.0);
+        channelSum += coverage;
+    }
+
+    const double total = readout.value(QStringLiteral("totalInkCoverage")).toDouble();
+    QVERIFY(qAbs(total - channelSum) < 1e-6);
+    // The sampled point is inside the fixture's ink, so the readout is a measurement
+    // rather than a plausible zero.
+    QVERIFY(total > 0.0);
+    QVERIFY(readout.value(QStringLiteral("reason")).toString().isEmpty());
+
+    // Outside the page: a typed reason and available=false, not a zero readout.
+    QVERIFY(host.requestInkCoverageAtPoint(-100.0, -100.0));
+    QTRY_COMPARE_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("reason")).toString(),
+                              QStringLiteral("ink-coverage/point-outside-page"), 30000);
+    QVERIFY(!host.inkCoverageReadout().value(QStringLiteral("available")).toBool());
+    QVERIFY(!host.inkCoverageReadout().contains(QStringLiteral("totalInkCoverage")));
+
+    // No document: the request is refused outright.
+    EditorHost empty;
+    QVERIFY(!empty.requestInkCoverageAtPoint(10.0, 10.0));
+}
+
+QTEST_GUILESS_MAIN(EditorHostTest)
 #include "tst_editorhosttest.moc"

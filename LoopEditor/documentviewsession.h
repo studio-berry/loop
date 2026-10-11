@@ -81,6 +81,13 @@ public:
     void clearDocumentView();
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
+    /// The proofing profile identity in force for the interactive canvas (issue
+    /// #237). Empty disables proofing. The surfaces re-render as proofs through
+    /// Core's colour management; the identity joins the surface key, so a proof
+    /// can never be served from, or mistaken for, the fast or authoritative
+    /// render of the same page.
+    void setSoftProofProfile(const QString& proofProfileId);
+
     quint64 passwordRequestId() const;
     bool answerPassword(quint64 requestId, QString password, bool accepted);
 

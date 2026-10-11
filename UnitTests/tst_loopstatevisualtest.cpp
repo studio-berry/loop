@@ -241,6 +241,7 @@ private slots:
 
     void previewFidelityClassification_data();
     void previewFidelityClassification();
+    void previewFidelitySimulationOutranksTheRender();
     void previewFidelityOrigin_data();
     void previewFidelityOrigin();
     void previewFidelityStatesStayDistinctWithoutColour();
@@ -838,6 +839,32 @@ void LoopStateVisualTest::previewFidelityClassification()
     QCOMPARE(classifyPreviewFidelityState(hasDocument, stale, authoritative, exact), expectedName);
 }
 
+/// A display simulation is what the operator is looking at, so it outranks the
+/// render path underneath it (issue #235 display half, issue #237). Only a stale
+/// preview, which is not evidence for this revision at all, outranks it in turn.
+void LoopStateVisualTest::previewFidelitySimulationOutranksTheRender()
+{
+    QCOMPARE(classifyPreviewFidelityState(true, false, true, true, QStringLiteral("soft-proof")),
+             QStringLiteral("soft-proof"));
+    QCOMPARE(classifyPreviewFidelityState(true, false, true, true, QStringLiteral("display-filter")),
+             QStringLiteral("display-filter"));
+
+    // Case is the host's, but the classifier normalizes so the state name it returns
+    // is always the one the visual resolver and the origin table know.
+    QCOMPARE(classifyPreviewFidelityState(true, false, false, true, QStringLiteral(" Soft-Proof ")),
+             QStringLiteral("soft-proof"));
+
+    // A preview that does not describe the open revision is not evidence first.
+    QCOMPARE(classifyPreviewFidelityState(true, true, true, true, QStringLiteral("soft-proof")),
+             QStringLiteral("stale"));
+    QCOMPARE(classifyPreviewFidelityState(false, false, true, true, QStringLiteral("soft-proof")),
+             QStringLiteral("unavailable"));
+
+    // No simulation in force: the render path's own fidelity is the answer.
+    QCOMPARE(classifyPreviewFidelityState(true, false, false, true, QString()),
+             QStringLiteral("exact"));
+}
+
 void LoopStateVisualTest::previewFidelityOrigin_data()
 {
     QTest::addColumn<QString>("stateName");
@@ -849,6 +876,8 @@ void LoopStateVisualTest::previewFidelityOrigin_data()
     QTest::newRow("stale") << QStringLiteral("stale") << QStringLiteral("none");
     QTest::newRow("unavailable") << QStringLiteral("unavailable") << QStringLiteral("none");
     QTest::newRow("unrecognised") << QStringLiteral("garbage") << QStringLiteral("none");
+    QTest::newRow("display filter") << QStringLiteral("display-filter") << QStringLiteral("display-filter");
+    QTest::newRow("soft proof") << QStringLiteral("soft-proof") << QStringLiteral("soft-proof");
 }
 
 void LoopStateVisualTest::previewFidelityOrigin()
@@ -866,7 +895,8 @@ void LoopStateVisualTest::previewFidelityStatesStayDistinctWithoutColour()
 {
     const QStringList states = { QStringLiteral("unavailable"), QStringLiteral("stale"),
                                  QStringLiteral("exact"), QStringLiteral("approximate"),
-                                 QStringLiteral("authoritative") };
+                                 QStringLiteral("authoritative"), QStringLiteral("display-filter"),
+                                 QStringLiteral("soft-proof") };
 
     QSet<int> icons;
     QSet<QString> names;
@@ -888,7 +918,8 @@ void LoopStateVisualTest::previewFidelityNeverClaimsAPass_data()
 
     for (const QString& state : { QStringLiteral("unavailable"), QStringLiteral("stale"),
                                   QStringLiteral("exact"), QStringLiteral("approximate"),
-                                  QStringLiteral("authoritative"), QString() })
+                                  QStringLiteral("authoritative"), QStringLiteral("display-filter"),
+                                  QStringLiteral("soft-proof"), QString() })
     {
         QTest::newRow(qPrintable(state.isEmpty() ? QStringLiteral("empty") : state)) << state;
     }

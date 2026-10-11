@@ -267,12 +267,14 @@ LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName)
              QStringLiteral("No correction planned") };
 }
 
-QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact)
+QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact, const QString& simulation)
 {
-    // The host owns these four facts; this orders them and names the result. An open
+    // The host owns these facts; this orders them and names the result. An open
     // document whose preview belongs to an earlier revision is stale before it is
-    // anything else, and an authoritative render is authoritative before it is judged
-    // on its (ascertained later) diagnostics.
+    // anything else; a simulation is a simulation before the render underneath it is
+    // judged, because the display transform is what the operator is looking at; and an
+    // authoritative render is authoritative before it is judged on its (ascertained
+    // later) diagnostics.
     if (!hasDocument)
     {
         return QStringLiteral("unavailable");
@@ -280,6 +282,10 @@ QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authorit
     if (stale)
     {
         return QStringLiteral("stale");
+    }
+    if (!simulation.trimmed().isEmpty())
+    {
+        return simulation.trimmed().toLower();
     }
     if (authoritative)
     {
@@ -304,6 +310,12 @@ QString previewFidelityOriginName(const QString& stateName)
     if (normalized == QLatin1String("approximate") || normalized == QLatin1String("exact"))
     {
         return QStringLiteral("fast-canvas");
+    }
+    if (normalized == QLatin1String("display-filter") || normalized == QLatin1String("soft-proof"))
+    {
+        // The simulation names its own path: neither the fast canvas nor the
+        // output-preview render produced what is on screen.
+        return normalized;
     }
     return QStringLiteral("none");
 }
@@ -332,6 +344,20 @@ LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName)
     {
         return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
                  QStringLiteral("Preview is stale for the current revision") };
+    }
+    if (normalized == QLatin1String("display-filter"))
+    {
+        // A display colour mode is a presentation filter: the pixels are a simulation of
+        // the page, never a production render and never approval evidence.
+        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Slash,
+                 QStringLiteral("Display colour simulation, not a production render") };
+    }
+    if (normalized == QLatin1String("soft-proof"))
+    {
+        // Soft proof simulates the output intent through colour management. It is a
+        // simulation of print, not the print's evidence.
+        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::HalfFilled,
+                 QStringLiteral("Soft-proof simulation of the output intent") };
     }
 
     // "unavailable", an empty string and anything unrecognised: no preview to trust.

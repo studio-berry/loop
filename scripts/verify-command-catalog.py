@@ -93,6 +93,11 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionGoToPreviousLine",
         "actionScreenshot",
         "actionExtractImage",
+        "actionColorInvert",
+        "actionColorGrayscale",
+        "actionColorHighContrast",
+        "actionColorBitonal",
+        "actionColorCustom",
     }
 )
 

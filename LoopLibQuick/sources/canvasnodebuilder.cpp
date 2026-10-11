@@ -23,6 +23,8 @@
 
 #include "canvasnodebuilder.h"
 
+#include "canvasdisplaycolor.h"
+
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>
 #include <QSGGeometry>
@@ -244,6 +246,24 @@ void CanvasNodeBuilder::setPalette(const CanvasPalette& palette)
     }
 }
 
+void CanvasNodeBuilder::setDisplayColorSettings(const CanvasDisplayColorSettings& settings)
+{
+    if (m_displayColor == settings)
+    {
+        return;
+    }
+
+    m_displayColor = settings;
+
+    // Every retained copy described the previous setting. Dropping the source
+    // identity (and not the node) makes the next sync re-convert and re-upload
+    // each tile, which is the whole cost of a mode change.
+    for (auto& tile : m_tiles)
+    {
+        tile.second.displaySource = nullptr;
+    }
+}
+
 void CanvasNodeBuilder::forget()
 {
     m_tiles.clear();
@@ -296,19 +316,38 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
             entry.node->setFiltering(QSGTexture::Linear);
         }
 
+        // The display colour filter is applied here, on the render thread, over
+        // pixels that were already admitted. The copy is retained per tile so a
+        // mode that did not change costs no conversion and no upload.
+        pdfinteraction::SurfaceBufferPointer drawn = tile.pixels;
+        if (m_displayColor.isActive())
+        {
+            if (entry.displaySource != tile.pixels.get() || entry.displaySettings != m_displayColor)
+            {
+                entry.displayPixels = pdfinteraction::makeSurfaceBuffer(
+                    applyCanvasDisplayColorMode(tile.pixels->image, m_displayColor));
+                entry.displaySource = tile.pixels.get();
+                entry.displaySettings = m_displayColor;
+            }
+            if (entry.displayPixels)
+            {
+                drawn = entry.displayPixels;
+            }
+        }
+
         // Pointer identity is the whole test. SurfaceBuffer is immutable and
         // shared, so the same pointer is necessarily the same pixels and the
         // upload is skipped -- which is what keeps a pan from re-uploading every
         // visible page.
-        if (entry.pixels != tile.pixels)
+        if (entry.pixels != drawn)
         {
             entry.resourceReservation.reset();
-            const QQuickWindow::CreateTextureOptions options = tile.pixels->image.hasAlphaChannel()
+            const QQuickWindow::CreateTextureOptions options = drawn->image.hasAlphaChannel()
                                                                    ? QQuickWindow::TextureHasAlphaChannel
                                                                    : QQuickWindow::TextureIsOpaque;
             if (m_resourceBudget)
             {
-                const qsizetype bytes = tile.pixels->image.sizeInBytes();
+                const qsizetype bytes = drawn->image.sizeInBytes();
                 if (bytes <= 0 || !m_resourceBudget->tryReserve(pdf::PDFResourcePool::GpuTextureCache,
                                                                 bytes,
                                                                 pdf::PDFResourcePriority::Visible,
@@ -323,15 +362,15 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
                     continue;
                 }
                 entry.resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
-                                                                                              pdf::PDFResourcePool::GpuTextureCache,
-                                                                                              bytes);
+                                                                                          pdf::PDFResourcePool::GpuTextureCache,
+                                                                                          bytes);
             }
-            entry.node->setTexture(m_window->createTextureFromImage(tile.pixels->image, options));
-            entry.pixels = tile.pixels;
+            entry.node->setTexture(m_window->createTextureFromImage(drawn->image, options));
+            entry.pixels = drawn;
         }
         else if (m_resourceBudget && !entry.resourceReservation)
         {
-            const qsizetype bytes = tile.pixels->image.sizeInBytes();
+            const qsizetype bytes = drawn->image.sizeInBytes();
             if (bytes <= 0 || !m_resourceBudget->tryReserve(pdf::PDFResourcePool::GpuTextureCache,
                                                             bytes,
                                                             pdf::PDFResourcePriority::Visible,
@@ -346,8 +385,8 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
                 continue;
             }
             entry.resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
-                                                                                          pdf::PDFResourcePool::GpuTextureCache,
-                                                                                          bytes);
+                                                                                      pdf::PDFResourcePool::GpuTextureCache,
+                                                                                      bytes);
         }
 
         entry.placedRect = tile.placedRect;
@@ -368,7 +407,7 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
         parent->appendChildNode(entry.node);
         retained.insert({ tile.key, entry });
 
-        retainedBytes += qint64(tile.pixels->image.sizeInBytes());
+        retainedBytes += qint64(drawn->image.sizeInBytes());
 
         ++m_tileCount;
         if (!tile.exact)

@@ -24,6 +24,7 @@
 #ifndef CANVASNODEBUILDER_H
 #define CANVASNODEBUILDER_H
 
+#include "canvasdisplaycolor.h"
 #include "canvaspalette.h"
 #include "loopquickglobal.h"
 
@@ -91,6 +92,15 @@ public:
 
     void setPalette(const CanvasPalette& palette);
     const CanvasPalette& palette() const noexcept { return m_palette; }
+
+    /// The display colour filter applied to every tile this builder presents
+    /// (issue #235 display half). It is presentation state, not render state:
+    /// the filter runs here, over pixels that were already admitted, and never
+    /// reaches a surface request or a PageSurfaceKey. Changing it re-converts
+    /// the retained tiles against the new setting; it asks nothing of a
+    /// coordinator.
+    void setDisplayColorSettings(const CanvasDisplayColorSettings& settings);
+    const CanvasDisplayColorSettings& displayColorSettings() const noexcept { return m_displayColor; }
 
     /// Page pixels. `parent` is emptied of tiles that the snapshot no longer
     /// contains, and every surviving tile keeps its texture.
@@ -160,6 +170,15 @@ private:
         pdfinteraction::SurfaceBufferPointer pixels;
         std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
 
+        /// The display-filtered copy of the tile for the settings it was built
+        /// with, when a display colour mode is active. `displaySource` is a key,
+        /// not an owner: `pixels` above keeps the source buffer alive for as
+        /// long as this entry exists, and the two are compared to decide whether
+        /// the copy still describes the frame.
+        pdfinteraction::SurfaceBufferPointer displayPixels;
+        const pdfinteraction::SurfaceBuffer* displaySource = nullptr;
+        CanvasDisplayColorSettings displaySettings;
+
         QRect placedRect;
         bool exact = true;
     };
@@ -186,6 +205,7 @@ private:
     QQuickWindow* m_window = nullptr;
     std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
     CanvasPalette m_palette = CanvasPalette::standard();
+    CanvasDisplayColorSettings m_displayColor;
 
     std::map<pdfinteraction::PageSurfaceKey, TileNode> m_tiles;
     QHash<QString, OverlayNode> m_overlays;

@@ -179,9 +179,9 @@
       "command": {
         "label_key": "command.actionColorBitonal.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -192,9 +192,9 @@
       "command": {
         "label_key": "command.actionColorCustom.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -205,9 +205,9 @@
       "command": {
         "label_key": "command.actionColorGrayscale.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -218,9 +218,9 @@
       "command": {
         "label_key": "command.actionColorHighContrast.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -231,9 +231,9 @@
       "command": {
         "label_key": "command.actionColorInvert.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },

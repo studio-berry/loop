@@ -253,6 +253,11 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     m_surfaces->setRenderSettings(settings);
 }
 
+void DocumentViewSession::setSoftProofProfile(const QString& proofProfileId)
+{
+    m_surfaces->setSoftProofProfile(proofProfileId);
+}
+
 void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
