@@ -38,8 +38,8 @@ round trip per edit would make the Fix workspace the authoring surface.
 
 What exists to build on:
 
-- **Command surface.** `docs/loop-shell-actions.json` declares 108 actions
-  (`expected_action_count: 108`). 34 of the commands these three issues name are
+- **Command surface.** `docs/loop-shell-actions.json` declares 109 actions
+  (`expected_action_count: 109`). 34 of the commands these three issues name are
   already declared but unbound — 16 bookmark/link ids (#233), 18 annotation ids
   (#234), and `actionSend_by_E_Mail` (#242) — and they are recorded in the
   handler-coverage ratchet (`docs/shell-handler-coverage.json`) that PR 1
@@ -107,7 +107,7 @@ because they are properties of the *path*, not of the Fix flow:
    admits `string`/`integer`/`number`/`boolean`,
    `docs/schemas/loop-shell-actions.schema.json`), `capability: document.modify`,
    `availability: implemented` when its handler lands, and
-   `expected_action_count` bumped accordingly (108 → 112). The exact names may
+   `expected_action_count` bumped accordingly (109 → 113). The exact names may
    be adjusted by the slice only within this delta's shape; a different shape is
    a new decision.
 2. **A typed direct-edit request on `DocumentFacade`** (interaction layer): the
