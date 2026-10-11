@@ -71,6 +71,8 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionProperties",
         "actionPrint",
         "actionExportDocument",
+        "actionUndo",
+        "actionRedo",
     }
 )
 
