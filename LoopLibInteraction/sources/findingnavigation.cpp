@@ -232,61 +232,12 @@ bool FindingCanvasNavigator::requestMatchesCurrentRevision(const FindingNavigati
 
 bool FindingCanvasNavigator::revealPage(int pageIndex)
 {
-    if (!m_viewport || pageIndex < 0 || pageIndex >= m_viewport->pageCount())
-    {
-        return false;
-    }
-
-    if (m_viewport->isBlockMode())
-    {
-        m_viewport->setBlockIndex(m_viewport->blockIndexForPage(pageIndex));
-    }
-
-    const QRect pageRect = m_viewport->placedPageRect(pageIndex);
-    const QRect viewportRect = m_viewport->viewportRect();
-    if (!pageRect.isValid() || viewportRect.isEmpty())
-    {
-        return false;
-    }
-
-    const QPointF delta = QPointF(viewportRect.center()) - QPointF(pageRect.center());
-    m_viewport->setOffset(m_viewport->offset() + QPoint(qRound(delta.x()), qRound(delta.y())));
-    return m_viewport->placedPageRect(pageIndex).isValid();
+    return m_viewport && m_viewport->revealPage(pageIndex);
 }
 
 bool FindingCanvasNavigator::focusRegion(int pageIndex, QRectF pageBounds, qreal contextMargin)
 {
-    if (!m_viewport || !usableBounds(pageBounds) || !revealPage(pageIndex))
-    {
-        return false;
-    }
-
-    const qreal margin = qBound(0.0, contextMargin, 1.0);
-    pageBounds = pageBounds.normalized();
-    pageBounds = pageBounds.adjusted(-pageBounds.width() * margin,
-                                     -pageBounds.height() * margin,
-                                     pageBounds.width() * margin,
-                                     pageBounds.height() * margin);
-
-    const QRect viewportRect = m_viewport->viewportRect();
-    const QPointF viewportCenter(viewportRect.center());
-    QTransform pageToViewport = m_viewport->pagePointToViewportMatrix(pageIndex);
-    QRectF deviceBounds = pageToViewport.mapRect(pageBounds).normalized();
-    if (!usableBounds(deviceBounds) || viewportRect.isEmpty())
-    {
-        return false;
-    }
-
-    const qreal availableWidth = qMax<qreal>(1.0, viewportRect.width() * 0.75);
-    const qreal availableHeight = qMax<qreal>(1.0, viewportRect.height() * 0.75);
-    const qreal scaleFactor = qMin(availableWidth / deviceBounds.width(), availableHeight / deviceBounds.height());
-    m_viewport->setZoom(m_viewport->zoom() * scaleFactor, viewportCenter);
-
-    pageToViewport = m_viewport->pagePointToViewportMatrix(pageIndex);
-    deviceBounds = pageToViewport.mapRect(pageBounds).normalized();
-    const QPointF delta = viewportCenter - deviceBounds.center();
-    m_viewport->setOffset(m_viewport->offset() + QPoint(qRound(delta.x()), qRound(delta.y())));
-    return true;
+    return m_viewport && m_viewport->revealPageRegion(pageIndex, pageBounds, contextMargin);
 }
 
 FindingNavigationResult FindingCanvasNavigator::navigate(const FindingNavigationRequest& request)

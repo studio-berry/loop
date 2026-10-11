@@ -7,6 +7,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfdocumentsearch.h"
 #include "pdfdocumentsession.h"
+#include "pdfexception.h"
 #include "pdfform.h"
 #include "pdfoutline.h"
 #include "pdfpage.h"
@@ -236,11 +237,238 @@ void QuickSearchResultModel::clear()
     replace({}, {}, {});
 }
 
+namespace
+{
+
+/// Stable, operator-facing kind name for an annotation type. A local switch
+/// rather than Core's GUI caption: the caption is a display string with
+/// historical quirks (it labels Link as Line) and is not a vocabulary.
+QString annotationKindName(pdf::AnnotationType type)
+{
+    switch (type)
+    {
+        case pdf::AnnotationType::Text:
+            return QStringLiteral("text");
+        case pdf::AnnotationType::Link:
+            return QStringLiteral("link");
+        case pdf::AnnotationType::FreeText:
+            return QStringLiteral("free-text");
+        case pdf::AnnotationType::Line:
+            return QStringLiteral("line");
+        case pdf::AnnotationType::Square:
+            return QStringLiteral("square");
+        case pdf::AnnotationType::Circle:
+            return QStringLiteral("circle");
+        case pdf::AnnotationType::Polygon:
+            return QStringLiteral("polygon");
+        case pdf::AnnotationType::Polyline:
+            return QStringLiteral("polyline");
+        case pdf::AnnotationType::Highlight:
+            return QStringLiteral("highlight");
+        case pdf::AnnotationType::Underline:
+            return QStringLiteral("underline");
+        case pdf::AnnotationType::Squiggly:
+            return QStringLiteral("squiggly");
+        case pdf::AnnotationType::StrikeOut:
+            return QStringLiteral("strike-out");
+        case pdf::AnnotationType::Stamp:
+            return QStringLiteral("stamp");
+        case pdf::AnnotationType::Caret:
+            return QStringLiteral("caret");
+        case pdf::AnnotationType::Ink:
+            return QStringLiteral("ink");
+        case pdf::AnnotationType::Popup:
+            return QStringLiteral("popup");
+        case pdf::AnnotationType::FileAttachment:
+            return QStringLiteral("file-attachment");
+        case pdf::AnnotationType::Sound:
+            return QStringLiteral("sound");
+        case pdf::AnnotationType::Movie:
+            return QStringLiteral("movie");
+        case pdf::AnnotationType::Widget:
+            return QStringLiteral("widget");
+        case pdf::AnnotationType::Screen:
+            return QStringLiteral("screen");
+        case pdf::AnnotationType::PrinterMark:
+            return QStringLiteral("printer-mark");
+        case pdf::AnnotationType::TrapNet:
+            return QStringLiteral("trap-net");
+        case pdf::AnnotationType::Watermark:
+            return QStringLiteral("watermark");
+        case pdf::AnnotationType::Redact:
+            return QStringLiteral("redact");
+        case pdf::AnnotationType::Projection:
+            return QStringLiteral("projection");
+        case pdf::AnnotationType::_3D:
+            return QStringLiteral("3d");
+        case pdf::AnnotationType::RichMedia:
+            return QStringLiteral("rich-media");
+        case pdf::AnnotationType::Invalid:
+        case pdf::AnnotationType::Unknown:
+            break;
+    }
+
+    return QStringLiteral("unknown");
+}
+
+/// Reads the document's annotations, page by page, into review rows. Read-only:
+/// Core's own parse of each `/Annots` entry, no annotation manager, no mutation
+/// surface. One unparseable annotation is skipped rather than failing the read.
+QList<QuickAnnotation> readAnnotations(const pdf::PDFDocument* document)
+{
+    QList<QuickAnnotation> rows;
+    const pdf::PDFCatalog* catalog = document->getCatalog();
+    const size_t pageCount = catalog->getPageCount();
+    for (size_t pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const pdf::PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        for (const pdf::PDFObjectReference& reference : page->getAnnotations())
+        {
+            try
+            {
+                const pdf::PDFAnnotationPtr annotation = pdf::PDFAnnotation::parse(&document->getStorage(), reference);
+                if (!annotation || annotation->getType() == pdf::AnnotationType::Popup)
+                {
+                    // A popup is the open state of a parent annotation, not a
+                    // separate review row.
+                    continue;
+                }
+
+                QuickAnnotation row;
+                row.pageIndex = int(pageIndex);
+                row.kindName = annotationKindName(annotation->getType());
+                row.bounds = annotation->getRectangle();
+                row.contents = annotation->getContents();
+                if (const pdf::PDFMarkupAnnotation* markup = annotation->asMarkupAnnotation())
+                {
+                    row.title = markup->getWindowTitle();
+                    row.subject = markup->getSubject();
+                    row.created = markup->getCreationDate().toString(Qt::ISODate);
+                }
+                row.reference = QStringLiteral("%1 %2 R").arg(reference.objectNumber).arg(reference.generation);
+                const pdf::PDFAnnotation::Flags flags = annotation->getEffectiveFlags();
+                row.hidden = flags.testFlag(pdf::PDFAnnotation::Hidden) ||
+                             flags.testFlag(pdf::PDFAnnotation::Invisible) ||
+                             flags.testFlag(pdf::PDFAnnotation::NoView);
+                rows.append(row);
+            }
+            catch (const pdf::PDFException&)
+            {
+                continue;
+            }
+        }
+    }
+    return rows;
+}
+
+}   // namespace
+
+QuickAnnotationModel::QuickAnnotationModel(QObject* parent) :
+    QAbstractListModel(parent)
+{
+}
+
+int QuickAnnotationModel::rowCount(const QModelIndex& parent) const
+{
+    return parent.isValid() ? 0 : int(m_annotations.size());
+}
+
+QVariant QuickAnnotationModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() < 0 || index.row() >= m_annotations.size())
+        return {};
+    const QuickAnnotation& annotation = m_annotations.at(index.row());
+    switch (role)
+    {
+        case Qt::DisplayRole:
+        case KindRole:
+            return annotation.kindName;
+        case PageIndexRole:
+            return annotation.pageIndex;
+        case PageNumberRole:
+            return annotation.pageIndex + 1;
+        case BoundsRole:
+            return annotation.bounds;
+        case TitleRole:
+            return annotation.title;
+        case ContentsRole:
+            return annotation.contents;
+        case SubjectRole:
+            return annotation.subject;
+        case CreatedRole:
+            return annotation.created;
+        case ReferenceRole:
+            return annotation.reference;
+        case HiddenRole:
+            return annotation.hidden;
+        case SelectedRole:
+            return index.row() == m_selectedRow;
+    }
+    return {};
+}
+
+QHash<int, QByteArray> QuickAnnotationModel::roleNames() const
+{
+    return { { PageIndexRole, "pageIndex" },
+             { PageNumberRole, "pageNumber" },
+             { KindRole, "kind" },
+             { BoundsRole, "bounds" },
+             { TitleRole, "title" },
+             { ContentsRole, "contents" },
+             { SubjectRole, "subject" },
+             { CreatedRole, "created" },
+             { ReferenceRole, "reference" },
+             { HiddenRole, "hidden" },
+             { SelectedRole, "selected" } };
+}
+
+void QuickAnnotationModel::replace(QList<QuickAnnotation> annotations, QString revision)
+{
+    beginResetModel();
+    m_annotations = std::move(annotations);
+    m_revision = std::move(revision);
+    m_selectedRow = -1;
+    endResetModel();
+}
+
+void QuickAnnotationModel::clear()
+{
+    replace({}, {});
+}
+
+void QuickAnnotationModel::setSelectedRow(int row)
+{
+    const int bounded = row >= 0 && row < m_annotations.size() ? row : -1;
+    if (bounded == m_selectedRow)
+    {
+        return;
+    }
+    const int previous = m_selectedRow;
+    m_selectedRow = bounded;
+    const auto notifyRow = [this](int changed)
+    {
+        if (changed < 0)
+        {
+            return;
+        }
+        const QModelIndex index = this->index(changed, 0);
+        Q_EMIT dataChanged(index, index, { SelectedRole });
+    };
+    notifyRow(previous);
+    notifyRow(bounded);
+}
+
 QuickDocumentModel::QuickDocumentModel(QObject* parent) :
     QObject(parent),
     m_pages(this),
     m_outline(this),
-    m_searchResults(this)
+    m_searchResults(this),
+    m_annotations(this)
 {
 }
 
@@ -258,6 +486,7 @@ void QuickDocumentModel::setDocument(pdf::PDFDocumentContext* context)
 
     m_pages.replace(document);
     m_outline.replace(document);
+    m_annotations.replace(readAnnotations(document), context->getRevision().toString());
     const pdf::PDFDocumentInfo* info = document->getInfo();
     const pdf::PDFCatalog* catalog = document->getCatalog();
     m_title = info->title;
@@ -319,6 +548,7 @@ void QuickDocumentModel::clear()
     m_pages.clear();
     m_outline.clear();
     m_searchResults.clear();
+    m_annotations.clear();
     m_context = nullptr;
     m_session = nullptr;
     m_title.clear();

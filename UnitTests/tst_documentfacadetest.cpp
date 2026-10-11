@@ -386,6 +386,9 @@ private slots:
     void inspectionInvalidation();
     void inspectionStopsWhenContextIsDestroyed();
 
+    void signatureCheckReducesVerificationResultsToTheOperatorVocabulary();
+    void signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument();
+
     void realDocumentRoundTripsThroughCoreReaderAndWriter();
 };
 
@@ -1304,6 +1307,111 @@ void DocumentFacadeTest::shellStatusProjectionIsPinned()
 
     QCOMPARE(QLatin1String(pdfinteraction::getShellDocumentStatusName(ShellDocumentStatus::OutputPending)),
              QLatin1String("OUTPUT_PENDING"));
+}
+
+void DocumentFacadeTest::signatureCheckReducesVerificationResultsToTheOperatorVocabulary()
+{
+    using Result = pdf::PDFSignatureVerificationResult;
+    using State = pdfinteraction::DocumentSignatureState;
+    using Facade = pdfinteraction::DocumentFacade;
+
+    const auto verifiedResult = []()
+    {
+        Result result;
+        result.setFlag(Result::Certificate_OK, true);
+        result.setFlag(Result::Signature_OK, true);
+        result.validate();
+        return result;
+    };
+
+    // No results at all is the distinct "no signature is present" case, never
+    // folded into one of the four operator-facing states.
+    QCOMPARE(Facade::reduceSignatureState({}), State::None);
+
+    const Result valid = verifiedResult();
+    QCOMPARE(Facade::reduceSignatureState({ valid }), State::Valid);
+
+    Result notCovered = verifiedResult();
+    notCovered.addSignatureNotCoveredBytesWarning(16);
+    QCOMPARE(Facade::reduceSignatureState({ notCovered }), State::ModifiedAfterSigning);
+
+    Result tampered;
+    tampered.addInvalidSignatureError();
+    tampered.validate();
+    QCOMPARE(Facade::reduceSignatureState({ tampered }), State::Invalid);
+
+    Result selfSigned;
+    selfSigned.addCertificateSelfSignedError();
+    selfSigned.validate();
+    QCOMPARE(Facade::reduceSignatureState({ selfSigned }), State::Unknown);
+
+    Result noHandler;
+    noHandler.addNoHandlerError(QByteArrayLiteral("application/unknown"));
+    noHandler.validate();
+    QCOMPARE(Facade::reduceSignatureState({ noHandler }), State::Unknown);
+
+    Result revoked;
+    revoked.addCertificateRevokedError();
+    revoked.validate();
+    QCOMPARE(Facade::reduceSignatureState({ revoked }), State::Invalid);
+
+    // The strongest fact wins across a mixed set: a broken signature outranks a
+    // covered-bytes warning, which outranks an unestablished trust chain, and
+    // only an all-verified set is Valid.
+    QCOMPARE(Facade::reduceSignatureState({ valid, tampered }), State::Invalid);
+    QCOMPARE(Facade::reduceSignatureState({ valid, selfSigned }), State::Unknown);
+    QCOMPARE(Facade::reduceSignatureState({ valid, notCovered }), State::ModifiedAfterSigning);
+    QCOMPARE(Facade::reduceSignatureState({ valid, valid }), State::Valid);
+}
+
+void DocumentFacadeTest::signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+
+    const auto token = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(token.has_value(), qPrintable(error));
+
+    // One check at a time.
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+
+    // A completion for a different token is refused, and the facts stay empty.
+    auto forged = *token;
+    ++forged.request;
+    QVERIFY(!harness.facade->completeSignatureCheck(forged, { validResult }, error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+
+    QVERIFY2(harness.facade->completeSignatureCheck(*token, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
+    QCOMPARE(harness.facade->signatureFacts().signatureCount, 1);
+
+    // A failed check is Unknown with the host-supplied policy-safe detail.
+    const auto failing = harness.facade->beginSignatureCheck(error);
+    QVERIFY(failing.has_value());
+    QVERIFY(harness.facade->failSignatureCheck(*failing,
+                                               QStringLiteral("The file changed since the document was loaded."),
+                                               error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Unknown);
+    QCOMPARE(harness.facade->signatureFacts().detail,
+             QStringLiteral("The file changed since the document was loaded."));
+
+    // Replacing the document clears the facts: nothing about the previous
+    // document is evidence about the next one.
+    harness.facade->open(QStringLiteral("/corpus/other.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+    QVERIFY(harness.facade->signatureFacts().detail.isEmpty());
+    QCOMPARE(harness.facade->signatureFacts().signatureCount, 0);
 }
 
 void DocumentFacadeTest::realDocumentRoundTripsThroughCoreReaderAndWriter()

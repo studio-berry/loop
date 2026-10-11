@@ -61,6 +61,25 @@ const char* getShellDocumentStatusName(ShellDocumentStatus status)
     return "NO_DOCUMENT";
 }
 
+const char* getDocumentSignatureStateName(DocumentSignatureState state)
+{
+    switch (state)
+    {
+        case DocumentSignatureState::None:
+            return "not-signed";
+        case DocumentSignatureState::Valid:
+            return "valid";
+        case DocumentSignatureState::Invalid:
+            return "invalid";
+        case DocumentSignatureState::Unknown:
+            return "unknown";
+        case DocumentSignatureState::ModifiedAfterSigning:
+            return "modified-after-signing";
+    }
+
+    return "unknown";
+}
+
 ShellDocumentStatus DocumentFacade::shellDocumentStatus() const
 {
     return projectShellStatus(m_state, m_facets, m_outputState);
@@ -342,6 +361,141 @@ void DocumentFacade::invalidateInspection()
         m_inspection.state = DocumentInspectionState::Stale;
     }
     Q_EMIT operatorStateChanged();
+}
+
+std::optional<DocumentSignatureCheckToken> DocumentFacade::beginSignatureCheck(QString& error)
+{
+    error.clear();
+    if (m_state != DocumentState::Ready || !currentRevision().isValid())
+    {
+        error = QStringLiteral("signature/document-not-ready");
+        return std::nullopt;
+    }
+    if (m_signatureCheckRunning)
+    {
+        error = QStringLiteral("signature/check-already-running");
+        return std::nullopt;
+    }
+
+    const DocumentSignatureCheckToken token{ ++m_signatureCheckRequest, m_generation, currentRevision() };
+    m_signatureCheckToken = token;
+    m_signatureCheckRunning = true;
+    return token;
+}
+
+bool DocumentFacade::admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const
+{
+    error.clear();
+    if (m_state != DocumentState::Ready || !currentRevision().isValid() ||
+        !m_signatureCheckRunning ||
+        token != m_signatureCheckToken || token.generation != m_generation ||
+        token.revision != currentRevision())
+    {
+        error = QStringLiteral("signature/not-current-or-terminal");
+        return false;
+    }
+    return true;
+}
+
+DocumentSignatureState DocumentFacade::reduceSignatureState(const std::vector<pdf::PDFSignatureVerificationResult>& results)
+{
+    if (results.empty())
+    {
+        return DocumentSignatureState::None;
+    }
+
+    bool anyInvalid = false;
+    bool anyModifiedAfterSigning = false;
+    bool anyUnknown = false;
+    bool anyValid = false;
+
+    for (const pdf::PDFSignatureVerificationResult& result : results)
+    {
+        if (result.hasSignatureError() ||
+            result.hasFlag(pdf::PDFSignatureVerificationResult::Error_Certificate_Revoked) ||
+            result.hasFlag(pdf::PDFSignatureVerificationResult::Error_Certificate_Invalid))
+        {
+            anyInvalid = true;
+        }
+        else if (result.hasSignatureWarning())
+        {
+            // The signature itself verifies but does not cover the whole source,
+            // which is what a change after signing looks like. The modification
+            // is a fact of the bytes, so it outranks an unestablished trust
+            // chain: an operator needs to know the file moved, whichever
+            // certificate signed it.
+            anyModifiedAfterSigning = true;
+        }
+        else if (!result.isValid())
+        {
+            // Trust was not established (a self-signed or unknown chain), no
+            // handler exists, or the check was otherwise indeterminate: not a
+            // pass, and not proof of tampering either.
+            anyUnknown = true;
+        }
+        else
+        {
+            anyValid = true;
+        }
+    }
+
+    if (anyInvalid)
+    {
+        return DocumentSignatureState::Invalid;
+    }
+    if (anyModifiedAfterSigning)
+    {
+        return DocumentSignatureState::ModifiedAfterSigning;
+    }
+    if (anyUnknown)
+    {
+        return DocumentSignatureState::Unknown;
+    }
+    return anyValid ? DocumentSignatureState::Valid : DocumentSignatureState::Unknown;
+}
+
+bool DocumentFacade::completeSignatureCheck(const DocumentSignatureCheckToken& token,
+                                            const std::vector<pdf::PDFSignatureVerificationResult>& results,
+                                            QString& error)
+{
+    if (!admitSignatureCheckTransition(token, error))
+    {
+        return false;
+    }
+
+    m_signatureCheckRunning = false;
+    m_signatureFacts.state = reduceSignatureState(results);
+    m_signatureFacts.signatureCount = int(results.size());
+    m_signatureFacts.detail.clear();
+    Q_EMIT signatureFactsChanged();
+    return true;
+}
+
+bool DocumentFacade::failSignatureCheck(const DocumentSignatureCheckToken& token, const QString& detail, QString& error)
+{
+    if (!admitSignatureCheckTransition(token, error))
+    {
+        return false;
+    }
+    if (detail.isEmpty())
+    {
+        error = QStringLiteral("signature/missing-failure");
+        return false;
+    }
+
+    m_signatureCheckRunning = false;
+    m_signatureFacts.state = DocumentSignatureState::Unknown;
+    m_signatureFacts.signatureCount = 0;
+    m_signatureFacts.detail = detail;
+    Q_EMIT signatureFactsChanged();
+    return true;
+}
+
+void DocumentFacade::invalidateSignatureCheck()
+{
+    m_signatureCheckRunning = false;
+    m_signatureFacts = {};
+    Q_EMIT signatureFactsChanged();
 }
 
 void DocumentFacade::setState(DocumentState state)

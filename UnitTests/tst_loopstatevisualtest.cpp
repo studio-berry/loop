@@ -40,6 +40,7 @@ using pdfquick::tokens::MinimumPointerTargetPx;
 using pdfquick::tokens::previewFidelityOriginName;
 using pdfquick::tokens::resolveFixLifecycleStateVisual;
 using pdfquick::tokens::resolvePreviewFidelityStateVisual;
+using pdfquick::tokens::resolveSignatureStateVisual;
 using pdfquick::tokens::resolveStateVisual;
 using pdfquick::tokens::SpaceL;
 using pdfquick::tokens::SpaceM;
@@ -246,6 +247,12 @@ private slots:
     void previewFidelityStatesStayDistinctWithoutColour();
     void previewFidelityNeverClaimsAPass_data();
     void previewFidelityNeverClaimsAPass();
+
+    void signatureStateMapping_data();
+    void signatureStateMapping();
+    void signatureStatesStayDistinctWithoutColour();
+    void signatureStatesOnlyValidClaimsAPass_data();
+    void signatureStatesOnlyValidClaimsAPass();
 };
 
 void LoopStateVisualTest::severityMapping_data()
@@ -905,6 +912,89 @@ void LoopStateVisualTest::previewFidelityNeverClaimsAPass()
     // approximate canvas pixels can never be cited as proof of print-safe output.
     QVERIFY(visual.kind != StateKind::Passed);
     QVERIFY(visual.colorRole != ColorRole::Success);
+}
+
+void LoopStateVisualTest::signatureStateMapping_data()
+{
+    QTest::addColumn<QString>("stateName");
+    QTest::addColumn<StateKind>("expectedKind");
+    QTest::addColumn<ColorRole>("expectedRole");
+    QTest::addColumn<StateIcon>("expectedIcon");
+
+    QTest::newRow("valid") << QStringLiteral("valid") << StateKind::Passed << ColorRole::Success << StateIcon::Checkmark;
+    QTest::newRow("invalid") << QStringLiteral("invalid") << StateKind::Error << ColorRole::SeverityError << StateIcon::FilledCircle;
+    QTest::newRow("unknown") << QStringLiteral("unknown") << StateKind::Incomplete << ColorRole::StateIncomplete << StateIcon::Hatched;
+    QTest::newRow("modified after signing") << QStringLiteral("modified-after-signing") << StateKind::Warning << ColorRole::SeverityWarning << StateIcon::Cross;
+    QTest::newRow("not signed") << QStringLiteral("not-signed") << StateKind::NotChecked << ColorRole::StateNotChecked << StateIcon::Outline;
+    QTest::newRow("unrecognised") << QStringLiteral("something-else") << StateKind::NotChecked << ColorRole::StateNotChecked << StateIcon::Outline;
+    QTest::newRow("empty") << QString() << StateKind::NotChecked << ColorRole::StateNotChecked << StateIcon::Outline;
+}
+
+void LoopStateVisualTest::signatureStateMapping()
+{
+    QFETCH(QString, stateName);
+    QFETCH(StateKind, expectedKind);
+    QFETCH(ColorRole, expectedRole);
+    QFETCH(StateIcon, expectedIcon);
+
+    const LoopStateVisual visual = resolveSignatureStateVisual(stateName);
+
+    QCOMPARE(visual.kind, expectedKind);
+    QCOMPARE(visual.colorRole, expectedRole);
+    QCOMPARE(visual.icon, expectedIcon);
+    QVERIFY(!visual.accessibleName.trimmed().isEmpty());
+}
+
+void LoopStateVisualTest::signatureStatesStayDistinctWithoutColour()
+{
+    const QStringList states = { QStringLiteral("not-signed"), QStringLiteral("valid"),
+                                 QStringLiteral("invalid"), QStringLiteral("unknown"),
+                                 QStringLiteral("modified-after-signing") };
+
+    QSet<int> icons;
+    QSet<QString> names;
+    for (const QString& state : states)
+    {
+        const LoopStateVisual visual = resolveSignatureStateVisual(state);
+        icons.insert(static_cast<int>(visual.icon));
+        names.insert(visual.accessibleName);
+        QVERIFY2(!visual.accessibleName.trimmed().isEmpty(), qPrintable(state));
+    }
+
+    QCOMPARE(icons.size(), states.size());
+    QCOMPARE(names.size(), states.size());
+}
+
+void LoopStateVisualTest::signatureStatesOnlyValidClaimsAPass_data()
+{
+    QTest::addColumn<QString>("stateName");
+
+    for (const QString& state : { QStringLiteral("not-signed"), QStringLiteral("valid"),
+                                  QStringLiteral("invalid"), QStringLiteral("unknown"),
+                                  QStringLiteral("modified-after-signing"), QString() })
+    {
+        QTest::newRow(qPrintable(state.isEmpty() ? QStringLiteral("empty") : state)) << state;
+    }
+}
+
+void LoopStateVisualTest::signatureStatesOnlyValidClaimsAPass()
+{
+    QFETCH(QString, stateName);
+
+    const LoopStateVisual visual = resolveSignatureStateVisual(stateName);
+
+    // Only Core's own verified-OK result may read as a pass. Every other
+    // signature state - including anything unrecognised - must decline to look
+    // like one, because a signature that is not verified is not evidence.
+    if (stateName == QLatin1String("valid"))
+    {
+        QCOMPARE(visual.kind, StateKind::Passed);
+        QCOMPARE(visual.icon, StateIcon::Checkmark);
+        return;
+    }
+    QVERIFY(visual.kind != StateKind::Passed);
+    QVERIFY(visual.colorRole != ColorRole::Success);
+    QVERIFY(visual.icon != StateIcon::Checkmark);
 }
 
 QTEST_APPLESS_MAIN(LoopStateVisualTest)

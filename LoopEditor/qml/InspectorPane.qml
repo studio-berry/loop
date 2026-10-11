@@ -143,6 +143,15 @@ Pane {
                         .arg(root.documentModel && root.documentModel.canCopy ? qsTr("allowed") : qsTr("restricted"))
                         .arg(root.documentModel && root.documentModel.canAssemble ? qsTr("allowed") : qsTr("restricted"))
                 }
+
+                StateBadge {
+                    objectName: "signatureStateBadge"
+                    Layout.fillWidth: true
+                    visual: root.host ? root.host.signatureStateVisual : null
+                    stateColor: root.host ? root.host.signatureStateColor : "transparent"
+                    labelText: root.host ? root.host.signatureSummary : ""
+                    badgePrefix: "signatureState"
+                }
             }
         }
     }
