@@ -70,10 +70,54 @@ Dialog {
             id: sections
             objectName: "operatorHelpSections"
             Layout.fillWidth: true
-            TabButton { text: qsTr("Getting started") }
-            TabButton { text: qsTr("Workspaces") }
-            TabButton { text: qsTr("Findings") }
-            TabButton { text: qsTr("Sample jobs") }
+            TabButton {
+                text: qsTr("Getting started")
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: parent.palette.buttonText
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    Accessible.ignored: true
+                }
+            }
+            TabButton {
+                text: qsTr("Workspaces")
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: parent.palette.buttonText
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    Accessible.ignored: true
+                }
+            }
+            TabButton {
+                text: qsTr("Findings")
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: parent.palette.buttonText
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    Accessible.ignored: true
+                }
+            }
+            TabButton {
+                text: qsTr("Sample jobs")
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: parent.palette.buttonText
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    Accessible.ignored: true
+                }
+            }
         }
         StackLayout {
             Layout.fillWidth: true
@@ -180,7 +224,7 @@ Dialog {
                             Label {
                                 required property var modelData
                                 Layout.fillWidth: true
-                                text: "%1: %2".arg(modelData.finding_type).arg(modelData.condition)
+                                text: qsTr("%1: %2").arg(root.host ? root.host.localizedTerm(modelData.finding_type) : modelData.finding_type).arg(modelData.condition)
                                 wrapMode: Text.WordWrap
                                 activeFocusOnTab: true
                                 Accessible.name: text
