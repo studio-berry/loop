@@ -298,7 +298,7 @@
       "replacement_surface": "loop-fix",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 231
+      "follow_up_issue": null
     },
     {
       "id": "editor-plugin",
@@ -358,7 +358,7 @@
       "replacement_surface": "loop-document",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 231
+      "follow_up_issue": null
     },
     {
       "id": "audiobook-plugin",
