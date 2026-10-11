@@ -45,6 +45,7 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdirectedit.h"
 #include "pdfdocumentimageextractor.h"
 #include "pdfannotationauthoring.h"
 #include "pdfsecurityhandler.h"
@@ -4549,6 +4550,14 @@ bool EditorHost::commandPermissionAllowed(const QString& commandId) const
         {
             return permissions.modifyAnnotations;
         }
+    if (commandId == QLatin1String("actionSetFormFieldValue"))
+    {
+        return m_documentModel.canFillForms();
+    }
+    if (commandId == QLatin1String("actionAddAttachment") || commandId == QLatin1String("actionRemoveAttachment") ||
+        commandId == QLatin1String("actionEditDocumentMetadata"))
+    {
+        return m_documentModel.canModify();
     }
     return true;
 }
@@ -5200,6 +5209,39 @@ void EditorHost::registerFeatureHandlers()
             QString typedError;
             const std::optional<pdf::PDFAuthoringEdit> edit = build(parameters, typedError);
             runAuthoringEdit(invocation, edit, typedError, parameters);
+    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
+    // Form values, attachments and metadata are mutations through this catalog
+    // into Core: each handler maps its declared scalars into the facade's typed
+    // direct-edit request, and the facade checks the revision fence and the
+    // document's permission before any writer runs. A refusal finishes Failed
+    // with the facade's own stable code, so a stale, unauthorized, XFA or
+    // unsupported edit is reported rather than silently dropped.
+    auto bindAuthoringEdit = [this](const QString& id, pdfinteraction::DocumentDirectEditRequest::Kind kind)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, kind](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            const pdfinteraction::DocumentDirectEditResult result = applyAuthoringEdit(kind, parameters);
+            m_session->catalog().finishInvocation(invocation,
+                                                  result.applied ? pdfinteraction::CommandTerminalState::Completed
+                                                                 : pdfinteraction::CommandTerminalState::Failed,
+                                                  result.applied ? QString() : result.typedError);
+            if (result.applied)
+            {
+                announceDocumentState(tr("The document was edited. Save to publish the new revision."));
+                // The document was replaced in place, so the surfaces the new
+                // revision needs are requested now rather than at the next
+                // viewport change.
+                if (m_documentBound)
+                {
+                    m_session->surfaces()->requestSurfaces();
+                }
+            }
+            else
+            {
+                announceDocumentState(tr("The edit was refused: %1").arg(result.typedError));
+            }
+            bumpPresentation();
         };
         m_session->catalog().setHandler(id, std::move(handler));
     };
@@ -5456,8 +5498,150 @@ void EditorHost::registerFeatureHandlers()
         };
         m_session->catalog().setHandler(entry.first, std::move(authoring));
     }
+    bindAuthoringEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DocumentDirectEditRequest::Kind::SetFormFieldValue);
+    bindAuthoringEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment);
+    bindAuthoringEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DocumentDirectEditRequest::Kind::RemoveAttachment);
+    bindAuthoringEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DocumentDirectEditRequest::Kind::EditMetadata);
+
+    // Send by e-mail hands the current published revision to the mail client and
+    // writes nothing. An unsaved document is refused with a typed reason: the
+    // bytes on disk are then a different revision than the one on screen.
+    pdfinteraction::CommandCatalog::Handler sendByMail;
+    sendByMail.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        QString typedError;
+        const bool handed = handOffPublishedRevisionToMail(&typedError);
+        m_session->catalog().finishInvocation(invocation,
+                                              handed ? pdfinteraction::CommandTerminalState::Completed
+                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                              handed ? QString() : typedError);
+        if (!handed)
+        {
+            announceDocumentState(tr("The document was not handed to the mail client: %1").arg(typedError));
+        }
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionSend_by_E_Mail"), std::move(sendByMail));
 
     refreshFeatureAvailability();
+}
+
+pdfinteraction::DocumentDirectEditResult EditorHost::applyAuthoringEdit(pdfinteraction::DocumentDirectEditRequest::Kind kind,
+                                                                        const QVariantMap& parameters)
+{
+    pdfinteraction::DocumentDirectEditResult result;
+    if (!hasDocument())
+    {
+        result.typedError = QStringLiteral("document/not-ready");
+        return result;
+    }
+
+    pdfinteraction::DocumentDirectEditRequest request;
+    request.kind = kind;
+    request.scalars = parameters;
+    // The caller names the revision the edit was begun against. It is parsed at
+    // this boundary, and an absent or malformed identity stays invalid, so the
+    // gateway refuses it as a stale fence instead of guessing which revision
+    // the caller meant.
+    request.revision = pdf::PDFRevisionIdentity::fromString(parameters.value(QStringLiteral("revision")).toString());
+
+    if (kind == pdfinteraction::DocumentDirectEditRequest::Kind::AddAttachment)
+    {
+        // The command carries a path; the host reads the file so the mutation
+        // gateway never touches the filesystem.
+        constexpr qint64 maximumAttachmentBytes = 64ll * 1024 * 1024;
+        const QString source = parameters.value(QStringLiteral("path")).toString();
+        QFile file(source);
+        if (source.isEmpty() || !file.open(QIODevice::ReadOnly))
+        {
+            result.typedError = QStringLiteral("attachment/source-unreadable");
+            return result;
+        }
+        if (file.size() > maximumAttachmentBytes)
+        {
+            result.typedError = QStringLiteral("attachment/source-too-large");
+            return result;
+        }
+        request.contents = file.readAll();
+    }
+
+    return m_session->facade().applyDirectEdit(request);
+}
+
+bool EditorHost::handOffPublishedRevisionToMail(QString* typedError)
+{
+    typedError->clear();
+    if (!hasDocument())
+    {
+        *typedError = QStringLiteral("mail/no-document");
+        return false;
+    }
+
+    const pdfinteraction::DocumentFacade& facade = m_session->facade();
+    if (facade.facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        // The published bytes are a different revision than the one on screen.
+        // Handing them over as if they were current is exactly the stale case.
+        *typedError = QStringLiteral("mail/unsaved-changes");
+        return false;
+    }
+
+    const pdfinteraction::DocumentSource& source = facade.source();
+    if (!source.isValid() || !QFileInfo::exists(source.path))
+    {
+        *typedError = QStringLiteral("mail/no-published-file");
+        return false;
+    }
+
+    // The revision travels with the hand-off, so the receiving side can refuse a
+    // file that is not the revision the shell was showing.
+    Q_EMIT documentMailRequested(source.path, facade.currentRevision().toString());
+    announceDocumentState(tr("The published document was handed to the mail client."));
+    return true;
+}
+
+bool EditorHost::extractAttachmentFileUrl(const QUrl& directory, const QString& name)
+{
+    const auto project = [this](const QString& status, const QString& fileName, bool autoOpenRefused, const QString& typedError)
+    {
+        QVariantMap projection;
+        projection.insert(QStringLiteral("status"), status);
+        projection.insert(QStringLiteral("fileName"), fileName);
+        projection.insert(QStringLiteral("autoOpenRefused"), autoOpenRefused);
+        projection.insert(QStringLiteral("typedError"), typedError);
+        m_attachmentExtraction = projection;
+        bumpPresentation();
+    };
+
+    if (!hasDocument() || !m_session->context().getDocument() || name.isEmpty())
+    {
+        project(QStringLiteral("refused"), name, false, QStringLiteral("attachment/no-document"));
+        return false;
+    }
+
+    const pdf::PDFAttachmentWriter::ExtractionOutcome outcome =
+        pdf::PDFAttachmentWriter::extractToDirectory(m_session->context().getDocument(), name, directory.toLocalFile());
+
+    if (!outcome.written)
+    {
+        project(QStringLiteral("refused"), name, false, outcome.typedError);
+        announceDocumentState(tr("The attachment could not be extracted: %1").arg(outcome.typedError));
+        return false;
+    }
+
+    const QString extractedName = QFileInfo(outcome.path).fileName();
+    project(QStringLiteral("written"), extractedName, outcome.autoOpenRefused, QString());
+    if (outcome.autoOpenRefused)
+    {
+        // The bytes are the document's; launching them is not. The shell must
+        // not auto-open an executable-type attachment.
+        announceDocumentState(tr("Extracted %1. This file type must not be opened automatically.").arg(extractedName));
+    }
+    else
+    {
+        announceDocumentState(tr("Extracted %1.").arg(extractedName));
+    }
+    return true;
 }
 
 void EditorHost::refreshFeatureAvailability()
@@ -5550,6 +5734,17 @@ void EditorHost::refreshFeatureAvailability()
     {
         availability.insert(entry.first, annotationAuthoring);
     }
+    // Direct authoring edits (ADR-014, issue #242). Each is enabled exactly when
+    // the open document grants the permission its family needs, so an
+    // unauthorized edit is unreachable rather than refused after the fact.
+    availability.insert(QStringLiteral("actionSetFormFieldValue"), ready && m_documentModel.canFillForms());
+    availability.insert(QStringLiteral("actionAddAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionRemoveAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionEditDocumentMetadata"), ready && m_documentModel.canModify());
+    // Send by e-mail stays enabled with a document even when it has unsaved
+    // changes, so its typed refusal is reachable and visible rather than the
+    // command silently disappearing from the menu.
+    availability.insert(QStringLiteral("actionSend_by_E_Mail"), ready && !outputBusy());
 
     m_session->catalog().setEnabledBatch(availability);
 }

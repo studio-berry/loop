@@ -28,7 +28,6 @@
     "actionRemoveExternalLinks",
     "actionRender_to_Images",
     "actionSanitize",
-    "actionSend_by_E_Mail",
     "actionStickyNoteComment",
     "actionStickyNoteHelp",
     "actionStickyNoteInsert",

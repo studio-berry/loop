@@ -22,7 +22,9 @@
 
 #include "documentfacade.h"
 
+#include "pdfdirectedit.h"
 #include "pdfresourcebudget.h"
+#include "pdfsecurityhandler.h"
 
 #include <QTimer>
 #include <QVariant>
@@ -41,6 +43,60 @@ namespace
 {
 
 constexpr const char* PathParameter = "path";
+constexpr const char* FieldParameter = "field";
+constexpr const char* ValueParameter = "value";
+constexpr const char* CheckedParameter = "checked";
+constexpr const char* NameParameter = "name";
+constexpr const char* DescriptionParameter = "description";
+constexpr const char* TitleParameter = "title";
+constexpr const char* AuthorParameter = "author";
+constexpr const char* SubjectParameter = "subject";
+constexpr const char* KeywordsParameter = "keywords";
+constexpr const char* CreatorParameter = "creator";
+
+/// Reads one declared string parameter. An absent key is an absent value; a key
+/// carrying another type is malformed, never coerced.
+std::optional<QString> scalarString(const QVariantMap& scalars, const char* name, bool* malformed)
+{
+    const auto it = scalars.constFind(QLatin1String(name));
+    if (it == scalars.constEnd())
+    {
+        return std::nullopt;
+    }
+    if (it->typeId() != QMetaType::QString)
+    {
+        *malformed = true;
+        return std::nullopt;
+    }
+    return it->toString();
+}
+
+std::optional<bool> scalarBool(const QVariantMap& scalars, const char* name, bool* malformed)
+{
+    const auto it = scalars.constFind(QLatin1String(name));
+    if (it == scalars.constEnd())
+    {
+        return std::nullopt;
+    }
+    if (it->typeId() != QMetaType::Bool)
+    {
+        *malformed = true;
+        return std::nullopt;
+    }
+    return it->toBool();
+}
+
+bool requiredString(const QVariantMap& scalars, const char* name, QString* value, bool* malformed)
+{
+    const std::optional<QString> read = scalarString(scalars, name, malformed);
+    if (!read || read->isEmpty())
+    {
+        *malformed = true;
+        return false;
+    }
+    *value = *read;
+    return true;
+}
 
 }   // namespace
 
@@ -278,6 +334,158 @@ DocumentEditOutcome DocumentFacade::applyAuthoringEdit(const DocumentEditRequest
     outcome.affectedCount = result.affectedCount;
     outcome.revision = m_revisionSource.currentRevision();
     return outcome;
+DocumentDirectEditResult DocumentFacade::applyDirectEdit(const DocumentDirectEditRequest& request)
+{
+    DocumentDirectEditResult result;
+    result.revision = currentRevision();
+
+    pdf::PDFDocumentContext* documentContext = context();
+    const pdf::PDFDocument* document = documentContext ? documentContext->getDocument() : nullptr;
+    if (m_state != DocumentState::Ready || !document)
+    {
+        result.typedError = QStringLiteral("document/not-ready");
+        return result;
+    }
+
+    // The fence first. An edit begun against a superseded revision is refused
+    // before its payload is read and before any writer is reached.
+    if (!request.revision.isValid() || request.revision != currentRevision())
+    {
+        result.typedError = QStringLiteral("document/stale-revision");
+        return result;
+    }
+
+    // One mutation at a time: a lifecycle operation in flight is measured
+    // against the revision this edit is about to supersede.
+    if (m_pendingInvocation != InvalidCommandInvocation || m_outputState == DocumentOutputState::Pending)
+    {
+        result.typedError = QStringLiteral("document/busy");
+        return result;
+    }
+
+    if (!directEditAllowed(request.kind))
+    {
+        result.typedError = QStringLiteral("document/modify-permission-denied");
+        return result;
+    }
+
+    // Parse the scalar payload at this boundary, then hand it to the one Core
+    // writer for the family. Nothing below here reads the raw map again.
+    bool malformed = false;
+    pdf::DirectEditOutcome outcome;
+    switch (request.kind)
+    {
+        case DocumentDirectEditRequest::Kind::SetFormFieldValue:
+        {
+            pdf::FormFieldValueEdit edit;
+            const bool hasField = requiredString(request.scalars, FieldParameter, &edit.field, &malformed);
+            edit.text = scalarString(request.scalars, ValueParameter, &malformed);
+            edit.checked = scalarBool(request.scalars, CheckedParameter, &malformed);
+            if (!hasField || malformed || (!edit.text && !edit.checked))
+            {
+                result.typedError = QStringLiteral("direct-edit/invalid-request");
+                return result;
+            }
+            outcome = pdf::PDFFormValueWriter::setFieldValue(document, edit);
+            break;
+        }
+
+        case DocumentDirectEditRequest::Kind::AddAttachment:
+        {
+            pdf::AttachmentEdit edit;
+            const bool hasName = requiredString(request.scalars, NameParameter, &edit.name, &malformed);
+            edit.description = scalarString(request.scalars, DescriptionParameter, &malformed).value_or(QString());
+            edit.contents = request.contents;
+            if (!hasName || malformed || edit.contents.isEmpty())
+            {
+                result.typedError = QStringLiteral("direct-edit/invalid-request");
+                return result;
+            }
+            outcome = pdf::PDFAttachmentWriter::add(document, edit);
+            break;
+        }
+
+        case DocumentDirectEditRequest::Kind::RemoveAttachment:
+        {
+            QString name;
+            const bool hasName = requiredString(request.scalars, NameParameter, &name, &malformed);
+            if (!hasName || malformed)
+            {
+                result.typedError = QStringLiteral("direct-edit/invalid-request");
+                return result;
+            }
+            outcome = pdf::PDFAttachmentWriter::remove(document, name);
+            break;
+        }
+
+        case DocumentDirectEditRequest::Kind::EditMetadata:
+        {
+            pdf::DocumentMetadataEdit edit;
+            edit.title = scalarString(request.scalars, TitleParameter, &malformed);
+            edit.author = scalarString(request.scalars, AuthorParameter, &malformed);
+            edit.subject = scalarString(request.scalars, SubjectParameter, &malformed);
+            edit.keywords = scalarString(request.scalars, KeywordsParameter, &malformed);
+            edit.creator = scalarString(request.scalars, CreatorParameter, &malformed);
+            if (malformed || (!edit.title && !edit.author && !edit.subject && !edit.keywords && !edit.creator))
+            {
+                result.typedError = QStringLiteral("direct-edit/invalid-request");
+                return result;
+            }
+            outcome = pdf::PDFMetadataWriter::update(document, edit);
+            break;
+        }
+    }
+
+    if (!outcome.ok())
+    {
+        result.typedError = QString::fromLatin1(pdf::getDirectEditRefusalCode(outcome.refusal));
+        return result;
+    }
+
+    // Accept the edit: the new document replaces the current one, which is what
+    // advances the revision exactly once. markModified() is deliberately not
+    // used here -- it would advance the revision a second time for one edit.
+    if (m_outputState == DocumentOutputState::Pending)
+    {
+        supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
+    }
+    documentContext->setDocument(outcome.document);
+    if (!m_publishedKey.isEmpty())
+    {
+        m_submitter->publishCurrentRevision(m_publishedKey, m_revisionSource.currentRevision());
+    }
+    setOutputState(DocumentOutputState::None);
+    setFacets(m_facets | DocumentFacet::Dirty);
+    updateAvailability();
+
+    result.applied = true;
+    result.revision = m_revisionSource.currentRevision();
+    return result;
+}
+
+bool DocumentFacade::directEditAllowed(DocumentDirectEditRequest::Kind kind) const
+{
+    const auto* documentContext = context();
+    const auto* document = m_state == DocumentState::Ready && documentContext ? documentContext->getDocument() : nullptr;
+    const auto* security = document ? document->getStorage().getSecurityHandler() : nullptr;
+    if (!security)
+    {
+        return false;
+    }
+
+    using Permission = pdf::PDFSecurityHandler::Permission;
+    switch (kind)
+    {
+        case DocumentDirectEditRequest::Kind::SetFormFieldValue:
+            return security->isAllowed(Permission::ModifyFormFields);
+
+        case DocumentDirectEditRequest::Kind::AddAttachment:
+        case DocumentDirectEditRequest::Kind::RemoveAttachment:
+        case DocumentDirectEditRequest::Kind::EditMetadata:
+            return security->isAllowed(Permission::Modify);
+    }
+
+    return false;
 }
 
 CommandInvocationId DocumentFacade::open(const QString& path)

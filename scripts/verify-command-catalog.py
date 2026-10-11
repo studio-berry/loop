@@ -150,6 +150,11 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionStickyNoteNewParagraph",
         "actionStickyNoteNote",
         "actionStickyNoteParagraph",
+        "actionSetFormFieldValue",
+        "actionAddAttachment",
+        "actionRemoveAttachment",
+        "actionEditDocumentMetadata",
+        "actionSend_by_E_Mail",
     }
 )
 

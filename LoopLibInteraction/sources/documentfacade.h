@@ -37,6 +37,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariantMap>
 
 #include <functional>
 #include <memory>
@@ -172,6 +173,47 @@ struct DocumentPlanIntent
     QString findingId;
     QString receiptIdentity;
     pdf::PDFRevisionIdentity revision;
+};
+
+/// One direct authoring edit's request (ADR-014).
+///
+/// Every authoring handler submits through this one shape: the edit kind, the
+/// command's own scalar parameters, the attachment bytes when the kind needs
+/// them, and the `PDFRevisionIdentity` the edit was begun against. The gateway
+/// checks the fence before it reads anything else, so an edit begun against a
+/// superseded revision can never mutate the current one.
+struct DocumentDirectEditRequest
+{
+    enum class Kind
+    {
+        SetFormFieldValue,
+        AddAttachment,
+        RemoveAttachment,
+        EditMetadata
+    };
+
+    Kind kind = Kind::SetFormFieldValue;
+    pdf::PDFRevisionIdentity revision;
+
+    /// The edit's scalar payload: exactly the parameters the command declares
+    /// (`field`, `value`, `checked`, `name`, `description`, `title`, ...).
+    QVariantMap scalars;
+
+    /// Attachment bytes for Kind::AddAttachment. The command contract carries a
+    /// path; the host resolves and reads it, so the mutation gateway itself
+    /// never touches the filesystem.
+    QByteArray contents;
+};
+
+/// The gateway's typed outcome. `applied` is the only success: a refused edit
+/// carries a stable `typedError` code and changed nothing.
+struct DocumentDirectEditResult
+{
+    bool applied = false;
+    QString typedError;
+    pdf::PDFRevisionIdentity revision;
+
+    bool ok() const { return applied; }
 };
 
 struct DocumentInspection
@@ -312,6 +354,17 @@ public:
     bool requestPlan(const QString& operationId, QString& error);
     void clearPlanIntent();
 
+    /// Applies one direct authoring edit (ADR-014).
+    ///
+    /// The order is the contract: the fence is checked against the complete
+    /// `PDFRevisionIdentity` before anything else, then the document's
+    /// permission for that edit family, then the payload is parsed at this
+    /// boundary, and only then does a Core writer run. An accepted edit
+    /// replaces the document in the context — one new revision, one history
+    /// fence — and marks the document modified. A refused edit changes nothing
+    /// and returns its stable code in `typedError`.
+    DocumentDirectEditResult applyDirectEdit(const DocumentDirectEditRequest& request);
+
     /// Begins a signature check for the current revision. One check at a time.
     /// The host runs Core's verification on a scheduler worker and admits the
     /// result through completeSignatureCheck/failSignatureCheck.
@@ -430,6 +483,11 @@ private:
     void invalidateInspection();
     bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;
     void invalidateSignatureCheck();
+
+    /// Whether the open document's security handler grants the permission one
+    /// direct-edit family needs. A document that grants none of them is not an
+    /// error state; it is a refusal with a typed reason.
+    bool directEditAllowed(DocumentDirectEditRequest::Kind kind) const;
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a

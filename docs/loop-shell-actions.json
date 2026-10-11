@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 193,
   "source_ui": "LoopEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
-  "expected_action_count": 109,
+  "expected_action_count": 113,
   "actions": [
     {
       "id": "actionAbout",
@@ -2328,9 +2328,9 @@
       "command": {
         "label_key": "command.actionSend_by_E_Mail.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2695,6 +2695,142 @@
         "availability": "implemented"
       },
       "menu_group": "File"
+    },
+    {
+      "id": "actionSetFormFieldValue",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSetFormFieldValue.label",
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "value",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "checked",
+            "type": "boolean",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionAddAttachment",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionAddAttachment.label",
+        "parameters": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "path",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionRemoveAttachment",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionRemoveAttachment.label",
+        "parameters": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionEditDocumentMetadata",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionEditDocumentMetadata.label",
+        "parameters": [
+          {
+            "name": "title",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "author",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "subject",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "keywords",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "creator",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
     }
   ]
 }

@@ -138,6 +138,8 @@ add_library(LoopLibCore SHARED
     sources/pdfdocumenttextfloweditormodel.h
     sources/pdfdocumentwriter.cpp
     sources/pdfdocumentwriter.h
+    sources/pdfdirectedit.cpp
+    sources/pdfdirectedit.h
     sources/pdfwriteobjectvisitor.cpp
     sources/pdfwriteobjectvisitor_p.h
     sources/pdfexecutionpolicy.cpp

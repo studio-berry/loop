@@ -414,6 +414,7 @@
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
+    "UnitTestsDirectEdit",
     "UnitTestsDocumentFacade",
     "UnitTestsDocumentSearch",
     "UnitTestsDocumentSession",

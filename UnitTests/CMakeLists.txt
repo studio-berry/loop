@@ -862,6 +862,24 @@ set_target_properties(UnitTestsSafeFileWriter PROPERTIES
 )
 add_test(UnitTestsSafeFileWriter "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsSafeFileWriter")
 
+# ADR-014 / epic #231 issue #242: the Core direct-edit writers (form value,
+# attachment add/remove/extract, XMP metadata) and the refusals they owe. No
+# Widgets, no QML: the writers are Core's, and the interaction layer's fence is
+# pinned by UnitTestsEditorHost.
+add_executable(UnitTestsDirectEdit
+    tst_directedittest.cpp
+)
+
+target_link_libraries(UnitTestsDirectEdit PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsDirectEdit PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsDirectEdit "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDirectEdit")
+
 add_executable(UnitTestsContentProcessorLimits
 	tst_contentprocessorlimitstest.cpp
 )

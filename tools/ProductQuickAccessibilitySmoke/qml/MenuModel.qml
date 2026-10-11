@@ -85,6 +85,7 @@ QtObject {
         }
         switch (entry.id) {
         case "actionAbout": return qsTr("About")
+        case "actionAddAttachment": return qsTr("Add Attachment")
         case "actionAutomaticDocumentRefresh": return qsTr("Automatic Document Refresh")
         case "actionBecomeASponsor": return qsTr("Become ASponsor")
         case "actionBleedFixup": return qsTr("Bleed Fixup")
@@ -124,6 +125,7 @@ QtObject {
         case "actionCreateTextStrikeout": return qsTr("Create Text Strikeout")
         case "actionCreateTextUnderline": return qsTr("Create Text Underline")
         case "actionDeselectText": return qsTr("Deselect Text")
+        case "actionEditDocumentMetadata": return qsTr("Edit Document Metadata")
         case "actionEncryption": return qsTr("Encryption")
         case "actionExtractImage": return qsTr("Extract Image")
         case "actionFind": return qsTr("Find")
@@ -161,6 +163,7 @@ QtObject {
         case "actionQuit": return qsTr("Quit")
         case "actionRedo": return qsTr("Redo")
         case "actionRemoveExternalLinks": return qsTr("Remove External Links")
+        case "actionRemoveAttachment": return qsTr("Remove Attachment")
         case "actionRender_to_Images": return qsTr("Render to Images")
         case "actionRendering_Errors": return qsTr("Rendering Errors")
         case "actionRenderOptionAntialiasing": return qsTr("Render Option Antialiasing")
@@ -180,6 +183,7 @@ QtObject {
         case "actionSelectText": return qsTr("Select Text")
         case "actionSelectTextAll": return qsTr("Select Text All")
         case "actionSend_by_E_Mail": return qsTr("Send by E Mail")
+        case "actionSetFormFieldValue": return qsTr("Set Form Field Value")
         case "actionShow_Text_Blocks": return qsTr("Show Text Blocks")
         case "actionShow_Text_Lines": return qsTr("Show Text Lines")
         case "actionStickyNoteComment": return qsTr("Sticky Note Comment")

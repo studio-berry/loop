@@ -59,6 +59,36 @@ QString PDFRevisionIdentity::toString() const
         .arg(effectiveProfileIdentity);
 }
 
+PDFRevisionIdentity PDFRevisionIdentity::fromString(const QString& value)
+{
+    PDFRevisionIdentity identity;
+
+    // The effective profile identity is the last field and may itself contain
+    // colons, so the first four separators are the structure and everything
+    // after the fourth belongs to the profile identity.
+    QStringList parts = value.split(QLatin1Char(':'));
+    if (parts.size() < 5)
+    {
+        return identity;
+    }
+
+    bool documentRevisionOk = false;
+    bool cacheGenerationOk = false;
+    const quint64 documentRevision = parts[2].toULongLong(&documentRevisionOk);
+    const quint64 cacheGeneration = parts[3].toULongLong(&cacheGenerationOk);
+    if (!documentRevisionOk || !cacheGenerationOk || parts[1].isEmpty())
+    {
+        return identity;
+    }
+
+    identity.document.sourceDataHash = QByteArray::fromHex(parts[0].toLatin1());
+    identity.document.documentId = parts[1];
+    identity.documentRevision = documentRevision;
+    identity.cacheGeneration = cacheGeneration;
+    identity.effectiveProfileIdentity = parts.mid(4).join(QLatin1Char(':'));
+    return identity;
+}
+
 PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent, qsizetype pageCacheTotal) :
     QObject(parent),
     m_document(document),
