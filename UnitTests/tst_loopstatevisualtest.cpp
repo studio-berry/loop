@@ -23,7 +23,10 @@
 #include "loopstatevisual.h"
 #include "preflightengine.h"
 
+#include "shellglossary.h"
+
 #include <QSet>
+#include <QTranslator>
 #include <QtTest>
 
 #include <cmath>
@@ -193,6 +196,7 @@ class LoopStateVisualTest : public QObject
     Q_OBJECT
 
 private slots:
+    void glossaryTranslatesPresentationWithoutChangingState();
     void severityMapping_data();
     void severityMapping();
 
@@ -907,6 +911,36 @@ void LoopStateVisualTest::previewFidelityNeverClaimsAPass()
     QVERIFY(visual.colorRole != ColorRole::Success);
 }
 
-QTEST_APPLESS_MAIN(LoopStateVisualTest)
+void LoopStateVisualTest::glossaryTranslatesPresentationWithoutChangingState()
+{
+    class GlossaryTranslator final : public QTranslator
+    {
+    public:
+        bool isEmpty() const override { return false; }
+        QString translate(const char* context, const char* source, const char*, int) const override
+        {
+            return QByteArray(context) == "LoopGlossary"
+                       ? QStringLiteral("[translated %1]").arg(QString::fromUtf8(source))
+                       : QString();
+        }
+    } translator;
+    QVERIFY(QCoreApplication::installTranslator(&translator));
+    for (const QString& code : { QStringLiteral("pass"), QStringLiteral("fail"),
+                                 QStringLiteral("incomplete"), QStringLiteral("error"),
+                                 QStringLiteral("image-resolution") })
+    {
+        QVERIFY(pdfinteraction::glossary::term(code).startsWith(QStringLiteral("[translated ")));
+    }
+    QCOMPARE(pdfinteraction::glossary::term(QStringLiteral("future-finding-code")),
+             QStringLiteral("future-finding-code"));
+    const auto visual = pdfquick::tokens::resolvePreflightStateVisual(QStringLiteral("pass"));
+    QCOMPARE(visual.kind, StateKind::Passed);
+    QCOMPARE(pdfquick::tokens::stateKindName(visual.kind), QStringLiteral("Passed"));
+    QCOMPARE(visual.accessibleName, QStringLiteral("[translated Passed]"));
+    QVERIFY(QCoreApplication::removeTranslator(&translator));
+    QCOMPARE(pdfinteraction::glossary::term(QStringLiteral("pass")), QStringLiteral("Pass"));
+}
+
+QTEST_GUILESS_MAIN(LoopStateVisualTest)
 
 #include "tst_loopstatevisualtest.moc"

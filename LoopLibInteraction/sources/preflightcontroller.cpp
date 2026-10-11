@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightcontroller.h"
+#include "shellglossary.h"
 
 #include "findingnavigation.h"
 #include "pdfpreflightverdict.h"
@@ -92,7 +93,7 @@ QString PreflightController::selectedFindingDescription() const
     }
     const PreflightFindingView* finding = m_findings.finding(id);
     return tr("Selected finding %1. %2. Severity %3. Scope %4. Page %5.")
-        .arg(finding->id, finding->message, finding->severity, finding->scope)
+        .arg(finding->id, finding->message, glossary::term(finding->severity), finding->scope)
         .arg(finding->page);
 }
 
@@ -211,7 +212,7 @@ bool PreflightController::acceptResult(const QString& jobId,
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
-    m_verdictSummary = tr("%1. %2").arg(pdf::preflightVerdictStateToString(verdict.state), m_operatorSummary);
+    m_verdictSummary = tr("%1. %2").arg(glossary::term(pdf::preflightVerdictStateToString(verdict.state)), m_operatorSummary);
     m_jobState = JobState::Completed;
     switch (verdict.state)
     {

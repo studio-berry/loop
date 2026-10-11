@@ -35,6 +35,7 @@
 #include "actionlistrunsubmitter.h"
 #include "repairparameterschema.h"
 #include "preflightcontroller.h"
+#include "shellglossary.h"
 #include "preflightclirun.h"
 #include "preflightengine.h"
 #include "preflightprofileresolver.h"
@@ -1469,6 +1470,11 @@ void EditorHost::acknowledgeSearchPanel()
 
     m_searchPanelVisible = false;
     Q_EMIT presentationChanged();
+}
+
+QString EditorHost::localizedTerm(const QString& code) const
+{
+    return pdfinteraction::glossary::term(code);
 }
 
 QString EditorHost::preflightStateName() const

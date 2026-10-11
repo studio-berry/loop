@@ -31,6 +31,8 @@
 #include <QTimer>
 #include <QTemporaryDir>
 #include <QStandardPaths>
+#include <QTranslator>
+#include <QImage>
 
 #include <cstdio>
 #include <cmath>
@@ -1227,6 +1229,73 @@ void startOperatorProbe(QGuiApplication& application, QQuickWindow* window, Edit
     timer->start(100);
 }
 
+void runLocalizationProbe(QGuiApplication& application, QQuickWindow* window,
+                          EditorHost& host, const QString& directory)
+{
+    if (!QDir(directory).exists())
+    {
+        application.exit(6);
+        return;
+    }
+    const QList<QPair<EditorHost::LoopWorkspace, QString>> workspaces = {
+        { EditorHost::Preflight, QStringLiteral("preflight") },
+        { EditorHost::Fix, QStringLiteral("fix") },
+        { EditorHost::Inspect, QStringLiteral("inspect") }
+    };
+    auto* timer = new QTimer(&application);
+    QObject::connect(timer, &QTimer::timeout, &application,
+                     [&application, window, &host, directory, workspaces, timer, stage = 0]() mutable
+                     {
+                         if (stage == workspaces.size())
+                         {
+                             fprintf(stdout, "quick-localization-probe status=pass native_accessibility_active=%d\n",
+                                     QAccessible::isActive() ? 1 : 0);
+                             timer->stop();
+                             application.exit(0);
+                             return;
+                         }
+                         host.setWorkspace(workspaces.at(stage).first);
+                         QTimer::singleShot(150, &application, [&application, window, directory, name = workspaces.at(stage).second]()
+                                            {
+                                                QJsonArray nodes;
+                                                bool valid = true;
+                                                for (auto* item : window->findChildren<QQuickItem*>())
+                                                {
+                                                    if (!item->isVisible() || item->width() <= 0 || item->height() <= 0)
+                                                    {
+                                                        continue;
+                                                    }
+                                                    const QString text = item->property("text").toString();
+                                                    if (text.isEmpty())
+                                                    {
+                                                        continue;
+                                                    }
+                                                    const bool truncated = item->property("truncated").toBool();
+                                                    valid = valid && !truncated;
+                                                    auto* accessible = QAccessible::queryAccessibleInterface(item);
+                                                    nodes.append(QJsonObject{ { QStringLiteral("object"), item->objectName() },
+                                                                              { QStringLiteral("text"), text },
+                                                                              { QStringLiteral("truncated"), truncated },
+                                                                              { QStringLiteral("accessible_name"), accessible ? accessible->text(QAccessible::Name) : QString() } });
+                                                }
+                                                auto* menu = window->findChild<QQuickItem*>(QStringLiteral("shellMenuBar"));
+                                                auto* accessibleMenu = menu ? QAccessible::queryAccessibleInterface(menu) : nullptr;
+                                                valid = valid && accessibleMenu && accessibleMenu->text(QAccessible::Name).startsWith(QString::fromUtf8("âŸ¦"));
+                                                const QImage screenshot = window->grabWindow();
+                                                valid = valid && !screenshot.isNull() && screenshot.save(QDir(directory).filePath(name + QStringLiteral(".png")));
+                                                QSaveFile report(QDir(directory).filePath(name + QStringLiteral(".json")));
+                                                const QByteArray bytes = QJsonDocument(QJsonObject{ { QStringLiteral("nodes"), nodes }, { QStringLiteral("layout_pass"), valid } }).toJson();
+                                                valid = valid && report.open(QIODevice::WriteOnly) && report.write(bytes) == bytes.size() && report.commit();
+                                                if (!valid)
+                                                {
+                                                    fprintf(stderr, "quick-localization-probe failed workspace=%s\n", qPrintable(name));
+                                                    application.exit(6);
+                                                } });
+                         ++stage;
+                     });
+    timer->start(500);
+}
+
 }   // namespace
 
 int main(int argc, char** argv)
@@ -1236,6 +1305,26 @@ int main(int argc, char** argv)
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     const QStringList arguments = application.arguments();
+    QTranslator localizationTranslator;
+    QString localizationDirectory;
+    const int localizationArgument = arguments.indexOf(QStringLiteral("--pseudo-locale"));
+    if (localizationArgument >= 0)
+    {
+        if (localizationArgument + 2 >= arguments.size() ||
+            !localizationTranslator.load(arguments.at(localizationArgument + 1)) ||
+            !application.installTranslator(&localizationTranslator))
+        {
+            return 6;
+        }
+        localizationDirectory = arguments.at(localizationArgument + 2);
+        if (!QDir(localizationDirectory).exists() ||
+            arguments.contains(QStringLiteral("--operator-native-probe")) ||
+            arguments.contains(QStringLiteral("--encrypted-fixture")) ||
+            arguments.contains(QStringLiteral("--preview-fixtures")))
+        {
+            return 6;
+        }
+    }
     const bool encryptedFixture = arguments.contains(QStringLiteral("--encrypted-fixture"));
     const int probeArgument = arguments.indexOf(QStringLiteral("--operator-native-probe"));
     const bool nativeProbe = probeArgument >= 0;
@@ -1307,11 +1396,18 @@ int main(int argc, char** argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
-                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture, previewFixtures](QObject* object, const QUrl&)
+                     [&application, &host, nativeProbe, probeDirectory, encryptedFixture, previewFixtures, localizationDirectory](QObject* object, const QUrl&)
                      {
                          auto* window = qobject_cast<QQuickWindow*>(object);
                          if (!window)
                          {
+                             return;
+                         }
+
+                         if (!localizationDirectory.isEmpty())
+                         {
+                             QTimer::singleShot(250, &application, [&application, window, &host, localizationDirectory]()
+                                                { runLocalizationProbe(application, window, host, localizationDirectory); });
                              return;
                          }
 

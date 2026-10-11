@@ -349,6 +349,7 @@ public:
     /// approximate one.
     bool pageFidelityIsAuthoritative() const;
 
+    Q_INVOKABLE QString localizedTerm(const QString& code) const;
     Q_INVOKABLE void selectFinding(const QString& findingId);
     Q_INVOKABLE bool selectNextFinding();
     Q_INVOKABLE bool selectPreviousFinding();
