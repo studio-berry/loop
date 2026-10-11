@@ -24,6 +24,7 @@
 #include "loopstatevisual.h"
 
 #include "preflightengine.h"
+#include "../../LoopLibInteraction/sources/shellglossary.h"
 
 namespace pdfquick::tokens
 {
@@ -33,22 +34,22 @@ QString stateAccessibleName(StateKind kind)
     switch (kind)
     {
         case StateKind::Error:
-            return QStringLiteral("Error");
+            return pdfinteraction::glossary::term(QStringLiteral("error"));
         case StateKind::Warning:
-            return QStringLiteral("Warning");
+            return pdfinteraction::glossary::term(QStringLiteral("warning"));
         case StateKind::Info:
-            return QStringLiteral("Info");
+            return pdfinteraction::glossary::term(QStringLiteral("info"));
         case StateKind::Incomplete:
-            return QStringLiteral("Incomplete");
+            return pdfinteraction::glossary::term(QStringLiteral("incomplete"));
         case StateKind::NotChecked:
-            return QStringLiteral("Not checked");
+            return pdfinteraction::glossary::term(QStringLiteral("not-checked"));
         case StateKind::Passed:
-            return QStringLiteral("Passed");
+            return pdfinteraction::glossary::term(QStringLiteral("passed"));
         case StateKind::Waived:
-            return QStringLiteral("Waived");
+            return pdfinteraction::glossary::term(QStringLiteral("waived"));
     }
 
-    return QStringLiteral("Not checked");
+    return pdfinteraction::glossary::term(QStringLiteral("not-checked"));
 }
 
 // Stable, QML-facing names. stateKindName is not stateAccessibleName: "NotChecked" is compared by
@@ -219,52 +220,52 @@ LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName)
     if (normalized == QLatin1String("planned"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::DashedSquare,
-                 QStringLiteral("Plan ready for review") };
+                 QCoreApplication::translate("LoopGlossary", "Plan ready for review") };
     }
     if (normalized == QLatin1String("preview-ready"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::HalfFilled,
-                 QStringLiteral("Preview ready for review") };
+                 QCoreApplication::translate("LoopGlossary", "Preview ready for review") };
     }
     if (normalized == QLatin1String("approved"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::Checkmark,
-                 QStringLiteral("Plan approved, ready to execute") };
+                 QCoreApplication::translate("LoopGlossary", "Plan approved, ready to execute") };
     }
     if (normalized == QLatin1String("executing") || normalized == QLatin1String("running"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::Play,
-                 QStringLiteral("Executing the approved plan") };
+                 QCoreApplication::translate("LoopGlossary", "Executing the approved plan") };
     }
     if (normalized == QLatin1String("succeeded"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare,
-                 QStringLiteral("Correction rechecked and published") };
+                 QCoreApplication::translate("LoopGlossary", "Correction rechecked and published") };
     }
     if (normalized == QLatin1String("stale"))
     {
         return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
-                 QStringLiteral("Plan or preview is stale for the current revision") };
+                 QCoreApplication::translate("LoopGlossary", "Plan or preview is stale for the current revision") };
     }
     if (normalized == QLatin1String("rejected"))
     {
         return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Cross,
-                 QStringLiteral("Plan rejected by the operator") };
+                 QCoreApplication::translate("LoopGlossary", "Plan rejected by the operator") };
     }
     if (normalized == QLatin1String("failed"))
     {
         return { StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle,
-                 QStringLiteral("Correction failed") };
+                 QCoreApplication::translate("LoopGlossary", "Correction failed") };
     }
     if (normalized == QLatin1String("cancelled"))
     {
         return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Slash,
-                 QStringLiteral("Correction cancelled") };
+                 QCoreApplication::translate("LoopGlossary", "Correction cancelled") };
     }
 
     // "idle", an empty string and anything unrecognised: nothing is planned, nothing to trust.
     return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline,
-             QStringLiteral("No correction planned") };
+             QCoreApplication::translate("LoopGlossary", "No correction planned") };
 }
 
 QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact)
@@ -315,28 +316,28 @@ LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName)
     if (normalized == QLatin1String("authoritative"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::BadgeOverlay,
-                 QStringLiteral("Authoritative output-preview render") };
+                 QCoreApplication::translate("LoopGlossary", "Authoritative output-preview render") };
     }
     if (normalized == QLatin1String("approximate"))
     {
         // The overprint-sensitive fast render: never a pass, never a proof of print-safe output.
         return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::Cross,
-                 QStringLiteral("Approximate render, overprint is not simulated") };
+                 QCoreApplication::translate("LoopGlossary", "Approximate render, overprint is not simulated") };
     }
     if (normalized == QLatin1String("exact"))
     {
         return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare,
-                 QStringLiteral("Fast preview path, no overprint-sensitive content") };
+                 QCoreApplication::translate("LoopGlossary", "Fast preview path, no overprint-sensitive content") };
     }
     if (normalized == QLatin1String("stale"))
     {
         return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched,
-                 QStringLiteral("Preview is stale for the current revision") };
+                 QCoreApplication::translate("LoopGlossary", "Preview is stale for the current revision") };
     }
 
     // "unavailable", an empty string and anything unrecognised: no preview to trust.
     return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline,
-             QStringLiteral("Preview fidelity unavailable") };
+             QCoreApplication::translate("LoopGlossary", "Preview fidelity unavailable") };
 }
 
 LoopStateVisual resolveSignatureStateVisual(const QString& stateName)

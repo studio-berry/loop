@@ -408,22 +408,22 @@ Pane {
             delegate: ItemDelegate {
                 width: findingsView.width
                 activeFocusOnTab: true
-                text: "%1 — %2".arg(model.severity).arg(model.message)
+                text: qsTr("%1 — %2: %3").arg(root.host.localizedTerm(model.severity)).arg(root.host.localizedTerm(model.type)).arg(model.message)
                 highlighted: model.selected
                 Accessible.selected: model.selected
                 Accessible.role: Accessible.ListItem
-                Accessible.name: model.message
+                Accessible.name: qsTr("%1: %2").arg(root.host.localizedTerm(model.type)).arg(model.message)
                 Accessible.description: qsTr("Severity %1, scope %2, page %3, object %4, check %5, evidence %6")
-                    .arg(model.severity).arg(model.scope).arg(model.page).arg(model.objectId).arg(model.checkId).arg(model.evidenceIds.join(", "))
+                    .arg(root.host.localizedTerm(model.severity)).arg(model.scope).arg(model.page).arg(model.objectId).arg(model.checkId).arg(model.evidenceIds.join(", "))
                 contentItem: RowLayout {
                     Label {
                         Layout.fillWidth: true
-                        text: "%1 — %2".arg(model.severity).arg(model.message)
+                        text: qsTr("%1 — %2: %3").arg(root.host.localizedTerm(model.severity)).arg(root.host.localizedTerm(model.type)).arg(model.message)
                         wrapMode: Text.WordWrap
                     }
                     ToolButton {
                         text: qsTr("Help")
-                        Accessible.name: qsTr("Help for %1 finding").arg(model.type)
+                        Accessible.name: qsTr("Help for %1 finding").arg(root.host.localizedTerm(model.type))
                         onClicked: root.helpRequested(model.checkId, model.type)
                     }
                 }
