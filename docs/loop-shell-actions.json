@@ -311,10 +311,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateEllipse.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -324,10 +355,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateFreehandCurve.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1052,10 +1099,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreatePolygon.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1065,10 +1128,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreatePolyline.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1078,10 +1157,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateRectangle.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1091,10 +1201,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateStraightLine.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x1",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y1",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "x2",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y2",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1104,10 +1245,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextHighlight.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1117,10 +1289,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextSquiggly.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1130,10 +1333,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextStrikeout.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1143,10 +1377,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextUnderline.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1455,10 +1720,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionInlineText.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2070,10 +2366,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteComment.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2083,10 +2400,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteHelp.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2096,10 +2434,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteInsert.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2109,10 +2468,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteKey.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2122,10 +2502,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteNewParagraph.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2135,10 +2536,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteNote.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -2148,10 +2570,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteParagraph.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },

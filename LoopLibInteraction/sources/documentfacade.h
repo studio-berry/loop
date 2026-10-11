@@ -24,6 +24,7 @@
 #define DOCUMENTFACADE_H
 
 #include "commandcatalog.h"
+#include "directeditrequest.h"
 #include "documentcontextsource.h"
 #include "documentloader.h"
 #include "jobrelay.h"
@@ -210,6 +211,11 @@ struct DocumentPermissions
     bool copy = false;
     bool assemble = false;
 
+    /// Modify-annotations (PDF permission bit 6) is the permission annotation
+    /// authoring needs: it is checked by the facade's direct-edit gateway and by
+    /// the shell's availability gate, from this one value (ADR-014).
+    bool modifyAnnotations = false;
+
     bool allowsCorrection() const { return print && modify && copy && assemble; }
 };
 
@@ -346,6 +352,15 @@ public:
     /// document, which advances the revision and the cache generation.
     DocumentEditOutcome applyAuthoringEdit(const DocumentEditRequest& request);
 
+    /// Applies one typed direct edit — the single mutation gateway for
+    /// interactive authoring (ADR-014). The revision fence and the document's
+    /// modify-annotations permission are checked before anything is built, so a
+    /// refusal mutates nothing. An accepted edit replaces the document with the
+    /// new revision produced by the Core writer primitive and appends one
+    /// operation-history event and rollback point (#124's model); the outcome
+    /// reports the mutation and the provenance write separately.
+    DirectEditOutcome applyDirectEdit(const DirectEditRequest& request);
+
     CommandInvocationId open(const QString& path);
 
     /// Re-opens the current source. Replacement, not a refresh: the old identity
@@ -404,6 +419,13 @@ private:
     /// moves, and the document is dirty with no pending output.
     void noteAuthoringMutation();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
+
+    /// Lifecycle bookkeeping for a mutation that already advanced the revision
+    /// through the document context (applyDirectEdit). Unlike markModified(), it
+    /// does not advance the revision again: the context is the revision
+    /// authority, and one accepted edit is exactly one revision.
+    void noteDirectMutation();
+
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();
     bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;

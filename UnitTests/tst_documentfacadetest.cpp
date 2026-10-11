@@ -449,9 +449,10 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     }
     // The display colour modes (#235), the select/copy/capture commands (#232),
     // the measure commands (#238), the shell settings/diagnostics surfaces
-    // (#239) and the bookmark/hyperlink commands (#233) joined the implemented
-    // set in epic #231.
-    QCOMPARE(implemented, 71);
+    // (#239), the bookmark/hyperlink commands (#233), the annotation authoring
+    // family (#234) and the form/attachment/metadata commands (#242) joined the
+    // implemented set in epic #231.
+    QCOMPARE(implemented, 94);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()

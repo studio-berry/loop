@@ -33,6 +33,7 @@
 #include "pagesurfacecoordinator.h"
 #include "actionlistcontroller.h"
 #include "actionlistrunsubmitter.h"
+#include "directeditrequest.h"
 #include "repairparameterschema.h"
 #include "preflightcontroller.h"
 #include "shellglossary.h"
@@ -45,6 +46,7 @@
 
 #include "pdfdocumentsession.h"
 #include "pdfdocumentimageextractor.h"
+#include "pdfannotationauthoring.h"
 #include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
@@ -4537,9 +4539,16 @@ bool EditorHost::commandPermissionAllowed(const QString& commandId) const
         return permissions.copy;
     }
     if (commandId == MoveSelectionCommandId || commandId == QLatin1String("actionPageGeometry") ||
-        commandId == QLatin1String("actionInsertPageNumbers") || commandId == QLatin1String("actionStickyNoteInsert"))
+        commandId == QLatin1String("actionInsertPageNumbers"))
     {
         return permissions.allowsCorrection();
+    }
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        if (commandId == entry.first)
+        {
+            return permissions.modifyAnnotations;
+        }
     }
     return true;
 }
@@ -5401,6 +5410,51 @@ void EditorHost::registerFeatureHandlers()
             bumpPresentation();
         };
         m_session->catalog().setHandler(id, std::move(navigation));
+    // ---- Annotation authoring (issue #234) ---------------------------------
+    // One handler per declared annotation command. The handler parses geometry
+    // at this boundary, submits the typed request to the facade's direct-edit
+    // gateway (ADR-014) and surfaces the gateway's typed refusal; it never
+    // touches the document itself. An accepted edit is a new revision, and the
+    // revision-changed path already refreshes the canvas and the annotation
+    // overlay, so no annotation state is cached here.
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        const pdf::AnnotationAuthoringSubtype subtype = entry.second;
+        pdfinteraction::CommandCatalog::Handler authoring;
+        authoring.invoke = [this, subtype](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            QString refusal;
+            const std::optional<pdfinteraction::DirectEditRequest> parsed =
+                pdfinteraction::directEditRequestFromParameters(subtype, parameters, &refusal);
+            if (!parsed)
+            {
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, refusal);
+                bumpPresentation();
+                return;
+            }
+
+            pdfinteraction::DirectEditRequest request = *parsed;
+            request.revision = m_session->facade().currentRevision();
+            request.operatorIdentity = QStringLiteral("Editor");
+            const pdfinteraction::DirectEditOutcome outcome = m_session->facade().applyDirectEdit(request);
+            if (!outcome.accepted)
+            {
+                // A menu command that changed nothing must say why, in the same
+                // announcement channel every other operator-visible outcome uses.
+                announceDocumentState(tr("The annotation was not created: %1").arg(outcome.typedError));
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, outcome.typedError);
+            }
+            else
+            {
+                announceDocumentState(tr("Annotation added."));
+                // The annotation exists. A provenance failure is reported on the
+                // completed invocation instead of pretending the edit did not land.
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed,
+                                                      outcome.historyAppended ? QString() : outcome.historyError);
+            }
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(entry.first, std::move(authoring));
     }
 
     refreshFeatureAvailability();
@@ -5487,6 +5541,14 @@ void EditorHost::refreshFeatureAvailability()
     for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
     {
         availability.insert(id, ready && m_documentModel.hasOutline());
+    // Annotation authoring (issue #234): available with a document whose
+    // modify-annotations permission is granted, so a restricted document cannot
+    // offer an edit the gateway would refuse. The ids come from the one table
+    // the handlers were registered from.
+    const bool annotationAuthoring = ready && m_session->facade().permissions().modifyAnnotations;
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        availability.insert(entry.first, annotationAuthoring);
     }
 
     m_session->catalog().setEnabledBatch(availability);

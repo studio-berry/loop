@@ -399,6 +399,7 @@
   "test_targets": [
     "UnitTests",
     "UnitTestsActionList",
+    "UnitTestsAnnotationAuthoring",
     "UnitTestsApplicationIdentity",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",

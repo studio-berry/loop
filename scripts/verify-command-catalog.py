@@ -129,6 +129,27 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionGotoNextBookmark",
         "actionGotoPreviousBookmark",
         "actionRedo",
+        # Annotation authoring (issue #234). EditorHost registers one handler per
+        # id; each maps its scalar geometry into the facade's direct-edit gateway
+        # (ADR-014).
+        "actionCreateTextHighlight",
+        "actionCreateTextUnderline",
+        "actionCreateTextStrikeout",
+        "actionCreateTextSquiggly",
+        "actionCreateRectangle",
+        "actionCreateEllipse",
+        "actionCreateStraightLine",
+        "actionCreatePolyline",
+        "actionCreatePolygon",
+        "actionCreateFreehandCurve",
+        "actionInlineText",
+        "actionStickyNoteComment",
+        "actionStickyNoteHelp",
+        "actionStickyNoteInsert",
+        "actionStickyNoteKey",
+        "actionStickyNoteNewParagraph",
+        "actionStickyNoteNote",
+        "actionStickyNoteParagraph",
     }
 )
 

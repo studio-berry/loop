@@ -405,6 +405,10 @@ private slots:
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void annotationReviewListsAndNavigatesToThePageRegion();
+    /// Issue #234: annotation authoring commands go through the direct-edit
+    /// gateway, and the authored annotation reaches the quick lane's models.
+    void annotationCommandsAuthorThroughTheGatewayAndRefuseWithoutGeometry();
+
     void signatureStatusPresentsTheReducedState();
     void signatureInvalidationGateBlocksExecutionUntilAcknowledged();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
@@ -2677,6 +2681,105 @@ void EditorHostTest::annotationReviewListsAndNavigatesToThePageRegion()
     QVERIFY(!host.navigateToAnnotation(2));
     QVERIFY(!host.navigateToAnnotation(-1));
     QCOMPARE(host.currentPage(), 1);
+}
+
+void EditorHostTest::annotationCommandsAuthorThroughTheGatewayAndRefuseWithoutGeometry()
+{
+    qRegisterMetaType<pdfinteraction::CommandResult>("pdfinteraction::CommandResult");
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("authoring.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 612, 792));
+        pdf::PDFDocumentWriter writer(nullptr);
+        const pdf::PDFDocument document = builder.build();
+        QVERIFY(writer.write(documentPath, &document, false));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    QuickDocumentModel* documentModel = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(documentModel != nullptr);
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // The command is available with an unrestricted document.
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionCreateTextHighlight")));
+
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    // A menu invocation carries no geometry: the catalog refuses the missing
+    // required parameter before any handler runs, typed, and nothing is created.
+    QCOMPARE(host.invokeCommand(QStringLiteral("actionCreateTextHighlight")), quint64(0));
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Failed);
+        QCOMPARE(result.typedError, QStringLiteral("command/missing-parameter"));
+    }
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // A degenerate rectangle passes the contract's type check and is refused by
+    // the handler's boundary parse, before the gateway is reached.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionCreateTextHighlight"),
+                               QVariantMap{ { QStringLiteral("page"), 0 },
+                                            { QStringLiteral("x"), 10.0 },
+                                            { QStringLiteral("y"), 10.0 },
+                                            { QStringLiteral("width"), 0.0 },
+                                            { QStringLiteral("height"), 10.0 } }) != 0);
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Failed);
+        QCOMPARE(result.typedError, QStringLiteral("annotation/invalid-geometry"));
+    }
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // With geometry the handler submits the typed request, the gateway creates
+    // the annotation as a new revision, and the quick lane presents it.
+    const QString beforeRevision = session->facade().currentRevision().toString();
+    const QVariantMap parameters{
+        { QStringLiteral("page"), 0 },
+        { QStringLiteral("x"), 100.0 },
+        { QStringLiteral("y"), 120.0 },
+        { QStringLiteral("width"), 200.0 },
+        { QStringLiteral("height"), 16.0 },
+    };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionCreateTextHighlight"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Completed);
+        QVERIFY2(result.typedError.isEmpty(), qPrintable(result.typedError));
+    }
+    QVERIFY(session->facade().currentRevision().toString() != beforeRevision);
+
+    const pdf::PDFPage* page = session->context().getDocument()->getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    QCOMPARE(page->getAnnotations().size(), std::size_t(1));
+    const pdf::PDFAnnotationPtr annotation =
+        pdf::PDFAnnotation::parse(&session->context().getDocument()->getStorage(), page->getAnnotations().front());
+    QVERIFY(annotation != nullptr);
+    QCOMPARE(annotation->getType(), pdf::AnnotationType::Highlight);
+    QCOMPARE(annotation->getRectangle(), QRectF(100.0, 120.0, 200.0, 16.0));
+
+    // The revision change reached the quick lane: the annotation model lists the
+    // new mark and the overlay carries it as a read-only page-space rectangle.
+    QTRY_COMPARE_WITH_TIMEOUT(documentModel->annotationCount(), 1, 10000);
+    const QList<QuickAnnotation>& rows = documentModel->annotationModel().rows();
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows.at(0).pageIndex, 0);
+    QCOMPARE(rows.at(0).bounds, QRectF(100.0, 120.0, 200.0, 16.0));
+    QCOMPARE(session->overlays()->annotations().size(), 1);
+
+    // The accepted edit appended its provenance event beside the document
+    // (#124's model; wiring Undo stays out of this slice).
+    QVERIFY(QFile::exists(documentPath + QStringLiteral(".loop-history/history.sqlite3")));
 }
 
 void EditorHostTest::signatureStatusPresentsTheReducedState()
