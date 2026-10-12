@@ -145,6 +145,7 @@ private Q_SLOTS:
     void textSelectionPaintsInTheSelectionBandWithoutATarget();
     void annotationMarksPaintUnderFindingsWithTheirOwnSelection();
     void annotationMarksAreBounded();
+    void findingAndAnnotationCapsLeaveHeadroomForSteeringPrimitives();
 
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
@@ -259,6 +260,60 @@ void OverlayFrameTest::annotationMarksAreBounded()
     QCOMPARE(frame.droppedPrimitives, 2);
     QCOMPARE(frame.primitives.at(0).layer, pdfinteraction::OverlayLayer::Annotations);
     QCOMPARE(frame.primitives.at(1).layer, pdfinteraction::OverlayLayer::Findings);
+}
+
+void OverlayFrameTest::findingAndAnnotationCapsLeaveHeadroomForSteeringPrimitives()
+{
+    // The defaults face the corpus-scale frame: findings and annotation marks
+    // beyond their caps, plus the hover and selection the user is steering. The
+    // two marker caps must leave headroom for the steering primitives, because
+    // annotations are emitted before them and the total bound is the last
+    // resort, not the intended one.
+    const pdfinteraction::OverlayBounds bounds = pdfinteraction::OverlayBounds::conservativeDefaults();
+
+    QList<pdfinteraction::InteractionTarget> findings;
+    for (int index = 0; index < bounds.maxFindingPrimitives + 100; ++index)
+    {
+        findings.push_back(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                      QStringLiteral("finding-%1").arg(index),
+                                      QRectF(qreal(index % 90), qreal((index / 90) % 90), 1.0, 1.0)));
+    }
+
+    QList<pdfinteraction::InteractionTarget> annotations;
+    for (int index = 0; index < bounds.maxAnnotationPrimitives + 300; ++index)
+    {
+        annotations.push_back(makeTarget(pdfinteraction::InteractionTargetKind::None,
+                                         QStringLiteral("annotation-%1").arg(index),
+                                         QRectF(qreal(index % 90), qreal((index / 90) % 90), 1.0, 1.0)));
+    }
+
+    m_overlays->setFindings(findings);
+    m_overlays->setAnnotations(annotations);
+    m_state.setHovered(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                  QStringLiteral("hovered"), QRectF(20.0, 20.0, 10.0, 10.0)));
+    m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                   QStringLiteral("selected"), QRectF(30.0, 30.0, 10.0, 10.0)));
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, makeToken());
+
+    QVERIFY(frame.primitives.size() <= bounds.maxPrimitives);
+
+    // The steering primitives survive the saturated marker bands.
+    QVERIFY(findPrimitive(frame, QStringLiteral("hovered#hover")));
+    QVERIFY(findPrimitive(frame, QStringLiteral("selected#selection")));
+
+    // The annotation band is capped at the constant, and the shortfall is
+    // reported rather than implied.
+    int annotationPrimitives = 0;
+    for (const pdfinteraction::OverlayPrimitive& primitive : frame.primitives)
+    {
+        if (primitive.layer == pdfinteraction::OverlayLayer::Annotations)
+        {
+            ++annotationPrimitives;
+        }
+    }
+    QCOMPARE(annotationPrimitives, bounds.maxAnnotationPrimitives);
+    QCOMPARE(frame.droppedPrimitives, 400);
 }
 
 void OverlayFrameTest::tiesBreakByRegistrationSequence()

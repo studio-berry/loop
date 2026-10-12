@@ -391,6 +391,8 @@ private slots:
 
     void signatureCheckReducesVerificationResultsToTheOperatorVocabulary();
     void signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument();
+    void refusedSignatureCheckCompletionReleasesTheRunningCheck();
+    void supersededSignatureCheckCompletionDoesNotReleaseTheNewerCheck();
 
     // The typed direct-edit gateway (ADR-014, issue #233).
     void authoringEditAdvancesTheRevisionAndWritesTheOutline();
@@ -1424,6 +1426,81 @@ void DocumentFacadeTest::signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWith
     QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
     QVERIFY(harness.facade->signatureFacts().detail.isEmpty());
     QCOMPARE(harness.facade->signatureFacts().signatureCount, 0);
+}
+
+void DocumentFacadeTest::refusedSignatureCheckCompletionReleasesTheRunningCheck()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    const auto token = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(token.has_value(), qPrintable(error));
+
+    // A revision change while Core verifies: the completion no longer belongs
+    // to the current revision and is refused, but it must release the
+    // one-check-at-a-time flag instead of wedging every later check.
+    harness.context.markModified();
+
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+
+    QVERIFY(!harness.facade->completeSignatureCheck(*token, { validResult }, error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+
+    const auto resubmitted = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(resubmitted.has_value(), qPrintable(error));
+    QVERIFY2(harness.facade->completeSignatureCheck(*resubmitted, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
+
+    // The failed-check path releases the same way.
+    const auto failing = harness.facade->beginSignatureCheck(error);
+    QVERIFY(failing.has_value());
+    harness.context.markModified();
+    QVERIFY(!harness.facade->failSignatureCheck(*failing,
+                                                QStringLiteral("The file changed since the document was loaded."),
+                                                error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY2(harness.facade->beginSignatureCheck(error).has_value(), qPrintable(error));
+}
+
+void DocumentFacadeTest::supersededSignatureCheckCompletionDoesNotReleaseTheNewerCheck()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    const auto oldToken = harness.facade->beginSignatureCheck(error);
+    QVERIFY(oldToken.has_value());
+    harness.context.markModified();
+    QVERIFY(!harness.facade->completeSignatureCheck(*oldToken, {}, error));
+
+    const auto current = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(current.has_value(), qPrintable(error));
+
+    // The old completion is superseded now: it is refused, and it must not
+    // clear the newer check's running flag.
+    QVERIFY(!harness.facade->completeSignatureCheck(*oldToken, {}, error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    QVERIFY(!harness.facade->failSignatureCheck(*oldToken, QStringLiteral("stale"), error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    // The newer check is the one that completes.
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+    QVERIFY2(harness.facade->completeSignatureCheck(*current, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
 }
 
 void DocumentFacadeTest::realDocumentRoundTripsThroughCoreReaderAndWriter()

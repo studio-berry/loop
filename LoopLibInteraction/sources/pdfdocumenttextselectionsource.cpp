@@ -138,6 +138,13 @@ pdf::PDFTextLayout* PDFDocumentTextSelectionSource::mutableTextLayout(int pageIn
     const auto cached = m_layouts.find(pageIndex);
     if (cached != m_layouts.end())
     {
+        // A page with no text layer caches an empty layout, and the refusal
+        // must be the same on every call, not only the one that generated it.
+        // Re-check rather than return the cached empty layout as available.
+        if (cached.value().getTextBlocks().empty())
+        {
+            return unavailable(tr("This page has no text layer."));
+        }
         return &cached.value();
     }
 

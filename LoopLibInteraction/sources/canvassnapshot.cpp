@@ -70,11 +70,12 @@ QImage composeCanvasImage(const CanvasSnapshot& snapshot, QRect viewportRect, qr
             continue;
         }
 
-        // The tile image is drawn into its placed rectangle in device pixels.
-        // A tile rendered for another resolution is scaled here exactly as the
-        // scene graph scales it, so the capture shows what the canvas shows.
-        const QRectF target(tile.placedRect.topLeft() * ratio, tile.placedRect.size() * ratio);
-        painter.drawImage(target, tile.pixels->image);
+        // The painter's coordinate space is viewport units: the composed
+        // image's device pixel ratio maps them to device pixels, so the placed
+        // rectangle is drawn unchanged. A tile rendered for another resolution
+        // is scaled here exactly as the scene graph scales it, so the capture
+        // shows what the canvas shows.
+        painter.drawImage(QRectF(tile.placedRect), tile.pixels->image);
         anyTile = true;
     }
     painter.end();

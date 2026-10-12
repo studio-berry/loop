@@ -281,6 +281,7 @@ private Q_SLOTS:
     void measureToolDragThroughTheCanvasReportsProductionUnits();
     void textSelectionOnAPageWithNoTextLayerReportsThatState();
     void canvasCompositionPlacesTilesInDevicePixels();
+    void canvasCompositionDrawsPlacedTilesInViewportUnitsOnHiDpi();
 
     void admittedTilesReachTheSceneGraph();
     void revisionReplacementLeavesNoStaleTile();
@@ -898,6 +899,37 @@ void QuickCanvasTest::canvasCompositionPlacesTilesInDevicePixels()
 
     // A region no tile intersects is a refusal, not a blank success.
     QVERIFY(pdfinteraction::composeCanvasImage(snapshot, QRect(100, 100, 40, 20), 1.0).isNull());
+}
+
+void QuickCanvasTest::canvasCompositionDrawsPlacedTilesInViewportUnitsOnHiDpi()
+{
+    // At a device pixel ratio other than 1 the painter's coordinate space is
+    // still viewport units: the placed rectangle is drawn unchanged and the
+    // composed image's own ratio maps it to device pixels. Multiplying the
+    // placed rect by the ratio again would move and grow the tile.
+    pdfinteraction::CanvasSnapshot snapshot;
+    snapshot.token = pdfinteraction::RevisionFencedToken();
+
+    QImage red(10, 10, QImage::Format_ARGB32_Premultiplied);
+    red.fill(Qt::red);
+
+    pdfinteraction::CanvasTile tile;
+    tile.key.pageIndex = 0;
+    tile.pixels = pdfinteraction::makeSurfaceBuffer(red);
+    tile.placedRect = QRect(10, 0, 10, 10);
+    snapshot.tiles.push_back(tile);
+
+    const QImage composed = pdfinteraction::composeCanvasImage(snapshot, QRect(0, 0, 40, 20), 2.0);
+    QVERIFY(!composed.isNull());
+    QCOMPARE(composed.size(), QSize(80, 40));
+
+    // Device pixels inside placedRect * 2 carry the tile colour.
+    QCOMPARE(composed.pixelColor(30, 10), QColor(Qt::red));
+
+    // Outside it the canvas white shows: at the placed rect's viewport
+    // coordinates when read as device pixels, and beyond its device rect.
+    QCOMPARE(composed.pixelColor(10, 10), QColor(Qt::white));
+    QCOMPARE(composed.pixelColor(50, 10), QColor(Qt::white));
 }
 
 // ---------------------------------------------------------------------------

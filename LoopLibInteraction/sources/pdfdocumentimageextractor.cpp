@@ -131,6 +131,14 @@ QList<PageImage> PDFDocumentImageExtractor::extractPage(int pageIndex, QString* 
         return refuse(tr("No document is open."));
     }
 
+    // PdfTool's fetch-images refuses the same operation with
+    // `pdf.copy-not-permitted`; extraction and the shell's write-to-disk path
+    // must agree about what the document's permissions allow.
+    if (!document->getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
+    {
+        return refuse(tr("Document doesn't allow to copy content."));
+    }
+
     const pdf::PDFCatalog* catalog = document->getCatalog();
     const bool pageInRange = catalog && pageIndex >= 0 &&
                              static_cast<size_t>(pageIndex) < catalog->getPageCount();

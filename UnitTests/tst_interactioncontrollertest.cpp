@@ -35,10 +35,12 @@
 
 #include <QJsonDocument>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 
 #include <cmath>
 #include <memory>
 
+#include "documentloader.h"
 #include "hittestsource.h"
 #include "inputintent.h"
 #include "interactioncontroller.h"
@@ -50,8 +52,14 @@
 #include "pagesurfacerenderer.h"
 #include "viewportcontroller.h"
 
+#include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentimageextractor.h"
+#include "pdfdocumenttextselectionsource.h"
+#include "pdfdocumentwriter.h"
 #include "pdfevidencegraph.h"
+#include "pdfjobscheduler.h"
+#include "pdfsecurityhandler.h"
 
 namespace
 {
@@ -79,6 +87,56 @@ pdf::PDFRevisionIdentity makeRevision(const QString& documentId, quint64 documen
     revision.document.sourceDataHash = documentId.toUtf8();
     revision.documentRevision = documentRevision;
     return revision;
+}
+
+/// One 2x2 RGB image XObject painted on a page with no text at all: the
+/// fixture for "a page with no text layer" and for image extraction. Mirrors
+/// the DocumentViewSession suite's fixture so both suites extract the same
+/// content.
+void appendImageOnlyPage(pdf::PDFDocumentBuilder& builder)
+{
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    QByteArray imageData;
+    for (int pixel = 0; pixel < 4; ++pixel)
+    {
+        imageData.append('\xff');
+        imageData.append('\0');
+        imageData.append('\0');
+    }
+
+    pdf::PDFDictionary imageDictionary;
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Image"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Width"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Height"), pdf::PDFObject::createInteger(2));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"), pdf::PDFObject::createName("DeviceRGB"));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString("BitsPerComponent"), pdf::PDFObject::createInteger(8));
+    imageDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(imageData.size()));
+    pdf::PDFStream imageStream(std::move(imageDictionary), std::move(imageData));
+    const pdf::PDFObjectReference imageReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(imageStream)));
+
+    const QByteArray content = "q 40 0 0 40 80 80 cm /Im0 Do Q";
+
+    pdf::PDFDictionary contentDictionary;
+    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                               pdf::PDFObject::createInteger(content.size()));
+    pdf::PDFStream contentStream(std::move(contentDictionary), QByteArray(content));
+    const pdf::PDFObjectReference contentReference =
+        builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(contentStream)));
+
+    pdf::PDFDictionary xObjects;
+    xObjects.addEntry(pdf::PDFInplaceOrMemoryString("Im0"), pdf::PDFObject::createReference(imageReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
+
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
 }
 
 /// Fixed-size pages and a transform simple enough to invert by hand, the same
@@ -365,6 +423,12 @@ private Q_SLOTS:
     void selectAllAndDeselectText();
     void steppingByLineWalksTheTextLayer();
     void tableSelectionUsesTheBlockUnderThePointer();
+
+    // The Core-backed interaction sources, against real documents: extraction
+    // permission parity with PdfTool's fetch-images, and the selection source's
+    // layout cache.
+    void imageExtractionRefusesWhenCopyContentIsDenied();
+    void selectionSourceRefusesAPageWithNoTextLayerOnEveryCall();
 
 private:
     void setViewport();
@@ -1660,6 +1724,95 @@ void InteractionControllerTest::tableSelectionUsesTheBlockUnderThePointer()
     QCOMPARE(selection->text, m_textSource->blockText);
     QVERIFY(qAbs(m_textSource->lastBlockPoint.x() - 30.0) <= 1.0);
     QVERIFY(qAbs(m_textSource->lastBlockPoint.y() - 30.0) <= 1.0);
+}
+
+void InteractionControllerTest::imageExtractionRefusesWhenCopyContentIsDenied()
+{
+    // Only a reader-created handler reports the permissions the file declares,
+    // so the fixture is a real encrypted file read through the real loader.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("copy-restricted.pdf"));
+
+    {
+        pdf::PDFDocumentBuilder builder;
+        appendImageOnlyPage(builder);
+
+        pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+        settings.algorithm = pdf::PDFSecurityHandlerFactory::AES_256;
+        settings.permissions = 0;
+        settings.userPassword = QStringLiteral("user");
+        settings.ownerPassword = QStringLiteral("owner");
+        settings.id = builder.build().getIdPart(0);
+        builder.setSecurityHandler(pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings));
+
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(bool(writer.write(path, &document, false)));
+    }
+
+    const auto loadDocument = [&path](const QString& password) -> pdf::PDFDocumentPointer
+    {
+        pdfinteraction::PDFReaderDocumentLoader loader(
+            [password](bool* ok, const pdf::PDFOperationControl*)
+            {
+                *ok = true;
+                return password;
+            });
+        pdf::PDFJobContext jobContext(std::make_shared<pdf::PDFJobCancellationToken>(),
+                                      pdf::PDFProcessingLimits::conservativeDefaults(), {});
+        const pdfinteraction::DocumentLoadResult result =
+            loader.load(pdfinteraction::DocumentSource{ path }, jobContext);
+        return result.document;
+    };
+
+    // User authorization without CopyContent: the extraction is refused with
+    // the same sentence PdfTool's fetch-images refuses with.
+    const pdf::PDFDocumentPointer restricted = loadDocument(QStringLiteral("user"));
+    QVERIFY(restricted);
+    QVERIFY(!restricted->getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent));
+    pdf::PDFDocumentContext restrictedContext(restricted);
+    pdfinteraction::PDFDocumentImageExtractor restrictedExtractor(&restrictedContext);
+    QString typedError;
+    const QList<pdfinteraction::PageImage> refused = restrictedExtractor.extractPage(0, &typedError);
+    QVERIFY(refused.isEmpty());
+    QCOMPARE(typedError, QStringLiteral("Document doesn't allow to copy content."));
+
+    // Owner authorization satisfies the same permission: the page carries one
+    // image, so the refusal above is the permission and not a missing fixture.
+    const pdf::PDFDocumentPointer owner = loadDocument(QStringLiteral("owner"));
+    QVERIFY(owner);
+    pdf::PDFDocumentContext ownerContext(owner);
+    pdfinteraction::PDFDocumentImageExtractor ownerExtractor(&ownerContext);
+    typedError.clear();
+    const QList<pdfinteraction::PageImage> extracted = ownerExtractor.extractPage(0, &typedError);
+    QCOMPARE(extracted.size(), 1);
+    QVERIFY(typedError.isEmpty());
+}
+
+void InteractionControllerTest::selectionSourceRefusesAPageWithNoTextLayerOnEveryCall()
+{
+    // The source against a real revision: the first call generates an empty
+    // layout for the page and caches it, and the second must report the same
+    // refusal instead of handing the cached empty layout back as available.
+    pdf::PDFDocumentBuilder builder;
+    appendImageOnlyPage(builder);
+    const pdf::PDFDocumentPointer document(new pdf::PDFDocument(builder.build()));
+    pdf::PDFDocumentContext context(document);
+    pdfinteraction::PDFDocumentTextSelectionSource source(&context);
+
+    const QPointF start(10.0, 10.0);
+    const QPointF end(150.0, 150.0);
+
+    const pdfinteraction::TextSelectionResult first = source.selectRange(0, start, end);
+    QVERIFY(!first.available);
+    QCOMPARE(first.unavailableReason, QStringLiteral("This page has no text layer."));
+    QVERIFY(!source.hasTextLayer(0));
+
+    const pdfinteraction::TextSelectionResult second = source.selectRange(0, start, end);
+    QVERIFY(!second.available);
+    QCOMPARE(second.unavailableReason, QStringLiteral("This page has no text layer."));
+    QVERIFY(!source.hasTextLayer(0));
 }
 
 QTEST_GUILESS_MAIN(InteractionControllerTest)

@@ -499,10 +499,6 @@ DirectEditOutcome DocumentFacade::applyDocumentEdit(const DirectEditRequest& req
     // Accept the edit: the new document replaces the current one, which is what
     // advances the revision exactly once. markModified() is deliberately not
     // used here -- it would advance the revision a second time for one edit.
-    if (m_outputState == DocumentOutputState::Pending)
-    {
-        supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
-    }
     documentContext->setDocument(coreOutcome.document);
     if (!m_publishedKey.isEmpty())
     {

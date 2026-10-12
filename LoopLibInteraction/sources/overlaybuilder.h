@@ -51,8 +51,11 @@ struct OverlayBounds
 
     /// Of those, how many may be read-only annotation review marks. Bounded for
     /// the same reason as findings: a heavily annotated document must not crowd
-    /// the steering primitives out of the frame.
-    int maxAnnotationPrimitives = 1000;
+    /// the steering primitives out of the frame. The cap leaves explicit
+    /// headroom for them: findings plus annotations can never consume more than
+    /// 3500 of the 4000 slots, so hover, selection, handles and the drag
+    /// preview always fit.
+    int maxAnnotationPrimitives = 500;
 
     static OverlayBounds conservativeDefaults() { return OverlayBounds(); }
 };

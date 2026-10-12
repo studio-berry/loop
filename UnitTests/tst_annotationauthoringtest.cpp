@@ -324,6 +324,7 @@ private slots:
 
     void catalogBindsTheWholeAnnotationFamily_data();
     void catalogBindsTheWholeAnnotationFamily();
+    void catalogFamilyMatchesTheLiteralCommandList();
     void parametersMapToTypedRequestsAndRefuseMalformedOnes();
 
     void subtypesRoundTripThroughTheGateway_data();
@@ -379,6 +380,44 @@ void AnnotationAuthoringTest::catalogBindsTheWholeAnnotationFamily()
     pdfinteraction::CommandCatalog::Handler handler;
     handler.invoke = [](pdfinteraction::CommandInvocationId, const QVariantMap&) {};
     QVERIFY(catalog.setHandler(commandId, handler));
+}
+
+void AnnotationAuthoringTest::catalogFamilyMatchesTheLiteralCommandList()
+{
+    // The family table is the single declaration EditorHost registers handlers
+    // from, and the data functions above iterate the table itself. Pin it
+    // against a literal list, so a dropped row fails here instead of running
+    // one row fewer and passing while the contract still advertises the id.
+    using Entry = QPair<QString, pdf::AnnotationAuthoringSubtype>;
+    const QList<Entry> expected = {
+        { QStringLiteral("actionCreateTextHighlight"), pdf::AnnotationAuthoringSubtype::TextHighlight },
+        { QStringLiteral("actionCreateTextUnderline"), pdf::AnnotationAuthoringSubtype::TextUnderline },
+        { QStringLiteral("actionCreateTextStrikeout"), pdf::AnnotationAuthoringSubtype::TextStrikeout },
+        { QStringLiteral("actionCreateTextSquiggly"), pdf::AnnotationAuthoringSubtype::TextSquiggly },
+        { QStringLiteral("actionCreateRectangle"), pdf::AnnotationAuthoringSubtype::Rectangle },
+        { QStringLiteral("actionCreateEllipse"), pdf::AnnotationAuthoringSubtype::Ellipse },
+        { QStringLiteral("actionCreateStraightLine"), pdf::AnnotationAuthoringSubtype::StraightLine },
+        { QStringLiteral("actionCreatePolyline"), pdf::AnnotationAuthoringSubtype::Polyline },
+        { QStringLiteral("actionCreatePolygon"), pdf::AnnotationAuthoringSubtype::Polygon },
+        { QStringLiteral("actionCreateFreehandCurve"), pdf::AnnotationAuthoringSubtype::FreehandCurve },
+        { QStringLiteral("actionInlineText"), pdf::AnnotationAuthoringSubtype::InlineText },
+        { QStringLiteral("actionStickyNoteComment"), pdf::AnnotationAuthoringSubtype::StickyNoteComment },
+        { QStringLiteral("actionStickyNoteHelp"), pdf::AnnotationAuthoringSubtype::StickyNoteHelp },
+        { QStringLiteral("actionStickyNoteInsert"), pdf::AnnotationAuthoringSubtype::StickyNoteInsert },
+        { QStringLiteral("actionStickyNoteKey"), pdf::AnnotationAuthoringSubtype::StickyNoteKey },
+        { QStringLiteral("actionStickyNoteNewParagraph"), pdf::AnnotationAuthoringSubtype::StickyNoteNewParagraph },
+        { QStringLiteral("actionStickyNoteNote"), pdf::AnnotationAuthoringSubtype::StickyNoteNote },
+        { QStringLiteral("actionStickyNoteParagraph"), pdf::AnnotationAuthoringSubtype::StickyNoteParagraph },
+    };
+
+    const QList<Entry>& table = pdfinteraction::annotationAuthoringCommandIds();
+    QCOMPARE(table.size(), qsizetype(18));
+    QCOMPARE(table.size(), expected.size());
+    for (qsizetype index = 0; index < expected.size(); ++index)
+    {
+        QCOMPARE(table.at(index).first, expected.at(index).first);
+        QCOMPARE(table.at(index).second, expected.at(index).second);
+    }
 }
 
 void AnnotationAuthoringTest::parametersMapToTypedRequestsAndRefuseMalformedOnes()

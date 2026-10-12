@@ -461,6 +461,16 @@ bool DocumentFacade::completeSignatureCheck(const DocumentSignatureCheckToken& t
 {
     if (!admitSignatureCheckTransition(token, error))
     {
+        // The fence refuses results that belong to another revision, but the
+        // refused check must not hold the one-check-at-a-time flag for the rest
+        // of the session. Release it when this completion is still the current
+        // check's and only the revision moved on; a superseded completion must
+        // not release a newer check.
+        if (token == m_signatureCheckToken && token.generation == m_generation &&
+            token.revision != currentRevision())
+        {
+            m_signatureCheckRunning = false;
+        }
         return false;
     }
 
@@ -476,6 +486,14 @@ bool DocumentFacade::failSignatureCheck(const DocumentSignatureCheckToken& token
 {
     if (!admitSignatureCheckTransition(token, error))
     {
+        // Same release as completeSignatureCheck: a refused failure belongs to
+        // the document that moved on, so the next check may begin; a
+        // superseded one must not release a newer check.
+        if (token == m_signatureCheckToken && token.generation == m_generation &&
+            token.revision != currentRevision())
+        {
+            m_signatureCheckRunning = false;
+        }
         return false;
     }
     if (detail.isEmpty())
