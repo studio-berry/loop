@@ -30,6 +30,37 @@
 namespace pdf
 {
 
+namespace
+{
+
+/// True when the value is an even-length run of hex digits, the shape
+/// QByteArray::toHex() produces. The empty run is that shape too: a document
+/// with no source bytes (an in-memory document after an edit) serializes with
+/// an empty hash field, and the round trip must preserve it. Any other value
+/// must not be decoded, because QByteArray::fromHex() silently drops non-hex
+/// characters and an odd trailing nibble.
+bool isHexHash(const QString& value)
+{
+    if (value.size() % 2 != 0)
+    {
+        return false;
+    }
+
+    for (const QChar character : value)
+    {
+        const bool isDigit = character >= QLatin1Char('0') && character <= QLatin1Char('9');
+        const bool isLowerHex = character >= QLatin1Char('a') && character <= QLatin1Char('f');
+        const bool isUpperHex = character >= QLatin1Char('A') && character <= QLatin1Char('F');
+        if (!isDigit && !isLowerHex && !isUpperHex)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+}   // namespace
+
 PDFDocumentIdentity PDFDocumentIdentity::fromDocument(const PDFDocument* document)
 {
     if (!document)
@@ -57,6 +88,36 @@ QString PDFRevisionIdentity::toString() const
         .arg(documentRevision)
         .arg(cacheGeneration)
         .arg(effectiveProfileIdentity);
+}
+
+PDFRevisionIdentity PDFRevisionIdentity::fromString(const QString& value)
+{
+    PDFRevisionIdentity identity;
+
+    // The effective profile identity is the last field and may itself contain
+    // colons, so the first four separators are the structure and everything
+    // after the fourth belongs to the profile identity.
+    QStringList parts = value.split(QLatin1Char(':'));
+    if (parts.size() < 5 || !isHexHash(parts[0]))
+    {
+        return identity;
+    }
+
+    bool documentRevisionOk = false;
+    bool cacheGenerationOk = false;
+    const quint64 documentRevision = parts[2].toULongLong(&documentRevisionOk);
+    const quint64 cacheGeneration = parts[3].toULongLong(&cacheGenerationOk);
+    if (!documentRevisionOk || !cacheGenerationOk || parts[1].isEmpty())
+    {
+        return identity;
+    }
+
+    identity.document.sourceDataHash = QByteArray::fromHex(parts[0].toLatin1());
+    identity.document.documentId = parts[1];
+    identity.documentRevision = documentRevision;
+    identity.cacheGeneration = cacheGeneration;
+    identity.effectiveProfileIdentity = parts.mid(4).join(QLatin1Char(':'));
+    return identity;
 }
 
 PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent, qsizetype pageCacheTotal) :

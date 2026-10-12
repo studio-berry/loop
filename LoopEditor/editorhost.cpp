@@ -33,8 +33,10 @@
 #include "pagesurfacecoordinator.h"
 #include "actionlistcontroller.h"
 #include "actionlistrunsubmitter.h"
+#include "directeditrequest.h"
 #include "repairparameterschema.h"
 #include "preflightcontroller.h"
+#include "shellglossary.h"
 #include "preflightclirun.h"
 #include "preflightengine.h"
 #include "preflightprofileresolver.h"
@@ -43,9 +45,14 @@
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdirectedit.h"
+#include "pdfdocumentimageextractor.h"
+#include "pdfannotationauthoring.h"
 #include "pdfsecurityhandler.h"
 #include "pdfdocumentwriter.h"
 #include "pdfartifactstore.h"
+#include "pdfcertificatestore.h"
+#include "pdfform.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfpreflightaudit.h"
 #include "pdfpreflightcertificate.h"
@@ -53,15 +60,20 @@
 #include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"
+#include "pdfcms.h"
+#include "pdfdiagnostics.h"
 #include "pdfpage.h"
+#include "pdfrenderer.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QBuffer>
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -75,9 +87,12 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
+#include <vector>
 #include <cmath>
 #include <optional>
 #include <stdexcept>
@@ -89,6 +104,56 @@ namespace
 const QString QuitCommandId = QStringLiteral("actionQuit");
 const QString MoveSelectionCommandId = QStringLiteral("actionMoveSelection");
 const QString TranslatePageBoxOperationId = QStringLiteral("translate-page-box");
+
+/// The destination type each `actionCreateHyperlinkToThisPDF*` command writes
+/// (issue #233). `XYZInheritZoom` is the XYZ destination with a null zoom,
+/// which asks the viewer to keep its own zoom.
+struct HyperlinkDestinationVariant
+{
+    const char* command;
+    pdf::DestinationType type;
+    bool inheritZoom;
+};
+
+const HyperlinkDestinationVariant HyperlinkDestinationVariants[] = {
+    { "actionCreateHyperlinkToThisPDFFit", pdf::DestinationType::Fit, false },
+    { "actionCreateHyperlinkToThisPDFFitB", pdf::DestinationType::FitB, false },
+    { "actionCreateHyperlinkToThisPDFFitBH", pdf::DestinationType::FitBH, false },
+    { "actionCreateHyperlinkToThisPDFFitBV", pdf::DestinationType::FitBV, false },
+    { "actionCreateHyperlinkToThisPDFFitH", pdf::DestinationType::FitH, false },
+    { "actionCreateHyperlinkToThisPDFFitR", pdf::DestinationType::FitR, false },
+    { "actionCreateHyperlinkToThisPDFFitV", pdf::DestinationType::FitV, false },
+    { "actionCreateHyperlinkToThisPDFXYZ", pdf::DestinationType::XYZ, false },
+    { "actionCreateHyperlinkToThisPDFXYZInheritZoom", pdf::DestinationType::XYZ, true },
+};
+
+/// Reads a page-space rectangle from four scalar parameters, or nothing when
+/// the surface supplied none. A partial rectangle is refused: a corner the
+/// surface never gave is not a corner the host may invent.
+std::optional<QRectF> rectangleFromParameters(const QVariantMap& parameters,
+                                              const QString& leftKey,
+                                              const QString& bottomKey,
+                                              const QString& rightKey,
+                                              const QString& topKey,
+                                              QString& typedError)
+{
+    const bool any = parameters.contains(leftKey) || parameters.contains(bottomKey) ||
+                     parameters.contains(rightKey) || parameters.contains(topKey);
+    if (!any)
+    {
+        return std::nullopt;
+    }
+
+    if (!parameters.contains(leftKey) || !parameters.contains(bottomKey) ||
+        !parameters.contains(rightKey) || !parameters.contains(topKey))
+    {
+        typedError = QStringLiteral("hyperlink/incomplete-geometry");
+        return std::nullopt;
+    }
+
+    return QRectF(QPointF(parameters.value(leftKey).toDouble(), parameters.value(bottomKey).toDouble()),
+                  QPointF(parameters.value(rightKey).toDouble(), parameters.value(topKey).toDouble()));
+}
 
 QString actionListBindingsHash(const QJsonObject& bindings)
 {
@@ -166,6 +231,15 @@ int rotationToDegrees(pdf::PageRotation rotation)
 
     return 0;
 }
+
+/// Rasterization resolution of the ink-coverage point readout. It samples one
+/// point, not a page: the value only has to be fine enough that the pixel under
+/// the point is that point, and the job is charged for the pixels it renders.
+constexpr int InkCoverageReadoutDpi = 150;
+
+/// Ceiling on the readout raster's longest edge. A huge page samples the same
+/// point at a coarser resolution instead of rasterizing an unbounded image.
+constexpr int InkCoverageMaxRasterPixels = 4096;
 
 QString actionListStateToString(pdfinteraction::ActionListController::State state)
 {
@@ -271,6 +345,20 @@ QString shellMenuGroupForAction(const QString& id, const QString& target)
     return QStringLiteral("Document");
 }
 
+pdf::PDFRenderer::Features featuresForOptions(const EditorSettings::RenderOptions& options)
+{
+    pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
+    features.setFlag(pdf::PDFRenderer::Antialiasing, options.antialiasing);
+    features.setFlag(pdf::PDFRenderer::TextAntialiasing, options.textAntialiasing);
+    features.setFlag(pdf::PDFRenderer::SmoothImages, options.smoothPictures);
+    features.setFlag(pdf::PDFRenderer::DisplayAnnotations, options.displayAnnotations);
+    features.setFlag(pdf::PDFRenderer::IgnoreOptionalContent, options.ignoreOptionalContentSettings);
+    features.setFlag(pdf::PDFRenderer::DisplayTimes, options.displayRenderTimes);
+    features.setFlag(pdf::PDFRenderer::DebugTextBlocks, options.showTextBlocks);
+    features.setFlag(pdf::PDFRenderer::DebugTextLines, options.showTextLines);
+    return features;
+}
+
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
 {
     QVariantMap entry;
@@ -280,7 +368,11 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     entry.insert(QStringLiteral("enabled"), enabled);
     entry.insert(QStringLiteral("target"), descriptor.target);
     entry.insert(QStringLiteral("disposition"), descriptor.disposition);
-    entry.insert(QStringLiteral("menuGroup"), shellMenuGroupForAction(descriptor.id, descriptor.target));
+    // Menu placement is the manifest's routing policy (menu_group); the prefix
+    // table is only the fallback for a descriptor that arrives without one.
+    entry.insert(QStringLiteral("menuGroup"),
+                 descriptor.menuGroup.isEmpty() ? shellMenuGroupForAction(descriptor.id, descriptor.target)
+                                                : descriptor.menuGroup);
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
@@ -302,7 +394,7 @@ struct EditorHost::PreflightWorkerOutcome
     QJsonObject auditSummary;
 };
 
-EditorHost::EditorHost(QObject* parent) :
+EditorHost::EditorHost(EditorSettings* settings, QObject* parent, QString recipesDirectory) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
     m_findingNavigator(std::make_unique<pdfinteraction::FindingCanvasNavigator>(
@@ -313,8 +405,19 @@ EditorHost::EditorHost(QObject* parent) :
         pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry(),
         this)),
     m_preflight(&m_session->scheduler(), this),
-    m_actionListController(&m_session->scheduler(), this)
+    m_actionListController(&m_session->scheduler(), this),
+    m_actionListCatalog(nullptr, std::move(recipesDirectory))
 {
+    if (settings)
+    {
+        m_settings = settings;
+    }
+    else
+    {
+        m_ownedSettings = std::make_unique<EditorSettings>(nullptr, this);
+        m_settings = m_ownedSettings.get();
+    }
+
     // Registers this constructing thread -- the one QML dispatches pointer
     // and frame callbacks on -- as the thread blocking service adapters
     // (PreflightEngine::run, and future OCR/AI/file-I/O adapters) must
@@ -343,6 +446,12 @@ EditorHost::EditorHost(QObject* parent) :
     connectSurfaces();
     registerShellHandlers();
     registerFeatureHandlers();
+
+    // One apply path for every option change, wherever it came from: the
+    // command handlers, the settings surface, or a factory reset.
+    connect(m_settings, &EditorSettings::optionsChanged, this, [this]
+            { applyRenderOptions(); });
+    connect(m_settings, &EditorSettings::noticeChanged, this, &EditorHost::bumpPresentation);
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
@@ -416,6 +525,9 @@ EditorHost::EditorHost(QObject* parent) :
                 finishRollbackJob(snapshot);
                 finishPreflightJob(snapshot);
                 finishActionListJob(snapshot);
+                finishInkCoverageJob(snapshot);
+                finishDocumentOutput(snapshot);
+                finishSignatureCheckJob(snapshot);
                 refreshCanvasTrace(); });
 }
 
@@ -426,6 +538,8 @@ EditorHost::~EditorHost()
     cancelPreflight();
     cancelActionList();
     QObject::disconnect(&m_session->scheduler(), nullptr, this, nullptr);
+    if (outputBusy())
+        m_session->scheduler().cancel(m_outputJobId);
     unbindCanvas();
 
     // The guard registration is global process state owned by the thread that
@@ -546,6 +660,190 @@ bool EditorHost::setActiveTool(const QString& toolId)
     return true;
 }
 
+bool EditorHost::copySelectedText()
+{
+    pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (!interaction)
+    {
+        return false;
+    }
+
+    // The document's own copy permission decides before the controller is
+    // asked, and the refusal carries the sentence the CLI refuses with, so a
+    // copy-restricted document never reaches the clipboard through this seam.
+    if (!m_documentModel.canCopy())
+    {
+        announceDocumentState(tr("Copy refused: %1").arg(tr("Document doesn't allow to copy content.")));
+        return false;
+    }
+
+    // The refusal is typed and named, and the clipboard is left untouched: an
+    // empty string is never copied as success.
+    const pdfinteraction::TextCopyResult result = interaction->selectedText();
+    if (!result.copied)
+    {
+        announceDocumentState(tr("Copy refused: %1").arg(result.refusalReason));
+        return false;
+    }
+
+    QGuiApplication::clipboard()->setText(result.text);
+    announceDocumentState(tr("Copied %n character(s).", "", result.text.size()));
+    return true;
+}
+
+QImage EditorHost::composeVisibleCanvasImage() const
+{
+    pdfinteraction::PageSurfaceCoordinator* surfaces = m_session->surfaces();
+    if (!surfaces || !hasDocument())
+    {
+        return QImage();
+    }
+
+    const pdfinteraction::CanvasSnapshot& snapshot = surfaces->snapshot();
+    if (snapshot.isEmpty() || !snapshot.token.revision.isValid() ||
+        snapshot.token.revision != m_session->facade().currentRevision())
+    {
+        return QImage();
+    }
+
+    return pdfinteraction::composeCanvasImage(snapshot,
+                                              m_session->viewport().viewportRect(),
+                                              m_session->viewport().devicePixelRatio());
+}
+
+bool EditorHost::captureCanvasFileUrl(const QUrl& url)
+{
+    const QString path = url.toLocalFile();
+    if (path.isEmpty())
+    {
+        announceDocumentState(tr("Choose a local file to save the screenshot to."));
+        return false;
+    }
+
+    const QImage image = composeVisibleCanvasImage();
+    if (image.isNull())
+    {
+        announceDocumentState(tr("There is nothing on the canvas to capture."));
+        return false;
+    }
+
+    QByteArray png;
+    {
+        QBuffer buffer(&png);
+        buffer.open(QIODevice::WriteOnly);
+        if (!image.save(&buffer, "PNG"))
+        {
+            announceDocumentState(tr("The screenshot could not be encoded."));
+            return false;
+        }
+    }
+
+    const pdf::PDFOperationResult result =
+        pdf::PDFSafeFileWriter::writeData(path, png, pdf::PDFSafeFileWriter::OverwritePolicy::Fail);
+    if (!result)
+    {
+        announceDocumentState(tr("Could not write the screenshot: %1").arg(result.getErrorMessage()));
+        return false;
+    }
+
+    announceDocumentState(tr("Screenshot saved."));
+    return true;
+}
+
+bool EditorHost::extractCurrentPageImagesFileUrl(const QUrl& directory)
+{
+    if (!hasDocument() || !m_session->imageExtractor())
+    {
+        announceDocumentState(tr("Open a document before extracting images."));
+        return false;
+    }
+
+    const QString directoryPath = directory.toLocalFile();
+    if (directoryPath.isEmpty() || !QFileInfo(directoryPath).isDir())
+    {
+        announceDocumentState(tr("Choose an existing directory to extract the images into."));
+        return false;
+    }
+
+    QString typedError;
+    const QList<pdfinteraction::PageImage> images = m_session->imageExtractor()->extractPage(currentPage(), &typedError);
+    if (!typedError.isEmpty())
+    {
+        announceDocumentState(tr("Could not extract images: %1").arg(typedError));
+        return false;
+    }
+    if (images.isEmpty())
+    {
+        announceDocumentState(tr("This page has no images to extract."));
+        return false;
+    }
+
+    // Guard every planned output up front: extraction must not silently clobber
+    // an existing file, and a run must not stop halfway through the set.
+    QStringList plannedOutputs;
+    plannedOutputs.reserve(images.size());
+    for (int index = 0; index < images.size(); ++index)
+    {
+        plannedOutputs << QDir(directoryPath).filePath(QStringLiteral("page-%1-image-%2.png").arg(currentPage() + 1).arg(index + 1));
+    }
+
+    if (!pdf::PDFSafeFileWriter::findOutputConflicts(plannedOutputs, true).isEmpty())
+    {
+        announceDocumentState(tr("Refusing to overwrite an existing file in the destination directory."));
+        return false;
+    }
+
+    for (int index = 0; index < images.size(); ++index)
+    {
+        QByteArray png;
+        {
+            QBuffer buffer(&png);
+            buffer.open(QIODevice::WriteOnly);
+            if (!images[index].image.save(&buffer, "PNG"))
+            {
+                announceDocumentState(tr("An extracted image could not be encoded."));
+                return false;
+            }
+        }
+
+        const pdf::PDFOperationResult result =
+            pdf::PDFSafeFileWriter::writeData(plannedOutputs[index], png, pdf::PDFSafeFileWriter::OverwritePolicy::Fail);
+        if (!result)
+        {
+            announceDocumentState(tr("Could not write %1: %2")
+                                      .arg(QFileInfo(plannedOutputs[index]).fileName(), result.getErrorMessage()));
+            return false;
+        }
+    }
+
+    announceDocumentState(tr("Extracted %n image(s).", "", images.size()));
+    return true;
+}
+
+bool EditorHost::importBookmarksFileUrl(const QUrl& url, const QString& revision)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    return invokeCommand(QStringLiteral("actionBookmarkImport"),
+                         { { QStringLiteral("path"), url.toLocalFile() },
+                           { QStringLiteral("revision"), revision } }) != pdfinteraction::InvalidCommandInvocation;
+}
+
+bool EditorHost::exportBookmarksFileUrl(const QUrl& url, const QString& revision)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+
+    return invokeCommand(QStringLiteral("actionBookmarkExport"),
+                         { { QStringLiteral("path"), url.toLocalFile() },
+                           { QStringLiteral("revision"), revision } }) != pdfinteraction::InvalidCommandInvocation;
+}
+
 QObject* EditorHost::preflight()
 {
     return &m_preflight;
@@ -638,31 +936,6 @@ QVariantMap fixStateVisualMap(const pdfquick::tokens::LoopStateVisual& visual)
     return result;
 }
 
-/// Recorded rollback points for a document's history sidecar, or nothing when there is no
-/// history or it cannot be read. Read-only: the shell never rewrites history.
-QList<pdf::PDFRollbackPoint> rollbackPointsForDocument(const QString& documentPath)
-{
-    if (documentPath.isEmpty())
-    {
-        return {};
-    }
-
-    const QString historyDirectory =
-        QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
-    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
-    if (!QFileInfo::exists(historyPath))
-    {
-        return {};
-    }
-
-    pdf::PDFOperationHistoryStore history(historyPath);
-    QString error;
-    if (!history.open(&error))
-    {
-        return {};
-    }
-    return history.rollbackPoints(&error);
-}
 }   // namespace
 
 QString EditorHost::fixCurrentPlanDigest() const
@@ -704,7 +977,8 @@ pdf::PDFActionListExecutionResult EditorHost::fixRunResult() const
 bool EditorHost::fixExecutionArmed() const
 {
     return m_session->facade().permissions().allowsCorrection() &&
-           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent();
+           fixLifecycleStateName() == QLatin1String("approved") && fixPlanIsCurrent() &&
+           (!planSignatureInvalidationApplies() || planSignatureInvalidationAcknowledged());
 }
 
 QString EditorHost::fixLifecycleStateName() const
@@ -790,6 +1064,11 @@ QString EditorHost::fixLifecycleSummary() const
     }
     if (state == QLatin1String("approved"))
     {
+        if (planSignatureInvalidationApplies() && !planSignatureInvalidationAcknowledged())
+        {
+            return tr("The approved plan invalidates document signatures. Acknowledge the signature "
+                      "invalidation before executing.");
+        }
         return tr("The approved plan is bound to revision %1 and is ready to execute.")
             .arg(m_fixPlannedDocumentRevision.left(12));
     }
@@ -844,6 +1123,8 @@ QVariantMap EditorHost::fixPlanIdentity() const
                         : (m_fixReviewDecision == FixReviewDecision::Rejected ? QStringLiteral("rejected")
                                                                               : QStringLiteral("none")));
     identity.insert(QStringLiteral("executionArmed"), fixExecutionArmed());
+    identity.insert(QStringLiteral("signatureInvalidationApplies"), planSignatureInvalidationApplies());
+    identity.insert(QStringLiteral("signatureInvalidationAcknowledged"), planSignatureInvalidationAcknowledged());
     return identity;
 }
 
@@ -860,6 +1141,7 @@ QVariantMap EditorHost::fixPreview() const
     preview.insert(QStringLiteral("pageFidelityIsExact"), pageFidelityIsExact());
     preview.insert(QStringLiteral("pageFidelityReason"), pageFidelityReason());
     preview.insert(QStringLiteral("pageFidelityIsAuthoritative"), pageFidelityIsAuthoritative());
+    preview.insert(QStringLiteral("signatureInvalidation"), signatureInvalidationMap());
 
     QVariantList steps;
     QVariantList plannedSteps;
@@ -1025,15 +1307,168 @@ QVariantMap EditorHost::fixSignOff() const
     return signOff;
 }
 
+bool EditorHost::planSignatureInvalidationApplies() const
+{
+    if (!hasDocument())
+    {
+        return false;
+    }
+    if (m_session->facade().signatureFacts().state == pdfinteraction::DocumentSignatureState::None)
+    {
+        return false;
+    }
+    // The plan's own merged save policy, the field Core serializes as
+    // `invalidates_signatures` and includes in the plan digest.
+    return fixRunResult().savePolicy.invalidatesSignatures;
+}
+
+bool EditorHost::planSignatureInvalidationAcknowledged() const
+{
+    return !m_fixSignatureInvalidationAcknowledgedDigest.isEmpty() &&
+           m_fixSignatureInvalidationAcknowledgedDigest == fixCurrentPlanDigest();
+}
+
+QString EditorHost::planSignatureInvalidationSummary() const
+{
+    if (!planSignatureInvalidationApplies())
+    {
+        return QString();
+    }
+
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+    const QString rationale = fixRunResult().savePolicy.rationale;
+    return tr("This plan invalidates %1 document signature(s): %2 The published correction will "
+              "not carry a verifiable signature.")
+        .arg(facts.signatureCount)
+        .arg(rationale);
+}
+
+QVariantMap EditorHost::signatureInvalidationMap() const
+{
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+
+    QVariantMap invalidation;
+    invalidation.insert(QStringLiteral("applies"), planSignatureInvalidationApplies());
+    invalidation.insert(QStringLiteral("acknowledged"), planSignatureInvalidationAcknowledged());
+    invalidation.insert(QStringLiteral("signatureStateName"), signatureStateName());
+    invalidation.insert(QStringLiteral("signatureCount"), facts.signatureCount);
+    invalidation.insert(QStringLiteral("summary"), planSignatureInvalidationSummary());
+    return invalidation;
+}
+
+bool EditorHost::acknowledgePlanSignatureInvalidation(const QString& planDigest)
+{
+    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned ||
+        !fixPlanIsCurrent() || planDigest.isEmpty() ||
+        planDigest != m_fixPlannedPlanDigest || planDigest != fixCurrentPlanDigest())
+    {
+        return false;
+    }
+    if (!planSignatureInvalidationApplies())
+    {
+        return false;
+    }
+
+    m_fixSignatureInvalidationAcknowledgedDigest = planDigest;
+    announceDocumentState(tr("Signature invalidation acknowledged for this plan."));
+    bumpPresentation();
+    return true;
+}
+
+QString EditorHost::signatureStateName() const
+{
+    return QString::fromLatin1(
+        pdfinteraction::getDocumentSignatureStateName(m_session->facade().signatureFacts().state));
+}
+
+QVariantMap EditorHost::signatureStateVisual() const
+{
+    return fixStateVisualMap(
+        pdfquick::tokens::resolveSignatureStateVisual(signatureStateName()));
+}
+
+QColor EditorHost::signatureStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual =
+        pdfquick::tokens::resolveSignatureStateVisual(signatureStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::signatureSummary() const
+{
+    const pdfinteraction::DocumentSignatureFacts facts = m_session->facade().signatureFacts();
+
+    switch (facts.state)
+    {
+        case pdfinteraction::DocumentSignatureState::None:
+            return hasDocument() ? tr("No signature is present in this document.")
+                                 : tr("Open a document to check its signatures.");
+        case pdfinteraction::DocumentSignatureState::Valid:
+            return tr("%1 signature(s) verified against the document's source bytes.")
+                .arg(facts.signatureCount);
+        case pdfinteraction::DocumentSignatureState::Invalid:
+            return tr("At least one signature does not match the document's source bytes. The "
+                      "document was changed after it was signed, or the signature is damaged.");
+        case pdfinteraction::DocumentSignatureState::ModifiedAfterSigning:
+            return tr("The document carries bytes added after it was signed; the existing "
+                      "signature(s) do not cover the whole file.");
+        case pdfinteraction::DocumentSignatureState::Unknown:
+            break;
+    }
+
+    if (!facts.detail.isEmpty())
+    {
+        return facts.detail;
+    }
+    return tr("The signature(s) could not be verified with the certificates available to this "
+              "machine.");
+}
+
 bool EditorHost::fixRollbackAvailable() const
 {
-    return m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
-           documentShellStatus() != QLatin1String("MODIFIED");
+    return m_historyError.isEmpty() && m_session->facade().permissions().allowsCorrection() && !m_fixRollbackPoints.isEmpty() &&
+           m_rollbackOutcomes.isEmpty() && m_actionListOutcomes.isEmpty() &&
+           m_session->facade().outputState() != pdfinteraction::DocumentOutputState::Pending &&
+           (documentShellStatus() != QLatin1String("MODIFIED") ||
+            m_publishedHistoryRevision == m_session->facade().currentRevision().toString());
 }
 
 QVariantList EditorHost::fixRollbackPoints() const
 {
     return m_fixRollbackPoints;
+}
+
+QString EditorHost::historyDocumentPath() const
+{
+    return m_publishedHistoryRevision == m_session->facade().currentRevision().toString()
+               ? m_publishedHistoryPath
+               : m_session->facade().source().path;
+}
+
+QString EditorHost::historyArtifactDigest() const
+{
+    const auto document = m_session->context().getDocumentPointer();
+    return document ? QString::fromLatin1(document->getSourceDataHash().toHex()) : QString();
+}
+
+QString EditorHost::revisionHistorySummary() const
+{
+    if (!m_historyError.isEmpty())
+        return tr("Revision history is unavailable: %1").arg(m_historyError);
+    return tr("%1 recorded events. Undo and Redo publish forward rollback artifacts; approvals and receipts are retained.")
+        .arg(m_revisionHistory.size());
+}
+
+bool EditorHost::historyUndoAvailable() const
+{
+    return fixRollbackAvailable() && !m_historyUndoId.isEmpty();
+}
+
+bool EditorHost::historyRedoAvailable() const
+{
+    return fixRollbackAvailable() && !m_historyRedoId.isEmpty();
 }
 
 QString EditorHost::fixRollbackSummary() const
@@ -1042,7 +1477,8 @@ QString EditorHost::fixRollbackSummary() const
     {
         return tr("Open a document to return to a recorded revision.");
     }
-    if (documentShellStatus() == QLatin1String("MODIFIED"))
+    if (documentShellStatus() == QLatin1String("MODIFIED") &&
+        m_publishedHistoryRevision != m_session->facade().currentRevision().toString())
     {
         return tr("Save the document before returning to a recorded revision.");
     }
@@ -1104,10 +1540,28 @@ QString EditorHost::previewFidelityStateName() const
     {
         return QStringLiteral("unavailable");
     }
+    // A display simulation outranks the render underneath it: the operator is
+    // looking at a transformed page, so the indicator may not report the render
+    // path's own fidelity as if that were what is on screen (issue #235 display
+    // half, issue #237).
     return pdfquick::tokens::classifyPreviewFidelityState(hasDocument(),
                                                           stale,
                                                           pageFidelityIsAuthoritative(),
-                                                          pageFidelityIsExact());
+                                                          pageFidelityIsExact(),
+                                                          displaySimulationName());
+}
+
+QString EditorHost::displaySimulationName() const
+{
+    if (softProofActive())
+    {
+        return QStringLiteral("soft-proof");
+    }
+    if (m_displayColor.isActive())
+    {
+        return QStringLiteral("display-filter");
+    }
+    return QString();
 }
 
 QVariantMap EditorHost::previewFidelityVisual() const
@@ -1178,6 +1632,20 @@ QString EditorHost::previewFidelitySummary() const
                   "canvas pixels cannot stand as proof of print-safe output; switch this page to the "
                   "authoritative overprint render before any print claim.")
             .arg(pageFidelityReason());
+    }
+    if (state == QLatin1String("display-filter"))
+    {
+        return tr("Display colour simulation (%1): a display colour mode is filtering the canvas, so "
+                  "these pixels are a presentation of the page and not a production render. They are "
+                  "never recorded as approval evidence.")
+            .arg(displayColorModeName());
+    }
+    if (state == QLatin1String("soft-proof"))
+    {
+        return tr("Soft-proof simulation of the output intent through colour management (profile %1). "
+                  "It is a simulation of print, not the print's evidence, and it is never recorded as "
+                  "approval.")
+            .arg(m_softProofProfile.name.isEmpty() ? m_softProofProfile.id : m_softProofProfile.name);
     }
     return tr("Fidelity exact, origin fast-canvas: this page reports no overprint-sensitive content. "
               "The interactive preview still does not certify print-safe output.");
@@ -1431,6 +1899,30 @@ bool EditorHost::navigateCompareDelta(int deltaIndex)
     return true;
 }
 
+bool EditorHost::navigateToAnnotation(int row)
+{
+    if (!hasDocument() || !m_documentBound)
+    {
+        return false;
+    }
+
+    QuickAnnotationModel& annotations = m_documentModel.annotationModel();
+    if (row < 0 || row >= annotations.rows().size())
+    {
+        return false;
+    }
+
+    const QuickAnnotation& annotation = annotations.rows().at(row);
+    annotations.setSelectedRow(row);
+    refreshAnnotationOverlay();
+
+    const bool revealed = m_session->viewport().revealPageRegion(annotation.pageIndex,
+                                                                 annotation.bounds, 0.2);
+    updateCanvasAccessibilitySummary();
+    bumpPresentation();
+    return revealed;
+}
+
 QString EditorHost::productionStateName() const
 {
     if (!hasDocument())
@@ -1460,6 +1952,101 @@ bool EditorHost::allowDeveloperDiagnostics() const
 #endif
 }
 
+QString EditorHost::settingsNotice()
+{
+    return m_settings->notice();
+}
+
+QVariantMap EditorHost::diagnosticsBundle() const
+{
+    QVariantMap bundle;
+    bundle.insert(QStringLiteral("status"), m_diagnosticsBundle.status);
+    bundle.insert(QStringLiteral("directory"), m_diagnosticsBundle.directory);
+    bundle.insert(QStringLiteral("error"), m_diagnosticsBundle.error);
+    bundle.insert(QStringLiteral("fileCount"), m_diagnosticsBundle.fileCount);
+    return bundle;
+}
+
+bool EditorHost::requestSettingsReset()
+{
+    m_settingsResetPending = true;
+    Q_EMIT settingsResetRequested();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::confirmSettingsReset()
+{
+    if (!m_settingsResetPending)
+    {
+        return false;
+    }
+    m_settingsResetPending = false;
+
+    // resetToFactory() reports its own failure through the store notice; the
+    // typed state is only replaced when every owned key was removed.
+    const bool reset = m_settings->resetToFactory();
+    bumpPresentation();
+    return reset;
+}
+
+void EditorHost::cancelSettingsReset()
+{
+    if (!m_settingsResetPending)
+    {
+        return;
+    }
+    m_settingsResetPending = false;
+    bumpPresentation();
+}
+
+bool EditorHost::collectDiagnosticsFileUrl(const QUrl& parentDirectory)
+{
+    if (!parentDirectory.isValid() || !parentDirectory.isLocalFile() || parentDirectory.toLocalFile().isEmpty())
+    {
+        m_diagnosticsBundle.status = QStringLiteral("failed");
+        m_diagnosticsBundle.directory.clear();
+        m_diagnosticsBundle.fileCount = 0;
+        m_diagnosticsBundle.error = tr("Choose a local folder for the diagnostics bundle.");
+        bumpPresentation();
+        return false;
+    }
+
+    pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("editor");
+    options.outputDirectory = parentDirectory.toLocalFile();
+    const pdf::PDFDiagnosticsResult result = pdf::PDFDiagnosticsCollector::collect(options);
+
+    if (!result.success)
+    {
+        m_diagnosticsBundle.status = QStringLiteral("failed");
+        m_diagnosticsBundle.directory.clear();
+        m_diagnosticsBundle.fileCount = 0;
+        m_diagnosticsBundle.error = result.errorMessage.isEmpty()
+                                        ? tr("The diagnostics bundle could not be written.")
+                                        : result.errorMessage;
+        bumpPresentation();
+        return false;
+    }
+
+    m_diagnosticsBundle.status = QStringLiteral("ready");
+    m_diagnosticsBundle.error.clear();
+    m_diagnosticsBundle.directory = result.bundleDirectory;
+    m_diagnosticsBundle.fileCount = static_cast<int>(result.files.size());
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::applyRenderOptions()
+{
+    m_session->setSurfaceRenderFeatures(featuresForOptions(m_settings->renderOptions()));
+    if (m_documentBound)
+    {
+        m_session->surfaces()->requestSurfaces();
+    }
+    bumpPresentation();
+}
+
 void EditorHost::acknowledgeSearchPanel()
 {
     if (!m_searchPanelVisible)
@@ -1469,6 +2056,11 @@ void EditorHost::acknowledgeSearchPanel()
 
     m_searchPanelVisible = false;
     Q_EMIT presentationChanged();
+}
+
+QString EditorHost::localizedTerm(const QString& code) const
+{
+    return pdfinteraction::glossary::term(code);
 }
 
 QString EditorHost::preflightStateName() const
@@ -1662,6 +2254,13 @@ bool EditorHost::pageFidelityIsExact() const
         return true;
     }
 
+    if (m_settings->isOptionEnabled(EditorSettings::IgnoreOptionalContentOptionId))
+    {
+        // The optional-content override deliberately deviates from the
+        // document's own view state; no render under it is an exact render.
+        return false;
+    }
+
     const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
     return !diagnostics.has_value() || diagnostics->isExact();
 }
@@ -1673,13 +2272,20 @@ QString EditorHost::pageFidelityReason() const
         return QString();
     }
 
-    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
-    if (!diagnostics.has_value() || diagnostics->reasons.isEmpty())
+    QStringList reasons;
+    if (m_settings->isOptionEnabled(EditorSettings::IgnoreOptionalContentOptionId))
     {
-        return QString();
+        reasons.append(tr("The optional content override is enabled: this render shows all optional "
+                          "content regardless of the document's settings."));
     }
 
-    return diagnostics->reasons.join(QStringLiteral(" "));
+    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
+    if (diagnostics.has_value() && !diagnostics->reasons.isEmpty())
+    {
+        reasons.append(diagnostics->reasons);
+    }
+
+    return reasons.join(QStringLiteral(" "));
 }
 
 bool EditorHost::pageFidelityIsAuthoritative() const
@@ -1715,6 +2321,618 @@ bool EditorHost::ensureAuthoritativePreview()
     m_session->surfaces()->setPageAuthoritativeOverprint(currentPage(), true);
     bumpPresentation();
     return true;
+}
+
+QString EditorHost::displayColorModeName() const
+{
+    return pdfquick::getCanvasDisplayColorModeName(m_displayColor.mode);
+}
+
+bool EditorHost::displayColorModeActive() const
+{
+    return m_displayColor.isActive();
+}
+
+QColor EditorHost::displayColorCustomForeground() const
+{
+    return m_displayColor.customForeground;
+}
+
+QColor EditorHost::displayColorCustomBackground() const
+{
+    return m_displayColor.customBackground;
+}
+
+int EditorHost::displayColorBitonalThreshold() const
+{
+    return m_displayColor.bitonalThreshold;
+}
+
+bool EditorHost::setDisplayColorMode(const QString& modeName)
+{
+    const std::optional<pdfquick::CanvasDisplayColorMode> mode =
+        pdfquick::canvasDisplayColorModeFromName(modeName);
+    if (!mode)
+    {
+        return false;
+    }
+
+    m_displayColor.mode = *mode;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setDisplayColorCustomColors(const QColor& foreground, const QColor& background)
+{
+    if (!foreground.isValid() || !background.isValid())
+    {
+        return false;
+    }
+
+    m_displayColor.customForeground = foreground;
+    m_displayColor.customBackground = background;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setDisplayColorBitonalThreshold(int threshold)
+{
+    if (threshold < 1 || threshold > 254)
+    {
+        return false;
+    }
+
+    m_displayColor.bitonalThreshold = threshold;
+    applyDisplayColorToCanvas();
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::applyDisplayColorToCanvas()
+{
+    if (m_canvas)
+    {
+        m_canvas->setDisplayColorMode(pdfquick::getCanvasDisplayColorModeName(m_displayColor.mode));
+        m_canvas->setDisplayColorCustomForeground(m_displayColor.customForeground);
+        m_canvas->setDisplayColorCustomBackground(m_displayColor.customBackground);
+        m_canvas->setDisplayColorBitonalThreshold(m_displayColor.bitonalThreshold);
+    }
+}
+
+bool EditorHost::softProofActive() const
+{
+    return m_softProofEnabled && !m_softProofProfile.id.isEmpty();
+}
+
+QString EditorHost::softProofStateName() const
+{
+    return m_softProofStateName;
+}
+
+QString EditorHost::softProofProfileName() const
+{
+    return m_softProofProfile.name;
+}
+
+QString EditorHost::softProofProfileId() const
+{
+    return m_softProofProfile.id;
+}
+
+QString EditorHost::softProofProfileTypeName() const
+{
+    return m_softProofProfile.typeName;
+}
+
+QString EditorHost::softProofSummary() const
+{
+    if (!hasDocument())
+    {
+        return tr("No document is open, so there is no output intent to simulate.");
+    }
+    if (softProofActive())
+    {
+        return tr("Soft proof of the output intent through colour management. The profile is %1. "
+                  "This is a simulation of print, not the print's evidence: it is never recorded "
+                  "as approval.")
+            .arg(m_softProofProfile.name.isEmpty() ? m_softProofProfile.id : m_softProofProfile.name);
+    }
+    if (m_softProofStateName == QLatin1String("profile-missing"))
+    {
+        return tr("Soft proof is unavailable: this document declares no output-intent profile. "
+                  "Nothing is simulated and the canvas keeps the unproofed render.");
+    }
+    if (m_softProofStateName == QLatin1String("profile-invalid"))
+    {
+        return tr("Soft proof is unavailable: the document's output-intent profile could not be "
+                  "read. Nothing is simulated and the canvas keeps the unproofed render.");
+    }
+    return tr("Soft proof is off. The canvas shows the unproofed render.");
+}
+
+std::optional<EditorHost::SoftProofProfile> EditorHost::resolveOutputIntentProfile(bool* documentDeclaresOutputIntent) const
+{
+    if (documentDeclaresOutputIntent)
+    {
+        *documentDeclaresOutputIntent = false;
+    }
+
+    if (!hasDocument())
+    {
+        return std::nullopt;
+    }
+
+    pdf::PDFDocumentSession* session = m_session->context().tryGetSession();
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    if (!session || !document)
+    {
+        return std::nullopt;
+    }
+
+    if (documentDeclaresOutputIntent)
+    {
+        *documentDeclaresOutputIntent = !document->getCatalog()->getOutputIntents().empty();
+    }
+
+    // Core resolves the output intent: PDFCMSManager decodes the profile stream
+    // under the session's operation budget and refuses one it cannot open, so an
+    // unreadable profile is absent here rather than guessed at. A budget failure
+    // is the same kind of answer -- the profile could not be read -- and is
+    // reported as one instead of escaping a presentation call.
+    try
+    {
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document, session->getProcessingBudget());
+
+        for (const pdf::PDFColorProfileIdentifier& identifier : cmsManager.getCMYKProfiles())
+        {
+            if (!identifier.isOutputIntentProfile)
+            {
+                continue;
+            }
+
+            SoftProofProfile profile;
+            profile.id = identifier.id;
+            profile.name = identifier.name;
+            profile.typeName = QStringLiteral("output-intent");
+            return profile;
+        }
+    }
+    catch (const pdf::PDFException&)
+    {
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+bool EditorHost::setSoftProofEnabled(bool enabled)
+{
+    if (!enabled)
+    {
+        const bool wasActive = softProofActive();
+        m_softProofEnabled = false;
+        m_softProofStateName = QStringLiteral("off");
+        m_softProofProfile = SoftProofProfile();
+        if (m_session)
+        {
+            m_session->setSoftProofProfile(QString());
+        }
+        if (wasActive)
+        {
+            bumpPresentation();
+        }
+        return wasActive;
+    }
+
+    if (!hasDocument())
+    {
+        m_softProofEnabled = false;
+        m_softProofStateName = QStringLiteral("profile-missing");
+        bumpPresentation();
+        return false;
+    }
+
+    bool declaresOutputIntent = false;
+    const std::optional<SoftProofProfile> profile = resolveOutputIntentProfile(&declaresOutputIntent);
+    if (!profile)
+    {
+        m_softProofEnabled = false;
+        m_softProofStateName = declaresOutputIntent ? QStringLiteral("profile-invalid")
+                                                    : QStringLiteral("profile-missing");
+        bumpPresentation();
+        return false;
+    }
+
+    m_softProofProfile = *profile;
+    m_softProofEnabled = true;
+    m_softProofStateName = QStringLiteral("simulating");
+    m_session->setSoftProofProfile(m_softProofProfile.id);
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::toggleSoftProof()
+{
+    if (softProofActive())
+    {
+        setSoftProofEnabled(false);
+        return false;
+    }
+    return setSoftProofEnabled(true);
+}
+
+QVariantMap EditorHost::plateRow(const QString& id) const
+{
+    for (const QVariant& entry : m_plates)
+    {
+        const QVariantMap row = entry.toMap();
+        if (row.value(QStringLiteral("id")).toString() == id)
+        {
+            return row;
+        }
+    }
+    return QVariantMap();
+}
+
+QVariantList EditorHost::productionPlates() const
+{
+    return m_plates;
+}
+
+QString EditorHost::plateIsolationSummary() const
+{
+    if (m_plates.isEmpty())
+    {
+        return tr("No separations are known for this document.");
+    }
+    if (!m_isolatedPlateId.isEmpty())
+    {
+        const QVariantMap isolated = plateRow(m_isolatedPlateId);
+        return tr("Isolated plate: %1. The other plates are hidden.")
+            .arg(isolated.value(QStringLiteral("displayName")).toString());
+    }
+
+    QStringList hidden;
+    for (const QVariant& entry : m_plates)
+    {
+        const QVariantMap row = entry.toMap();
+        if (!row.value(QStringLiteral("visible")).toBool())
+        {
+            hidden.append(row.value(QStringLiteral("displayName")).toString());
+        }
+    }
+    if (hidden.isEmpty())
+    {
+        return tr("Every plate is shown.");
+    }
+    return tr("Hidden plates: %1.").arg(hidden.join(QStringLiteral(", ")));
+}
+
+bool EditorHost::setPlateVisible(const QString& plateId, bool visible)
+{
+    if (plateRow(plateId).isEmpty())
+    {
+        return false;
+    }
+
+    m_plateVisible.insert(plateId, visible);
+    if (!visible && m_isolatedPlateId == plateId)
+    {
+        m_isolatedPlateId.clear();
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::isolatePlate(const QString& plateId)
+{
+    if (plateRow(plateId).isEmpty())
+    {
+        return false;
+    }
+
+    m_isolatedPlateId = plateId;
+    for (const QVariant& entry : m_plates)
+    {
+        const QString id = entry.toMap().value(QStringLiteral("id")).toString();
+        m_plateVisible.insert(id, id == plateId);
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::showAllPlates()
+{
+    m_isolatedPlateId.clear();
+    for (const QVariant& entry : m_plates)
+    {
+        m_plateVisible.insert(entry.toMap().value(QStringLiteral("id")).toString(), true);
+    }
+    reloadProductionPlates();
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::reloadProductionPlates()
+{
+    m_plates.clear();
+
+    if (!hasDocument())
+    {
+        return;
+    }
+
+    pdf::PDFDocumentSession* session = m_session->context().tryGetSession();
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    if (!session || !document)
+    {
+        return;
+    }
+
+    // The press separations Core resolves for this document: the four process
+    // plates the preview simulates plus the document's own spot inks. This is
+    // the same PDFInkMapper recipe PdfTool's ink tools and the authoritative
+    // renderer use, so the list names the inks the render path actually knows.
+    try
+    {
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document, session->getProcessingBudget());
+        pdf::PDFInkMapper inkMapper(&cmsManager, document);
+        inkMapper.createSpotColors(true);
+
+        for (const pdf::PDFInkMapper::ColorInfo& info : inkMapper.getSeparations(4, true))
+        {
+            const QString id = QString::fromLatin1(info.name);
+            QVariantMap row;
+            row.insert(QStringLiteral("id"), id);
+            row.insert(QStringLiteral("displayName"), info.textName.isEmpty() ? id : info.textName);
+            row.insert(QStringLiteral("kind"), info.isSpot ? QStringLiteral("spot") : QStringLiteral("process"));
+            row.insert(QStringLiteral("spotColorName"), info.isSpot ? id : QString());
+            row.insert(QStringLiteral("color"), info.color.name());
+            row.insert(QStringLiteral("visible"), m_plateVisible.value(id, true));
+            row.insert(QStringLiteral("isolated"), m_isolatedPlateId == id);
+            m_plates.append(row);
+        }
+    }
+    catch (const pdf::PDFException&)
+    {
+        // A document whose inks could not be enumerated says so through the
+        // empty list and its summary rather than presenting an invented one.
+        m_plates.clear();
+    }
+}
+
+bool EditorHost::requestInkCoverageAtPoint(qreal pageX, qreal pageY)
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return false;
+    }
+
+    const int pageIndex = currentPage();
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document || pageIndex < 0)
+    {
+        return false;
+    }
+
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("ink-coverage.point");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    auto outcome = std::make_shared<InkCoverageOutcome>();
+    outcome->pageIndex = pageIndex;
+    m_inkCoverageOutcomes.insert(jobId, outcome);
+
+    m_session->scheduler().submit(spec, [document, outcome, pageIndex, pageX, pageY](pdf::PDFJobContext& context)
+                                  {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+
+        const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+        if (!page)
+        {
+            outcome->reason = QStringLiteral("ink-coverage/no-such-page");
+            return;
+        }
+
+        // The readout is rendered through Core's separation-accurate path, so the
+        // coverage it reports is the coverage of the separated inks rather than
+        // of the display raster.
+        pdf::PDFCMSManager cmsManager(nullptr);
+        cmsManager.setDocument(document.data(), nullptr);
+        pdf::PDFInkMapper inkMapper(&cmsManager, document.data());
+        inkMapper.createSpotColors(true);
+
+        pdf::PDFFontCache fontCache(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+        pdf::PDFOptionalContentActivity optionalContent(document.data(), pdf::OCUsage::Print, nullptr);
+        pdf::PDFModifiedDocument modifiedDocument(document.data(), &optionalContent);
+        fontCache.setDocument(modifiedDocument);
+        fontCache.setCacheShrinkEnabled(nullptr, false);
+
+        pdf::PDFTransparencyRendererSettings rendererSettings;
+        rendererSettings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, true);
+        rendererSettings.renderPolicy = pdf::PDFRenderPolicy::forSeparationPreview();
+
+        // The readout raster is chosen for the point query, not for display: it
+        // only has to be fine enough that one pixel is a point sample, and the
+        // job is charged for every pixel it rasterizes.
+        const QRectF cropBox = page->getCropBox();
+        if (!cropBox.isValid() || cropBox.width() <= 0.0 || cropBox.height() <= 0.0)
+        {
+            outcome->reason = QStringLiteral("ink-coverage/page-has-no-box");
+            return;
+        }
+
+        const qreal scale = static_cast<qreal>(InkCoverageReadoutDpi) / 72.0;
+        QSize pixelSize(qRound(cropBox.width() * scale), qRound(cropBox.height() * scale));
+        pixelSize = pixelSize.boundedTo(QSize(InkCoverageMaxRasterPixels, InkCoverageMaxRasterPixels));
+        if (pixelSize.isEmpty())
+        {
+            outcome->reason = QStringLiteral("ink-coverage/raster-too-small");
+            return;
+        }
+
+        context.processingBudget().chargeRenderPixels(static_cast<std::uint64_t>(pixelSize.width()) * static_cast<std::uint64_t>(pixelSize.height()),
+                                                      QStringLiteral("ink coverage readout"));
+
+        const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));
+        const QTransform pagePointToDevice = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, pdf::PageRotation::None);
+        const QPointF devicePoint = pagePointToDevice.map(QPointF(pageX, pageY));
+        const int pixelX = qFloor(devicePoint.x());
+        const int pixelY = qFloor(devicePoint.y());
+        if (pixelX < 0 || pixelY < 0 || pixelX >= pixelSize.width() || pixelY >= pixelSize.height())
+        {
+            outcome->reason = QStringLiteral("ink-coverage/point-outside-page");
+            return;
+        }
+
+        pdf::PDFTransparencyRenderer renderer(page,
+                                              document.data(),
+                                              &fontCache,
+                                              cmsManager.getCurrentCMS().data(),
+                                              &optionalContent,
+                                              &inkMapper,
+                                              rendererSettings,
+                                              pagePointToDevice);
+        renderer.setOperationControl(context.operationControl());
+        renderer.beginPaint(pixelSize);
+        renderer.processContents();
+        const pdf::PDFFloatBitmap& separated = renderer.endPaint();
+
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+
+        const pdf::PDFConstColorBuffer channels = separated.getPixel(static_cast<size_t>(pixelX), static_cast<size_t>(pixelY));
+        const pdf::PDFPixelFormat format = separated.getPixelFormat();
+
+        QVariantList channelRows;
+        const std::vector<pdf::PDFInkMapper::ColorInfo> separations = inkMapper.getSeparations(4, true);
+        const int channelCount = format.getColorChannelCount();
+        for (int channel = 0; channel < channelCount; ++channel)
+        {
+            QVariantMap row;
+            const size_t separationIndex = static_cast<size_t>(channel);
+            if (separationIndex < separations.size())
+            {
+                row.insert(QStringLiteral("name"), QString::fromLatin1(separations[separationIndex].name));
+                row.insert(QStringLiteral("displayName"), separations[separationIndex].textName);
+                row.insert(QStringLiteral("isSpot"), separations[separationIndex].isSpot);
+            }
+            else
+            {
+                row.insert(QStringLiteral("name"), QStringLiteral("channel-%1").arg(channel));
+                row.insert(QStringLiteral("displayName"), QStringLiteral("Channel %1").arg(channel));
+                row.insert(QStringLiteral("isSpot"), false);
+            }
+            row.insert(QStringLiteral("coverage"), double(channels[static_cast<uint8_t>(channel)]));
+            channelRows.append(row);
+        }
+
+        outcome->ok = true;
+        outcome->readout.insert(QStringLiteral("available"), true);
+        outcome->readout.insert(QStringLiteral("pageIndex"), pageIndex);
+        outcome->readout.insert(QStringLiteral("pageX"), pageX);
+        outcome->readout.insert(QStringLiteral("pageY"), pageY);
+        outcome->readout.insert(QStringLiteral("totalInkCoverage"), double(separated.getPixelInkCoverage(static_cast<size_t>(pixelX), static_cast<size_t>(pixelY))));
+        outcome->readout.insert(QStringLiteral("channelCount"), channelCount);
+        outcome->readout.insert(QStringLiteral("channels"), channelRows);
+        outcome->readout.insert(QStringLiteral("rasterSize"), pixelSize);
+        outcome->readout.insert(QStringLiteral("reason"), QString()); });
+
+    return true;
+}
+
+QVariantMap EditorHost::inkCoverageReadout() const
+{
+    return m_inkCoverageReadout;
+}
+
+qreal EditorHost::currentPageCentreX() const
+{
+    return currentPageCentre().x();
+}
+
+qreal EditorHost::currentPageCentreY() const
+{
+    return currentPageCentre().y();
+}
+
+QPointF EditorHost::currentPageCentre() const
+{
+    if (!hasDocument())
+    {
+        return QPointF();
+    }
+
+    const pdf::PDFDocument* document = m_session->context().getDocument();
+    const int pageIndex = currentPage();
+    if (!document || pageIndex < 0 || pageIndex >= static_cast<int>(document->getCatalog()->getPageCount()))
+    {
+        return QPointF();
+    }
+
+    const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+    if (!page)
+    {
+        return QPointF();
+    }
+
+    const QRectF cropBox = page->getCropBox();
+    return cropBox.isValid() ? cropBox.center() : QPointF();
+}
+
+void EditorHost::finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const auto outcome = m_inkCoverageOutcomes.take(snapshot.jobId);
+    if (!outcome)
+    {
+        return;
+    }
+
+    const bool measured = snapshot.status == pdf::PDFJobStatus::Succeeded;
+    if (!measured || !outcome->ok)
+    {
+        // A readout that could not be produced, or one the scheduler has since
+        // superseded, cancelled or failed, is a visible state, never a zero:
+        // "0% ink" and "not measured" are different facts, and ink numbers
+        // measured against another revision are not this revision's numbers.
+        QString reason = outcome->reason;
+        if (!measured)
+        {
+            reason = QStringLiteral("ink-coverage/stale-or-cancelled");
+        }
+        else if (reason.isEmpty())
+        {
+            reason = QStringLiteral("ink-coverage/not-measured");
+        }
+
+        QVariantMap readout;
+        readout.insert(QStringLiteral("available"), false);
+        readout.insert(QStringLiteral("pageIndex"), outcome->pageIndex);
+        readout.insert(QStringLiteral("reason"), reason);
+        readout.insert(QStringLiteral("channels"), QVariantList());
+        m_inkCoverageReadout = readout;
+    }
+    else
+    {
+        m_inkCoverageReadout = outcome->readout;
+    }
+    bumpPresentation();
 }
 
 void EditorHost::selectFinding(const QString& findingId)
@@ -1930,15 +3148,15 @@ bool EditorHost::runPreflight()
             }
             const auto* security = document->getStorage().getSecurityHandler();
             receipt.limitations.append(security && security->getMode() != pdf::EncryptionMode::None
-                                           ? QStringLiteral("Document is encrypted; authenticated document permissions apply.")
-                                           : QStringLiteral("Document is not encrypted."));
+                                           ? tr("Document is encrypted; authenticated document permissions apply.")
+                                           : tr("Document is not encrypted."));
             outcome->auditSummary.insert(QStringLiteral("inspection_receipt"), receipt.toJson());
 
             if (context.isCancellationRequested())
                 return;
 
             context.reportProgress(95);
-            context.setResultSummary(QStringLiteral("Preflight completed."));
+            context.setResultSummary(tr("Preflight completed."));
         });
     if (submittedId != jobId)
     {
@@ -2441,9 +3659,9 @@ bool EditorHost::saveActionListRecipe()
 bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                      pdfinteraction::ActionListController::State controllerState)
 {
-    if (!m_session->facade().permissions().allowsCorrection())
+    if (!m_rollbackOutcomes.isEmpty() || !m_session->facade().permissions().allowsCorrection())
     {
-        announceDocumentState(tr("Document permissions restrict corrections. No plan or output was created."));
+        announceDocumentState(tr("A rollback is in progress or document permissions restrict corrections."));
         return false;
     }
     if (!hasDocument() || m_selectedActionListRecipeId.isEmpty() || !m_session->revisionSource())
@@ -2542,7 +3760,10 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
                                                 outcome,
                                                 preflightProfilePath,
                                                 preflightProfile,
-                                                preflightProfileBindings));
+                                                preflightProfileBindings,
+                                                historyDocumentPath(),
+                                                phase == pdfinteraction::ActionListRunPhase::Execute &&
+                                                    planSignatureInvalidationAcknowledged()));
     if (submittedId != jobId)
     {
         m_actionListOutcomes.remove(jobId);
@@ -2570,6 +3791,11 @@ bool EditorHost::runActionList()
 {
     if (!fixExecutionArmed())
     {
+        if (planSignatureInvalidationApplies() && !planSignatureInvalidationAcknowledged())
+        {
+            announceDocumentState(tr("The plan invalidates document signatures. Acknowledge the "
+                                     "signature invalidation before executing."));
+        }
         return false;
     }
     return submitActionListJob(pdfinteraction::ActionListRunPhase::Execute,
@@ -2585,6 +3811,7 @@ void EditorHost::clearFixReview()
 {
     m_fixReviewDecision = FixReviewDecision::None;
     m_fixReviewedPlanDigest.clear();
+    m_fixSignatureInvalidationAcknowledgedDigest.clear();
 }
 
 bool EditorHost::approveActionListPlan()
@@ -2826,44 +4053,72 @@ void EditorHost::refreshFixRollbackPoints()
 void EditorHost::refreshFixRollbackPointsFromHistory()
 {
     m_fixRollbackPoints.clear();
-
+    m_revisionHistory.clear();
+    m_historyUndoId.clear();
+    m_historyRedoId.clear();
+    m_historyError.clear();
     if (!hasDocument())
+        return;
+    const QString databasePath = QDir(historyDocumentPath() + QStringLiteral(".loop-history")).filePath(QStringLiteral("history.sqlite3"));
+    if (!QFileInfo::exists(databasePath))
+        return;
+    pdf::PDFOperationHistoryStore history(databasePath);
+    if (!history.open(&m_historyError))
+        return;
+    const auto verification = history.verify();
+    if (!verification.verified)
     {
-        m_fixRollbackSummary = fixRollbackSummary();
+        m_historyError = verification.errorMessage;
         return;
     }
-
-    const QList<pdf::PDFRollbackPoint> points = documentRollbackPoints();
-    for (const pdf::PDFRollbackPoint& point : points)
+    const auto points = history.rollbackPoints(&m_historyError);
+    const auto events = history.events(&m_historyError);
+    QHash<QString, QString> parents;
+    QStringList redo;
+    const QString currentDigest = historyArtifactDigest();
+    for (const auto& event : events)
     {
-        // Core returns to a revision only when it is the accepted output of a recorded
-        // execution, so an evicted artifact or the as-received input (kept as a protected
-        // retention point rather than a selectable revision) is never offered as one.
-        if (point.artifactEvicted || point.isOriginalInput)
-        {
+        QVariantMap row = event.toJson().toVariantMap();
+        row.insert(QStringLiteral("current"), event.output && event.output->sha256 == currentDigest);
+        row.insert(QStringLiteral("receiptText"), QString::fromUtf8(QJsonDocument(event.resultSummary.value(QStringLiteral("governed")).toObject()).toJson(QJsonDocument::Compact)));
+        m_revisionHistory.append(row);
+        if (!event.output)
             continue;
+        const auto execution = history.execution(event.executionId, &m_historyError);
+        if (!execution)
+            continue;
+        const QString source = execution->input.sha256;
+        const QString target = event.output->sha256;
+        if (event.status == pdf::PDFOperationHistoryStatus::Accepted && source != target)
+        {
+            parents.insert(target, source);
+            redo.clear();
         }
-        QVariantMap entry;
-        entry.insert(QStringLiteral("rollbackId"), point.rollbackId);
-        entry.insert(QStringLiteral("documentRevisionDigest"), point.documentRevisionDigest);
-        entry.insert(QStringLiteral("createdUtc"), point.createdAtUtc.toString(Qt::ISODateWithMs));
-        entry.insert(QStringLiteral("operationId"), point.operationId);
-        entry.insert(QStringLiteral("artifactBytes"), point.artifactBytes);
-        entry.insert(QStringLiteral("isOriginalInput"), point.isOriginalInput);
-        entry.insert(QStringLiteral("approvedOutput"), point.approvedOutput);
-        entry.insert(QStringLiteral("planSummary"), point.planSummary.left(160));
-        m_fixRollbackPoints.append(entry);
+        else if (event.status == pdf::PDFOperationHistoryStatus::RolledBack)
+        {
+            if (parents.value(source) == target)
+                redo.append(source);
+            else if (!redo.isEmpty() && redo.last() == target)
+                redo.removeLast();
+            else
+                redo.clear();
+        }
     }
-    m_fixRollbackSummary = fixRollbackSummary();
-}
-
-QList<pdf::PDFRollbackPoint> EditorHost::documentRollbackPoints() const
-{
-    if (!hasDocument() || !m_session->facade().source().isValid())
+    for (const auto& point : points)
     {
-        return {};
+        const auto accepted = std::find_if(events.cbegin(), events.cend(), [&point](const auto& event)
+                                           { return event.entryId == point.auditEventId && event.status == pdf::PDFOperationHistoryStatus::Accepted; });
+        if (point.artifactEvicted || (!point.isOriginalInput && accepted == events.cend()))
+            continue;
+        QVariantMap entry = point.toJson().toVariantMap();
+        entry.insert(QStringLiteral("canReturn"), !point.isOriginalInput || point.documentRevisionDigest == parents.value(currentDigest));
+        m_fixRollbackPoints.append(entry);
+        if (point.documentRevisionDigest == parents.value(currentDigest))
+            m_historyUndoId = point.rollbackId;
+        if (!redo.isEmpty() && point.documentRevisionDigest == redo.last())
+            m_historyRedoId = point.rollbackId;
     }
-    return rollbackPointsForDocument(m_session->facade().source().path);
+    refreshFeatureAvailability();
 }
 
 bool EditorHost::requestFixRollback(const QString& rollbackId)
@@ -2873,7 +4128,7 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
-    const QString documentPath = m_session->facade().source().path;
+    const QString documentPath = historyDocumentPath();
     if (documentPath.isEmpty())
     {
         return false;
@@ -2911,17 +4166,30 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     const QString currentDigest =
         QString::fromLatin1(QCryptographicHash::hash(currentBytes, QCryptographicHash::Sha256).toHex());
 
+    if (currentDigest != historyArtifactDigest())
+    {
+        announceDocumentState(tr("The source artifact changed; reopen it before navigating history."));
+        return false;
+    }
     QUuid targetExecutionId;
     const QList<pdf::PDFOperationHistoryEvent> events = history.events(&error);
     const auto event = std::find_if(events.cbegin(), events.cend(),
-                                    [&point](const pdf::PDFOperationHistoryEvent& candidate)
-                                    { return candidate.entryId == point->auditEventId; });
+                                    [&point, &history, &currentDigest](const pdf::PDFOperationHistoryEvent& candidate)
+                                    {
+                                        if (!point->isOriginalInput)
+                                            return candidate.entryId == point->auditEventId;
+                                        const auto execution = history.execution(candidate.executionId);
+                                        return execution && candidate.status == pdf::PDFOperationHistoryStatus::Accepted &&
+                                               candidate.output && candidate.output->sha256 == currentDigest &&
+                                               execution->input.sha256 == point->documentRevisionDigest;
+                                    });
     if (event == events.cend())
     {
         announceDocumentState(tr("The recorded revision has no audit event and cannot be returned to."));
         return false;
     }
     targetExecutionId = event->executionId;
+    history.close();
 
     // P2: a rollback revalidates the restored revision through the #38 path, so the
     // Editor must supply the effective profile it already holds. Without a validated
@@ -2958,8 +4226,8 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     const QFileInfo documentInfo(documentPath);
     const QString destination =
         documentInfo.absoluteDir().filePath(QStringLiteral("%1-rollback-%2.pdf")
-                                                .arg(documentInfo.completeBaseName(),
-                                                     point->documentRevisionDigest.left(8)));
+                                                .arg(documentInfo.completeBaseName().left(32),
+                                                     QUuid::createUuid().toString(QUuid::WithoutBraces)));
 
     // One rollback at a time: a second request while the first is still restoring would
     // race the same history and publish two revisions from one document state.
@@ -2974,7 +4242,6 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
     // scheduled exactly like the Action List run. The worker builds its own stores: Qt SQL
     // connections are thread-affine, so the GUI-thread history opened above must never be
     // touched off-thread.
-    const QString historyPath = QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3"));
     const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     pdf::PDFJobSpec spec;
@@ -2995,20 +4262,24 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        [request, historyPath, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
+        [request, historyDirectory, destination, outcome](pdf::PDFJobContext& context)
         {
             if (context.isCancellationRequested())
             {
                 return;
             }
-            pdf::PDFOperationHistoryStore workerHistory(historyPath);
             QString openError;
+            const QString sourcePath = historyDirectory.left(historyDirectory.size() - QStringLiteral(".loop-history").size());
+            if (!pdfinteraction::retainHistoryForArtifact(sourcePath, destination, &openError))
+                throw std::runtime_error(openError.toStdString());
+            const QString outputHistoryDirectory = destination + QStringLiteral(".loop-history");
+            pdf::PDFOperationHistoryStore workerHistory(QDir(outputHistoryDirectory).filePath(QStringLiteral("history.sqlite3")));
             if (!workerHistory.open(&openError))
             {
                 throw std::runtime_error(
-                    QStringLiteral("Recorded revisions are unavailable: %1").arg(openError).toStdString());
+                    tr("Recorded revisions are unavailable: %1").arg(openError).toStdString());
             }
-            pdf::PDFArtifactStore artifacts(historyDirectory);
+            pdf::PDFArtifactStore artifacts(outputHistoryDirectory);
             const pdf::PDFOperationResult rollback = workerHistory.rollbackTo(request, artifacts, destination);
             if (!rollback)
             {
@@ -3033,7 +4304,8 @@ bool EditorHost::requestFixRollback(const QString& rollbackId)
         return false;
     }
 
-    // The rollback is scheduled, not complete: finishRollbackJob announces the outcome.
+    refreshFeatureAvailability();
+    bumpPresentation();
     return true;
 }
 
@@ -3136,7 +4408,7 @@ void EditorHost::reloadPreflightProfiles()
         if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
         {
             choice.name = QFileInfo(source).completeBaseName();
-            choice.diagnostic = QStringLiteral("Profile JSON is invalid.");
+            choice.diagnostic = tr("Profile JSON is invalid.");
             profiles.append(choice);
             return;
         }
@@ -3290,9 +4562,25 @@ bool EditorHost::commandPermissionAllowed(const QString& commandId) const
         return permissions.copy;
     }
     if (commandId == MoveSelectionCommandId || commandId == QLatin1String("actionPageGeometry") ||
-        commandId == QLatin1String("actionInsertPageNumbers") || commandId == QLatin1String("actionStickyNoteInsert"))
+        commandId == QLatin1String("actionInsertPageNumbers"))
     {
         return permissions.allowsCorrection();
+    }
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        if (commandId == entry.first)
+        {
+            return permissions.modifyAnnotations;
+        }
+    }
+    if (commandId == QLatin1String("actionSetFormFieldValue"))
+    {
+        return m_documentModel.canFillForms();
+    }
+    if (commandId == QLatin1String("actionAddAttachment") || commandId == QLatin1String("actionRemoveAttachment") ||
+        commandId == QLatin1String("actionEditDocumentMetadata"))
+    {
+        return m_documentModel.canModify();
     }
     return true;
 }
@@ -3346,6 +4634,161 @@ void EditorHost::reopenDocument()
     {
         bumpCommandEpoch();
     }
+}
+
+QString EditorHost::outputRevision() const
+{
+    return m_session->facade().currentRevision().toString();
+}
+
+bool EditorHost::exportDocumentFileUrl(const QUrl& url, const QString& format, int dpi,
+                                       const QString& revision, bool fidelityAcknowledged)
+{
+    if (!url.isValid() || !url.isLocalFile())
+        return false;
+    return invokeCommand(format == QLatin1String("print-pdf") ? QStringLiteral("actionPrint") : QStringLiteral("actionExportDocument"),
+                         { { QStringLiteral("path"), url.toLocalFile() }, { QStringLiteral("format"), format }, { QStringLiteral("dpi"), dpi }, { QStringLiteral("revision"), revision }, { QStringLiteral("fidelityAcknowledged"), fidelityAcknowledged } }) != pdfinteraction::InvalidCommandInvocation;
+}
+
+void EditorHost::beginDocumentOutput(pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+{
+    const auto refuse = [this, invocation](const QString& reason)
+    {
+        m_outputRecord = { { QStringLiteral("error"), reason }, { QStringLiteral("printProof"), false } };
+        m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, reason);
+        announceDocumentState(reason);
+        bumpPresentation();
+        Q_EMIT documentOutputFinished();
+    };
+    if (!hasDocument() || outputBusy() || m_session->facade().operation().pending ||
+        parameters.value(QStringLiteral("revision")).toString() != outputRevision())
+    {
+        refuse(QStringLiteral("output/stale-or-busy-document"));
+        return;
+    }
+    loopeditor::OutputRequest request;
+    const QString format = parameters.value(QStringLiteral("format")).toString();
+    if (format == QLatin1String("pdf"))
+        request.format = loopeditor::OutputFormat::PublishedPdf;
+    else if (format == QLatin1String("print-pdf"))
+        request.format = loopeditor::OutputFormat::PrintPdf;
+    else if (format == QLatin1String("png"))
+        request.format = loopeditor::OutputFormat::Png;
+    else if (format == QLatin1String("tiff"))
+        request.format = loopeditor::OutputFormat::Tiff;
+    else
+    {
+        refuse(QStringLiteral("output/invalid-format"));
+        return;
+    }
+    const bool printing = request.format == loopeditor::OutputFormat::PrintPdf;
+    request.dpi = parameters.value(QStringLiteral("dpi"), 300).toInt();
+    if ((printing && (!m_documentModel.canPrint() || (!m_documentModel.canHighResolutionPrint() && request.dpi > 150))) ||
+        (!printing && !m_documentModel.canCopy()))
+    {
+        refuse(QStringLiteral("output/permission-restricted"));
+        return;
+    }
+    request.fidelityAcknowledged = parameters.value(QStringLiteral("fidelityAcknowledged")).toBool();
+    if (!pageFidelityIsExact() && !request.fidelityAcknowledged)
+    {
+        refuse(QStringLiteral("output/fidelity-acknowledgment-required"));
+        return;
+    }
+    request.revision = outputRevision();
+    request.document = m_session->context().getDocumentPointer();
+    request.sourcePath = m_session->facade().source().path;
+    request.page = currentPage();
+    if (m_publicationRevision == request.revision)
+    {
+        request.publishedBytes = m_publishedOutputBytes;
+        request.publicationReceipt = m_publicationReceipt;
+    }
+    if (request.format == loopeditor::OutputFormat::PublishedPdf && request.publishedBytes.isEmpty() &&
+        m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        refuse(QStringLiteral("output/unpublished-revision"));
+        return;
+    }
+    const QString destination = parameters.value(QStringLiteral("path")).toString();
+    const QFileInfo target(destination), source(request.sourcePath);
+    if (destination.isEmpty() || target.isDir() ||
+        target.absoluteFilePath() == source.absoluteFilePath() ||
+        (target.exists() && target.canonicalFilePath() == source.canonicalFilePath()))
+    {
+        refuse(QStringLiteral("output/invalid-or-source-destination"));
+        return;
+    }
+    m_outputRevision = request.revision;
+    m_outputDestination = destination;
+    m_outputInvocation = invocation;
+    m_outputCancelled = false;
+    m_outputJobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    m_outputRecord = { { QStringLiteral("status"), QStringLiteral("preparing") } };
+    m_outputResult = std::make_shared<loopeditor::OutputResult>();
+    pdf::PDFJobSpec spec;
+    spec.jobId = m_outputJobId;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_outputRevision;
+    spec.operationId = QStringLiteral("quick-output.%1").arg(format);
+    const auto result = m_outputResult;
+    m_session->scheduler().submit(spec, [request, result](pdf::PDFJobContext& job)
+                                  { loopeditor::prepareOutput(request, *result, job); });
+    refreshFeatureAvailability();
+    bumpPresentation();
+}
+
+void EditorHost::finishDocumentOutput(const pdf::PDFJobSnapshot& snapshot)
+{
+    if (snapshot.jobId != m_outputJobId || !m_outputResult)
+        return;
+    QString error = m_outputResult->error;
+    if (m_outputCancelled || snapshot.status != pdf::PDFJobStatus::Succeeded || !hasDocument() ||
+        snapshot.kind != pdf::PDFJobKind::Export || snapshot.documentKey != m_session->revisionSource()->documentKey() ||
+        snapshot.documentRevision != outputRevision() || snapshot.documentRevision != m_outputRevision ||
+        !m_session->catalog().isPending(m_outputInvocation))
+    {
+        error = QStringLiteral("output/cancelled-stale-or-failed");
+    }
+    if (error.isEmpty())
+    {
+        QFile staged(m_outputResult->stagedPath);
+        if (!staged.open(QIODevice::ReadOnly))
+            error = QStringLiteral("output/staging-read-failed");
+        else
+        {
+            const QString expectedDigest = snapshot.outputArtifact.sha256;
+            const auto written = pdf::PDFSafeFileWriter::writeDevice(m_outputDestination, [&staged, expectedDigest](QIODevice* output)
+                                                                     {
+                QCryptographicHash digest(QCryptographicHash::Sha256);
+                while (!staged.atEnd())
+                {
+                    const QByteArray chunk = staged.read(65536);
+                    if (chunk.isEmpty() || output->write(chunk) != chunk.size()) return false;
+                    digest.addData(chunk);
+                }
+                return staged.error() == QFile::NoError && QString::fromLatin1(digest.result().toHex()) == expectedDigest; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            if (!written)
+                error = QStringLiteral("output/commit-failed");
+        }
+    }
+    const bool ok = error.isEmpty();
+    m_outputRecord = m_outputResult->record.toVariantMap();
+    m_outputRecord.insert(QStringLiteral("status"), ok ? QStringLiteral("saved") : QStringLiteral("failed"));
+    m_outputRecord.insert(QStringLiteral("error"), error);
+    m_outputRecord.insert(QStringLiteral("printProof"), false);
+    m_session->catalog().finishInvocation(m_outputInvocation, ok ? pdfinteraction::CommandTerminalState::Completed : snapshot.status == pdf::PDFJobStatus::Cancelled ? pdfinteraction::CommandTerminalState::Cancelled
+                                                                                                                                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                          error);
+    m_outputJobId.clear();
+    m_outputResult.reset();
+    m_outputInvocation = pdfinteraction::InvalidCommandInvocation;
+    refreshFeatureAvailability();
+    announceDocumentState(ok ? tr("Output saved. Artifact %1. This is not print proof.").arg(snapshot.outputArtifact.sha256.left(12)) : error);
+    bumpPresentation();
+    Q_EMIT documentOutputFinished();
 }
 
 void EditorHost::cancelPendingOperation()
@@ -3466,11 +4909,16 @@ void EditorHost::connectFacade()
             [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
             {
                 cancelPreflight();
+                // The ink-coverage readout measured the revision that just left;
+                // dropping it is the honest state, and a fresh measurement
+                // repopulates it.
+                m_inkCoverageReadout = QVariantMap();
                 syncRevisionModels();
                 if (m_documentBound)
                 {
                     m_documentModel.setDocument(&m_session->context());
                     m_searchRow = -1;
+                    refreshAnnotationOverlay();
                     bumpPresentation();
                 }
             });
@@ -3525,6 +4973,25 @@ void EditorHost::connectInteraction()
             &pdfinteraction::InteractionController::dragCompleted,
             this,
             &EditorHost::onDragCompleted);
+
+    // Measurements and text selections are presentation state the accessible
+    // summary reports, so every change re-reads the summary.
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::measurementCompleted,
+            this,
+            [this](const pdfinteraction::Measurement& measurement)
+            {
+                announceDocumentState(tr("Measured %1.").arg(pdfinteraction::measurementReadout(measurement)));
+                bumpPresentation();
+            });
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::measurementsCleared,
+            this,
+            &EditorHost::bumpPresentation);
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::textSelectionChanged,
+            this,
+            &EditorHost::bumpPresentation);
 }
 
 void EditorHost::connectSurfaces()
@@ -3553,6 +5020,32 @@ void EditorHost::registerShellHandlers()
 
 void EditorHost::registerFeatureHandlers()
 {
+    for (const QString& id : { QStringLiteral("actionPrint"), QStringLiteral("actionExportDocument") })
+    {
+        pdfinteraction::CommandCatalog::Handler output;
+        output.invoke = [this, id](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            if (parameters.isEmpty())
+            {
+                Q_EMIT documentOutputRequested(id == QLatin1String("actionPrint"));
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+                return;
+            }
+            QVariantMap request = parameters;
+            if (id == QLatin1String("actionPrint"))
+                request.insert(QStringLiteral("format"), QStringLiteral("print-pdf"));
+            beginDocumentOutput(invocation, request);
+        };
+        output.cancel = [this](pdfinteraction::CommandInvocationId invocation)
+        {
+            if (invocation == m_outputInvocation)
+            {
+                m_outputCancelled = true;
+                m_session->scheduler().cancel(m_outputJobId);
+            }
+        };
+        m_session->catalog().setHandler(id, std::move(output));
+    }
     auto bind = [this](const QString& id, std::function<void()> action)
     {
         pdfinteraction::CommandCatalog::Handler handler;
@@ -3587,6 +5080,111 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionProperties"), [this]
          { setWorkspace(LoopWorkspace::Inspect); });
 
+    // ---- Select, copy and capture (issue #232) -------------------------------------
+    // A selection command finishes Failed with a typed code when it applied
+    // nothing, so "the menu did nothing" is reported rather than implied.
+    auto bindSelectionCommand = [this](const QString& id, std::function<bool()> action)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, action = std::move(action)](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            const bool applied = action();
+            m_session->catalog().finishInvocation(invocation,
+                                                  applied ? pdfinteraction::CommandTerminalState::Completed
+                                                          : pdfinteraction::CommandTerminalState::Failed,
+                                                  applied ? QString() : QStringLiteral("text/selection-refused"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindSelectionCommand(QStringLiteral("actionSelectText"), [this]
+                         { return setActiveTool(QStringLiteral("text")); });
+    bindSelectionCommand(QStringLiteral("actionSelectTextAll"), [this]
+                         { return m_session->interaction()->selectAllText(); });
+    bindSelectionCommand(QStringLiteral("actionDeselectText"), [this]
+                         { return m_session->interaction()->deselectText(); });
+    bindSelectionCommand(QStringLiteral("actionSelectTable"), [this]
+                         { return m_session->interaction()->selectTableUnderPointer(); });
+    bindSelectionCommand(QStringLiteral("actionGoToNextLine"), [this]
+                         { return m_session->interaction()->stepTextSelectionByLine(1); });
+    bindSelectionCommand(QStringLiteral("actionGoToPreviousLine"), [this]
+                         { return m_session->interaction()->stepTextSelectionByLine(-1); });
+
+    // Copy reports the controller's typed refusal, so a page with no text layer
+    // can never be copied as an empty success.
+    pdfinteraction::CommandCatalog::Handler copy;
+    copy.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        const bool copied = copySelectedText();
+        m_session->catalog().finishInvocation(invocation,
+                                              copied ? pdfinteraction::CommandTerminalState::Completed
+                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                              copied ? QString() : QStringLiteral("text/copy-refused"));
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionCopyText"), std::move(copy));
+
+    // Screenshot and image extraction need a destination, so the commands ask
+    // the shell for one and write nothing themselves.
+    bind(QStringLiteral("actionScreenshot"), [this]
+         { Q_EMIT screenshotRequested(); });
+    bind(QStringLiteral("actionExtractImage"), [this]
+         { Q_EMIT imageExtractionRequested(); });
+
+    // Display colour modes (#235 display half). Presentation-only: each filters
+    // the pixels the canvas already holds and asks for no render. Invoking the
+    // mode that is already in force returns the display to normal, which is the
+    // toggle a checkable action used to provide -- there is no sixth action for
+    // "normal", and a mode with no way back is a trap.
+    for (const pdfquick::CanvasDisplayColorMode mode : { pdfquick::CanvasDisplayColorMode::Invert,
+                                                         pdfquick::CanvasDisplayColorMode::Grayscale,
+                                                         pdfquick::CanvasDisplayColorMode::HighContrast,
+                                                         pdfquick::CanvasDisplayColorMode::Bitonal,
+                                                         pdfquick::CanvasDisplayColorMode::Custom })
+    {
+        const QString actionId = pdfquick::getCanvasDisplayColorModeActionId(mode);
+        bind(actionId, [this, mode]
+             { setDisplayColorMode(m_displayColor.mode == mode
+                                       ? QStringLiteral("normal")
+                                       : pdfquick::getCanvasDisplayColorModeName(mode)); });
+    }
+
+    // Shell settings, render options and diagnostics (#239). Every one of these
+    // is ADVANCED-disposition and developer-gated; binding a handler does not
+    // make it reachable in a release profile.
+    bind(QStringLiteral("actionOptions"), [this]
+         { Q_EMIT settingsPanelRequested(); });
+    bind(QStringLiteral("actionResetToFactorySettings"), [this]
+         { requestSettingsReset(); });
+    bind(QStringLiteral("actionCollectDiagnostics"), [this]
+         { Q_EMIT diagnosticsCollectionRequested(); });
+
+    auto bindOptionToggle = [this](const QString& commandId, const QString& optionId)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, optionId](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            const bool enabled = !m_settings->isOptionEnabled(optionId);
+            const bool applied = m_settings->setOptionEnabled(optionId, enabled);
+            m_session->catalog().finishInvocation(invocation,
+                                                  applied ? pdfinteraction::CommandTerminalState::Completed
+                                                          : pdfinteraction::CommandTerminalState::Failed,
+                                                  applied ? QString() : QStringLiteral("settings/persist-failed"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(commandId, std::move(handler));
+    };
+
+    bindOptionToggle(QStringLiteral("actionRenderOptionAntialiasing"), EditorSettings::AntialiasingOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionTextAntialiasing"), EditorSettings::TextAntialiasingOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionSmoothPictures"), EditorSettings::SmoothPicturesOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionDisplayAnnotations"), EditorSettings::DisplayAnnotationsOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings"), EditorSettings::IgnoreOptionalContentOptionId);
+    bindOptionToggle(QStringLiteral("actionRenderOptionDisplayRenderTimes"), EditorSettings::DisplayRenderTimesOptionId);
+    bindOptionToggle(QStringLiteral("actionShow_Text_Blocks"), EditorSettings::ShowTextBlocksOptionId);
+    bindOptionToggle(QStringLiteral("actionShow_Text_Lines"), EditorSettings::ShowTextLinesOptionId);
+
     pdfinteraction::CommandCatalog::Handler move;
     move.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
     {
@@ -3598,7 +5196,506 @@ void EditorHost::registerFeatureHandlers()
         bumpPresentation();
     };
     m_session->catalog().setHandler(MoveSelectionCommandId, std::move(move));
+    for (const QString& command : { QStringLiteral("actionUndo"), QStringLiteral("actionRedo") })
+    {
+        pdfinteraction::CommandCatalog::Handler navigation;
+        navigation.invoke = [this, command](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            const QString rollbackId = command == QLatin1String("actionUndo") ? m_historyUndoId : m_historyRedoId;
+            bool accepted = command == QLatin1String("actionUndo") ? historyUndoAvailable() : historyRedoAvailable();
+            if (accepted && parameters.isEmpty())
+            {
+                setWorkspace(LoopWorkspace::Fix);
+                Q_EMIT historyNavigationRequested(command, rollbackId, m_session->facade().currentRevision().toString());
+            }
+            else if (accepted)
+            {
+                accepted = parameters.value(QStringLiteral("rollbackId")).toString() == rollbackId &&
+                           parameters.value(QStringLiteral("revision")).toString() == m_session->facade().currentRevision().toString() &&
+                           requestFixRollback(rollbackId);
+            }
+            m_session->catalog().finishInvocation(invocation, accepted ? pdfinteraction::CommandTerminalState::Completed : pdfinteraction::CommandTerminalState::Failed,
+                                                  accepted ? QString() : QStringLiteral("history/stale-or-unavailable"));
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(command, std::move(navigation));
+    }
+
+    // ---- Bookmarks and hyperlinks (issue #233, ADR-014) -------------------------------
+    // Every edit is one typed direct-edit request on the document facade, which
+    // fences the revision and the document's modify permission before Core
+    // writes the outline or the link annotation. Nothing here and nothing in
+    // QML edits the outline model; it re-reads the revision the edit produced.
+    auto bindAuthoringEdit = [this](const QString& id,
+                                    std::function<std::optional<pdf::PDFAuthoringEdit>(const QVariantMap&, QString&)> build)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, build = std::move(build)](pdfinteraction::CommandInvocationId invocation,
+                                                          const QVariantMap& parameters)
+        {
+            QString typedError;
+            const std::optional<pdf::PDFAuthoringEdit> edit = build(parameters, typedError);
+            runAuthoringEdit(invocation, edit, typedError, parameters);
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindAuthoringEdit(QStringLiteral("actionBookmarkPage"),
+                      [this](const QVariantMap& parameters, QString& typedError)
+                      {
+                          const int page = currentPage();
+                          if (page < 0)
+                          {
+                              // The viewport has placed no page yet, so there is
+                              // no page the operator is on. Refuse with that
+                              // reason instead of blaming the document's page
+                              // range, which is not what is wrong.
+                              typedError = QStringLiteral("bookmark/no-current-page");
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+                          edit.text = parameters.value(QStringLiteral("title")).toString();
+                          edit.pageIndex = page;
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+    bindAuthoringEdit(QStringLiteral("actionBookmarkAutoGenerate"),
+                      [](const QVariantMap&, QString&)
+                      {
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::GenerateBookmarks;
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+    bindAuthoringEdit(QStringLiteral("actionCreateHyperlink"),
+                      [this](const QVariantMap& parameters, QString& typedError)
+                      {
+                          pdf::PDFAuthoringEdit edit;
+                          edit.kind = pdf::PDFAuthoringEdit::Kind::AddUriLink;
+                          edit.text = parameters.value(QStringLiteral("uri")).toString();
+                          if (edit.text.isEmpty())
+                          {
+                              typedError = QStringLiteral("hyperlink/uri-required");
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+                          if (!authoringLinkGeometry(parameters, &edit.pageIndex, &edit.rectangle, typedError))
+                          {
+                              return std::optional<pdf::PDFAuthoringEdit>();
+                          }
+                          return std::optional<pdf::PDFAuthoringEdit>(edit);
+                      });
+
+    for (const HyperlinkDestinationVariant& variant : HyperlinkDestinationVariants)
+    {
+        bindAuthoringEdit(QString::fromLatin1(variant.command),
+                          [this, variant](const QVariantMap& parameters, QString& typedError)
+                          {
+                              pdf::PDFAuthoringEdit edit;
+                              edit.kind = pdf::PDFAuthoringEdit::Kind::AddDestinationLink;
+                              edit.destinationType = variant.type;
+                              if (!authoringLinkGeometry(parameters, &edit.pageIndex, &edit.rectangle, typedError))
+                              {
+                                  return std::optional<pdf::PDFAuthoringEdit>();
+                              }
+
+                              edit.targetPageIndex =
+                                  parameters.value(QStringLiteral("targetPage"), currentPage()).toInt();
+                              const std::optional<QRectF> target =
+                                  rectangleFromParameters(parameters,
+                                                          QStringLiteral("targetLeft"),
+                                                          QStringLiteral("targetBottom"),
+                                                          QStringLiteral("targetRight"),
+                                                          QStringLiteral("targetTop"),
+                                                          typedError);
+                              if (!typedError.isEmpty())
+                              {
+                                  return std::optional<pdf::PDFAuthoringEdit>();
+                              }
+                              if (target.has_value())
+                              {
+                                  edit.targetRectangle = *target;
+                              }
+
+                              // XYZ without an explicit zoom uses the zoom on
+                              // screen; the inherit-zoom variant writes the PDF
+                              // null zoom instead, which keeps the viewer's own.
+                              edit.zoom = variant.inheritZoom
+                                              ? std::numeric_limits<pdf::PDFReal>::quiet_NaN()
+                                              : parameters.value(QStringLiteral("zoom"), m_session->viewport().zoom()).toDouble();
+                              return std::optional<pdf::PDFAuthoringEdit>(edit);
+                          });
+    }
+
+    // Import and export carry a file, so the file is read or written here and
+    // only the outline replacement is a document edit. Without a path the
+    // command asks the shell for one and answers through
+    // importBookmarksFileUrl()/exportBookmarksFileUrl().
+    pdfinteraction::CommandCatalog::Handler importBookmarks;
+    importBookmarks.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+    {
+        const QString path = parameters.value(QStringLiteral("path")).toString();
+        if (path.isEmpty())
+        {
+            Q_EMIT bookmarkImportRequested();
+            m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+            return;
+        }
+
+        QString typedError;
+        std::optional<pdf::PDFBookmarkFile> file;
+        QFile source(path);
+        if (!source.open(QIODevice::ReadOnly))
+        {
+            typedError = QStringLiteral("bookmark/file-unreadable");
+        }
+        else
+        {
+            file = pdf::PDFBookmarkFile::fromJson(source.readAll(), typedError);
+        }
+
+        std::optional<pdf::PDFAuthoringEdit> edit;
+        if (file.has_value())
+        {
+            pdf::PDFAuthoringEdit replacement;
+            replacement.kind = pdf::PDFAuthoringEdit::Kind::ReplaceBookmarks;
+            replacement.bookmarks = file->bookmarks;
+            edit = replacement;
+        }
+        runAuthoringEdit(invocation, edit, typedError, parameters);
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionBookmarkImport"), std::move(importBookmarks));
+
+    pdfinteraction::CommandCatalog::Handler exportBookmarks;
+    exportBookmarks.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+    {
+        const QString path = parameters.value(QStringLiteral("path")).toString();
+        if (path.isEmpty())
+        {
+            Q_EMIT bookmarkExportRequested();
+            m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+            return;
+        }
+
+        QString typedError;
+        pdf::PDFBookmarkFile file;
+        const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+        const QString displayed = parameters.value(QStringLiteral("revision")).toString();
+        std::optional<QList<pdf::PDFBookmarkRecord>> records;
+        if (!document)
+        {
+            typedError = QStringLiteral("bookmark/document-not-ready");
+        }
+        else if (!displayed.isEmpty() && displayed != m_session->facade().currentRevision().toString())
+        {
+            // The file would describe a revision the document has left.
+            typedError = QStringLiteral("bookmark/stale-revision");
+        }
+        else
+        {
+            records = pdf::PDFAuthoringEditWriter::readOutline(document.data(), typedError);
+        }
+
+        if (records.has_value())
+        {
+            file.bookmarks = *records;
+            const pdf::PDFOperationResult written = pdf::PDFSafeFileWriter::writeData(
+                path, file.toJson(), pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            if (!written)
+            {
+                typedError = QStringLiteral("bookmark/export-failed");
+            }
+        }
+
+        const bool exported = typedError.isEmpty() && records.has_value();
+        if (exported)
+        {
+            announceDocumentState(tr("Exported %n bookmark(s).", "", file.count()));
+        }
+        else
+        {
+            announceDocumentState(tr("The bookmarks could not be exported: %1").arg(typedError));
+        }
+        m_session->catalog().finishInvocation(invocation,
+                                              exported ? pdfinteraction::CommandTerminalState::Completed
+                                                       : pdfinteraction::CommandTerminalState::Failed,
+                                              exported ? QString() : typedError);
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionBookmarkExport"), std::move(exportBookmarks));
+
+    for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
+    {
+        pdfinteraction::CommandCatalog::Handler navigation;
+        navigation.invoke = [this, id](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+        {
+            QString typedError;
+            const bool moved = goToAdjacentBookmark(id == QLatin1String("actionGotoNextBookmark") ? 1 : -1,
+                                                    typedError);
+            if (moved)
+            {
+                announceDocumentState(tr("Moved to bookmark on page %1.").arg(currentPage() + 1));
+            }
+            else
+            {
+                announceDocumentState(tr("No bookmark to move to: %1").arg(typedError));
+            }
+            m_session->catalog().finishInvocation(invocation,
+                                                  moved ? pdfinteraction::CommandTerminalState::Completed
+                                                        : pdfinteraction::CommandTerminalState::Failed,
+                                                  moved ? QString() : typedError);
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(navigation));
+    }
+
+
+    // ---- Annotation authoring (issue #234) ---------------------------------
+    // One handler per declared annotation command. The handler parses geometry
+    // at this boundary, submits the typed request to the facade's direct-edit
+    // gateway (ADR-014) and surfaces the gateway's typed refusal; it never
+    // touches the document itself. An accepted edit is a new revision, and the
+    // revision-changed path already refreshes the canvas and the annotation
+    // overlay, so no annotation state is cached here.
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        const pdf::AnnotationAuthoringSubtype subtype = entry.second;
+        pdfinteraction::CommandCatalog::Handler authoring;
+        authoring.invoke = [this, subtype](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            QString refusal;
+            const std::optional<pdfinteraction::DirectEditRequest> parsed =
+                pdfinteraction::directEditRequestFromParameters(subtype, parameters, &refusal);
+            if (!parsed)
+            {
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, refusal);
+                bumpPresentation();
+                return;
+            }
+
+            pdfinteraction::DirectEditRequest request = *parsed;
+            request.revision = m_session->facade().currentRevision();
+            request.operatorIdentity = QStringLiteral("Editor");
+            const pdfinteraction::DirectEditOutcome outcome = m_session->facade().applyDirectEdit(request);
+            if (!outcome.accepted)
+            {
+                // A menu command that changed nothing must say why, in the same
+                // announcement channel every other operator-visible outcome uses.
+                announceDocumentState(tr("The annotation was not created: %1").arg(outcome.typedError));
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Failed, outcome.typedError);
+            }
+            else
+            {
+                announceDocumentState(tr("Annotation added."));
+                // The annotation exists. A provenance failure is reported on the
+                // completed invocation instead of pretending the edit did not land.
+                m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed,
+                                                      outcome.historyAppended ? QString() : outcome.historyError);
+            }
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(entry.first, std::move(authoring));
+    }
+
+
+    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
+    // Form values, attachments and metadata are mutations through this catalog
+    // into Core: each handler maps its declared scalars into the facade's typed
+    // direct-edit request, and the facade checks the revision fence and the
+    // document's permission before any writer runs. A refusal finishes Failed
+    // with the facade's own stable code, so a stale, unauthorized, XFA or
+    // unsupported edit is reported rather than silently dropped.
+    auto bindDocumentDirectEdit = [this](const QString& id, pdfinteraction::DirectEditKind kind)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, kind](pdfinteraction::CommandInvocationId invocation, const QVariantMap& parameters)
+        {
+            const pdfinteraction::DirectEditOutcome result = submitDocumentDirectEdit(kind, parameters);
+            m_session->catalog().finishInvocation(invocation,
+                                                  result.accepted ? pdfinteraction::CommandTerminalState::Completed
+                                                                  : pdfinteraction::CommandTerminalState::Failed,
+                                                  result.accepted ? QString() : result.typedError);
+            if (result.accepted)
+            {
+                announceDocumentState(tr("The document was edited. Save to publish the new revision."));
+                // The document was replaced in place, so the surfaces the new
+                // revision needs are requested now rather than at the next
+                // viewport change.
+                if (m_documentBound)
+                {
+                    m_session->surfaces()->requestSurfaces();
+                }
+            }
+            else
+            {
+                announceDocumentState(tr("The edit was refused: %1").arg(result.typedError));
+            }
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bindDocumentDirectEdit(QStringLiteral("actionSetFormFieldValue"), pdfinteraction::DirectEditKind::SetFormFieldValue);
+    bindDocumentDirectEdit(QStringLiteral("actionAddAttachment"), pdfinteraction::DirectEditKind::AddAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionRemoveAttachment"), pdfinteraction::DirectEditKind::RemoveAttachment);
+    bindDocumentDirectEdit(QStringLiteral("actionEditDocumentMetadata"), pdfinteraction::DirectEditKind::EditMetadata);
+
+    // Send by e-mail hands the current published revision to the mail client and
+    // writes nothing. An unsaved document is refused with a typed reason: the
+    // bytes on disk are then a different revision than the one on screen.
+    pdfinteraction::CommandCatalog::Handler sendByMail;
+    sendByMail.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        QString typedError;
+        const bool handed = handOffPublishedRevisionToMail(&typedError);
+        m_session->catalog().finishInvocation(invocation,
+                                              handed ? pdfinteraction::CommandTerminalState::Completed
+                                                     : pdfinteraction::CommandTerminalState::Failed,
+                                              handed ? QString() : typedError);
+        if (!handed)
+        {
+            announceDocumentState(tr("The document was not handed to the mail client: %1").arg(typedError));
+        }
+        bumpPresentation();
+    };
+    m_session->catalog().setHandler(QStringLiteral("actionSend_by_E_Mail"), std::move(sendByMail));
+
     refreshFeatureAvailability();
+}
+
+pdfinteraction::DirectEditOutcome EditorHost::submitDocumentDirectEdit(pdfinteraction::DirectEditKind kind,
+                                                                       const QVariantMap& parameters)
+{
+    pdfinteraction::DirectEditOutcome outcome;
+    if (!hasDocument())
+    {
+        outcome.typedError = QStringLiteral("document/not-ready");
+        return outcome;
+    }
+
+    pdfinteraction::DirectEditRequest request;
+    request.kind = kind;
+    request.scalars = parameters;
+    // The caller names the revision the edit was begun against. It is parsed at
+    // this boundary, and an absent or malformed identity stays invalid, so the
+    // gateway refuses it as a stale fence instead of guessing which revision
+    // the caller meant.
+    request.revision = pdf::PDFRevisionIdentity::fromString(parameters.value(QStringLiteral("revision")).toString());
+
+    if (kind == pdfinteraction::DirectEditKind::AddAttachment)
+    {
+        // The command carries a path; the host reads the file so the mutation
+        // gateway never touches the filesystem.
+        constexpr qint64 maximumAttachmentBytes = 64ll * 1024 * 1024;
+        const QString source = parameters.value(QStringLiteral("path")).toString();
+        QFile file(source);
+        if (source.isEmpty() || !file.open(QIODevice::ReadOnly))
+        {
+            outcome.typedError = QStringLiteral("attachment/source-unreadable");
+            return outcome;
+        }
+        if (file.size() > maximumAttachmentBytes)
+        {
+            outcome.typedError = QStringLiteral("attachment/source-too-large");
+            return outcome;
+        }
+        request.contents = file.readAll();
+    }
+
+    return m_session->facade().applyDirectEdit(request);
+}
+
+QUrl EditorHost::mailHandoffUrl(const QString& path, const QString& revision)
+{
+    const QString name = QFileInfo(path).fileName();
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("subject"), tr("Published document: %1").arg(name));
+    query.addQueryItem(QStringLiteral("body"), tr("The published document %1 is at revision %2.").arg(path, revision));
+    QUrl url(QStringLiteral("mailto:"));
+    url.setQuery(query);
+    return url;
+}
+
+bool EditorHost::handOffPublishedRevisionToMail(QString* typedError)
+{
+    typedError->clear();
+    if (!hasDocument())
+    {
+        *typedError = QStringLiteral("mail/no-document");
+        return false;
+    }
+
+    const pdfinteraction::DocumentFacade& facade = m_session->facade();
+    if (facade.facets().testFlag(pdfinteraction::DocumentFacet::Dirty))
+    {
+        // The published bytes are a different revision than the one on screen.
+        // Handing them over as if they were current is exactly the stale case.
+        *typedError = QStringLiteral("mail/unsaved-changes");
+        return false;
+    }
+
+    const pdfinteraction::DocumentSource& source = facade.source();
+    if (!source.isValid() || !QFileInfo::exists(source.path))
+    {
+        *typedError = QStringLiteral("mail/no-published-file");
+        return false;
+    }
+
+    // The revision travels in the message body, so the recipient can tell which
+    // revision of the file they hold. A client that does not take the message is
+    // a refusal, not a hand-off.
+    const QString revision = facade.currentRevision().toString();
+    if (!QDesktopServices::openUrl(mailHandoffUrl(source.path, revision)))
+    {
+        *typedError = QStringLiteral("mail/client-unavailable");
+        return false;
+    }
+    Q_EMIT documentMailRequested(source.path, revision);
+    announceDocumentState(tr("The published document was handed to the mail client."));
+    return true;
+}
+
+bool EditorHost::extractAttachmentFileUrl(const QUrl& directory, const QString& name)
+{
+    const auto project = [this](const QString& status, const QString& fileName, bool autoOpenRefused, const QString& typedError)
+    {
+        QVariantMap projection;
+        projection.insert(QStringLiteral("status"), status);
+        projection.insert(QStringLiteral("fileName"), fileName);
+        projection.insert(QStringLiteral("autoOpenRefused"), autoOpenRefused);
+        projection.insert(QStringLiteral("typedError"), typedError);
+        m_attachmentExtraction = projection;
+        bumpPresentation();
+    };
+
+    if (!hasDocument() || !m_session->context().getDocument() || name.isEmpty())
+    {
+        project(QStringLiteral("refused"), name, false, QStringLiteral("attachment/no-document"));
+        return false;
+    }
+
+    const pdf::PDFAttachmentWriter::ExtractionOutcome outcome =
+        pdf::PDFAttachmentWriter::extractToDirectory(m_session->context().getDocument(), name, directory.toLocalFile());
+
+    if (!outcome.written)
+    {
+        project(QStringLiteral("refused"), name, false, outcome.typedError);
+        announceDocumentState(tr("The attachment could not be extracted: %1").arg(outcome.typedError));
+        return false;
+    }
+
+    const QString extractedName = QFileInfo(outcome.path).fileName();
+    project(QStringLiteral("written"), extractedName, outcome.autoOpenRefused, QString());
+    if (outcome.autoOpenRefused)
+    {
+        // The bytes are the document's; launching them is not. The shell must
+        // not auto-open an executable-type attachment.
+        announceDocumentState(tr("Extracted %1. This file type must not be opened automatically.").arg(extractedName));
+    }
+    else
+    {
+        announceDocumentState(tr("Extracted %1.").arg(extractedName));
+    }
+    return true;
 }
 
 void EditorHost::refreshFeatureAvailability()
@@ -3607,7 +5704,10 @@ void EditorHost::refreshFeatureAvailability()
     QHash<pdfinteraction::CommandId, bool> availability;
     for (const QString& id : { QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
                                QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
-                               QStringLiteral("actionFind"), QStringLiteral("actionProperties"), MoveSelectionCommandId })
+                               QStringLiteral("actionFind"), QStringLiteral("actionProperties"), MoveSelectionCommandId,
+                               QStringLiteral("actionColorInvert"), QStringLiteral("actionColorGrayscale"),
+                               QStringLiteral("actionColorHighContrast"), QStringLiteral("actionColorBitonal"),
+                               QStringLiteral("actionColorCustom") })
     {
         availability.insert(id, ready);
     }
@@ -3615,8 +5715,288 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(QStringLiteral("actionFindNext"), hasSearchResults);
     availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
     availability.insert(QStringLiteral("actionFullscreenMode"), true);
+    availability.insert(QStringLiteral("actionUndo"), historyUndoAvailable());
+    availability.insert(QStringLiteral("actionRedo"), historyRedoAvailable());
     availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
+
+    // Select, copy and capture (issue #232). Every one of these is enabled with
+    // a document, and copy and extraction additionally follow the document's
+    // copy permission: Copy deliberately stays enabled without a selection so
+    // its typed refusal is reachable and visible, rather than the command
+    // silently disappearing from the menu.
+    for (const QString& id : { QStringLiteral("actionSelectText"), QStringLiteral("actionSelectTextAll"),
+                               QStringLiteral("actionDeselectText"), QStringLiteral("actionSelectTable"),
+                               QStringLiteral("actionGoToNextLine"), QStringLiteral("actionGoToPreviousLine"),
+                               QStringLiteral("actionScreenshot") })
+    {
+        availability.insert(id, ready);
+    }
+    availability.insert(QStringLiteral("actionCopyText"), ready && m_documentModel.canCopy());
+    availability.insert(QStringLiteral("actionExtractImage"), ready && m_documentModel.canCopy());
+
+    // The developer-diagnostics shell surfaces (#239): settings, render options
+    // and the diagnostics bundle. They follow the same flag the menu gate
+    // reads, so a release profile cannot reach them even by invocation.
+    const bool developerDiagnostics = allowDeveloperDiagnostics();
+    for (const QString& id : { QStringLiteral("actionOptions"),
+                               QStringLiteral("actionResetToFactorySettings"),
+                               QStringLiteral("actionCollectDiagnostics"),
+                               QStringLiteral("actionRenderOptionAntialiasing"),
+                               QStringLiteral("actionRenderOptionTextAntialiasing"),
+                               QStringLiteral("actionRenderOptionSmoothPictures"),
+                               QStringLiteral("actionRenderOptionDisplayAnnotations"),
+                               QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings"),
+                               QStringLiteral("actionRenderOptionDisplayRenderTimes"),
+                               QStringLiteral("actionShow_Text_Blocks"),
+                               QStringLiteral("actionShow_Text_Lines") })
+    {
+        availability.insert(id, developerDiagnostics);
+    }
+
+    availability.insert(QStringLiteral("actionPrint"), ready && !outputBusy() && m_documentModel.canPrint());
+    availability.insert(QStringLiteral("actionExportDocument"), ready && !outputBusy() && m_documentModel.canCopy());
+
+    // Annotation authoring (issue #234): available with a document whose
+    // modify-annotations permission is granted, so a restricted document cannot
+    // offer an edit the gateway would refuse. The ids come from the one table
+    // the handlers were registered from.
+    const bool annotationAuthoring = ready && m_session->facade().permissions().modifyAnnotations;
+    for (const auto& entry : pdfinteraction::annotationAuthoringCommandIds())
+    {
+        availability.insert(entry.first, annotationAuthoring);
+    }
+
+    // Direct authoring edits (ADR-014, issue #242). Each is enabled exactly when
+    // the open document grants the permission its family needs, so an
+    // unauthorized edit is unreachable rather than refused after the fact.
+    availability.insert(QStringLiteral("actionSetFormFieldValue"), ready && m_documentModel.canFillForms());
+    availability.insert(QStringLiteral("actionAddAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionRemoveAttachment"), ready && m_documentModel.canModify());
+    availability.insert(QStringLiteral("actionEditDocumentMetadata"), ready && m_documentModel.canModify());
+    // Send by e-mail stays enabled with a document even when it has unsaved
+    // changes, so its typed refusal is reachable and visible rather than the
+    // command silently disappearing from the menu.
+    availability.insert(QStringLiteral("actionSend_by_E_Mail"), ready && !outputBusy());
+
+    // Bookmarks and hyperlinks (#233). The edits are document mutations, so they
+    // follow the document's modify permission; navigation needs an outline to
+    // move through, and export follows the same copy permission the document
+    // export uses.
+    const bool canModify = ready && m_session->facade().permissions().modify;
+    for (const QString& id : { QStringLiteral("actionBookmarkPage"),
+                               QStringLiteral("actionBookmarkAutoGenerate"),
+                               QStringLiteral("actionBookmarkImport"),
+                               QStringLiteral("actionCreateHyperlink"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFit"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitB"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitBH"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitBV"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitH"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitR"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFFitV"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFXYZ"),
+                               QStringLiteral("actionCreateHyperlinkToThisPDFXYZInheritZoom") })
+    {
+        availability.insert(id, canModify);
+    }
+    availability.insert(QStringLiteral("actionBookmarkExport"), ready && m_documentModel.canCopy());
+    for (const QString& id : { QStringLiteral("actionGotoNextBookmark"), QStringLiteral("actionGotoPreviousBookmark") })
+    {
+        availability.insert(id, ready && m_documentModel.hasOutline());
+    }
+
     m_session->catalog().setEnabledBatch(availability);
+}
+
+void EditorHost::runAuthoringEdit(pdfinteraction::CommandInvocationId invocation,
+                                  const std::optional<pdf::PDFAuthoringEdit>& edit,
+                                  const QString& buildError,
+                                  const QVariantMap& parameters)
+{
+    QString typedError = buildError;
+    pdfinteraction::DirectEditOutcome outcome;
+    if (edit.has_value())
+    {
+        outcome = submitAuthoringEdit(*edit, parameters, typedError);
+    }
+
+    const bool applied = edit.has_value() && outcome.accepted;
+    if (applied)
+    {
+        announceDocumentState(authoringEditAnnouncement(*edit, outcome));
+    }
+    else
+    {
+        announceDocumentState(tr("The edit was refused: %1").arg(typedError));
+    }
+
+    m_session->catalog().finishInvocation(invocation,
+                                          applied ? pdfinteraction::CommandTerminalState::Completed
+                                                  : pdfinteraction::CommandTerminalState::Failed,
+                                          applied ? QString() : typedError);
+    bumpPresentation();
+    refreshFeatureAvailability();
+}
+
+pdfinteraction::DirectEditOutcome EditorHost::submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                                  const QVariantMap& parameters,
+                                                                  QString& typedError)
+{
+    const pdf::PDFRevisionIdentity current = m_session->facade().currentRevision();
+    const QString displayed = parameters.value(QStringLiteral("revision")).toString();
+    if (!displayed.isEmpty() && displayed != current.toString())
+    {
+        // The surface acted on a revision the document has left; the edit is
+        // refused rather than rebased onto one the operator never saw.
+        typedError = QStringLiteral("edit/stale-revision");
+        return {};
+    }
+
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring = edit;
+    request.revision = current;
+    const pdfinteraction::DirectEditOutcome outcome = m_session->facade().applyDirectEdit(request);
+    typedError = outcome.typedError;
+    return outcome;
+}
+
+bool EditorHost::authoringLinkGeometry(const QVariantMap& parameters, int* pageIndex, QRectF* rectangle,
+                                       QString& typedError) const
+{
+    const std::optional<QRectF> explicitRectangle = rectangleFromParameters(parameters,
+                                                                            QStringLiteral("left"),
+                                                                            QStringLiteral("bottom"),
+                                                                            QStringLiteral("right"),
+                                                                            QStringLiteral("top"),
+                                                                            typedError);
+    if (!typedError.isEmpty())
+    {
+        return false;
+    }
+
+    const QVariant page = parameters.value(QStringLiteral("page"));
+    if (explicitRectangle.has_value() || page.isValid())
+    {
+        if (!explicitRectangle.has_value() || !page.isValid())
+        {
+            typedError = QStringLiteral("hyperlink/incomplete-geometry");
+            return false;
+        }
+
+        *pageIndex = page.toInt();
+        *rectangle = *explicitRectangle;
+        return true;
+    }
+
+    // No explicit geometry: the current text selection is the shell's own
+    // "this region" gesture, already fenced to the revision it was taken from.
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (interaction)
+    {
+        const std::optional<pdfinteraction::TextSelection>& selection = interaction->state().textSelection();
+        if (selection.has_value() && selection->isValid() && selection->available && !selection->geometry.isEmpty())
+        {
+            QRectF bounds;
+            for (const QRectF& span : selection->geometry)
+            {
+                bounds = bounds.united(span);
+            }
+
+            if (bounds.isValid() && !bounds.isEmpty())
+            {
+                *pageIndex = selection->pageIndex;
+                *rectangle = bounds;
+                return true;
+            }
+        }
+    }
+
+    typedError = QStringLiteral("hyperlink/link-rectangle-required");
+    return false;
+}
+
+bool EditorHost::goToAdjacentBookmark(int direction, QString& typedError)
+{
+    if (!hasDocument())
+    {
+        typedError = QStringLiteral("bookmark/document-not-ready");
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    const QList<int> pages = pdf::PDFAuthoringEditWriter::bookmarkPages(document.data());
+    if (pages.isEmpty())
+    {
+        typedError = QStringLiteral("bookmark/none");
+        return false;
+    }
+
+    // Outline order, not page order: the first bookmark after (or before) the
+    // current page, wrapping at the ends like the shell's historical bookmark
+    // cursor. The page the operator is already on is never its own destination.
+    const int current = currentPage();
+    int target = -1;
+    if (direction > 0)
+    {
+        for (const int page : pages)
+        {
+            if (page > current)
+            {
+                target = page;
+                break;
+            }
+        }
+        if (target < 0)
+        {
+            target = pages.constFirst();
+        }
+    }
+    else
+    {
+        for (auto it = pages.crbegin(); it != pages.crend(); ++it)
+        {
+            if (*it < current)
+            {
+                target = *it;
+                break;
+            }
+        }
+        if (target < 0)
+        {
+            target = pages.constLast();
+        }
+    }
+
+    goToPage(target);
+    return true;
+}
+
+QString EditorHost::authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
+                                              const pdfinteraction::DirectEditOutcome& outcome) const
+{
+    switch (outcome.resolution)
+    {
+        case pdf::PDFAuthoringEditResult::Kind::BookmarkAdded:
+            return tr("Bookmark added for page %1.").arg(edit.pageIndex + 1);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarkRemoved:
+            return tr("Bookmark removed for page %1.").arg(edit.pageIndex + 1);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarksGenerated:
+            return tr("Generated %n bookmark(s).", "", outcome.affectedCount);
+
+        case pdf::PDFAuthoringEditResult::Kind::BookmarksReplaced:
+            return tr("Imported %n bookmark(s).", "", outcome.affectedCount);
+
+        case pdf::PDFAuthoringEditResult::Kind::LinkCreated:
+            return tr("Hyperlink created.");
+
+        case pdf::PDFAuthoringEditResult::Kind::Refused:
+            break;
+    }
+
+    return QString();
 }
 
 void EditorHost::moveSearch(int direction)
@@ -3662,6 +6042,7 @@ void EditorHost::bumpPresentation()
     {
         m_canvas->setHighContrast(highContrast());
     }
+    applyDisplayColorToCanvas();
     Q_EMIT presentationChanged();
 }
 
@@ -3673,6 +6054,9 @@ void EditorHost::bumpCommandEpoch()
 
 void EditorHost::onDocumentReady()
 {
+    // The persisted render options must be in force before the first surfaces
+    // are requested, so no page is rendered twice on open.
+    applyRenderOptions();
     m_session->prepareDocumentView();
 
     syncRevisionModels();
@@ -3680,10 +6064,13 @@ void EditorHost::onDocumentReady()
     syncDocumentLifecycle();
     m_searchRow = -1;
     refreshHitTestSources();
+    reloadProductionPlates();
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
     applyEmptyCanvasInspectorSelection();
+    refreshAnnotationOverlay();
+    submitSignatureCheck();
     announceDocumentState(tr("Document ready."));
 }
 
@@ -3713,8 +6100,23 @@ void EditorHost::syncDocumentLifecycle()
 
 void EditorHost::onDocumentGone()
 {
+    if (outputBusy())
+        m_session->scheduler().cancel(m_outputJobId);
+    m_publishedOutputBytes.clear();
+    m_publicationReceipt = {};
+    m_publicationRevision.clear();
+    m_outputRecord.clear();
+    m_publishedHistoryPath.clear();
+    m_publishedHistoryRevision.clear();
     cancelPreflight();
     cancelActionList();
+    if (!m_signatureCheckJobId.isEmpty())
+    {
+        m_session->scheduler().cancel(m_signatureCheckJobId);
+        m_signatureCheckJobId.clear();
+    }
+    m_signatureCheckOutcome.reset();
+    m_fixSignatureInvalidationAcknowledgedDigest.clear();
     if (m_findingNavigator)
     {
         m_findingNavigator->invalidate();
@@ -3725,9 +6127,20 @@ void EditorHost::onDocumentGone()
     m_actionListController.clear();
     m_inspector.clearSelection();
     m_documentModel.clear();
+    refreshAnnotationOverlay();
     m_searchRow = -1;
     m_preview.clear();
     m_production.clear();
+    // Proofing and the plate list describe the document that just closed, so
+    // neither may outlive it: a soft proof of a document nobody has open would
+    // keep the canvas on a simulation with no revision behind it.
+    m_softProofEnabled = false;
+    m_softProofStateName = QStringLiteral("off");
+    m_softProofProfile = SoftProofProfile();
+    m_plates.clear();
+    m_plateVisible.clear();
+    m_isolatedPlateId.clear();
+    m_inkCoverageReadout = QVariantMap();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
     m_preflightCertificateStateName = QStringLiteral("not-certified");
@@ -3961,6 +6374,15 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
                     m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult))
                 {
                     m_session->context().setDocument(outcome->candidate);
+                    m_session->scheduler().setCurrentRevision(m_session->revisionSource()->documentKey(), m_session->facade().currentRevision().toString());
+                    m_publishedOutputBytes = outcome->publishedBytes;
+                    m_publicationReceipt = outcome->executionResult.governed.value(QStringLiteral("receipt")).toObject();
+                    m_publicationRevision = m_session->facade().currentRevision().toString();
+                    m_session->scheduler().setCurrentRevision(m_session->revisionSource()->documentKey(),
+                                                              m_session->facade().currentRevision().toString());
+                    m_publishedHistoryPath = outcome->publishedPath;
+                    m_publishedHistoryRevision = outcome->publishedPath.isEmpty() ? QString()
+                                                                                  : m_session->facade().currentRevision().toString();
                     m_preflight.markProfileStale();
                     syncRevisionModels();
                     announceDocumentState(tr("Action List applied to the open document."));
@@ -4021,7 +6443,51 @@ void EditorHost::finishRollbackJob(const pdf::PDFJobSnapshot& snapshot)
     }
 
     const QString message = outcome->errorMessage.isEmpty() ? snapshot.errorMessage : outcome->errorMessage;
+    refreshFeatureAvailability();
     announceDocumentState(tr("The document was not rolled back: %1").arg(message));
+    bumpPresentation();
+}
+
+void EditorHost::finishSignatureCheckJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    if (snapshot.jobId.isEmpty() || snapshot.jobId != m_signatureCheckJobId || !m_signatureCheckOutcome)
+    {
+        return;
+    }
+
+    const std::shared_ptr<SignatureCheckOutcome> outcome = m_signatureCheckOutcome;
+    m_signatureCheckJobId.clear();
+    m_signatureCheckOutcome.reset();
+
+    if (snapshot.kind != pdf::PDFJobKind::Other ||
+        snapshot.operationId != QStringLiteral("document.verify-signatures"))
+    {
+        return;
+    }
+
+    QString transitionError;
+    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome->ok)
+    {
+        // The facade refuses a completion that belongs to another request,
+        // generation or revision; a refused completion presents nothing.
+        if (m_session->facade().completeSignatureCheck(outcome->token, outcome->results, transitionError))
+        {
+            bumpPresentation();
+        }
+        return;
+    }
+
+    QString detail = outcome->detail;
+    if (detail.isEmpty())
+    {
+        detail = snapshot.status == pdf::PDFJobStatus::Failed
+                     ? tr("Signature verification failed for this document.")
+                     : tr("Signature verification did not complete for this document.");
+    }
+    if (m_session->facade().failSignatureCheck(outcome->token, detail, transitionError))
+    {
+        bumpPresentation();
+    }
 }
 
 void EditorHost::refreshCanvasTrace()
@@ -4116,6 +6582,14 @@ void EditorHost::syncRevisionModels()
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
+    if (outputBusy() && documentRevision != m_outputRevision)
+        m_session->scheduler().cancel(m_outputJobId);
+    if (documentRevision != m_publicationRevision)
+    {
+        m_publishedOutputBytes.clear();
+        m_publicationReceipt = {};
+        m_publicationRevision.clear();
+    }
     m_actionListController.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
@@ -4136,6 +6610,138 @@ void EditorHost::syncRevisionModels()
                            tr("The current view uses the standard render path."),
                            QString());
         syncProductionState();
+    }
+}
+
+void EditorHost::refreshAnnotationOverlay()
+{
+    // Read-only review marks (issue #125). Every annotation row becomes one
+    // page-space rectangle; the selected row carries the selection treatment.
+    // The marks are not interaction targets: their kind stays None, so nothing
+    // hit-tests them and nothing routes a click through them.
+    const QuickAnnotationModel& annotations = m_documentModel.annotationModel();
+    const QList<QuickAnnotation>& rows = annotations.rows();
+
+    QList<pdfinteraction::InteractionTarget> marks;
+    marks.reserve(rows.size());
+    for (const QuickAnnotation& row : rows)
+    {
+        pdfinteraction::InteractionTarget target;
+        target.kind = pdfinteraction::InteractionTargetKind::None;
+        target.pageIndex = row.pageIndex;
+        target.id = QStringLiteral("annotation:") + row.reference;
+        target.pageBounds = row.bounds;
+        marks.append(target);
+    }
+
+    const int selectedRow = annotations.selectedRow();
+    const QString selectedId = selectedRow >= 0 && selectedRow < rows.size()
+                                   ? QStringLiteral("annotation:") + rows.at(selectedRow).reference
+                                   : QString();
+
+    m_session->overlays()->setAnnotations(std::move(marks));
+    m_session->overlays()->setSelectedAnnotationId(selectedId);
+    m_session->interaction()->refreshOverlay();
+}
+
+void EditorHost::submitSignatureCheck()
+{
+    if (!hasDocument() || !m_session->revisionSource())
+    {
+        return;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document)
+    {
+        return;
+    }
+
+    QString beginError;
+    const std::optional<pdfinteraction::DocumentSignatureCheckToken> token =
+        m_session->facade().beginSignatureCheck(beginError);
+    if (!token.has_value())
+    {
+        return;
+    }
+
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = m_session->revisionSource()->documentKey();
+    spec.documentRevision = m_session->facade().currentRevision().toString();
+    spec.operationId = QStringLiteral("document.verify-signatures");
+    spec.checkId = QStringLiteral("signature-verification");
+    spec.progressModel = QStringLiteral("signature-check-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    const QString documentPath = m_session->facade().source().path;
+    const QByteArray expectedSourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
+
+    auto outcome = std::make_shared<SignatureCheckOutcome>();
+    outcome->token = *token;
+    m_signatureCheckJobId = jobId;
+    m_signatureCheckOutcome = outcome;
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        [document, documentPath, expectedSourceHash, outcome](pdf::PDFJobContext& context)
+        {
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+
+            // Verification needs the exact source bytes a signature covers, and
+            // the loaded document retains only their digest. Re-reading the file
+            // is admitted only when the bytes still hash to the revision the
+            // document was loaded from; a changed file is a failed check, never
+            // a verdict about the open revision.
+            QFile file(documentPath);
+            if (!file.open(QIODevice::ReadOnly))
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("The source file could not be read for signature verification.");
+                return;
+            }
+            const QByteArray sourceData = file.readAll();
+            if (QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256) != expectedSourceHash)
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("The file changed since the document was loaded; its signatures were not verified.");
+                return;
+            }
+
+            try
+            {
+                pdf::PDFCertificateStore certificateStore;
+                pdf::PDFSignatureHandler::Parameters parameters;
+                parameters.store = &certificateStore;
+                parameters.dss = &document->getCatalog()->getDocumentSecurityStore();
+                parameters.enableVerification = true;
+                parameters.useSystemCertificateStore = true;
+                const pdf::PDFForm form =
+                    pdf::PDFForm::parse(document.get(), document->getCatalog()->getFormObject());
+                outcome->results = pdf::PDFSignatureHandler::verifySignatures(form, sourceData, parameters);
+                outcome->ok = true;
+            }
+            catch (const std::exception&)
+            {
+                outcome->ok = false;
+                outcome->detail = QStringLiteral("Signature verification could not complete for this document.");
+            }
+        });
+    if (submittedId != jobId)
+    {
+        m_signatureCheckJobId.clear();
+        m_signatureCheckOutcome.reset();
+        QString failError;
+        m_session->facade().failSignatureCheck(*token,
+                                               tr("Signature verification could not be scheduled."),
+                                               failError);
     }
 }
 
@@ -4181,8 +6787,46 @@ void EditorHost::updateCanvasAccessibilitySummary()
     const int pageNumber = currentPage() + 1;
     const int pages = pageCount();
     const int zoomPercent = qRound(zoom() * 100.0);
-    m_canvas->setAccessibleDocumentSummary(
-        tr("Document canvas. Page %1 of %2. Zoom %3 percent.").arg(pageNumber).arg(pages).arg(zoomPercent));
+    QString summary = tr("Document canvas. Page %1 of %2. Zoom %3 percent.").arg(pageNumber).arg(pages).arg(zoomPercent);
+
+    // Measurements and text selections are readouts, so the screen reader gets
+    // them from the same summary the canvas already exposes.
+    const pdfinteraction::InteractionController* interaction = m_session->interaction();
+    if (interaction)
+    {
+        const pdfinteraction::InteractionState& state = interaction->state();
+        const std::optional<pdfinteraction::TextSelection>& selection = state.textSelection();
+        if (selection.has_value())
+        {
+            if (!selection->available)
+            {
+                summary += QLatin1Char(' ') + tr("Text selection unavailable: %1").arg(selection->unavailableReason);
+            }
+            else if (!selection->text.isEmpty())
+            {
+                summary += QLatin1Char(' ') + tr("Selected %n character(s).", "", selection->text.size());
+            }
+        }
+
+        if (!state.measurements().isEmpty())
+        {
+            summary += QLatin1Char(' ') + tr("Measurements: %1. Latest: %2.")
+                                              .arg(state.measurements().size())
+                                              .arg(pdfinteraction::measurementReadout(state.measurements().last()));
+        }
+    }
+
+    // The outline is the one document structure the canvas can announce (issue
+    // #233): its count is read from the same Core projection bookmark
+    // navigation moves through.
+    const QList<int> bookmarkPages =
+        pdf::PDFAuthoringEditWriter::bookmarkPages(m_session->context().getDocumentPointer().data());
+    if (!bookmarkPages.isEmpty())
+    {
+        summary += QLatin1Char(' ') + tr("%n bookmark(s).", "", bookmarkPages.size());
+    }
+
+    m_canvas->setAccessibleDocumentSummary(summary);
 }
 
 void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)
@@ -4327,11 +6971,11 @@ void EditorHost::applyEmptyCanvasInspectorSelection()
     selection.title = tr("Document canvas");
     selection.kind = pdfinteraction::InspectorModel::SelectionKind::EmptyCanvas;
     selection.properties = {
-        { QStringLiteral("document"), QStringLiteral("Document"), displayTitle() },
-        { QStringLiteral("pages"), QStringLiteral("Pages"), QString::number(pageCount()) },
-        { QStringLiteral("document-status"), QStringLiteral("Document status"), documentShellStatus() },
-        { QStringLiteral("preflight"), QStringLiteral("Preflight"), preflightStateName() },
-        { QStringLiteral("production"), QStringLiteral("Production"), productionStateName() },
+        { QStringLiteral("document"), tr("Document"), displayTitle() },
+        { QStringLiteral("pages"), tr("Pages"), QString::number(pageCount()) },
+        { QStringLiteral("document-status"), tr("Document status"), documentShellStatus() },
+        { QStringLiteral("preflight"), tr("Preflight"), preflightStateName() },
+        { QStringLiteral("production"), tr("Production"), productionStateName() },
     };
     m_inspector.setSelection(selection);
 }
@@ -4373,18 +7017,18 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
         selection.title = tr("Image");
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Image;
         selection.properties = {
-            { QStringLiteral("id"), QStringLiteral("Image"), target.id.mid(6) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("bounds"), QStringLiteral("Bounds"),
+            { QStringLiteral("id"), tr("Image"), target.id.mid(6) },
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("bounds"), tr("Bounds"),
               QStringLiteral("%1,%2 %3x%4")
                   .arg(QString::number(target.pageBounds.x()),
                        QString::number(target.pageBounds.y()),
                        QString::number(target.pageBounds.width()),
                        QString::number(target.pageBounds.height())) },
-            { QStringLiteral("dpi"), QStringLiteral("Effective DPI"), tr("pending") },
-            { QStringLiteral("colour-space"), QStringLiteral("Colour space"), tr("pending") },
-            { QStringLiteral("compression"), QStringLiteral("Compression"), tr("pending") },
-            { QStringLiteral("mask"), QStringLiteral("Mask"), tr("pending") },
+            { QStringLiteral("dpi"), tr("Effective DPI"), tr("pending") },
+            { QStringLiteral("colour-space"), tr("Colour space"), tr("pending") },
+            { QStringLiteral("compression"), tr("Compression"), tr("pending") },
+            { QStringLiteral("mask"), tr("Mask"), tr("pending") },
         };
         m_inspector.setSelection(selection);
         return;
@@ -4399,10 +7043,10 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
         selection.title = tr("Separation");
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Separation;
         selection.properties = {
-            { QStringLiteral("name"), QStringLiteral("Ink"), target.id.mid(11) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("coverage"), QStringLiteral("Ink coverage"), tr("pending") },
-            { QStringLiteral("kind"), QStringLiteral("Process / spot"), tr("pending") },
+            { QStringLiteral("name"), tr("Ink"), target.id.mid(11) },
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("coverage"), tr("Ink coverage"), tr("pending") },
+            { QStringLiteral("kind"), tr("Process / spot"), tr("pending") },
         };
         m_inspector.setSelection(selection);
         return;
@@ -4420,13 +7064,13 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
                               : tr("Page %1").arg(target.pageIndex + 1);
         selection.kind = pdfinteraction::InspectorModel::SelectionKind::Page;
         selection.properties = {
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("box"), QStringLiteral("Box"), target.id },
-            { QStringLiteral("size"), QStringLiteral("Size"),
+            { QStringLiteral("page"), tr("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("box"), tr("Box"), target.id },
+            { QStringLiteral("size"), tr("Size"),
               QStringLiteral("%1 x %2")
                   .arg(QString::number(target.pageBounds.width()), QString::number(target.pageBounds.height())) },
-            { QStringLiteral("rotation"), QStringLiteral("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
-            { QStringLiteral("ocg"), QStringLiteral("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
+            { QStringLiteral("rotation"), tr("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
+            { QStringLiteral("ocg"), tr("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
         };
         m_inspector.setSelection(selection);
         return;

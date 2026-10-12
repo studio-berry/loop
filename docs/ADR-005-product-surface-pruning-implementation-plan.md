@@ -5,7 +5,7 @@
 **Status:** The Issue #191 product-surface contract is implemented. The checked-in
 manifest, source/package verifier, and profile-specific CI checks now describe the
 current post-Session-05 tree; Editor workspace integration remains planned for
-#193 / 0.0.1B.
+legacy #193 / 0.0.1B.
 
 ## 0.2B transitional surface contract
 
@@ -97,7 +97,7 @@ The implementation must follow the ADR-005 order:
       profile-aware manifest and explicit `source_status` fields.
 - [ ] Resolve the redaction decision against GitHub #66 before changing the
       Editor plugin or the supported CLI surface.
-- [x] Preserve Compare as `OPEN` with owner `m.berry` and follow-up #193 while
+- [x] Preserve Compare as `OPEN` with owner `m.berry` and follow-up legacy #193 while
       recording the already-deleted `LoopDiff` as absent.
 - [ ] Decide whether developer-menu visibility is a build flag, a release
       setting, or both. The existing `m_allowDeveloperMode` setting is a useful
@@ -274,7 +274,7 @@ build is available, validate the installed tree in this order:
 - Phase 1: Implemented — slim release flag is explicit and developer tools remain outside the release profile
 - Phase 2: Implemented — desktop/AppX/Flatpak/WiX sources and staged artifact checks derive from the manifest
 - Phase 3: Partial — release-only Developer menu gating is implemented; full Loop information architecture remains follow-up work
-- Phase 4: Boundary recorded; Editor workspace wiring remains deferred to #193
+- Phase 4: Boundary recorded; Editor workspace wiring remains deferred to legacy #193
 - Phase 5: Deferred until level-3 removals are explicitly approved
 
 **Overall:** Issue #191 implementation is complete on

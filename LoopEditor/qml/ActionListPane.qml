@@ -106,10 +106,20 @@ Pane {
                     objectName: "fixApprovePlanButton"
                     text: qsTr("Approve plan")
                     enabled: root.host !== null && root.host.correctionsAllowed && root.lifecycleState === "preview-ready"
-                    onClicked: if (root.host && root.planIdentity)
+                    onClicked: {
+                        if (!root.host || !root.planIdentity)
+                            return
+                        // A plan that invalidates signatures is approved through the
+                        // explicit acknowledgement, so the invalidation was shown in
+                        // the approval and not only in the preview.
+                        if (root.planIdentity.signatureInvalidationApplies) {
+                            signatureInvalidationDialog.open()
+                            return
+                        }
                         root.host.approveActionListPlan(root.planIdentity.planDigest,
-                                                       root.planIdentity.sourceSha256,
-                                                       root.planIdentity.plannedRevision)
+                                                        root.planIdentity.sourceSha256,
+                                                        root.planIdentity.plannedRevision)
+                    }
                     Accessible.name: qsTr("Approve the planned correction")
                     Accessible.description: qsTr("Binds the approval to this plan digest and revision.")
                 }
@@ -185,6 +195,17 @@ Pane {
                         text: qsTr("The preview is incomplete. It is not approval evidence.")
                         Accessible.name: qsTr("Preview incomplete")
                     }
+
+                    Label {
+                        objectName: "fixSignatureInvalidationNotice"
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        visible: root.preview !== null && root.preview.signatureInvalidation !== undefined
+                                 && root.preview.signatureInvalidation.applies
+                        text: visible ? root.preview.signatureInvalidation.summary : ""
+                        Accessible.name: qsTr("Signature invalidation")
+                        Accessible.description: text
+                    }
                 }
             }
 
@@ -238,7 +259,7 @@ Pane {
                             return qsTr("Run status %1 · postflight %2 · recheck verdict: %3 · cleared %4 · remaining %5 · introduced %6 · not fully rechecked %7")
                                 .arg(root.recheck.status)
                                 .arg(root.recheck.pass ? qsTr("passed") : qsTr("not passed"))
-                                .arg(root.recheck.verdictState === "" ? qsTr("not reduced") : root.recheck.verdictState)
+                                .arg(root.recheck.verdictState === "" ? qsTr("not reduced") : root.host.localizedTerm(root.recheck.verdictState))
                                 .arg(root.recheck.resolved.length)
                                 .arg(root.recheck.unchanged.length)
                                 .arg(root.recheck.introduced.length)
@@ -290,7 +311,7 @@ Pane {
             GroupBox {
                 objectName: "fixRollbackGroup"
                 Layout.fillWidth: true
-                title: qsTr("Recorded revisions")
+                title: qsTr("Revision history")
                 Accessible.name: qsTr("Rollback to a recorded revision")
 
                 ColumnLayout {
@@ -305,6 +326,61 @@ Pane {
                         Accessible.name: qsTr("Rollback availability")
                     }
 
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: root.host ? root.host.revisionHistorySummary : ""
+                        Accessible.name: qsTr("Governed revision history summary")
+                    }
+                    RowLayout {
+                        Button {
+                            objectName: "historyUndoButton"
+                            text: qsTr("Undo")
+                            enabled: root.host && root.host.historyUndoAvailable
+                            onClicked: root.host.invokeCommand("actionUndo")
+                            Accessible.name: qsTr("Undo by publishing a forward rollback")
+                        }
+                        Button {
+                            objectName: "historyRedoButton"
+                            text: qsTr("Redo")
+                            enabled: root.host && root.host.historyRedoAvailable
+                            onClicked: root.host.invokeCommand("actionRedo")
+                            Accessible.name: qsTr("Redo by publishing a forward rollback")
+                        }
+                        Button {
+                            text: qsTr("Open published artifact")
+                            enabled: root.host && root.host.hasDocument
+                            onClicked: root.host.openGovernedArtifact()
+                            Accessible.description: root.host ? root.host.governedArtifactPath : ""
+                        }
+                    }
+                    Repeater {
+                        model: root.host ? root.host.revisionHistory : []
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                text: qsTr("Event %1 · %2 · revision %3%4 · approval %5 by %6")
+                                    .arg(modelData.sequence).arg(modelData.status)
+                                    .arg(modelData.output ? modelData.output.sha256 : modelData.documentRevisionDigest)
+                                    .arg(modelData.current ? qsTr(" (current)") : "")
+                                    .arg(modelData.approval.decision || qsTr("none"))
+                                    .arg(modelData.approval.actorId || qsTr("none"))
+                                Accessible.name: text
+                            }
+                            TextArea {
+                                Layout.fillWidth: true
+                                readOnly: true
+                                selectByMouse: true
+                                wrapMode: TextEdit.Wrap
+                                visible: modelData.receiptText !== "{}"
+                                text: modelData.receiptText
+                                Accessible.name: qsTr("Revision approval and publication receipt")
+                            }
+                        }
+                    }
                     Repeater {
                         model: root.host ? root.host.fixRollbackPoints : []
 
@@ -325,7 +401,7 @@ Pane {
 
                             Button {
                                 text: qsTr("Return to this revision")
-                                enabled: root.host !== null && root.host.fixRollbackAvailable
+                                enabled: root.host !== null && root.host.fixRollbackAvailable && modelData.canReturn
                                 onClicked: {
                                     root.pendingRollbackId = modelData.rollbackId
                                     rollbackConfirm.open()
@@ -355,6 +431,36 @@ Pane {
 
                 onAccepted: if (root.host) root.host.requestFixRollback(root.pendingRollbackId)
                 onRejected: root.pendingRollbackId = ""
+            }
+
+            Dialog {
+                id: signatureInvalidationDialog
+                objectName: "fixSignatureInvalidationDialog"
+                title: qsTr("Approve and accept signature invalidation")
+                modal: true
+                anchors.centerIn: parent
+                standardButtons: Dialog.Ok | Dialog.Cancel
+
+                Label {
+                    width: 360
+                    wrapMode: Text.Wrap
+                    text: root.preview !== null && root.preview.signatureInvalidation !== undefined
+                          && root.preview.signatureInvalidation.applies
+                          ? root.preview.signatureInvalidation.summary
+                          : qsTr("This plan invalidates document signatures.")
+                    Accessible.name: qsTr("Signature invalidation notice")
+                    Accessible.description: text
+                }
+
+                onAccepted: {
+                    if (!root.host || !root.planIdentity)
+                        return
+                    if (!root.host.acknowledgePlanSignatureInvalidation(root.planIdentity.planDigest))
+                        return
+                    root.host.approveActionListPlan(root.planIdentity.planDigest,
+                                                    root.planIdentity.sourceSha256,
+                                                    root.planIdentity.plannedRevision)
+                }
             }
 
             RowLayout {

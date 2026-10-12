@@ -24,16 +24,20 @@
 #define DOCUMENTFACADE_H
 
 #include "commandcatalog.h"
+#include "directeditrequest.h"
 #include "documentcontextsource.h"
 #include "documentloader.h"
 #include "jobrelay.h"
 #include "jobsubmitter.h"
+#include "pdfauthoringedit.h"
 #include "pdfpreflightverdict.h"
+#include "pdfsignaturehandler.h"
 
 #include <QFlags>
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariantMap>
 
 #include <functional>
 #include <memory>
@@ -122,6 +126,47 @@ struct DocumentInspectionToken
     bool operator==(const DocumentInspectionToken&) const = default;
 };
 
+/// Verification status of the open document's signatures (issue #125). The
+/// operator-facing vocabulary is `valid`, `invalid`, `unknown` and
+/// `modified-after-signing`; `None` is the distinct "no signature is present"
+/// case and is never folded into one of them.
+enum class DocumentSignatureState
+{
+    None,
+    Valid,
+    Invalid,
+    Unknown,
+    ModifiedAfterSigning
+};
+
+const char* getDocumentSignatureStateName(DocumentSignatureState state);
+
+/// One signature check's identity, mirroring DocumentInspectionToken: a
+/// completion carrying a different request, generation or revision is refused
+/// rather than presented as the current document's status.
+struct DocumentSignatureCheckToken
+{
+    quint64 request = 0;
+    quint64 generation = 0;
+    pdf::PDFRevisionIdentity revision;
+
+    bool operator==(const DocumentSignatureCheckToken&) const = default;
+};
+
+/// The reduced signature facts a host presents.
+///
+/// They describe the source bytes the open document was loaded from: the check
+/// verifies those bytes and refuses results that belong to another revision, so
+/// an in-session revision change does not retract them. They are cleared when
+/// the document is replaced or closed. `detail` is a policy-safe explanation
+/// when a check could not complete, never document content or a path.
+struct DocumentSignatureFacts
+{
+    DocumentSignatureState state = DocumentSignatureState::None;
+    int signatureCount = 0;
+    QString detail;
+};
+
 struct DocumentPlanIntent
 {
     QString operationId;
@@ -166,6 +211,11 @@ struct DocumentPermissions
     bool modify = false;
     bool copy = false;
     bool assemble = false;
+
+    /// Modify-annotations (PDF permission bit 6) is the permission annotation
+    /// authoring needs: it is checked by the facade's direct-edit gateway and by
+    /// the shell's availability gate, from this one value (ADR-014).
+    bool modifyAnnotations = false;
 
     bool allowsCorrection() const { return print && modify && copy && assemble; }
 };
@@ -241,6 +291,26 @@ public:
     bool requestPlan(const QString& operationId, QString& error);
     void clearPlanIntent();
 
+    /// Begins a signature check for the current revision. One check at a time.
+    /// The host runs Core's verification on a scheduler worker and admits the
+    /// result through completeSignatureCheck/failSignatureCheck.
+    std::optional<DocumentSignatureCheckToken> beginSignatureCheck(QString& error);
+    bool completeSignatureCheck(const DocumentSignatureCheckToken& token,
+                                const std::vector<pdf::PDFSignatureVerificationResult>& results,
+                                QString& error);
+    bool failSignatureCheck(const DocumentSignatureCheckToken& token, const QString& detail, QString& error);
+    DocumentSignatureFacts signatureFacts() const { return m_signatureFacts; }
+
+    /// Reduces Core's per-signature verification results to the operator-facing
+    /// state. Pure, so the mapping is pinned by a test rather than re-derived by
+    /// every host. Precedence: a signature error (or a revoked or invalid
+    /// certificate) is Invalid; otherwise a signature that verifies but does not
+    /// cover the whole source is ModifiedAfterSigning; otherwise an
+    /// unestablished trust chain, a missing handler or any indeterminate result
+    /// is Unknown; only results that are fully valid are Valid. Empty results
+    /// mean no signature is present.
+    static DocumentSignatureState reduceSignatureState(const std::vector<pdf::PDFSignatureVerificationResult>& results);
+
     /// Advances on every document replacement and on every close. A completion
     /// carrying an older generation is rejected rather than admitted.
     quint64 documentGeneration() const noexcept { return m_generation; }
@@ -253,6 +323,22 @@ public:
     /// mutation belongs to the commands that mutate, and this is how they tell
     /// the lifecycle.
     void markModified();
+
+    /// Applies one direct-edit request — the single mutation gateway for
+    /// interactive authoring (ADR-014). Dispatches on `request.kind` to the
+    /// edit family's own helper, each of which keeps that family's fence,
+    /// permission and refusal codes.
+    ///
+    /// The order is the contract: the fence is checked against the complete
+    /// `PDFRevisionIdentity` before anything else, then the document's
+    /// permission for that edit family, then the payload is parsed at this
+    /// boundary, and only then does a Core writer run. An accepted edit
+    /// replaces the document in the context — one new revision — and marks the
+    /// document modified; a CreateAnnotation edit also appends one
+    /// operation-history event and rollback point (#124's model), reporting the
+    /// mutation and the provenance write separately. A refused edit changes
+    /// nothing and returns its stable code in `typedError`.
+    DirectEditOutcome applyDirectEdit(const DirectEditRequest& request);
 
     CommandInvocationId open(const QString& path);
 
@@ -278,6 +364,7 @@ signals:
     void stateChanged(pdfinteraction::DocumentState state);
     void facetsChanged(pdfinteraction::DocumentFacets facets);
     void operationChanged();
+    void signatureFactsChanged();
 
     /// Emitted after the new identity is established and the old one dropped.
     void documentReplaced(quint64 generation);
@@ -306,9 +393,34 @@ private:
     void setFacets(DocumentFacets facets);
     void setOutputState(DocumentOutputState outputState);
     void updateAvailability();
+    /// The bookkeeping every in-session mutation shares: a queued save was
+    /// fenced against a revision that is now superseded, the published revision
+    /// moves, and the document is dirty with no pending output.
+    void noteAuthoringMutation();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
+
+    /// Lifecycle bookkeeping for a mutation that already advanced the revision
+    /// through the document context (applyDirectEdit). Unlike markModified(), it
+    /// does not advance the revision again: the context is the revision
+    /// authority, and one accepted edit is exactly one revision.
+    void noteDirectMutation();
+
+    /// One direct-edit family's application, dispatched from applyDirectEdit.
+    /// Each helper owns its family's fence order, permission check and refusal
+    /// codes: the unification is one shape at the gateway, not one policy.
+    DirectEditOutcome applyAnnotationEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyOutlineEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyDocumentEdit(const DirectEditRequest& request);
+
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();
+    bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;
+    void invalidateSignatureCheck();
+
+    /// Whether the open document's security handler grants the permission one
+    /// direct-edit family needs. A document that grants none of them is not an
+    /// error state; it is a refusal with a typed reason.
+    bool directEditAllowed(DirectEditKind kind) const;
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a
@@ -333,6 +445,10 @@ private:
     pdf::PreflightProfileData m_inspectionProfile;
     QString m_inspectionInputDigest;
     quint64 m_inspectionRequest = 0;
+    DocumentSignatureFacts m_signatureFacts;
+    DocumentSignatureCheckToken m_signatureCheckToken;
+    quint64 m_signatureCheckRequest = 0;
+    bool m_signatureCheckRunning = false;
 
     quint64 m_generation = 0;
     int m_rejectedCompletions = 0;

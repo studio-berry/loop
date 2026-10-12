@@ -47,6 +47,16 @@ enum class InteractionKind
     Drag,
     Marquee,
     Pan,
+
+    /// A text selection being dragged out (issue #232). It is its own kind
+    /// rather than a ToolGesture because what it produces is a typed
+    /// TextSelection, not a command.
+    TextSelect,
+
+    /// A measurement being dragged out (issue #238). It never becomes a
+    /// DragSession: a measurement is presentation state, not a document edit.
+    Measure,
+
     ToolGesture
 };
 
@@ -66,7 +76,17 @@ enum class InteractionTool
     /// The left button is a viewport grip: a left drag pans and never selects,
     /// retargets or starts a transform. The configured pan button still pans
     /// in every tool.
-    Hand
+    Hand,
+
+    /// The left button drags out a text selection on the page under the pointer
+    /// (issue #232). What it produces is the typed TextSelection state; it never
+    /// selects a target, never starts a transform and never reaches the document.
+    Text,
+
+    /// The left button drags out a measurement in production units (issue #238).
+    /// A measurement is presentation state fenced to the revision it was taken
+    /// from; it is never a document mutation and never a DragSession.
+    Measure
 };
 
 const char* getInteractionToolName(InteractionTool tool);
@@ -136,6 +156,91 @@ struct DragSession
     RevisionFencedToken fence;
 };
 
+/// One measurement on a page, in production units (issue #238).
+///
+/// A measurement is derived presentation state: it names page-space points and
+/// the millimetres they span after the page's /UserUnit scale, and no method
+/// anywhere turns it into a document edit. The rectangle fields are the
+/// axis-aligned region the two points span, so a region drag reads as a
+/// distance, a width x height, a perimeter and an area at once.
+struct Measurement
+{
+    int pageIndex = -1;
+    QPointF startPagePoint;
+    QPointF endPagePoint;
+
+    /// Millimetres per page-space point this measurement was taken with,
+    /// including the page's /UserUnit. Carried so a readout can be explained
+    /// and re-derived without another document lookup.
+    qreal pointToMM = 1.0;
+
+    qreal distanceMM = 0.0;
+    qreal widthMM = 0.0;
+    qreal heightMM = 0.0;
+    qreal perimeterMM = 0.0;
+    qreal areaMM2 = 0.0;
+    qreal angleDegrees = 0.0;
+
+    /// The fence the measurement was taken against. A measurement whose fence no
+    /// longer matches is dropped rather than carried onto new geometry.
+    RevisionFencedToken fence;
+
+    bool isValid() const { return pageIndex >= 0 && fence.isValid(); }
+    bool operator==(const Measurement& other) const = default;
+};
+
+/// Derives a measurement from two page-space points and the page's
+/// millimetres-per-point scale. Pure; the caller supplies the scale it read
+/// from the page's own /UserUnit.
+Measurement measureBetween(int pageIndex, QPointF startPagePoint, QPointF endPagePoint, qreal pointToMM);
+
+/// The operator-facing readout of a measurement's distance, e.g. "42.3 mm".
+/// The layer names the unit so no host invents a second one.
+QString measurementReadout(const Measurement& measurement);
+
+/// What produced a text selection.
+enum class TextSelectionKind
+{
+    /// A text range: a drag between two page points, or a whole page.
+    Text,
+
+    /// One whole text block, which is what a table or a paragraph is to the
+    /// text layer (issue #232).
+    Block
+};
+
+const char* getTextSelectionKindName(TextSelectionKind kind);
+
+/// A typed text selection (issue #232).
+///
+/// Bound to the revision it was taken from through `fence`; a revision change
+/// clears it rather than carrying text onto geometry the operator never saw.
+/// `available == false` is a real state -- a page with no text layer -- and it
+/// is never an empty string presented as success.
+struct TextSelection
+{
+    TextSelectionKind kind = TextSelectionKind::Text;
+    int pageIndex = -1;
+
+    /// False when the page has no text layer. `unavailableReason` then says so.
+    bool available = false;
+    QString unavailableReason;
+
+    QString text;
+    QList<QRectF> geometry;
+
+    /// Reading-order line range of the selection, or -1 when the selection does
+    /// not address lines. Stepping by line moves this range.
+    int firstLine = -1;
+    int lastLine = -1;
+
+    RevisionFencedToken fence;
+
+    bool isValid() const { return pageIndex >= 0 && fence.isValid(); }
+    bool isEmpty() const { return text.isEmpty() && geometry.isEmpty(); }
+    bool operator==(const TextSelection& other) const = default;
+};
+
 /// A cheap, per-event, revision-fenced snapshot of what the pointer is doing.
 ///
 /// The class exists to keep direct manipulation off the document. Hover,
@@ -181,6 +286,17 @@ public:
     const InteractionTarget& selected() const noexcept { return m_selected; }
     const std::optional<DragSession>& drag() const noexcept { return m_drag; }
 
+    /// The measurement being dragged out, if any. Never a DragSession.
+    const std::optional<Measurement>& measurementDraft() const noexcept { return m_measurementDraft; }
+
+    /// Completed measurements, in the order they were taken. Cleared by
+    /// clearMeasurements() and by a revision change, never carried onto new
+    /// geometry.
+    const QList<Measurement>& measurements() const noexcept { return m_measurements; }
+
+    /// The typed text selection, or nothing when no page has one.
+    const std::optional<TextSelection>& textSelection() const noexcept { return m_textSelection; }
+
     /// The target that owns pointer capture, if any. A captured pointer keeps
     /// delivering to the drag even once it leaves the target's bounds.
     bool hasPointerCapture() const noexcept { return m_pointerCapture; }
@@ -221,6 +337,32 @@ public:
     /// session is what a caller turns into exactly one command invocation.
     std::optional<DragSession> completeDrag(const RevisionFencedToken& token);
 
+    /// Sets the in-progress measurement. Refuses a stale token or an invalid
+    /// measurement, so a measurement can never be steered onto a revision it
+    /// was not taken against.
+    bool setMeasurementDraft(const Measurement& draft, const RevisionFencedToken& token);
+
+    /// Ends the in-progress measurement, stores it, and returns it. Nothing is
+    /// returned for a stale token or when there is no draft; a stale draft is
+    /// dropped rather than completed.
+    std::optional<Measurement> completeMeasurement(const RevisionFencedToken& token);
+
+    /// Stores a text selection. Refuses a stale token or a selection without a
+    /// page, so a selection always names the page it came from.
+    bool setTextSelection(const TextSelection& selection, const RevisionFencedToken& token);
+
+    /// Drops the text selection. Returns true when there was one.
+    bool clearTextSelection();
+
+    /// Drops every measurement, draft and completed. Returns true when there
+    /// was something to drop.
+    bool clearMeasurements();
+
+    /// Drops the state derived from the document revision: the text selection
+    /// and every measurement. Returns true when something was dropped. A
+    /// revision change calls this instead of carrying a derived fact forward.
+    bool clearRevisionBoundState();
+
     /// Ends the active interaction. Idempotent; always leaves no preview behind.
     void cancel(InteractionCancelReason reason);
 
@@ -228,7 +370,8 @@ public:
     /// when something was cleared.
     bool clearHover();
 
-    /// Drops everything, including the selection. For a document replacement.
+    /// Drops everything, including the selection, the text selection and every
+    /// measurement. For a document replacement.
     void reset(InteractionCancelReason reason);
 
     /// Whether `token` still addresses the active interaction.
@@ -248,6 +391,9 @@ private:
     InteractionTarget m_hovered;
     InteractionTarget m_selected;
     std::optional<DragSession> m_drag;
+    std::optional<Measurement> m_measurementDraft;
+    QList<Measurement> m_measurements;
+    std::optional<TextSelection> m_textSelection;
     bool m_pointerCapture = false;
 
     int m_dragThresholdPx = DefaultDragThresholdPx;
@@ -258,5 +404,8 @@ private:
 Q_DECLARE_METATYPE(pdfinteraction::DragSession)
 Q_DECLARE_METATYPE(pdfinteraction::InteractionKind)
 Q_DECLARE_METATYPE(pdfinteraction::InteractionCancelReason)
+Q_DECLARE_METATYPE(pdfinteraction::Measurement)
+Q_DECLARE_METATYPE(pdfinteraction::TextSelection)
+Q_DECLARE_METATYPE(pdfinteraction::TextSelectionKind)
 
 #endif   // INTERACTIONSTATE_H

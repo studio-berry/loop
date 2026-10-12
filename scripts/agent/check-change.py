@@ -410,6 +410,29 @@ def main() -> int:
     add_result(evidence, "source_integrity", [python, "scripts/ci/check_source_integrity.py"], ROOT, args.dry_run)
     add_result(evidence, "architecture_catalog", [python, "scripts/generate-architecture-catalogs.py", "--check"], ROOT, args.dry_run)
     add_result(evidence, "policy_adapters", [python, "scripts/agent/generate-adapters.py"], ROOT, args.dry_run)
+    add_result(evidence, "loop_identity", [python, "scripts/ci/check_loop_identity.py"], ROOT, args.dry_run)
+    add_result(evidence, "governance_registers", [python, "scripts/ci/check_governance_registers.py"], ROOT, args.dry_run)
+    add_result(evidence, "governance_negative_cases",
+               [python, "-m", "unittest", "scripts.ci.test_check_governance_registers",
+                "scripts.ci.test_check_loop_identity", "scripts.github.test_sync_milestones", "-q"],
+               ROOT, args.dry_run)
+    # The command catalog's handler-coverage ratchet (epic #231): the check is
+    # whole-tree, so it runs on every change like source_integrity does.
+    add_result(evidence, "command_catalog",
+               [python, "scripts/verify-command-catalog.py"], ROOT, args.dry_run)
+    add_result(evidence, "command_catalog_cases",
+               [python, "-m", "unittest", "scripts.ci.test_command_catalog", "-q"],
+               ROOT, args.dry_run)
+    # The #126 Quick localization guard: the checker, its unit tests and the
+    # help-strings staleness check audit the whole tree, so they run on every
+    # change like source_integrity does.
+    add_result(evidence, "quick_localization",
+               [python, "scripts/ci/check_quick_localization.py"], ROOT, args.dry_run)
+    add_result(evidence, "quick_localization_cases",
+               [python, "-m", "unittest", "scripts.ci.test_check_quick_localization", "-q"],
+               ROOT, args.dry_run)
+    add_result(evidence, "quick_help_strings",
+               [python, "scripts/update-quick-help-strings.py", "--check"], ROOT, args.dry_run)
     # Whole-tree contract guards: they audit invariants of the tree, not just the
     # diff, so they run on every change like source_integrity does.
     add_result(

@@ -430,6 +430,42 @@ subsystems:
         ref: .github/workflows/WindowsInstall.yml
         contains: "qualify_windows:"
         executes: binding
+  - id: repository-governance
+    summary: Product identity, source qualification, proof ownership and retired milestone writes.
+    paths:
+      - README.md
+      - docs/REPOSITORY_GOVERNANCE.md
+      - docs/GOVERNANCE_SOURCE_REGISTER.md
+      - docs/ARCHITECTURE_PROOF_DISPOSITIONS.md
+      - docs/governance/**
+      - docs/github-milestones/**
+      - scripts/github/**
+      - scripts/ci/check_loop_identity.py
+      - scripts/ci/test_check_loop_identity.py
+      - scripts/ci/check_governance_registers.py
+      - scripts/ci/test_check_governance_registers.py
+      - Desktop/io.github.mberrys.Loop-pdf.appdata.xml
+    required:
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_check_governance_registers.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/ci/test_check_loop_identity.py
+        executes: binding
+      - kind: unit
+        bind: script
+        id: scripts/github/test_sync_milestones.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/ci/check_governance_registers.py
+        executes: binding
+      - kind: architecture
+        bind: script
+        id: scripts/ci/check_loop_identity.py
+        executes: binding
   - id: agent-policy
     summary: Agent policy, architecture contracts, and the contract checker.
     paths:

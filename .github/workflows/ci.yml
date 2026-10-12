@@ -78,6 +78,11 @@ jobs:
         run: python3 scripts/ci/test_check_loop_identity.py
       - name: Verify active Loop identity
         run: python3 scripts/ci/check_loop_identity.py
+      - name: Verify repository governance and retired milestone writes
+        run: |
+          python3 -m unittest scripts.ci.test_check_governance_registers scripts.github.test_sync_milestones -q
+          python3 scripts/ci/check_governance_registers.py
+          python3 scripts/github/sync_milestones.py
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
       - name: Verify authoritative product-surface contract
@@ -121,6 +126,15 @@ jobs:
         run: |
           python3 scripts/ci/test_correction_operation_catalog.py
           python3 scripts/generate-architecture-catalogs.py --check
+      - name: Verify command catalog handler coverage (#231)
+        run: |
+          python3 scripts/ci/test_command_catalog.py
+          python3 scripts/verify-command-catalog.py
+      - name: Verify Quick localization and operator help strings (#126)
+        run: |
+          python3 -m unittest scripts.ci.test_check_quick_localization -q
+          python3 scripts/update-quick-help-strings.py --check
+          python3 scripts/ci/check_quick_localization.py
       - name: Verify preflight check catalog and coverage backlog (#165)
         run: python3 scripts/ci/test_preflight_check_catalog.py
       - name: Verify preflight corpus coverage map (#165)

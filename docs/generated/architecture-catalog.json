@@ -399,7 +399,9 @@
   "test_targets": [
     "UnitTests",
     "UnitTestsActionList",
+    "UnitTestsAnnotationAuthoring",
     "UnitTestsApplicationIdentity",
+    "UnitTestsAuthoringEdit",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
@@ -413,6 +415,7 @@
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
+    "UnitTestsDirectEdit",
     "UnitTestsDocumentFacade",
     "UnitTestsDocumentSearch",
     "UnitTestsDocumentSession",

@@ -1,10 +1,14 @@
-# Loop-PDF
+# Loop
 
 A desktop PDF toolkit for editing, inspecting, validating, and automating PDF workflows.
 
-[Download](https://github.com/mberrys/Loop-pdf/releases) · [Platform support](docs/PLATFORM_SUPPORT.md) · [Project guide](docs/REPO_MAP.md) · [Build from source](#build-from-source)
+Current source version: `0.2.1-alpha`. Topic branches start from `dev`;
+`unstable` qualifies changes and `stable` is the default and release branch.
+See the [identity and governance decision](docs/REPOSITORY_GOVERNANCE.md).
 
-> **New install?** Get Loop-PDF from the official [GitHub releases](https://github.com/mberrys/Loop-pdf/releases). Windows and Linux are supported for V1; macOS source builds are best-effort only.
+[Download](https://github.com/studio-berry/loop/releases) · [Platform support](docs/PLATFORM_SUPPORT.md) · [Project guide](docs/REPO_MAP.md) · [Build from source](#build-from-source)
+
+> **New install?** Get Loop from the official [GitHub releases](https://github.com/studio-berry/loop/releases). Windows and Linux are supported for V1; macOS source builds are best-effort only.
 
 ## What it does
 
@@ -31,19 +35,19 @@ A desktop PDF toolkit for editing, inspecting, validating, and automating PDF wo
 
 Use Loop’s own release artifacts, not upstream packages.
 
-- **Windows (x64):** download the MSI or portable ZIP from [GitHub releases](https://github.com/mberrys/Loop-pdf/releases). **V1 installers are unsigned** — Windows SmartScreen will show an “unrecognized app” warning on first install. Choose **More info** → **Run anyway** to proceed. Verify the download against `SHA256SUMS.txt` on the release page before installing.
-- **Linux (x64):** download the AppImage from [GitHub releases](https://github.com/mberrys/Loop-pdf/releases), `chmod +x` it, and run. Verify the download against `SHA256SUMS.txt` on the release page. Flatpak packaging exists (`LinuxFlatpak.yml`) but isn't yet attached to releases. `ci.yml` also builds a `.deb` on every push to `master`, but **it does not work** — verified by installing it on a clean Ubuntu 22.04 container: `dpkg -i` succeeds, but the binary fails to launch (`libQt6Gui.so.6: cannot open shared object file`) because, unlike the AppImage, it doesn't bundle the Qt runtime, and it also has a glibc version mismatch against 22.04. Do not install the `.deb` until it's fixed.
+- **Windows (x64):** download the MSI or portable ZIP from [GitHub releases](https://github.com/studio-berry/loop/releases). **V1 installers are unsigned** — Windows SmartScreen will show an “unrecognized app” warning on first install. Choose **More info** → **Run anyway** to proceed. Verify the download against `SHA256SUMS.txt` on the release page before installing.
+- **Linux (x64):** download the AppImage from [GitHub releases](https://github.com/studio-berry/loop/releases), `chmod +x` it, and run. Verify the download against `SHA256SUMS.txt` on the release page. Flatpak packaging remains a separate CI artifact; release availability is determined by the release page.
 - **macOS:** not supported for V1. There is no official package, notarization, or macOS CI coverage.
 
 See [platform support](docs/PLATFORM_SUPPORT.md) for supported configurations, package layouts, and current validation notes.
 
 ## Build from source
 
-Loop-PDF requires a C++20 compiler, Qt 6.11.1 or newer, and vcpkg. Windows and Linux are the supported development targets.
+Loop requires a C++20 compiler, Qt 6.11.1 or newer, and vcpkg. Windows and Linux are the supported development targets.
 
 ```bash
-git clone https://github.com/mberrys/Loop-pdf.git
-cd Loop-pdf
+git clone https://github.com/studio-berry/loop.git
+cd loop
 
 git clone https://github.com/Microsoft/vcpkg.git
 ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
@@ -72,6 +76,6 @@ Contributions, testing, feedback, and bug reports are welcome. Please read [AGEN
 
 ## License and acknowledgements
 
-Loop-PDF is based on [PDF4QT](https://github.com/JakubMelka/PDF4QT) and is currently distributed under the MIT License. **The license is subject to change at any time.** It includes third-party components with their own license obligations, including Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, libjpeg, and Blend2D. Review the [packaging and licensing guide](docs/PACKAGING_LICENSING.md) before distributing a build.
+Loop is based on [PDF4QT](https://github.com/JakubMelka/PDF4QT) and is currently distributed under the MIT License. **The license is subject to change at any time.** It includes third-party components with their own license obligations, including Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, libjpeg, and Blend2D. Review the [packaging and licensing guide](docs/PACKAGING_LICENSING.md) before distributing a build.
 
 Copyright © 2026 Michael Berry. Portions are copyright © 2019 The FreeType Project.

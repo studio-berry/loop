@@ -44,6 +44,8 @@ qt_policy(SET QTP0001 NEW)
 
 qt_add_library(LoopLibQuick SHARED
     sources/loopquickglobal.h
+    sources/canvasdisplaycolor.cpp
+    sources/canvasdisplaycolor.h
     sources/canvaspalette.cpp
     sources/canvaspalette.h
     sources/canvasnodebuilder.cpp

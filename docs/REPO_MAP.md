@@ -31,7 +31,7 @@ workflow audit is tracked in legacy issue #232.
 ## Versioning
 
 Loop uses [Semantic Versioning 2.0](https://semver.org/). The current product
-version is **0.2.0-alpha**. Policy: [`version-policy.json`](version-policy.json)
+version is **0.2.1-alpha**. Policy: [`version-policy.json`](version-policy.json)
 and [`VERSIONING.md`](VERSIONING.md). Former 0.0.3–0.0.6 gates are 0.1.1–0.1.4.
 
 ## Upstream tracking policy

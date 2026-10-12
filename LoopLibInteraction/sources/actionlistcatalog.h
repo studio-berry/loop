@@ -53,7 +53,7 @@ class ActionListCatalog final : public QObject
     Q_OBJECT
 
 public:
-    explicit ActionListCatalog(QObject* parent = nullptr);
+    explicit ActionListCatalog(QObject* parent = nullptr, QString recipesDirectory = QString());
 
     const QList<ActionListRecipeEntry>& recipes() const noexcept { return m_recipes; }
     QString recipesDirectory() const;
@@ -72,6 +72,7 @@ private:
     bool loadRecipeFile(const QString& sourcePath, const QJsonObject& bindings, ActionListRecipeEntry* entry);
 
     QList<ActionListRecipeEntry> m_recipes;
+    QString m_recipesDirectory;
 };
 
 }   // namespace pdfinteraction

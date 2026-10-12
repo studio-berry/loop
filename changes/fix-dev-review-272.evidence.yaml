@@ -1,0 +1,37 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: core-mutation-and-authoring-fixes
+    evidence:
+      - unit:agent-policy:core
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: interaction-gateway-fixes
+    evidence:
+      - unit:agent-policy:interaction
+  - id: quick-shell-fixes
+    evidence:
+      - unit:agent-policy:quick
+  - id: build-policy-ctest-wiring
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: gates-and-generated-registers
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+      - unit:scripts/ci/test_check_governance_registers.py
+      - unit:scripts/ci/test_check_loop_identity.py
+      - unit:scripts/github/test_sync_milestones.py
+      - architecture:scripts/ci/check_governance_registers.py
+      - architecture:scripts/ci/check_loop_identity.py
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+  - id: packaging-lanes
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py
+  - Linux and Windows packaging lanes (linux-build, windows-build) and codeql run in CI on the pull request; this worktree proves the focused suites, the whole-tree checkers and the change gate locally.

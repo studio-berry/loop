@@ -30,6 +30,19 @@ ApplicationWindow {
         host: window.host
     }
 
+    SettingsDialog {
+        id: settingsDialog
+        parent: Overlay.overlay
+        host: window.host
+    }
+
+    DiagnosticsDialog {
+        id: diagnosticsDialog
+        parent: Overlay.overlay
+        host: window.host
+        folderDialog: diagnosticsFolderDialog
+    }
+
     Shortcut {
         sequence: "F1"
         onActivated: {
@@ -131,6 +144,36 @@ ApplicationWindow {
         saveAsDialog: saveAsDialog
     }
 
+    Dialog {
+        id: historyConfirm
+        objectName: "historyNavigationConfirmDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: commandId === "actionUndo" ? qsTr("Undo published correction") : qsTr("Redo published correction")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property string commandId: ""
+        property string rollbackId: ""
+        property string revision: ""
+        Label {
+            width: 360
+            wrapMode: Text.Wrap
+            text: qsTr("Publish a new rollback artifact after revalidation? Existing revisions, approvals and receipts are retained.")
+            Accessible.name: text
+        }
+        onAccepted: if (window.host) window.host.invokeCommand(commandId, {rollbackId: rollbackId, revision: revision})
+    }
+
+    Connections {
+        target: window.host
+        function onHistoryNavigationRequested(commandId, rollbackId, revision) {
+            historyConfirm.commandId = commandId
+            historyConfirm.rollbackId = rollbackId
+            historyConfirm.revision = revision
+            historyConfirm.open()
+        }
+    }
+
     FileDialog {
         id: openDialog
         title: qsTr("Open PDF")
@@ -144,6 +187,117 @@ ApplicationWindow {
         onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
+    Dialog {
+        id: outputDialog
+        objectName: "documentOutputDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: printing ? qsTr("Print to PDF") : qsTr("Export document")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        property bool printing: false
+        property string revision: ""
+        Accessible.name: title
+        contentItem: ColumnLayout {
+            Label {
+                text: host ? host.previewFidelitySummary : ""
+                wrapMode: Text.WordWrap
+                Layout.preferredWidth: 440
+            }
+            Label {
+                text: outputDialog.printing ? qsTr("Print every page to a PDF file using the authoritative renderer.") :
+                      qsTr("PDF copies the exact document bytes. PNG and TIFF export the current page.")
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ComboBox {
+                id: outputFormat
+                visible: !outputDialog.printing
+                model: [qsTr("PDF"), qsTr("PNG"), qsTr("TIFF")]
+                Accessible.name: qsTr("Export format")
+                Layout.fillWidth: true
+            }
+            Label {
+                text: qsTr("Resolution (dpi)")
+                visible: outputResolution.visible
+            }
+            SpinBox {
+                id: outputResolution
+                from: 72
+                to: outputDialog.printing && host && !host.documentModel.canHighResolutionPrint ? 150 : 600
+                value: 300
+                editable: true
+                visible: outputDialog.printing || outputFormat.currentIndex !== 0
+                Accessible.name: qsTr("Resolution in dots per inch")
+            }
+            CheckBox {
+                id: outputAcknowledgment
+                text: qsTr("I acknowledge fidelity warnings. This output is not print proof.")
+                Accessible.name: text
+                Layout.fillWidth: true
+            }
+        }
+        onOpened: printing ? outputResolution.forceActiveFocus() : outputFormat.forceActiveFocus()
+        onAccepted: outputFileDialog.open()
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: outputFileDialog
+        title: outputDialog.title
+        fileMode: FileDialog.SaveFile
+        readonly property string format: outputDialog.printing ? "print-pdf" : ["pdf", "png", "tiff"][outputFormat.currentIndex]
+        nameFilters: format === "png" ? [qsTr("PNG files (*.png)")] :
+                     format === "tiff" ? [qsTr("TIFF files (*.tiff *.tif)")] : [qsTr("PDF files (*.pdf)")]
+        onAccepted: {
+            if (host) host.exportDocumentFileUrl(selectedFile, format, outputResolution.value, outputDialog.revision, outputAcknowledgment.checked)
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    Connections {
+        target: host
+        function onDocumentOutputRequested(printing) {
+            if (host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            outputDialog.printing = printing
+            outputDialog.revision = host.outputRevision()
+            outputAcknowledgment.checked = false
+            outputResolution.value = printing && !host.documentModel.canHighResolutionPrint ? 150 : 300
+            outputDialog.open()
+        }
+        function onDocumentOutputFinished() { outputResultDialog.open() }
+    }
+
+    Dialog {
+        id: outputResultDialog
+        objectName: "documentOutputResultDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Output result")
+        standardButtons: Dialog.Close
+        Accessible.name: title
+        contentItem: ColumnLayout {
+            Label {
+                Layout.preferredWidth: 500
+                wrapMode: Text.WrapAnywhere
+                text: {
+                    const record = host ? host.outputRecord : ({})
+                    if (record.error) return record.error
+                    const artifact = record.artifact || ({})
+                    const receipt = record.publicationReceipt || ({})
+                    return qsTr("Saved artifact: %1\nRevision: %2\n%3\n%4\nThis output is not print proof.")
+                        .arg(artifact.sha256 || "").arg(record.revision || "")
+                        .arg(record.renderer || "")
+                        .arg(receipt.plan_digest ? qsTr("Correction receipt plan: %1").arg(receipt.plan_digest) :
+                             record.dpi ? qsTr("%1 dpi — %2").arg(record.dpi).arg(record.colorHandling) : qsTr("Original source bytes"))
+                }
+                Accessible.name: text
+            }
+        }
+        onClosed: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
     FileDialog {
         id: saveAsDialog
         title: qsTr("Save PDF As")
@@ -152,6 +306,61 @@ ApplicationWindow {
         onAccepted: {
             if (host) {
                 host.saveAsFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: screenshotDialog
+        title: qsTr("Save Screenshot")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("PNG images (*.png)")]
+        onAccepted: {
+            if (host) {
+                host.captureCanvasFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FolderDialog {
+        id: extractImagesDialog
+        title: qsTr("Extract Images Into Folder")
+        onAccepted: {
+            if (host) {
+                host.extractCurrentPageImagesFileUrl(selectedFolder)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: bookmarkImportDialog
+        title: qsTr("Import Bookmarks")
+        nameFilters: [qsTr("Bookmark files (*.json)")]
+        property string revision: ""
+        onAccepted: {
+            if (host) {
+                host.importBookmarksFileUrl(selectedFile, revision)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: bookmarkExportDialog
+        title: qsTr("Export Bookmarks")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Bookmark files (*.json)")]
+        property string revision: ""
+        onAccepted: {
+            if (host) {
+                host.exportBookmarksFileUrl(selectedFile, revision)
             }
             if (host && host.focusRestoration) host.focusRestoration.restore()
         }
@@ -228,6 +437,39 @@ ApplicationWindow {
             profileSaveVersionField.text = host ? host.preflightProfileDraftVersion : ""
             preflightProfileSaveDialog.open()
         }
+        function onScreenshotRequested() {
+            screenshotDialog.open()
+        }
+        function onImageExtractionRequested() {
+            extractImagesDialog.open()
+        }
+        function onBookmarkImportRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            bookmarkImportDialog.revision = host.outputRevision()
+            bookmarkImportDialog.open()
+        }
+        function onBookmarkExportRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            bookmarkExportDialog.revision = host.outputRevision()
+            bookmarkExportDialog.open()
+        }
+        function onSettingsPanelRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onSettingsResetRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            settingsDialog.open()
+        }
+        function onDiagnosticsCollectionRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            diagnosticsDialog.open()
+        }
+    }
+
+    FolderDialog {
+        id: diagnosticsFolderDialog
+        title: qsTr("Choose a folder for the diagnostics bundle")
     }
 
     TextField {

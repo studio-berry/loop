@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 // Production Preview workspace (#586): the identity-bound before/after preview.
@@ -138,7 +139,123 @@ Pane {
                         Accessible.description: qsTr("Re-renders the current page only; the document stays open.")
                     }
                 }
+
+                Label {
+                    objectName: "productionPreviewSoftProofState"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: !root.host
+                        ? ""
+                        : qsTr("Soft proof %1: %2")
+                            .arg(root.host.softProofStateName)
+                            .arg(root.host.softProofSummary)
+                    Accessible.name: qsTr("Soft proof state")
+                    Accessible.description: text
+                }
+
+                Label {
+                    objectName: "productionPreviewSoftProofProfile"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    visible: root.host !== null && root.host.softProofProfileId.length > 0
+                    text: root.host
+                        ? qsTr("Output-intent profile %1 (identifier %2, type %3).")
+                            .arg(root.host.softProofProfileName)
+                            .arg(root.host.softProofProfileId)
+                            .arg(root.host.softProofProfileTypeName)
+                        : ""
+                    Accessible.name: qsTr("Soft-proof profile identity")
+                    Accessible.description: text
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Button {
+                        objectName: "productionPreviewSoftProofToggle"
+                        text: root.host && root.host.softProofActive
+                              ? qsTr("Stop the soft proof")
+                              : qsTr("Simulate the output intent (soft proof)")
+                        enabled: root.host && root.host.hasDocument
+                        onClicked: if (root.host) root.host.toggleSoftProof()
+                        Accessible.name: qsTr("Toggle the soft-proof simulation of the output intent")
+                        Accessible.description: qsTr("Renders the canvas through Core's colour management under proofing settings. A simulation of print, never recorded as approval.")
+                    }
+                }
             }
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+            title: qsTr("Display colour")
+            Accessible.name: qsTr("Display colour modes")
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 4
+
+                ComboBox {
+                    objectName: "productionPreviewDisplayColorMode"
+                    Layout.fillWidth: true
+                    enabled: root.host !== null
+                    model: [ "normal", "invert", "grayscale", "high-contrast", "bitonal", "custom" ]
+                    currentIndex: {
+                        if (!root.host)
+                            return 0
+                        const index = model.indexOf(root.host.displayColorModeName)
+                        return index < 0 ? 0 : index
+                    }
+                    onActivated: if (root.host) root.host.setDisplayColorMode(model[currentIndex])
+                    Accessible.name: qsTr("Display colour mode")
+                    Accessible.description: qsTr("Presentation only: filters the canvas pixels and asks for no render.")
+                }
+
+                Label {
+                    objectName: "productionPreviewDisplayColorState"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: !root.host || !root.host.displayColorModeActive
+                        ? qsTr("No display colour mode is active.")
+                        : qsTr("Display colour simulation (%1): presentation only, never a production render.")
+                            .arg(root.host.displayColorModeName)
+                    Accessible.name: qsTr("Display colour state")
+                    Accessible.description: text
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Button {
+                        objectName: "productionPreviewCustomForeground"
+                        text: qsTr("Custom foreground")
+                        enabled: root.host !== null
+                        onClicked: customForegroundDialog.open()
+                        Accessible.name: qsTr("Choose the custom mode's foreground colour")
+                    }
+
+                    Button {
+                        objectName: "productionPreviewCustomBackground"
+                        text: qsTr("Custom background")
+                        enabled: root.host !== null
+                        onClicked: customBackgroundDialog.open()
+                        Accessible.name: qsTr("Choose the custom mode's background colour")
+                    }
+                }
+            }
+        }
+
+        ColorDialog {
+            id: customForegroundDialog
+            title: qsTr("Custom mode foreground")
+            selectedColor: root.host ? root.host.displayColorCustomForeground : "black"
+            onAccepted: if (root.host) root.host.setDisplayColorCustomColors(selectedColor, root.host.displayColorCustomBackground)
+        }
+
+        ColorDialog {
+            id: customBackgroundDialog
+            title: qsTr("Custom mode background")
+            selectedColor: root.host ? root.host.displayColorCustomBackground : "white"
+            onAccepted: if (root.host) root.host.setDisplayColorCustomColors(root.host.displayColorCustomForeground, selectedColor)
         }
 
         GroupBox {
@@ -147,30 +264,102 @@ Pane {
             title: qsTr("Plates and separations")
             Accessible.name: qsTr("Plates and separations")
 
-            ListView {
-                id: platesView
-                objectName: "productionPreviewPlatesView"
+            ColumnLayout {
                 anchors.fill: parent
-                clip: true
-                focus: visible
-                activeFocusOnTab: true
-                model: root.production
+                spacing: 4
 
-                Accessible.role: Accessible.List
-                Accessible.name: qsTr("Plates")
-                Accessible.description: qsTr("Inks and plates for the current page.")
+                Label {
+                    objectName: "productionPreviewPlateIsolation"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.host ? root.host.plateIsolationSummary : ""
+                    Accessible.name: qsTr("Plate isolation state")
+                    Accessible.description: text
+                }
 
-                delegate: ItemDelegate {
-                    id: plateRow
-                    width: platesView.width
-                    text: plateRow.displayName
-                    Accessible.role: Accessible.ListItem
-                    Accessible.name: plateRow.displayName
-                    Accessible.description: qsTr("Kind %1. Spot colour %2. Overprint %3. Prints %4.")
-                        .arg(plateRow.kind)
-                        .arg(plateRow.spotColorName)
-                        .arg(plateRow.overprint ? qsTr("yes") : qsTr("no"))
-                        .arg(plateRow.shouldPrint ? qsTr("yes") : qsTr("no"))
+                ListView {
+                    id: platesView
+                    objectName: "productionPreviewPlatesView"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    focus: visible
+                    activeFocusOnTab: true
+                    model: root.host ? root.host.productionPlates : []
+
+                    Accessible.role: Accessible.List
+                    Accessible.name: qsTr("Plates")
+                    Accessible.description: qsTr("Inks and plates for the current page. Each plate can be shown alone or hidden.")
+
+                    delegate: ItemDelegate {
+                        id: plateRow
+                        width: platesView.width
+                        text: plateRow.modelData ? plateRow.modelData.displayName : ""
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: plateRow.modelData ? plateRow.modelData.displayName : ""
+                        Accessible.description: qsTr("Kind %1. Spot colour %2. Shown %3. Isolated %4.")
+                            .arg(plateRow.modelData ? plateRow.modelData.kind : "")
+                            .arg(plateRow.modelData ? plateRow.modelData.spotColorName : "")
+                            .arg(plateRow.modelData && plateRow.modelData.visible ? qsTr("yes") : qsTr("no"))
+                            .arg(plateRow.modelData && plateRow.modelData.isolated ? qsTr("yes") : qsTr("no"))
+
+                        CheckBox {
+                            objectName: "productionPreviewPlateVisibleCheck"
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: plateRow.modelData ? plateRow.modelData.visible : false
+                            onToggled: if (root.host && plateRow.modelData) root.host.setPlateVisible(plateRow.modelData.id, checked)
+                            Accessible.name: qsTr("Show plate %1").arg(plateRow.modelData ? plateRow.modelData.displayName : "")
+                        }
+
+                        Button {
+                            objectName: "productionPreviewPlateIsolate"
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: qsTr("Isolate")
+                            onClicked: if (root.host && plateRow.modelData) root.host.isolatePlate(plateRow.modelData.id)
+                            Accessible.name: qsTr("Show only plate %1").arg(plateRow.modelData ? plateRow.modelData.displayName : "")
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Button {
+                        objectName: "productionPreviewShowAllPlates"
+                        text: qsTr("Show all plates")
+                        enabled: root.host !== null
+                        onClicked: if (root.host) root.host.showAllPlates()
+                        Accessible.name: qsTr("Show every plate")
+                    }
+
+                    Button {
+                        objectName: "productionPreviewInkCoverage"
+                        text: qsTr("Measure ink at the page centre")
+                        enabled: root.host && root.host.hasDocument
+                        onClicked: if (root.host) root.host.requestInkCoverageAtPoint(root.host.currentPageCentreX, root.host.currentPageCentreY)
+                        Accessible.name: qsTr("Measure ink coverage at the page centre")
+                        Accessible.description: qsTr("Renders the current page through Core's separation-accurate path and reports the ink coverage at one point.")
+                    }
+                }
+
+                Label {
+                    objectName: "productionPreviewInkCoverageReadout"
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: {
+                        if (!root.host || !root.host.inkCoverageReadout || !root.host.inkCoverageReadout.available)
+                            return root.host && root.host.inkCoverageReadout && root.host.inkCoverageReadout.reason
+                                ? qsTr("Ink coverage is not measured: %1.").arg(root.host.inkCoverageReadout.reason)
+                                : qsTr("Ink coverage has not been measured at a point.")
+                        return qsTr("Ink coverage at (%1, %2) pt: %3 total across %4 plate(s).")
+                            .arg(Number(root.host.inkCoverageReadout.pageX).toFixed(1))
+                            .arg(Number(root.host.inkCoverageReadout.pageY).toFixed(1))
+                            .arg(Number(root.host.inkCoverageReadout.totalInkCoverage).toFixed(3))
+                            .arg(root.host.inkCoverageReadout.channelCount)
+                    }
+                    Accessible.name: qsTr("Ink coverage readout")
+                    Accessible.description: text
                 }
             }
         }

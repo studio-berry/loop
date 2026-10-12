@@ -10,6 +10,7 @@ ToolBar {
     Accessible.name: qsTr("Document toolbar")
     Accessible.description: qsTr("Commands for opening, editing, viewing, and moving through the document.")
     activeFocusOnTab: true
+    implicitHeight: toolbarCommands.implicitHeight + topPadding + bottomPadding
 
     property var host: editorHost
     property var window: null
@@ -71,8 +72,9 @@ ToolBar {
         }
     }
 
-    RowLayout {
-        anchors.fill: parent
+    Flow {
+        id: toolbarCommands
+        width: parent.width
         spacing: 6
 
         ToolButton {
@@ -157,6 +159,38 @@ ToolBar {
                 value: !!root.host && root.host.activeTool === "hand"
             }
         }
+        ToolButton {
+            id: textToolButton
+            objectName: "textToolButton"
+            text: qsTr("Text")
+            checkable: true
+            activeFocusOnTab: true
+            onClicked: if (root.host) root.host.setActiveTool("text")
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: qsTr("Text selection tool")
+            ButtonGroup.group: toolGroup
+            Binding {
+                target: textToolButton
+                property: "checked"
+                value: !!root.host && root.host.activeTool === "text"
+            }
+        }
+        ToolButton {
+            id: measureToolButton
+            objectName: "measureToolButton"
+            text: qsTr("Measure")
+            checkable: true
+            activeFocusOnTab: true
+            onClicked: if (root.host) root.host.setActiveTool("measure")
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: qsTr("Measure tool")
+            ButtonGroup.group: toolGroup
+            Binding {
+                target: measureToolButton
+                property: "checked"
+                value: !!root.host && root.host.activeTool === "measure"
+            }
+        }
         ToolSeparator {}
         ToolButton {
             objectName: "zoomInButton"
@@ -192,6 +226,5 @@ ToolBar {
             Accessible.name: qsTr("Open production preview workspace")
         }
 
-        Item { Layout.fillWidth: true }
     }
 }

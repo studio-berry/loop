@@ -223,7 +223,7 @@
       "replacement_surface": "loop-pages-production",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "object-inspector-plugin",
@@ -238,7 +238,7 @@
       "replacement_surface": "loop-inspect",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "output-preview-plugin",
@@ -253,7 +253,7 @@
       "replacement_surface": "loop-production-preview",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "soft-proofing-plugin",
@@ -268,7 +268,7 @@
       "replacement_surface": "loop-production-preview",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "redact-plugin",
@@ -283,7 +283,7 @@
       "replacement_surface": "loop-fix",
       "dependencies": ["PdfTool redact"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 66
+      "follow_up_issue": 231
     },
     {
       "id": "signature-plugin",
@@ -313,7 +313,7 @@
       "replacement_surface": "loop-fix",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "loop-preflight-plugin",
@@ -328,7 +328,7 @@
       "replacement_surface": "loop-preflight",
       "dependencies": ["LoopLibCore", "PdfTool preflight"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 195
+      "follow_up_issue": 231
     },
     {
       "id": "action-list-plugin",
@@ -343,7 +343,7 @@
       "replacement_surface": "loop-fix",
       "dependencies": ["LoopEditor"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 30
+      "follow_up_issue": 231
     },
     {
       "id": "scanner-plugin",
@@ -388,7 +388,7 @@
       "replacement_surface": "loop-cli",
       "dependencies": ["PdfTool ocr"],
       "validation_evidence": "docs/generated/phase5-widgets-disposition.json",
-      "follow_up_issue": 41
+      "follow_up_issue": 231
     },
     {
       "id": "loop-document",
@@ -403,7 +403,7 @@
       "replacement_surface": "loop-editor",
       "dependencies": ["LoopEditor", "LoopLibQuick"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "loop-preflight",
@@ -418,7 +418,7 @@
       "replacement_surface": "loop-editor",
       "dependencies": ["PdfTool preflight"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 195
+      "follow_up_issue": 231
     },
     {
       "id": "loop-production-preview",
@@ -433,7 +433,7 @@
       "replacement_surface": "loop-production-preview",
       "dependencies": ["LoopLibInteraction", "PreviewStateModel"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "loop-pages-production",
@@ -448,7 +448,7 @@
       "replacement_surface": "loop-pagemaster",
       "dependencies": ["PDFPageMasterExport", "ADR-003", "ADR-004"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "loop-inspect",
@@ -463,7 +463,7 @@
       "replacement_surface": "loop-inspect",
       "dependencies": ["LoopLibInteraction", "InspectorModel"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     },
     {
       "id": "loop-fix",
@@ -478,7 +478,7 @@
       "replacement_surface": "loop-fix",
       "dependencies": ["LoopLibCore", "LoopLibInteraction", "PdfTool repair"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 126
+      "follow_up_issue": 231
     },
     {
       "id": "loop-compare",
@@ -493,7 +493,7 @@
       "replacement_surface": "loop-diff",
       "dependencies": ["PDFDiff"],
       "validation_evidence": "docs/LOOP_WORKSPACES.md",
-      "follow_up_issue": 193
+      "follow_up_issue": 231
     }
   ],
   "packaging": {

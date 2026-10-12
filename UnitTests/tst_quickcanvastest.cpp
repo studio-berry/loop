@@ -51,10 +51,12 @@
 #include <QWheelEvent>
 
 #include <atomic>
+#include <cmath>
 #include <memory>
 
 #include "canvaspalette.h"
 #include "canvaspresentmetrics.h"
+#include "canvasdisplaycolor.h"
 #include "canvastraceoverlay.h"
 #include "loopcanvasitem.h"
 
@@ -169,6 +171,89 @@ pdfinteraction::InteractionTarget makeTarget(const QString& id, QRectF bounds)
     return target;
 }
 
+/// Scripted text extraction, so the canvas-side selection path is provable
+/// without a document. The Core-backed source is exercised against a real
+/// document in UnitTestsDocumentViewSession.
+class ScriptedTextSelectionSource final : public pdfinteraction::ITextSelectionSource
+{
+public:
+    bool hasTextLayer(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available;
+    }
+
+    pdfinteraction::TextSelectionResult selectRange(int pageIndex, QPointF startPagePoint, QPointF endPagePoint) override
+    {
+        Q_UNUSED(pageIndex);
+
+        pdfinteraction::TextSelectionResult result;
+        result.available = available;
+        if (!available)
+        {
+            result.unavailableReason = QStringLiteral("This page has no text layer.");
+            return result;
+        }
+
+        result.text = QStringLiteral("canvas selection");
+        result.geometry = { QRectF(startPagePoint, endPagePoint).normalized() };
+        result.firstLine = 0;
+        result.lastLine = 0;
+        return result;
+    }
+
+    pdfinteraction::TextSelectionResult selectPage(int pageIndex) override
+    {
+        Q_UNUSED(pageIndex);
+        return selectRange(0, QPointF(), QPointF());
+    }
+
+    pdfinteraction::TextSelectionResult selectBlockAt(int pageIndex, QPointF pagePoint) override
+    {
+        Q_UNUSED(pagePoint);
+        return selectPage(pageIndex);
+    }
+
+    int lineCount(int pageIndex) const override
+    {
+        Q_UNUSED(pageIndex);
+        return available ? 1 : -1;
+    }
+
+    pdfinteraction::TextSelectionResult selectLine(int pageIndex, int lineIndex) override
+    {
+        Q_UNUSED(lineIndex);
+        return selectPage(pageIndex);
+    }
+
+    bool available = true;
+};
+
+class FakePageUnitSource final : public pdfinteraction::IPageUnitSource
+{
+public:
+    bool pagePointToMM(int pageIndex, qreal* factor) const override
+    {
+        if (!factor || pageIndex < 0 || pageIndex >= pageCount)
+        {
+            return false;
+        }
+
+        *factor = pointToMM;
+        return true;
+    }
+
+    int pageCount = 2;
+    qreal pointToMM = pdf::PDF_POINT_TO_MM;
+};
+
+/// A viewport pixel for a page-space point on page 0, through the same matrix
+/// the page surfaces use.
+QPointF viewportPointFor(const pdfinteraction::ViewportController& viewport, QPointF pagePoint)
+{
+    return viewport.pagePointToViewportMatrix(0).map(pagePoint);
+}
+
 }   // namespace
 
 class QuickCanvasTest : public QObject
@@ -192,6 +277,11 @@ private Q_SLOTS:
     void focusLossCancelsTheDrag();
     void unboundItemIgnoresInput();
     void toolSelectionRoundTrips();
+    void textToolDragThroughTheCanvasStoresASelection();
+    void measureToolDragThroughTheCanvasReportsProductionUnits();
+    void textSelectionOnAPageWithNoTextLayerReportsThatState();
+    void canvasCompositionPlacesTilesInDevicePixels();
+    void canvasCompositionDrawsPlacedTilesInViewportUnitsOnHiDpi();
 
     void admittedTilesReachTheSceneGraph();
     void revisionReplacementLeavesNoStaleTile();
@@ -208,6 +298,10 @@ private Q_SLOTS:
     void overlayOnlyHoverPreservesSurfaceDemand();
     void zoomReissuesSurfaceDemand();
     void firstViewIsUnavailableUntilAPageIsOnScreen();
+
+    void displayColorModesFilterTheCanvasWithoutARender();
+    void displayColorModeNamesRoundTripAndUnknownNamesAreRefused();
+    void displayColorModesAreDistinctPixelTransforms();
 
 private:
     void bindItem();
@@ -229,7 +323,12 @@ private:
     /// software and native smoke runs are for -- but it is exactly what these
     /// assertions need, because they are about node and texture lifetime rather
     /// than about which backend drew them.
-    void showItemInWindow();
+    ///
+    /// `tileFill`, when valid, is what the fake renderer paints the page with. It
+    /// is applied before the window is shown, because publishing the item's
+    /// geometry is what makes the coordinator request its first surfaces: a fill
+    /// set after the expose would arrive after the tile was already rendered.
+    void showItemInWindow(const QColor& tileFill = QColor());
 
     /// Submits surface demand and drains the coordinator relay until at least one
     /// surface is admitted. The relay is always queued, even for inline work.
@@ -249,6 +348,9 @@ private:
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
     std::unique_ptr<TestCanvasItem> m_item;
+
+    std::unique_ptr<ScriptedTextSelectionSource> m_textSource;
+    std::unique_ptr<FakePageUnitSource> m_units;
 
     std::unique_ptr<InlineJobSubmitter> m_submitter;
     std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
@@ -278,6 +380,11 @@ void QuickCanvasTest::init()
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
+    m_textSource = std::make_unique<ScriptedTextSelectionSource>();
+    m_units = std::make_unique<FakePageUnitSource>();
+    m_controller->setTextSelectionSource(m_textSource.get());
+    m_controller->setPageUnitSource(m_units.get());
+
     m_item = std::make_unique<TestCanvasItem>();
     m_item->setSize(QSizeF(400.0, 400.0));
 }
@@ -285,6 +392,8 @@ void QuickCanvasTest::init()
 void QuickCanvasTest::cleanup()
 {
     m_item.reset();
+    m_units.reset();
+    m_textSource.reset();
     m_window.reset();
     m_surfaces.reset();
     m_renderer.reset();
@@ -322,9 +431,14 @@ void QuickCanvasTest::buildCoordinator()
     m_surfaces->setDocumentKey(QStringLiteral("doc-1"));
 }
 
-void QuickCanvasTest::showItemInWindow()
+void QuickCanvasTest::showItemInWindow(const QColor& tileFill)
 {
     buildCoordinator();
+
+    if (tileFill.isValid())
+    {
+        m_renderer->fill = tileFill;
+    }
 
     m_window = std::make_unique<TestQuickWindow>();
     m_window->resize(400, 400);
@@ -631,6 +745,191 @@ void QuickCanvasTest::toolSelectionRoundTrips()
     // A name outside the vocabulary is refused and leaves the tool in place.
     QVERIFY(!m_item->setActiveTool(QStringLiteral("bogus")));
     QCOMPARE(m_item->activeTool(), QStringLiteral("hand"));
+}
+
+// ---------------------------------------------------------------------------
+// Issue #232 / #238: the canvas carries the text-selection and measurement
+// tools the same way it carries select and hand -- events in, neutral intents
+// out, and the typed state read back from the controller.
+// ---------------------------------------------------------------------------
+
+void QuickCanvasTest::textToolDragThroughTheCanvasStoresASelection()
+{
+    bindItem();
+
+    QVERIFY(m_item->setActiveTool(QStringLiteral("text")));
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Text);
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(selection->available);
+    QCOMPARE(selection->text, QStringLiteral("canvas selection"));
+    QCOMPARE(selection->pageIndex, 0);
+
+    // The overlay frame carries one rectangle per line span in the Selection
+    // band, and no page render was asked for.
+    const pdfinteraction::OverlayFrame& frame = m_controller->overlayFrame();
+    QVERIFY(frame.isOrdered());
+    int selectionPrimitives = 0;
+    for (const pdfinteraction::OverlayPrimitive& primitive : frame.primitives)
+    {
+        if (primitive.layer == pdfinteraction::OverlayLayer::Selection)
+        {
+            ++selectionPrimitives;
+        }
+    }
+    QCOMPARE(selectionPrimitives, selection->geometry.size());
+
+    // And Copy through the controller returns exactly what was selected.
+    const pdfinteraction::TextCopyResult copy = m_controller->selectedText();
+    QVERIFY(copy.copied);
+    QCOMPARE(copy.text, QStringLiteral("canvas selection"));
+}
+
+void QuickCanvasTest::measureToolDragThroughTheCanvasReportsProductionUnits()
+{
+    bindItem();
+
+    QVERIFY(m_item->setActiveTool(QStringLiteral("measure")));
+    QCOMPARE(m_controller->activeTool(), pdfinteraction::InteractionTool::Measure);
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QSignalSpy measureSpy(m_controller.get(), &pdfinteraction::InteractionController::measurementCompleted);
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    QCOMPARE(measureSpy.size(), 1);
+    QCOMPARE(m_controller->state().measurements().size(), 1);
+
+    // The measurement is page-space geometry times the page's own scale, and
+    // the overlay carries the readout.
+    const pdfinteraction::Measurement measurement = m_controller->state().measurements().constFirst();
+    const qreal referenceMM = std::hypot(40.0, 40.0) * m_units->pointToMM;
+    QVERIFY(qAbs(measurement.distanceMM - referenceMM) <= 0.5);
+
+    const pdfinteraction::OverlayFrame& frame = m_controller->overlayFrame();
+    const pdfinteraction::OverlayPrimitive* primitive = nullptr;
+    for (const pdfinteraction::OverlayPrimitive& candidate : frame.primitives)
+    {
+        if (candidate.kind == pdfinteraction::OverlayPrimitiveKind::Measurement)
+        {
+            primitive = &candidate;
+        }
+    }
+    QVERIFY(primitive);
+    QCOMPARE(primitive->label, pdfinteraction::measurementReadout(measurement));
+    QCOMPARE(primitive->layer, pdfinteraction::OverlayLayer::Guides);
+
+    // No DragSession, no command: a measurement is never a document edit.
+    QVERIFY(!m_controller->state().drag().has_value());
+}
+
+void QuickCanvasTest::textSelectionOnAPageWithNoTextLayerReportsThatState()
+{
+    bindItem();
+
+    m_textSource->available = false;
+    QVERIFY(m_item->setActiveTool(QStringLiteral("text")));
+
+    const QPointF from = viewportPointFor(*m_viewport, QPointF(20.0, 20.0));
+    const QPointF to = viewportPointFor(*m_viewport, QPointF(60.0, 60.0));
+
+    QVERIFY(sendMousePress(m_item.get(), from));
+    QVERIFY(sendMouseMove(m_item.get(), to));
+    QVERIFY(sendMouseRelease(m_item.get(), to));
+
+    const std::optional<pdfinteraction::TextSelection>& selection = m_controller->state().textSelection();
+    QVERIFY(selection.has_value());
+    QVERIFY(!selection->available);
+    QCOMPARE(selection->unavailableReason, QStringLiteral("This page has no text layer."));
+
+    // Copy refuses with the typed reason and never an empty success.
+    const pdfinteraction::TextCopyResult copy = m_controller->selectedText();
+    QVERIFY(!copy.copied);
+    QCOMPARE(copy.refusalCode, QStringLiteral("text/no-text-layer"));
+    QVERIFY(copy.text.isEmpty());
+
+    // And there is nothing to paint for an unavailable selection.
+    for (const pdfinteraction::OverlayPrimitive& primitive : m_controller->overlayFrame().primitives)
+    {
+        QVERIFY(primitive.layer != pdfinteraction::OverlayLayer::Selection);
+    }
+}
+
+void QuickCanvasTest::canvasCompositionPlacesTilesInDevicePixels()
+{
+    // The screenshot path composes the admitted tiles into one image. Pure
+    // function, no window and no scene graph: the same call the host makes.
+    pdfinteraction::CanvasSnapshot snapshot;
+    snapshot.token = pdfinteraction::RevisionFencedToken();
+
+    QImage red(20, 20, QImage::Format_ARGB32_Premultiplied);
+    red.fill(Qt::red);
+    QImage blue(20, 20, QImage::Format_ARGB32_Premultiplied);
+    blue.fill(Qt::blue);
+
+    pdfinteraction::CanvasTile first;
+    first.key.pageIndex = 0;
+    first.pixels = pdfinteraction::makeSurfaceBuffer(red);
+    first.placedRect = QRect(0, 0, 20, 20);
+    snapshot.tiles.push_back(first);
+
+    pdfinteraction::CanvasTile second;
+    second.key.pageIndex = 1;
+    second.pixels = pdfinteraction::makeSurfaceBuffer(blue);
+    second.placedRect = QRect(20, 0, 20, 20);
+    snapshot.tiles.push_back(second);
+
+    const QImage composed = pdfinteraction::composeCanvasImage(snapshot, QRect(0, 0, 40, 20), 1.0);
+    QVERIFY(!composed.isNull());
+    QCOMPARE(composed.size(), QSize(40, 20));
+    QCOMPARE(composed.pixelColor(10, 10), QColor(Qt::red));
+    QCOMPARE(composed.pixelColor(30, 10), QColor(Qt::blue));
+
+    // A region no tile intersects is a refusal, not a blank success.
+    QVERIFY(pdfinteraction::composeCanvasImage(snapshot, QRect(100, 100, 40, 20), 1.0).isNull());
+}
+
+void QuickCanvasTest::canvasCompositionDrawsPlacedTilesInViewportUnitsOnHiDpi()
+{
+    // At a device pixel ratio other than 1 the painter's coordinate space is
+    // still viewport units: the placed rectangle is drawn unchanged and the
+    // composed image's own ratio maps it to device pixels. Multiplying the
+    // placed rect by the ratio again would move and grow the tile.
+    pdfinteraction::CanvasSnapshot snapshot;
+    snapshot.token = pdfinteraction::RevisionFencedToken();
+
+    QImage red(10, 10, QImage::Format_ARGB32_Premultiplied);
+    red.fill(Qt::red);
+
+    pdfinteraction::CanvasTile tile;
+    tile.key.pageIndex = 0;
+    tile.pixels = pdfinteraction::makeSurfaceBuffer(red);
+    tile.placedRect = QRect(10, 0, 10, 10);
+    snapshot.tiles.push_back(tile);
+
+    const QImage composed = pdfinteraction::composeCanvasImage(snapshot, QRect(0, 0, 40, 20), 2.0);
+    QVERIFY(!composed.isNull());
+    QCOMPARE(composed.size(), QSize(80, 40));
+
+    // Device pixels inside placedRect * 2 carry the tile colour.
+    QCOMPARE(composed.pixelColor(30, 10), QColor(Qt::red));
+
+    // Outside it the canvas white shows: at the placed rect's viewport
+    // coordinates when read as device pixels, and beyond its device rect.
+    QCOMPARE(composed.pixelColor(10, 10), QColor(Qt::white));
+    QCOMPARE(composed.pixelColor(50, 10), QColor(Qt::white));
 }
 
 // ---------------------------------------------------------------------------
@@ -1053,6 +1352,162 @@ void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
     QVERIFY(after.value(QStringLiteral("ms")).toDouble(-1.0) >= 0.0);
 }
 
-QTEST_MAIN(QuickCanvasTest)
+void QuickCanvasTest::displayColorModesFilterTheCanvasWithoutARender()
+{
+    const QColor tileColor(30, 90, 210);
+    showItemInWindow(tileColor);
+    requestSurfacesAndDrain();
 
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+    const QPoint sample = placed.center();
+
+    const QImage normal = renderFrame();
+    QVERIFY(!normal.isNull());
+    QCOMPARE(normal.pixelColor(sample), tileColor);
+
+    // The mode is set on the item the way the host sets it: by name, parsed at the
+    // boundary. The pixels change; nothing is rendered, and nothing is asked of the
+    // coordinator -- a display colour mode is a presentation filter (issue #235
+    // display half), and the failure case it must not have is a page render.
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("invert")));
+    const QImage inverted = renderFrame();
+    QCOMPARE(inverted.pixelColor(sample), QColor(255 - tileColor.red(), 255 - tileColor.green(), 255 - tileColor.blue()));
+
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
+
+    // Leaving the mode restores the render path's own pixels, from the same
+    // retained surface: the filter never replaced them.
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("normal")));
+    const QImage restored = renderFrame();
+    QCOMPARE(restored.pixelColor(sample), tileColor);
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+}
+
+void QuickCanvasTest::displayColorModeNamesRoundTripAndUnknownNamesAreRefused()
+{
+    const QList<pdfquick::CanvasDisplayColorMode> modes = {
+        pdfquick::CanvasDisplayColorMode::Normal,
+        pdfquick::CanvasDisplayColorMode::Invert,
+        pdfquick::CanvasDisplayColorMode::Grayscale,
+        pdfquick::CanvasDisplayColorMode::HighContrast,
+        pdfquick::CanvasDisplayColorMode::Bitonal,
+        pdfquick::CanvasDisplayColorMode::Custom,
+    };
+
+    QSet<QString> names;
+    for (const pdfquick::CanvasDisplayColorMode mode : modes)
+    {
+        const QString name = pdfquick::getCanvasDisplayColorModeName(mode);
+        names.insert(name);
+        const std::optional<pdfquick::CanvasDisplayColorMode> parsed =
+            pdfquick::canvasDisplayColorModeFromName(name);
+        QVERIFY(parsed.has_value());
+        QCOMPARE(*parsed, mode);
+    }
+    QCOMPARE(names.size(), modes.size());
+
+    // Every mode but Normal names the shell action that selects it.
+    for (const pdfquick::CanvasDisplayColorMode mode : modes)
+    {
+        const QString actionId = pdfquick::getCanvasDisplayColorModeActionId(mode);
+        if (mode == pdfquick::CanvasDisplayColorMode::Normal)
+        {
+            QVERIFY(actionId.isEmpty());
+        }
+        else
+        {
+            QVERIFY(actionId.startsWith(QStringLiteral("actionColor")));
+        }
+    }
+
+    // A name outside the vocabulary is refused and changes nothing.
+    QVERIFY(!m_item->setDisplayColorMode(QStringLiteral("sepia")));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("normal"));
+    QVERIFY(m_item->setDisplayColorMode(QStringLiteral("GRAYSCALE")));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("grayscale"));
+    QVERIFY(!m_item->setDisplayColorMode(QString()));
+    QCOMPARE(m_item->displayColorMode(), QStringLiteral("grayscale"));
+}
+
+void QuickCanvasTest::displayColorModesAreDistinctPixelTransforms()
+{
+    QImage source(8, 8, QImage::Format_ARGB32_Premultiplied);
+    source.fill(QColor(30, 90, 210));
+
+    pdfquick::CanvasDisplayColorSettings settings;
+
+    // Normal is the identity: the transform is a filter, not a re-render.
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(source, settings), source);
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Invert;
+    const QImage inverted = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QCOMPARE(inverted.pixelColor(4, 4), QColor(225, 165, 45));
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Grayscale;
+    const QImage grayscale = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    const QColor gray = grayscale.pixelColor(4, 4);
+    QCOMPARE(gray.red(), gray.green());
+    QCOMPARE(gray.green(), gray.blue());
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Bitonal;
+    settings.bitonalThreshold = 128;
+    const QImage bitonal = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QSet<QRgb> bitonalColors;
+    for (int y = 0; y < bitonal.height(); ++y)
+    {
+        for (int x = 0; x < bitonal.width(); ++x)
+        {
+            bitonalColors.insert(bitonal.pixel(x, y) | 0xff000000u);
+        }
+    }
+    QVERIFY(bitonalColors.size() <= 2);
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::HighContrast;
+    const QImage highContrast = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    QVERIFY(highContrast.pixelColor(4, 4) != source.pixelColor(4, 4));
+
+    settings.mode = pdfquick::CanvasDisplayColorMode::Custom;
+    settings.customForeground = QColor(10, 20, 30);
+    settings.customBackground = QColor(200, 210, 220);
+    const QImage custom = pdfquick::applyCanvasDisplayColorMode(source, settings);
+    const QColor customPixel = custom.pixelColor(4, 4);
+    QVERIFY(customPixel != source.pixelColor(4, 4));
+
+    // Custom mode maps the source onto the configured foreground/background scale
+    // rather than replacing every pixel with one of the two: a mid-tone stays
+    // between them, and the two extremes are exactly the configured colours.
+    const auto between = [](int value, int first, int second)
+    { return value >= qMin(first, second) && value <= qMax(first, second); };
+    QVERIFY(between(customPixel.red(), settings.customForeground.red(), settings.customBackground.red()));
+    QVERIFY(between(customPixel.green(), settings.customForeground.green(), settings.customBackground.green()));
+    QVERIFY(between(customPixel.blue(), settings.customForeground.blue(), settings.customBackground.blue()));
+
+    QImage blackSource(2, 2, QImage::Format_ARGB32_Premultiplied);
+    blackSource.fill(Qt::black);
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(blackSource, settings).pixelColor(0, 0), settings.customForeground);
+
+    QImage whiteSource(2, 2, QImage::Format_ARGB32_Premultiplied);
+    whiteSource.fill(Qt::white);
+    QCOMPARE(pdfquick::applyCanvasDisplayColorMode(whiteSource, settings).pixelColor(0, 0), settings.customBackground);
+
+    // Every active mode produces its own pixels for the same source, so no two
+    // modes can be mistaken for one another by their output.
+    const QList<QImage> outputs = { inverted, grayscale, bitonal, highContrast, custom };
+    for (int first = 0; first < outputs.size(); ++first)
+    {
+        for (int second = first + 1; second < outputs.size(); ++second)
+        {
+            QVERIFY(outputs.at(first) != outputs.at(second));
+        }
+    }
+}
+
+QTEST_MAIN(QuickCanvasTest)
 #include "tst_quickcanvastest.moc"

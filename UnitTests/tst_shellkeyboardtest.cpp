@@ -111,19 +111,27 @@ void ShellKeyboardTest::activeToolIsExposedAndValidated()
 
     // A name outside the vocabulary is refused and leaves the active tool
     // unchanged.
-    QVERIFY(!host.setActiveTool(QStringLiteral("measure")));
+    QVERIFY(!host.setActiveTool(QStringLiteral("lasso")));
     QCOMPARE(host.activeTool(), QStringLiteral("hand"));
     QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Hand);
     QCOMPARE(toolSpy.size(), 1);
 
+    // The measure and text tools joined the vocabulary in epic #231 PR1
+    // (issues #238 and #232) and route to the controller like the original two.
+    QVERIFY(host.setActiveTool(QStringLiteral("measure")));
+    QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Measure);
+    QVERIFY(host.setActiveTool(QStringLiteral("text")));
+    QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Text);
+    QCOMPARE(toolSpy.size(), 3);
+
     // Re-selecting the active tool is not a change and must not signal.
-    QVERIFY(host.setActiveTool(QStringLiteral("hand")));
-    QCOMPARE(toolSpy.size(), 1);
+    QVERIFY(host.setActiveTool(QStringLiteral("text")));
+    QCOMPARE(toolSpy.size(), 3);
 
     QVERIFY(host.setActiveTool(QStringLiteral("select")));
     QCOMPARE(host.activeTool(), QStringLiteral("select"));
     QCOMPARE(host.sessionForTest()->interaction()->activeTool(), pdfinteraction::InteractionTool::Select);
-    QCOMPARE(toolSpy.size(), 2);
+    QCOMPARE(toolSpy.size(), 4);
 }
 
 QTEST_MAIN(ShellKeyboardTest)

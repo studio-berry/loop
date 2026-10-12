@@ -1,4 +1,5 @@
 #include "editorhost.h"
+#include "editorsettings.h"
 #include "operatorhelp.h"
 
 #include "commanddescriptor.h"
@@ -38,18 +39,49 @@ constexpr EditorHost::LoopWorkspace kWorkspaces[] = {
     EditorHost::Compare,
 };
 
+/// Repeater delegates are not QObject children of the dialog, so findChild
+/// cannot see them; the repeater's own itemAt() is the supported lookup.
+QQuickItem* optionRowItem(QObject* dialogRoot, const QString& objectName)
+{
+    for (QObject* node : dialogRoot->findChildren<QObject*>())
+    {
+        if (!QString::fromLatin1(node->metaObject()->className()).contains(QStringLiteral("Repeater")))
+        {
+            continue;
+        }
+        const int count = node->property("count").toInt();
+        for (int index = 0; index < count; ++index)
+        {
+            QQuickItem* item = nullptr;
+            QMetaObject::invokeMethod(node, "itemAt", Q_RETURN_ARG(QQuickItem*, item), Q_ARG(int, index));
+            if (item && item->objectName() == objectName)
+            {
+                return item;
+            }
+        }
+    }
+    return nullptr;
+}
+
 }   // namespace
 
 class ShellWorkspaceTest : public QObject
 {
     Q_OBJECT
 
+private:
+    std::unique_ptr<QTemporaryDir> m_fixtureRecipes;
+
 private slots:
+    void init();
+    void cleanup();
     void workspaceTransitionsPreserveClosedDocumentState();
     void workspaceTransitionsPreserveOpenDocumentAndPreflightState();
     void compareWorkspaceIsReachable();
     void menuPolicyRoutesVisibleActions();
     void developerDiagnosticsFollowReleaseProfile();
+    void advancedDiagnosticCommandsFollowTheDeveloperGate();
+    void settingsAndDiagnosticsDialogsLoadAndDriveTheHost();
     void helpMatchesEveryCatalogFinding();
     void welcomePreferenceSurvivesRestart();
     void sampleCopiesPreserveOperatorEdits();
@@ -58,9 +90,21 @@ private slots:
     void helpDialogShowsCatalogLimitsAndWelcome();
 };
 
+void ShellWorkspaceTest::init()
+{
+    QStandardPaths::setTestModeEnabled(true);
+    m_fixtureRecipes = std::make_unique<QTemporaryDir>();
+    QVERIFY(m_fixtureRecipes->isValid());
+}
+
+void ShellWorkspaceTest::cleanup()
+{
+    m_fixtureRecipes.reset();
+}
+
 void ShellWorkspaceTest::workspaceTransitionsPreserveClosedDocumentState()
 {
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.workspace(), EditorHost::Document);
     QCOMPARE(host.documentShellStatus(), QStringLiteral("NO_DOCUMENT"));
     QCOMPARE(host.preflightStateName(), QStringLiteral("not-checked"));
@@ -95,7 +139,7 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
     const QString path = directory.filePath(QStringLiteral("shell.pdf"));
     QVERIFY(writer.write(path, &document, true));
 
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY(host.hasDocument());
 
@@ -123,7 +167,7 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
 
 void ShellWorkspaceTest::compareWorkspaceIsReachable()
 {
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QCOMPARE(host.workspace(), EditorHost::Document);
     QVERIFY(host.isWorkspaceEnabled(EditorHost::Compare));
 
@@ -139,7 +183,7 @@ void ShellWorkspaceTest::compareWorkspaceIsReachable()
 
 void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()
 {
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     const QVariantList descriptors = host.commandDescriptors();
     QVERIFY(descriptors.size() > 100);
 
@@ -177,12 +221,135 @@ void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()
 
 void ShellWorkspaceTest::developerDiagnosticsFollowReleaseProfile()
 {
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
 #ifdef LOOP_LOOP_DISTRIBUTION_BUILD
     QVERIFY(!host.allowDeveloperDiagnostics());
 #else
     QVERIFY(host.allowDeveloperDiagnostics());
 #endif
+}
+
+void ShellWorkspaceTest::advancedDiagnosticCommandsFollowTheDeveloperGate()
+{
+    EditorHost host;
+
+    QHash<QString, QVariantMap> byId;
+    for (const QVariant& entry : host.commandDescriptors())
+    {
+        const QVariantMap descriptor = entry.toMap();
+        byId.insert(descriptor.value(QStringLiteral("id")).toString(), descriptor);
+    }
+
+    const QStringList boundCommands = {
+        QStringLiteral("actionOptions"),
+        QStringLiteral("actionResetToFactorySettings"),
+        QStringLiteral("actionCollectDiagnostics"),
+        QStringLiteral("actionRenderOptionAntialiasing"),
+        QStringLiteral("actionRenderOptionTextAntialiasing"),
+        QStringLiteral("actionRenderOptionSmoothPictures"),
+        QStringLiteral("actionRenderOptionDisplayAnnotations"),
+        QStringLiteral("actionRenderOptionIgnoreOptionalContentSettings"),
+        QStringLiteral("actionRenderOptionDisplayRenderTimes"),
+        QStringLiteral("actionShow_Text_Blocks"),
+        QStringLiteral("actionShow_Text_Lines"),
+    };
+
+    for (const QString& id : boundCommands)
+    {
+        QVERIFY2(byId.contains(id), qPrintable(id));
+        const QVariantMap descriptor = byId.value(id);
+        // The menu gate reads disposition and menuGroup: only a developer
+        // profile renders the Advanced group, and only there do these appear.
+        QCOMPARE(descriptor.value(QStringLiteral("disposition")).toString(), QStringLiteral("ADVANCED"));
+        QCOMPARE(descriptor.value(QStringLiteral("menuGroup")).toString(), QStringLiteral("Advanced"));
+        QCOMPARE(descriptor.value(QStringLiteral("implemented")).toBool(), true);
+        // Enabled exactly where the profile gate allows it, never in release.
+        QCOMPARE(host.isCommandEnabled(id), host.allowDeveloperDiagnostics());
+    }
+
+    // The ADVANCED ids without a handler stay unimplemented, and no profile
+    // can reach them: the release menu hides them and invocation answers
+    // not-implemented.
+    for (const QString& id : { QStringLiteral("actionRendering_Errors"),
+                               QStringLiteral("actionMagnifier"),
+                               QStringLiteral("actionGetSource") })
+    {
+        QVERIFY2(byId.contains(id), qPrintable(id));
+        QCOMPARE(byId.value(id).value(QStringLiteral("disposition")).toString(), QStringLiteral("ADVANCED"));
+        QCOMPARE(byId.value(id).value(QStringLiteral("menuGroup")).toString(), QStringLiteral("Advanced"));
+        QCOMPARE(byId.value(id).value(QStringLiteral("implemented")).toBool(), false);
+        QVERIFY(!host.isCommandEnabled(id));
+    }
+}
+
+void ShellWorkspaceTest::settingsAndDiagnosticsDialogsLoadAndDriveTheHost()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    QSettings backing(directory.filePath(QStringLiteral("shell-settings.ini")), QSettings::IniFormat);
+    EditorSettings settings(&backing);
+    EditorHost host(&settings);
+
+    // The commands route to the surfaces: the handler emits the request that
+    // the shell's Connections answer by opening the dialog.
+    QSignalSpy settingsPanelSpy(&host, &EditorHost::settingsPanelRequested);
+    QSignalSpy diagnosticsSpy(&host, &EditorHost::diagnosticsCollectionRequested);
+    QVERIFY(host.invokeCommand(QStringLiteral("actionOptions")) != 0);
+    QCOMPARE(settingsPanelSpy.size(), 1);
+    QVERIFY(host.invokeCommand(QStringLiteral("actionCollectDiagnostics")) != 0);
+    QCOMPARE(diagnosticsSpy.size(), 1);
+
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(800, 700);
+    window.show();
+
+    QQmlComponent settingsComponent(&engine, QUrl::fromLocalFile(QStringLiteral(LOOP_OPERATOR_SOURCE_DIR "/LoopEditor/qml/SettingsDialog.qml")));
+    QTRY_VERIFY_WITH_TIMEOUT(settingsComponent.status() != QQmlComponent::Loading, 10000);
+    QVERIFY2(!settingsComponent.isError(), qPrintable(settingsComponent.errorString()));
+    std::unique_ptr<QObject> settingsDialog(settingsComponent.createWithInitialProperties({ { QStringLiteral("host"), QVariant::fromValue(&host) },
+                                                                                            { QStringLiteral("parent"), QVariant::fromValue(window.contentItem()) } }));
+    QVERIFY2(settingsDialog, qPrintable(settingsComponent.errorString()));
+    QVERIFY(QMetaObject::invokeMethod(settingsDialog.get(), "open"));
+    QTRY_VERIFY(settingsDialog->property("visible").toBool());
+
+    // The surface renders the typed option rows of the one store, and a toggle
+    // goes through the store, not a second copy.
+    QQuickItem* smoothPicturesBox = optionRowItem(settingsDialog.get(), QStringLiteral("settingsOption_smoothPictures"));
+    QVERIFY(smoothPicturesBox);
+    QVERIFY(!smoothPicturesBox->property("checked").toBool());
+    smoothPicturesBox->setProperty("checked", true);
+    QVERIFY(QMetaObject::invokeMethod(smoothPicturesBox, "clicked"));
+    QVERIFY(settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+
+    // The factory reset is confirmed through the surface before it runs.
+    QVERIFY(host.requestSettingsReset());
+    auto* confirmReset = settingsDialog->findChild<QObject*>(QStringLiteral("settingsResetConfirmButton"));
+    QVERIFY(confirmReset);
+    QTRY_VERIFY(confirmReset->property("visible").toBool());
+    QVERIFY(QMetaObject::invokeMethod(confirmReset, "clicked"));
+    QVERIFY(!host.settingsResetPending());
+    QVERIFY(!settings.isOptionEnabled(QStringLiteral("smoothPictures")));
+    QVERIFY(settingsDialog->findChild<QObject*>(QStringLiteral("settingsNotice")));
+
+    // The diagnostics dialog takes a folder and renders the host's projection
+    // of the collector's outcome.
+    QQmlComponent diagnosticsComponent(&engine, QUrl::fromLocalFile(QStringLiteral(LOOP_OPERATOR_SOURCE_DIR "/LoopEditor/qml/DiagnosticsDialog.qml")));
+    QTRY_VERIFY_WITH_TIMEOUT(diagnosticsComponent.status() != QQmlComponent::Loading, 10000);
+    QVERIFY2(!diagnosticsComponent.isError(), qPrintable(diagnosticsComponent.errorString()));
+    std::unique_ptr<QObject> diagnosticsDialog(diagnosticsComponent.createWithInitialProperties({ { QStringLiteral("host"), QVariant::fromValue(&host) },
+                                                                                                  { QStringLiteral("parent"), QVariant::fromValue(window.contentItem()) } }));
+    QVERIFY2(diagnosticsDialog, qPrintable(diagnosticsComponent.errorString()));
+    auto* collectButton = diagnosticsDialog->findChild<QObject*>(QStringLiteral("diagnosticsCollectButton"));
+    QVERIFY(collectButton);
+    QVERIFY(!collectButton->property("enabled").toBool());
+
+    QVERIFY(host.collectDiagnosticsFileUrl(QUrl::fromLocalFile(directory.path())));
+    auto* result = diagnosticsDialog->findChild<QObject*>(QStringLiteral("diagnosticsResult"));
+    QVERIFY(result);
+    QTRY_VERIFY(result->property("text").toString().contains(QStringLiteral("Bundle written to")));
+    QVERIFY(result->property("text").toString().contains(QStringLiteral("loop-diagnostics-editor-")));
 }
 
 void ShellWorkspaceTest::helpMatchesEveryCatalogFinding()
@@ -257,7 +424,6 @@ void ShellWorkspaceTest::sampleCopiesPreserveOperatorEdits()
 
 void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
 {
-    QStandardPaths::setTestModeEnabled(true);
     QTemporaryDir directory;
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
@@ -266,7 +432,7 @@ void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
         const QVariantMap descriptor = job.toMap();
         const QVariantMap sample = help.prepareSample(descriptor.value(QStringLiteral("id")).toString());
         QVERIFY(sample.value(QStringLiteral("ok")).toBool());
-        EditorHost host;
+        EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
         QVERIFY(host.importPreflightProfileFileUrl(sample.value(QStringLiteral("profile")).toUrl()));
         host.openFileUrl(sample.value(QStringLiteral("pdf")).toUrl());
         QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
@@ -284,13 +450,12 @@ void ShellWorkspaceTest::samplesExerciseRealCoreOutcomes()
 
 void ShellWorkspaceTest::correctionSampleRunsGovernedCore()
 {
-    QStandardPaths::setTestModeEnabled(true);
     QTemporaryDir directory;
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
     const QVariantMap sample = help.prepareSample(QStringLiteral("correction"));
     QVERIFY(sample.value(QStringLiteral("ok")).toBool());
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QVERIFY(host.importPreflightProfileFileUrl(sample.value(QStringLiteral("profile")).toUrl()));
     QVERIFY(host.importActionListRecipe(sample.value(QStringLiteral("recipe")).toUrl()));
     host.openFileUrl(sample.value(QStringLiteral("pdf")).toUrl());
@@ -316,7 +481,7 @@ void ShellWorkspaceTest::helpDialogShowsCatalogLimitsAndWelcome()
     QSettings settings(directory.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     OperatorHelp help(settings, directory.filePath(QStringLiteral("samples")));
     QQmlEngine engine;
-    EditorHost host;
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(LOOP_OPERATOR_SOURCE_DIR "/LoopEditor/qml/OperatorHelpDialog.qml")));
     QTRY_VERIFY_WITH_TIMEOUT(component.status() != QQmlComponent::Loading, 10000);
     QVERIFY2(!component.isError(), qPrintable(component.errorString()));

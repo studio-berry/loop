@@ -108,6 +108,15 @@ def main() -> int:
         raise ContractError(
             f"Editor action count mismatch: expected_action_count={expected_count}, policy={len(actions)}"
         )
+    for action in actions:
+        if action.get("disposition") not in VALID_DISPOSITIONS:
+            raise ContractError(
+                f"invalid editor action disposition for {action.get('id')}: {action.get('disposition')!r}"
+            )
+        if action.get("target") not in VALID_TARGETS:
+            raise ContractError(
+                f"invalid editor action target for {action.get('id')}: {action.get('target')!r}"
+            )
 
     plugin_surfaces = {
         surface["artifact"]: surface

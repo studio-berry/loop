@@ -1,0 +1,37 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: authoring-edit-gateway
+    evidence:
+      - unit:agent-policy:core
+      - unit:agent-policy:interaction
+  - id: quick-authoring-surfaces
+    evidence:
+      - unit:agent-policy:quick
+  - id: governed-execution-parity
+    evidence:
+      - unit:UnitTestsGovernedExecution
+      - unit:UnitTestsProductOperatorLoop
+      - unit:scripts/ci/test_check_governed_parity.py
+      - fixture:regression:canonical-json-golden
+      - architecture:agent-policy:core
+      - packaging:linux-build
+      - packaging:windows-build
+  - id: core-contracts
+    evidence:
+      - architecture:docs/generated/architecture-catalog.json
+      - security:scripts/ci/check_source_integrity.py
+      - differential:UnitTestsConversionOracle
+  - id: build-policy
+    evidence:
+      - unit:agent-policy:build_policy
+  - id: documentation-and-catalogs
+    evidence:
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+unresolved:
+  - core:scripts/ci/check_independent_validation_gate.py

@@ -151,6 +151,19 @@ public:
     void setPageAuthoritativeOverprint(int pageIndex, bool enabled);
     bool isPageAuthoritativeOverprint(int pageIndex) const { return m_authoritativePages.contains(pageIndex); }
 
+    /// Requests the soft-proof simulation of the output intent for every page
+    /// (issue #237). The proofing profile identity joins the colour-managed
+    /// output identity (see withSoftProofMarker), so a proofed surface gets its
+    /// own cache slot and can neither be served from nor stand in for the fast
+    /// or authoritative render of the same page. Empty disables proofing.
+    ///
+    /// This is a render request, not a display filter: the pixels are produced
+    /// by Core's colour management under proofing settings, and the simulation
+    /// identity travels with the key.
+    void setSoftProofProfile(const QString& proofProfileId);
+    QString softProofProfile() const { return m_softProofProfile; }
+    bool isSoftProofing() const { return !m_softProofProfile.isEmpty(); }
+
     /// Diagnostics for the surface currently admitted for \p pageIndex, if any.
     /// Reflects whichever render path actually produced that surface -- the
     /// standard path's cached-flag approximation, or the authoritative
@@ -302,6 +315,10 @@ private:
     QString m_documentKey;
     std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
     QSet<int> m_authoritativePages;
+
+    /// The proofing profile identity in force, empty when no soft proof is
+    /// requested. It joins every page's colour-managed output identity.
+    QString m_softProofProfile;
 
     std::shared_ptr<JobRelay> m_relay;
 

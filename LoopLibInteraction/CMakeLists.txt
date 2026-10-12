@@ -47,10 +47,13 @@ add_library(LoopLibInteraction STATIC
     sources/commandcatalog.h
     sources/commandcatalogresource.cpp
     sources/commandcatalogresource_p.h
+    sources/directeditrequest.h
+    sources/directeditrequest.cpp
     sources/documentloader.cpp
     sources/documentloader.h
     sources/documentfacade.cpp
     sources/documentfacade.h
+    sources/documentfacadeedits.cpp
     sources/documentfacadestate.cpp
     sources/pagesurfacekey.cpp
     sources/pagesurfacekey.h
@@ -71,6 +74,12 @@ add_library(LoopLibInteraction STATIC
     sources/interactiontarget.h
     sources/interactionstate.cpp
     sources/interactionstate.h
+    sources/textselectionsource.h
+    sources/pdfdocumenttextselectionsource.cpp
+    sources/pdfdocumenttextselectionsource.h
+    sources/pdfdocumentimageextractor.cpp
+    sources/pdfdocumentimageextractor.h
+    sources/pageunitsource.h
     sources/hittestsource.cpp
     sources/hittestsource.h
     sources/pagespatialindex.cpp
@@ -85,6 +94,7 @@ add_library(LoopLibInteraction STATIC
     sources/interactiontracecontract.h
     sources/interactioncontroller.cpp
     sources/interactioncontroller.h
+    sources/shellglossary.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
     sources/preflightprofiledraft.cpp

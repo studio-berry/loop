@@ -121,18 +121,26 @@ LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreflightStateVisual(const QString& s
 LOOPLIBQUICK_EXPORT LoopStateVisual resolveFixLifecycleStateVisual(const QString& stateName);
 
 /// Render fidelity and origin of the interactive preview (#28). The state name is derived
-/// from four facts the host already holds: whether a document is open, whether the preview
-/// is stale for the open revision, whether the current page is showing the authoritative
-/// output-preview render, and whether that page's render is diagnostic-exact.
+/// from facts the host already holds: whether a document is open, whether the preview is
+/// stale for the open revision, whether a display simulation is in force, whether the
+/// current page is showing the authoritative output-preview render, and whether that page's
+/// render is diagnostic-exact.
 ///
 /// `approximate` is the overprint-sensitive page on the fast canvas path: overprint is not
 /// simulated there, so those pixels are never proof of print-safe output. `authoritative`
 /// is the only state that names the output-preview origin. No preview state reaches a pass
 /// treatment: the interactive preview proves a page's render path, never publication safety.
-LOOPLIBQUICK_EXPORT QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact);
+///
+/// `simulation` is the presentation filter or the proofing simulation in force -- issue
+/// #235's display colour modes (`display-filter`) or issue #237's soft proof
+/// (`soft-proof`). It outranks `authoritative`: the pixels on screen have been transformed
+/// for the display, so they are a simulation of the page whatever render produced them, and
+/// no simulation may be read as the authoritative render or as approval evidence.
+LOOPLIBQUICK_EXPORT QString classifyPreviewFidelityState(bool hasDocument, bool stale, bool authoritative, bool exact, const QString& simulation = {});
 
 /// Which render path produced the preview's pixels, for a state name above: `none`,
-/// `fast-canvas` or `output-preview`. Rendering only, no analysis.
+/// `fast-canvas`, `output-preview`, `display-filter` or `soft-proof`. Rendering only, no
+/// analysis.
 LOOPLIBQUICK_EXPORT QString previewFidelityOriginName(const QString& stateName);
 
 /// Canonical treatment for a preview fidelity state name. Each state takes a shape no other
@@ -140,6 +148,17 @@ LOOPLIBQUICK_EXPORT QString previewFidelityOriginName(const QString& stateName);
 /// content) can never be read as proof of print-safe output: no preview state carries a pass
 /// colour or a check.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreviewFidelityStateVisual(const QString& stateName);
+
+/// Verification status of the open document's signatures (issue #125). `stateName` is
+/// `pdfinteraction::getDocumentSignatureStateName()`: `not-signed`, `valid`, `invalid`,
+/// `unknown` or `modified-after-signing`.
+///
+/// `valid` is the one state Core's own verification reported as OK, and it is the only
+/// signature state that reaches Passed. `invalid`, `modified-after-signing` and `unknown`
+/// each take a shape no other signature state uses, and none of them looks like a pass.
+/// This renders Core's verdict, never a derivation: a caller may not reach Passed unless
+/// the verification itself said so.
+LOOPLIBQUICK_EXPORT LoopStateVisual resolveSignatureStateVisual(const QString& stateName);
 
 }   // namespace pdfquick::tokens
 
