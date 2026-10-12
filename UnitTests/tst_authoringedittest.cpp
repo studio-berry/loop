@@ -169,6 +169,73 @@ pdf::PDFDocument buildDocumentWithStructureOutline()
     return *modifier.getDocument();
 }
 
+/// A document whose outline carries one item built by the caller, which the
+/// outline writer may not be able to write back.
+pdf::PDFDocument buildDocumentWithOutlineItem(pdf::PDFObject item)
+{
+    const pdf::PDFDocument document = buildDocument(1);
+    pdf::PDFDocumentModifier modifier(&document);
+    pdf::PDFDocumentBuilder* builder = modifier.getBuilder();
+
+    const pdf::PDFObjectReference itemReference = builder->addObject(item);
+
+    pdf::PDFObjectFactory rootFactory;
+    rootFactory.beginDictionary();
+    rootFactory.beginDictionaryItem("First");
+    rootFactory << itemReference;
+    rootFactory.endDictionaryItem();
+    rootFactory.beginDictionaryItem("Last");
+    rootFactory << itemReference;
+    rootFactory.endDictionaryItem();
+    rootFactory.beginDictionaryItem("Count");
+    rootFactory << 1;
+    rootFactory.endDictionaryItem();
+    rootFactory.endDictionary();
+
+    builder->setOutline(builder->addObject(rootFactory.takeObject()));
+
+    if (!modifier.finalize())
+    {
+        return pdf::PDFDocument();
+    }
+    return *modifier.getDocument();
+}
+
+/// One outline item whose /Dest is a name: a valid destination that addresses
+/// the catalog's name tree rather than a page.
+pdf::PDFObject namedDestinationOutlineItem()
+{
+    pdf::PDFObjectFactory itemFactory;
+    itemFactory.beginDictionary();
+    itemFactory.beginDictionaryItem("Title");
+    itemFactory << QStringLiteral("Named");
+    itemFactory.endDictionaryItem();
+    itemFactory.beginDictionaryItem("Dest");
+    itemFactory << pdf::WrapName(QByteArrayLiteral("chapter-one"));
+    itemFactory.endDictionaryItem();
+    itemFactory.endDictionary();
+    return itemFactory.takeObject();
+}
+
+/// One outline item whose /Dest is an array with an unknown view name, which
+/// parses to an invalid destination.
+pdf::PDFObject unparsedDestinationOutlineItem()
+{
+    pdf::PDFObjectFactory itemFactory;
+    itemFactory.beginDictionary();
+    itemFactory.beginDictionaryItem("Title");
+    itemFactory << QStringLiteral("Broken target");
+    itemFactory.endDictionaryItem();
+    itemFactory.beginDictionaryItem("Dest");
+    itemFactory.beginArray();
+    itemFactory << 0;
+    itemFactory << pdf::WrapName(QByteArrayLiteral("Bogus"));
+    itemFactory.endArray();
+    itemFactory.endDictionaryItem();
+    itemFactory.endDictionary();
+    return itemFactory.takeObject();
+}
+
 }   // namespace
 
 class AuthoringEditTest : public QObject
@@ -188,6 +255,8 @@ private slots:
     void invalidEditsAreRefusedWithTypedReasons_data();
     void invalidEditsAreRefusedWithTypedReasons();
     void structureOutlineRefusesAnOutlineRewrite();
+    void namedDestinationOutlineIsNeverAPageTarget();
+    void unparsedDestinationOutlineRefusesAnOutlineRewrite();
 };
 
 void AuthoringEditTest::bookmarkFileRoundTripsCanonically()
@@ -584,6 +653,67 @@ void AuthoringEditTest::structureOutlineRefusesAnOutlineRewrite()
     QVERIFY(records.has_value());
     QCOMPARE(records->size(), 1);
     QCOMPARE(records->at(0).title, QStringLiteral("Fresh"));
+}
+
+void AuthoringEditTest::namedDestinationOutlineIsNeverAPageTarget()
+{
+    const pdf::PDFDocument document = buildDocumentWithOutlineItem(namedDestinationOutlineItem());
+    QVERIFY(document.getCatalog()->getOutlineRootPtr());
+    QCOMPARE(document.getCatalog()->getOutlineRootPtr()->getChildCount(), size_t(1));
+
+    // A named destination has no page here: the toggle must add a bookmark on
+    // page 0 instead of removing the item it cannot address.
+    pdf::PDFAuthoringEdit edit = bookmarkEdit(pdf::PDFAuthoringEdit::Kind::ToggleBookmark);
+    edit.pageIndex = 0;
+    edit.text = QStringLiteral("First page");
+    const pdf::PDFAuthoringEditResult added = pdf::PDFAuthoringEditWriter::apply(&document, edit);
+    QVERIFY2(added.applied(), qPrintable(added.typedError));
+    QCOMPARE(added.kind, pdf::PDFAuthoringEditResult::Kind::BookmarkAdded);
+
+    // The file carries both items afterwards, and the named one kept its name.
+    const std::optional<pdf::PDFDocument> parsed = writeAndRead(*added.document);
+    QVERIFY(parsed.has_value());
+    const QSharedPointer<pdf::PDFOutlineItem> root = parsed->getCatalog()->getOutlineRootPtr();
+    QVERIFY(root);
+    QCOMPARE(root->getChildCount(), size_t(2));
+    QCOMPARE(root->getChild(0)->getTitle(), QStringLiteral("Named"));
+    QCOMPARE(root->getChild(1)->getTitle(), QStringLiteral("First page"));
+    const auto* namedGoTo = dynamic_cast<const pdf::PDFActionGoTo*>(root->getChild(0)->getAction());
+    QVERIFY(namedGoTo);
+    QVERIFY(namedGoTo->getDestination().isNamedDestination());
+    QCOMPARE(namedGoTo->getDestination().getName(), QByteArrayLiteral("chapter-one"));
+    QCOMPARE(root->getChild(1)->getAction()->getType(), pdf::ActionType::GoTo);
+
+    // Exporting the outline refuses the named item with the typed code rather
+    // than reporting page 0 for it.
+    QString typedError;
+    QVERIFY(!pdf::PDFAuthoringEditWriter::readOutline(&document, typedError).has_value());
+    QCOMPARE(typedError, QStringLiteral("bookmark/unsupported-outline-item"));
+}
+
+void AuthoringEditTest::unparsedDestinationOutlineRefusesAnOutlineRewrite()
+{
+    const pdf::PDFDocument document = buildDocumentWithOutlineItem(unparsedDestinationOutlineItem());
+    QVERIFY(document.getCatalog()->getOutlineRootPtr());
+    QCOMPARE(document.getCatalog()->getOutlineRootPtr()->getChildCount(), size_t(1));
+
+    // The outline writer would write the unparsed destination as PDF null, so
+    // the item is not rewritable and the toggle refuses before writing.
+    pdf::PDFAuthoringEdit edit = bookmarkEdit(pdf::PDFAuthoringEdit::Kind::ToggleBookmark);
+    edit.pageIndex = 0;
+    edit.text = QStringLiteral("First page");
+    const pdf::PDFAuthoringEditResult refused = pdf::PDFAuthoringEditWriter::apply(&document, edit);
+    QVERIFY(!refused.applied());
+    QCOMPARE(refused.typedError, QStringLiteral("bookmark/unsupported-outline-item"));
+    QVERIFY(refused.document.isNull());
+
+    // The input document's outline is unchanged, destination included.
+    const QSharedPointer<pdf::PDFOutlineItem> root = document.getCatalog()->getOutlineRootPtr();
+    QCOMPARE(root->getChildCount(), size_t(1));
+    QCOMPARE(root->getChild(0)->getTitle(), QStringLiteral("Broken target"));
+    const auto* goTo = dynamic_cast<const pdf::PDFActionGoTo*>(root->getChild(0)->getAction());
+    QVERIFY(goTo);
+    QVERIFY(!goTo->getDestination().isValid());
 }
 
 QTEST_MAIN(AuthoringEditTest)

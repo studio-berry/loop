@@ -67,6 +67,8 @@ struct XmpProperty
     XmpValueShape shape = XmpValueShape::Text;
     std::optional<QString> value;
     bool written = false;
+    int elementOccurrences = 0;   ///< Matched as an element inside rdf:Description.
+    int attributeOccurrences = 0;   ///< Matched as an attribute on rdf:Description.
 };
 
 bool isRdfDescription(const QXmlStreamReader& reader)
@@ -94,15 +96,114 @@ bool matchesProperty(const QXmlStreamReader& reader, const XmpProperty& property
     return reader.name() == QString::fromLatin1(localName);
 }
 
-void writeXmpProperty(QXmlStreamWriter& writer, const XmpProperty& property)
+/// The attribute form of `matchesProperty`: a property carried as an attribute
+/// on rdf:Description (the common attribute shorthand) matches by qualified
+/// name first and by namespace URI plus local name second.
+bool matchesPropertyAttribute(const QXmlStreamAttribute& attribute, const XmpProperty& property)
 {
-    // The writer only takes qualified names here: every prefix this module
-    // writes (dc, pdf, xmp, rdf) is already declared by the packet being merged
-    // into, or is declared by the fresh packet's own elements.
+    if (attribute.qualifiedName() == QLatin1String(property.qualifiedName))
+    {
+        return true;
+    }
+
+    const QString uri = attribute.namespaceUri().toString();
+    if (uri.isEmpty() || uri != QLatin1String(property.namespaceUri))
+    {
+        return false;
+    }
+    const QByteArray localName = property.qualifiedName.mid(property.qualifiedName.indexOf(':') + 1);
+    return attribute.name() == QString::fromLatin1(localName);
+}
+
+/// Records how each property occurs in the packet: as an element inside an
+/// rdf:Description and as an attribute on one. The carried value is whether the
+/// packet has at least one rdf:Description; `std::nullopt` means it did not
+/// parse.
+std::optional<bool> recordXmpOccurrences(const QByteArray& existing, std::vector<XmpProperty>& properties)
+{
+    QXmlStreamReader reader(existing);
+    reader.setNamespaceProcessing(true);
+
+    int depth = 0;
+    int descriptionDepth = -1;
+    bool descriptionSeen = false;
+
+    while (!reader.atEnd())
+    {
+        reader.readNext();
+        if (reader.hasError())
+        {
+            return std::nullopt;
+        }
+
+        switch (reader.tokenType())
+        {
+            case QXmlStreamReader::StartElement:
+            {
+                ++depth;
+                if (isRdfDescription(reader))
+                {
+                    descriptionSeen = true;
+                    descriptionDepth = depth;
+                    for (const QXmlStreamAttribute& attribute : reader.attributes())
+                    {
+                        for (XmpProperty& property : properties)
+                        {
+                            if (matchesPropertyAttribute(attribute, property))
+                            {
+                                ++property.attributeOccurrences;
+                            }
+                        }
+                    }
+                }
+                else if (descriptionDepth >= 0)
+                {
+                    for (XmpProperty& property : properties)
+                    {
+                        if (matchesProperty(reader, property))
+                        {
+                            ++property.elementOccurrences;
+                        }
+                    }
+                }
+                break;
+            }
+
+            case QXmlStreamReader::EndElement:
+                --depth;
+                if (depth < descriptionDepth)
+                {
+                    descriptionDepth = -1;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    if (reader.hasError())
+    {
+        return std::nullopt;
+    }
+    return descriptionSeen;
+}
+
+void writeXmpProperty(QXmlStreamWriter& writer, const XmpProperty& property, bool declareNamespace = false)
+{
+    // The qualified-name write path bypasses the writer's namespace handling:
+    // neither the packet being merged into nor the fresh packet necessarily
+    // declares the prefix at the insertion point, so a merged property declares
+    // the namespace on the element itself.
     const QByteArray qualifiedName = property.qualifiedName;
     const QString value = property.value.value_or(QString());
 
     writer.writeStartElement(QString::fromLatin1(qualifiedName));
+    if (declareNamespace)
+    {
+        const QByteArray prefix = qualifiedName.left(qualifiedName.indexOf(':'));
+        writer.writeNamespace(QString::fromLatin1(property.namespaceUri), QString::fromLatin1(prefix));
+    }
     switch (property.shape)
     {
         case XmpValueShape::LocalizedAlt:
@@ -180,12 +281,102 @@ QByteArray freshXmpPacket(const DocumentMetadataEdit& edit)
     return output;
 }
 
+/// Writes an rdf:Description start element token by token when it carries an
+/// attribute this edit merges into: the substituted value for a matching
+/// property, the original attribute otherwise. Returns false when the element
+/// carries no such attribute, in which case the caller copies the token
+/// instead.
+bool writeStartElementWithMergedAttributes(QXmlStreamWriter& writer,
+                                           const QXmlStreamReader& reader,
+                                           std::vector<XmpProperty>& properties)
+{
+    bool mergesAttribute = false;
+    for (const XmpProperty& property : properties)
+    {
+        if (property.value && !property.written && property.attributeOccurrences == 1)
+        {
+            for (const QXmlStreamAttribute& attribute : reader.attributes())
+            {
+                mergesAttribute = mergesAttribute || matchesPropertyAttribute(attribute, property);
+            }
+        }
+    }
+    if (!mergesAttribute)
+    {
+        return false;
+    }
+
+    writer.writeStartElement(reader.qualifiedName().toString());
+    for (const QXmlStreamNamespaceDeclaration& declaration : reader.namespaceDeclarations())
+    {
+        if (declaration.prefix().isEmpty())
+        {
+            // writeNamespace() would invent a prefix for a default declaration.
+            writer.writeDefaultNamespace(declaration.namespaceUri().toString());
+        }
+        else
+        {
+            writer.writeNamespace(declaration.namespaceUri().toString(), declaration.prefix().toString());
+        }
+    }
+
+    for (const QXmlStreamAttribute& attribute : reader.attributes())
+    {
+        XmpProperty* merged = nullptr;
+        for (XmpProperty& property : properties)
+        {
+            if (property.value && !property.written && property.attributeOccurrences == 1 &&
+                matchesPropertyAttribute(attribute, property))
+            {
+                merged = &property;
+                break;
+            }
+        }
+
+        if (merged)
+        {
+            merged->written = true;
+            writer.writeAttribute(attribute.qualifiedName(), *merged->value);
+        }
+        else
+        {
+            writer.writeAttribute(attribute.qualifiedName(), attribute.value());
+        }
+    }
+    return true;
+}
+
 /// Merges the edit's properties into an existing packet, copying every token it
-/// does not own. `std::nullopt` means the packet did not parse, so the caller
-/// can refuse rather than overwrite a packet it could not read.
+/// does not own. `std::nullopt` means the packet did not parse, or carries a
+/// property this edit writes more than once and so cannot be merged
+/// unambiguously, and the caller refuses rather than overwriting a packet it
+/// could not read.
 std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const DocumentMetadataEdit& edit)
 {
     std::vector<XmpProperty> properties = propertiesFor(edit);
+
+    // A property carried in a later sibling rdf:Description, or as an
+    // attribute on one, is still the property; it has to be replaced where it
+    // is, because appending a second copy beside it would leave the packet
+    // carrying an old and a new value.
+    const std::optional<bool> descriptionSeen = recordXmpOccurrences(existing, properties);
+    if (!descriptionSeen)
+    {
+        return std::nullopt;
+    }
+    for (const XmpProperty& property : properties)
+    {
+        if (property.value && property.elementOccurrences + property.attributeOccurrences > 1)
+        {
+            return std::nullopt;
+        }
+    }
+    if (!*descriptionSeen)
+    {
+        // A packet with no rdf:Description carries no XMP properties to
+        // preserve, so a standard one is written instead.
+        return freshXmpPacket(edit);
+    }
 
     QXmlStreamReader reader(existing);
     reader.setNamespaceProcessing(true);
@@ -194,7 +385,6 @@ std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const Docum
 
     int depth = 0;
     int descriptionDepth = -1;
-    bool descriptionSeen = false;
     bool insertedMissing = false;
 
     while (!reader.atEnd())
@@ -217,8 +407,11 @@ std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const Docum
                 ++depth;
                 if (isRdfDescription(reader))
                 {
-                    descriptionSeen = true;
                     descriptionDepth = depth;
+                    if (writeStartElementWithMergedAttributes(writer, reader, properties))
+                    {
+                        break;
+                    }
                 }
                 else if (descriptionDepth >= 0)
                 {
@@ -228,7 +421,10 @@ std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const Docum
                         if (property.value && !property.written && matchesProperty(reader, property))
                         {
                             property.written = true;
-                            writeXmpProperty(writer, property);
+                            // The replaced element may be the only place its
+                            // prefix was declared (a child-declared binding), so
+                            // the replacement declares the namespace as well.
+                            writeXmpProperty(writer, property, true);
                             replaced = true;
                             break;
                         }
@@ -254,10 +450,11 @@ std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const Docum
                     insertedMissing = true;
                     for (XmpProperty& property : properties)
                     {
-                        if (property.value && !property.written)
+                        if (property.value && !property.written && property.elementOccurrences == 0 &&
+                            property.attributeOccurrences == 0)
                         {
                             property.written = true;
-                            writeXmpProperty(writer, property);
+                            writeXmpProperty(writer, property, true);
                         }
                     }
                 }
@@ -279,12 +476,6 @@ std::optional<QByteArray> mergeXmpPacket(const QByteArray& existing, const Docum
     if (reader.hasError())
     {
         return std::nullopt;
-    }
-    if (!descriptionSeen)
-    {
-        // A packet with no rdf:Description carries no XMP properties to
-        // preserve, so a standard one is written instead.
-        return freshXmpPacket(edit);
     }
     return output;
 }
@@ -423,6 +614,8 @@ const char* getDirectEditRefusalCode(DirectEditRefusal refusal)
             return "metadata/unchanged";
         case DirectEditRefusal::WriteRefused:
             return "attachment/output-write-refused";
+        case DirectEditRefusal::AttachmentSpecificationNotAddressable:
+            return "attachment/specification-not-addressable";
     }
 
     return "direct-edit/invalid-request";
@@ -465,12 +658,29 @@ DirectEditOutcome PDFFormValueWriter::setFieldValue(const PDFDocument* document,
     }
 
     PDFFormField* field = nullptr;
-    formManager.modify([&field, &edit](PDFFormField* candidate)
+    PDFFormField* firstMatch = nullptr;
+    formManager.modify([&field, &firstMatch, &edit](PDFFormField* candidate)
                        {
-                           if (!field && candidate->getName(PDFFormField::NameType::FullyQualified) == edit.field)
+                           if (candidate->getName(PDFFormField::NameType::FullyQualified) != edit.field)
+                           {
+                               return;
+                           }
+
+                           // Same-named fields are one field per PDF semantics.
+                           // A widget-less parent may match before the editable
+                           // terminal field, so the match carrying widgets wins.
+                           if (!firstMatch)
+                           {
+                               firstMatch = candidate;
+                           }
+                           if (!field && !candidate->getWidgets().empty())
                            {
                                field = candidate;
                            } });
+    if (!field)
+    {
+        field = firstMatch;
+    }
     if (!field)
     {
         outcome.refusal = DirectEditRefusal::FieldNotFound;
@@ -564,6 +774,25 @@ DirectEditOutcome PDFFormValueWriter::setFieldValue(const PDFDocument* document,
         outcome.refusal = DirectEditRefusal::FieldNotEditable;
         return outcome;
     }
+
+    // PDF semantics treat same-named terminal fields as one field, so the value
+    // is carried to every other field with the same fully qualified name, as
+    // the interactive edit path does. The name cannot be empty here: the entry
+    // guard refused an empty request, and the match above compared against it.
+    const QString qualifiedName = field->getName(PDFFormField::NameType::FullyQualified);
+    parameters.scope = PDFFormField::SetValueParameters::Scope::Internal;
+    formManager.modify([&parameters, &qualifiedName](PDFFormField* candidate)
+                       {
+                           if (parameters.invokingFormField == candidate)
+                           {
+                               return;
+                           }
+
+                           if (candidate->getName(PDFFormField::NameType::FullyQualified) == qualifiedName)
+                           {
+                               candidate->setValue(parameters);
+                           } });
+
     if (!modifier.finalize())
     {
         outcome.refusal = DirectEditRefusal::ValueUnchanged;
@@ -651,10 +880,14 @@ DirectEditOutcome PDFAttachmentWriter::add(const PDFDocument* document, const At
     std::map<QByteArray, PDFObjectReference> entries;
     for (const auto& item : document->getCatalog()->getEmbeddedFiles())
     {
-        if (item.second.getSelfReference().isValid())
+        if (!item.second.getSelfReference().isValid())
         {
-            entries[item.first] = item.second.getSelfReference();
+            // A specification stored inline in the names array has no reference
+            // to relist; rebuilding around it would silently unlist it.
+            outcome.refusal = DirectEditRefusal::AttachmentSpecificationNotAddressable;
+            return outcome;
         }
+        entries[item.first] = item.second.getSelfReference();
     }
     entries[edit.name.toUtf8()] = specification;
     writeEmbeddedFileNamesTree(builder, entries);
@@ -694,10 +927,18 @@ DirectEditOutcome PDFAttachmentWriter::remove(const PDFDocument* document, const
     std::map<QByteArray, PDFObjectReference> entries;
     for (const auto& item : document->getCatalog()->getEmbeddedFiles())
     {
-        if (item.first != *key && item.second.getSelfReference().isValid())
+        if (item.first == *key)
         {
-            entries[item.first] = item.second.getSelfReference();
+            continue;
         }
+        if (!item.second.getSelfReference().isValid())
+        {
+            // Any other inline specification would have to be relisted, and it
+            // has no reference to relist; the removal would silently drop it.
+            outcome.refusal = DirectEditRefusal::AttachmentSpecificationNotAddressable;
+            return outcome;
+        }
+        entries[item.first] = item.second.getSelfReference();
     }
     writeEmbeddedFileNamesTree(modifier.getBuilder(), entries);
 

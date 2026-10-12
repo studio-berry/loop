@@ -73,9 +73,16 @@ PDFObjectReference pageReference(const PDFCatalog* catalog, int pageIndex)
 }
 
 /// Resolves a destination's page. A destination may name the page by reference
-/// or by index; a reference that resolves to no page is not a page target.
+/// or by index; a named or unparsed destination has no page target here
+/// (callers refuse it with their own typed code), and a reference that
+/// resolves to no page is not a page target.
 bool resolveDestinationPage(const PDFCatalog* catalog, const PDFDestination& destination, int* pageIndex)
 {
+    if (!destination.isValid() || destination.isNamedDestination())
+    {
+        return false;
+    }
+
     if (destination.getPageReference().isValid())
     {
         const size_t resolved = catalog->getPageIndexFromPageReference(destination.getPageReference());
@@ -157,8 +164,9 @@ bool removePageBookmarks(const PDFCatalog* catalog, PDFOutlineItem* item, int pa
 }
 
 /// True when the builder's outline writer can write this item back unchanged.
-/// It writes Title, a GoTo Dest, a GoToDp action, colour and flags; a
-/// structure element or any other action would be silently dropped.
+/// It writes Title, a GoTo Dest, a GoToDp action, colour and flags; a structure
+/// element, a GoTo whose destination did not parse (the writer would write PDF
+/// null there) or any other action would be silently dropped.
 bool isRewritableItem(const PDFOutlineItem* item)
 {
     if (item->getStructureElement().isValid())
@@ -173,8 +181,15 @@ bool isRewritableItem(const PDFOutlineItem* item)
         return true;
     }
 
-    return dynamic_cast<const PDFActionGoTo*>(action) != nullptr ||
-           dynamic_cast<const PDFActionGoToDp*>(action) != nullptr;
+    const auto* goTo = dynamic_cast<const PDFActionGoTo*>(action);
+    if (goTo)
+    {
+        // A named destination is valid and round-trips (the object factory
+        // writes the name); only a destination that failed to parse is lossy.
+        return goTo->getDestination().isValid();
+    }
+
+    return dynamic_cast<const PDFActionGoToDp*>(action) != nullptr;
 }
 
 bool canRewriteOutline(const PDFOutlineItem* item)

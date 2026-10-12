@@ -30,7 +30,9 @@
 
 #include <QBuffer>
 #include <QDir>
+#include <QList>
 #include <QTemporaryDir>
+#include <QXmlStreamReader>
 
 #include "pdfcatalog.h"
 #include "pdfdirectedit.h"
@@ -254,6 +256,208 @@ QString formValue(const pdf::PDFDocument& document, const QString& name, bool* i
     return value;
 }
 
+/// Every value carried by a field with the given fully qualified name, in the
+/// order the form manager walks the fields.
+QList<QString> fieldValues(const pdf::PDFDocument& document, const QString& name)
+{
+    pdf::PDFFormManager manager(nullptr);
+    manager.setDocument(pdf::PDFModifiedDocument(const_cast<pdf::PDFDocument*>(&document), nullptr, pdf::PDFModifiedDocument::Reset));
+    QList<QString> values;
+    manager.apply([&values, &name](const pdf::PDFFormField* field)
+                  {
+                      if (field->getName(pdf::PDFFormField::NameType::FullyQualified) != name)
+                      {
+                          return;
+                      }
+
+                      const pdf::PDFObject& object = field->getValue();
+                      if (object.isName())
+                      {
+                          values.append(QString::fromLatin1(object.getString()));
+                      }
+                      else if (object.isString())
+                      {
+                          values.append(pdf::PDFEncoding::convertTextString(object.getString()));
+                      }
+                      else
+                      {
+                          values.append(QString());
+                      } });
+    return values;
+}
+
+/// Parses \p packet with a namespace-aware reader and counts the elements whose
+/// raw qualified name is \p qualifiedName. \p wellFormed reports whether every
+/// prefix resolved; a false \p wellFormed means the count is meaningless.
+int countXmlElements(const QByteArray& packet, const QString& qualifiedName, bool* wellFormed)
+{
+    QXmlStreamReader reader(packet);
+    reader.setNamespaceProcessing(true);
+    int count = 0;
+    while (!reader.atEnd())
+    {
+        reader.readNext();
+        if (reader.tokenType() == QXmlStreamReader::StartElement && reader.qualifiedName() == qualifiedName)
+        {
+            ++count;
+        }
+    }
+    *wellFormed = !reader.hasError();
+    return count;
+}
+
+/// Counts the character tokens equal to \p value: how many places in the packet
+/// carry it, without substring false positives.
+int countXmlText(const QByteArray& packet, const QString& value)
+{
+    QXmlStreamReader reader(packet);
+    reader.setNamespaceProcessing(true);
+    int count = 0;
+    while (!reader.atEnd())
+    {
+        reader.readNext();
+        if (reader.tokenType() == QXmlStreamReader::Characters && reader.text() == value)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+/// A form with two terminal text fields sharing one fully qualified name, each
+/// with its own widget: PDF semantics treat them as one field.
+pdf::PDFDocument buildDocumentWithSameNamedTextFields()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const auto addSharedTextField = [&builder, page](const QRectF& rect)
+    {
+        return addMergedField(builder, page, "Tx", QStringLiteral("SharedName"), rect,
+                              [&builder, rect](pdf::PDFDictionary& field)
+                              {
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("V"),
+                                                 pdf::PDFObjectFactory::createTextString(QStringLiteral("original")));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("DA"),
+                                                 pdf::PDFObject::createString(QByteArrayLiteral("/Helv 0 Tf 0 g")));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                                                 pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(
+                                                     [&builder, rect]()
+                                                     {
+                                                         pdf::PDFDictionary appearance;
+                                                         appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"),
+                                                                             pdf::PDFObject::createReference(addFormXObject(builder, rect)));
+                                                         return appearance;
+                                                     }())));
+                              });
+    };
+
+    std::vector<pdf::PDFObjectReference> fields;
+    fields.push_back(addSharedTextField(QRectF(10, 10, 90, 30)));
+    fields.push_back(addSharedTextField(QRectF(10, 50, 90, 70)));
+    builder.createAcroForm(fields);
+    return builder.build();
+}
+
+/// A form whose first button field has no widget and shares its fully qualified
+/// name with a checkbox that carries a widget and an on-state appearance.
+pdf::PDFDocument buildDocumentWithWidgetlessFirstMatch()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    pdf::PDFDictionary widgetless;
+    widgetless.addEntry(pdf::PDFInplaceOrMemoryString("FT"), pdf::PDFObject::createName("Btn"));
+    widgetless.addEntry(pdf::PDFInplaceOrMemoryString("T"), pdf::PDFObjectFactory::createTextString(QStringLiteral("SharedBox")));
+    widgetless.addEntry(pdf::PDFInplaceOrMemoryString("V"), pdf::PDFObject::createName("Off"));
+
+    std::vector<pdf::PDFObjectReference> fields;
+    fields.push_back(builder.addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(widgetless)))));
+    fields.push_back(addMergedField(builder, page, "Btn", QStringLiteral("SharedBox"), QRectF(10, 50, 30, 30),
+                                    [&builder](pdf::PDFDictionary& field)
+                                    {
+                                        pdf::PDFDictionary normal;
+                                        normal.addEntry(pdf::PDFInplaceOrMemoryString("Yes"),
+                                                        pdf::PDFObject::createReference(addFormXObject(builder, QRectF(10, 50, 30, 30))));
+                                        normal.addEntry(pdf::PDFInplaceOrMemoryString("Off"),
+                                                        pdf::PDFObject::createReference(addFormXObject(builder, QRectF(10, 50, 30, 30))));
+                                        pdf::PDFDictionary appearance;
+                                        appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"),
+                                                            pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(normal))));
+                                        field.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                                                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(appearance))));
+                                        field.addEntry(pdf::PDFInplaceOrMemoryString("AS"), pdf::PDFObject::createName("Off"));
+                                        field.addEntry(pdf::PDFInplaceOrMemoryString("V"), pdf::PDFObject::createName("Off"));
+                                    }));
+
+    builder.createAcroForm(fields);
+    return builder.build();
+}
+
+/// A document whose EmbeddedFiles name tree carries one attachment with an
+/// indirect specification and one whose specification is a direct dictionary
+/// value in the names array, which has no reference to relist.
+pdf::PDFDocument buildDocumentWithInlineAttachment()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const auto addEmbeddedFileStream = [&builder](const QByteArray& contents)
+    {
+        pdf::PDFDictionary stream;
+        stream.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("EmbeddedFile"));
+        stream.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(contents.size()));
+        return builder.addObject(pdf::PDFObject::createStream(
+            std::make_shared<pdf::PDFStream>(std::move(stream), QByteArray(contents))));
+    };
+
+    const auto makeFileSpecification = [](const QString& name, pdf::PDFObjectReference file)
+    {
+        pdf::PDFDictionary embeddedFiles;
+        embeddedFiles.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(file));
+        embeddedFiles.addEntry(pdf::PDFInplaceOrMemoryString("UF"), pdf::PDFObject::createReference(file));
+
+        pdf::PDFDictionary specification;
+        specification.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Filespec"));
+        specification.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createString(name.toUtf8()));
+        specification.addEntry(pdf::PDFInplaceOrMemoryString("UF"), pdf::PDFObjectFactory::createTextString(name));
+        specification.addEntry(pdf::PDFInplaceOrMemoryString("EF"),
+                               pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(embeddedFiles))));
+        return pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(specification)));
+    };
+
+    const pdf::PDFObjectReference normalFile = addEmbeddedFileStream(QByteArrayLiteral("normal"));
+    const pdf::PDFObjectReference normalSpecification =
+        builder.addObject(makeFileSpecification(QStringLiteral("normal.txt"), normalFile));
+    const pdf::PDFObjectReference inlineFile = addEmbeddedFileStream(QByteArrayLiteral("inline"));
+
+    pdf::PDFObjectFactory treeFactory;
+    treeFactory.beginDictionary();
+    treeFactory.beginDictionaryItem("Names");
+    treeFactory.beginArray();
+    treeFactory << pdf::PDFObject::createString(QByteArrayLiteral("normal.txt"));
+    treeFactory << normalSpecification;
+    treeFactory << pdf::PDFObject::createString(QByteArrayLiteral("inline.txt"));
+    treeFactory << makeFileSpecification(QStringLiteral("inline.txt"), inlineFile);
+    treeFactory.endArray();
+    treeFactory.endDictionaryItem();
+    treeFactory.endDictionary();
+
+    pdf::PDFObjectFactory catalogFactory;
+    catalogFactory.beginDictionary();
+    catalogFactory.beginDictionaryItem("Names");
+    catalogFactory.beginDictionary();
+    catalogFactory.beginDictionaryItem("EmbeddedFiles");
+    catalogFactory << builder.addObject(treeFactory.takeObject());
+    catalogFactory.endDictionaryItem();
+    catalogFactory.endDictionary();
+    catalogFactory.endDictionaryItem();
+    catalogFactory.endDictionary();
+    builder.mergeTo(builder.getCatalogReference(), catalogFactory.takeObject());
+
+    return builder.build();
+}
+
 }   // namespace
 
 class DirectEditTest : public QObject
@@ -270,7 +474,14 @@ private slots:
     void extractionUsesTheAtomicWriterAndRefusesExecutableAutoOpen();
     void metadataRoundTripsInfoAndXmp();
     void metadataMergesIntoAnExistingPacketAndKeepsForeignProperties();
+    void metadataReplacesAPropertyCarriedInASecondDescription();
+    void metadataDeclaresAppendedPropertyNamespaces();
+    void metadataSubstitutesAttributeFormProperties();
+    void metadataRefusesAmbiguousPropertyOccurrences();
     void unreadableXmpPacketIsRefusedInsteadOfReplaced();
+    void attachmentInlineSpecificationsAreRefusedNotDropped();
+    void sameNamedFormFieldsAreUpdatedTogether();
+    void widgetlessFormFieldMatchFallsBackToTheWritableTwin();
     void revisionIdentityRoundTripsThroughItsStringForm();
 };
 
@@ -385,6 +596,44 @@ void DirectEditTest::unknownFieldAndForeignChoiceValueAreRefused()
     }
 }
 
+void DirectEditTest::sameNamedFormFieldsAreUpdatedTogether()
+{
+    const pdf::PDFDocument source = buildDocumentWithSameNamedTextFields();
+    QCOMPARE(fieldValues(source, QStringLiteral("SharedName")).size(), 2);
+
+    pdf::FormFieldValueEdit edit;
+    edit.field = QStringLiteral("SharedName");
+    edit.text = QStringLiteral("Filled together");
+    const pdf::DirectEditOutcome outcome = pdf::PDFFormValueWriter::setFieldValue(&source, edit);
+    QVERIFY2(outcome.ok(), pdf::getDirectEditRefusalCode(outcome.refusal));
+
+    // Same-named terminal fields are one field per PDF semantics: both field
+    // objects carry the new value, not just the one that was addressed.
+    const QList<QString> values = fieldValues(*outcome.document, QStringLiteral("SharedName"));
+    QCOMPARE(values.size(), 2);
+    QCOMPARE(values.at(0), QStringLiteral("Filled together"));
+    QCOMPARE(values.at(1), QStringLiteral("Filled together"));
+}
+
+void DirectEditTest::widgetlessFormFieldMatchFallsBackToTheWritableTwin()
+{
+    const pdf::PDFDocument source = buildDocumentWithWidgetlessFirstMatch();
+    QCOMPARE(fieldValues(source, QStringLiteral("SharedBox")).size(), 2);
+
+    // The first field object with that name has no widget; the editable match
+    // is its widget-bearing twin, and the value reaches both.
+    pdf::FormFieldValueEdit edit;
+    edit.field = QStringLiteral("SharedBox");
+    edit.checked = true;
+    const pdf::DirectEditOutcome outcome = pdf::PDFFormValueWriter::setFieldValue(&source, edit);
+    QVERIFY2(outcome.ok(), pdf::getDirectEditRefusalCode(outcome.refusal));
+
+    const QList<QString> values = fieldValues(*outcome.document, QStringLiteral("SharedBox"));
+    QCOMPARE(values.size(), 2);
+    QCOMPARE(values.at(0), QStringLiteral("Yes"));
+    QCOMPARE(values.at(1), QStringLiteral("Yes"));
+}
+
 void DirectEditTest::attachmentRoundTripsThroughTheNameTree()
 {
     const pdf::PDFDocument source = buildFormDocument(false);
@@ -463,6 +712,53 @@ void DirectEditTest::attachmentRemovalUnlistsOnlyTheNamedFile()
     const pdf::DirectEditOutcome emptied = pdf::PDFAttachmentWriter::remove(removed.document.data(), QStringLiteral("keep.txt"));
     QVERIFY(emptied.ok());
     QVERIFY(emptied.document->getCatalog()->getEmbeddedFiles().empty());
+}
+
+void DirectEditTest::attachmentInlineSpecificationsAreRefusedNotDropped()
+{
+    const pdf::PDFDocument source = buildDocumentWithInlineAttachment();
+
+    // The fixture parses: an indirect specification and one inline in the names
+    // array, which carries no reference to relist.
+    const auto& files = source.getCatalog()->getEmbeddedFiles();
+    QCOMPARE(files.size(), size_t(2));
+    const auto inlineItem = files.find(QByteArrayLiteral("inline.txt"));
+    QVERIFY(inlineItem != files.cend());
+    QVERIFY(!inlineItem->second.getSelfReference().isValid());
+    QCOMPARE(inlineItem->second.getPlatformFileName(), QStringLiteral("inline.txt"));
+
+    // Adding another attachment would rebuild the tree carrying only the
+    // addressable entries, so it refuses instead of unlisting the inline one.
+    pdf::AttachmentEdit edit;
+    edit.name = QStringLiteral("extra.txt");
+    edit.contents = QByteArrayLiteral("extra");
+    const pdf::DirectEditOutcome refused = pdf::PDFAttachmentWriter::add(&source, edit);
+    QVERIFY(!refused.ok());
+    QCOMPARE(refused.refusal, pdf::DirectEditRefusal::AttachmentSpecificationNotAddressable);
+    QCOMPARE(QString::fromLatin1(pdf::getDirectEditRefusalCode(refused.refusal)),
+             QStringLiteral("attachment/specification-not-addressable"));
+    QVERIFY(!refused.document);
+
+    // Removing any other attachment would have to relist the inline one, so it
+    // refuses the same way...
+    const pdf::DirectEditOutcome refusedRemoval = pdf::PDFAttachmentWriter::remove(&source, QStringLiteral("normal.txt"));
+    QVERIFY(!refusedRemoval.ok());
+    QCOMPARE(refusedRemoval.refusal, pdf::DirectEditRefusal::AttachmentSpecificationNotAddressable);
+    QVERIFY(!refusedRemoval.document);
+
+    // ...while removing the inline attachment itself drops it from the tree
+    // without relisting it, so it proceeds and only unlists that one.
+    const pdf::DirectEditOutcome removedInline = pdf::PDFAttachmentWriter::remove(&source, QStringLiteral("inline.txt"));
+    QVERIFY2(removedInline.ok(), pdf::getDirectEditRefusalCode(removedInline.refusal));
+    const auto& remaining = removedInline.document->getCatalog()->getEmbeddedFiles();
+    QCOMPARE(remaining.size(), size_t(1));
+    QVERIFY(remaining.find(QByteArrayLiteral("inline.txt")) == remaining.cend());
+    QVERIFY(remaining.find(QByteArrayLiteral("normal.txt")) != remaining.cend());
+
+    // The refused edits wrote nothing: the source document still carries both.
+    QCOMPARE(source.getCatalog()->getEmbeddedFiles().size(), size_t(2));
+    QVERIFY(source.getCatalog()->getEmbeddedFiles().find(QByteArrayLiteral("inline.txt")) !=
+            source.getCatalog()->getEmbeddedFiles().cend());
 }
 
 void DirectEditTest::extractionUsesTheAtomicWriterAndRefusesExecutableAutoOpen()
@@ -595,15 +891,151 @@ void DirectEditTest::metadataMergesIntoAnExistingPacketAndKeepsForeignProperties
     const QByteArray packet = pdf::PDFMetadataWriter::readXmpPacket(outcome.document.data());
     // The property this edit owns is replaced, exactly once, and the packet is
     // still a packet rather than an XML document with a declaration bolted on.
-    QVERIFY(packet.contains("<dc:title>"));
+    // The packet declared dc only on the replaced element, so the replacement
+    // has to carry the binding itself for the result to parse.
+    bool wellFormed = false;
+    QCOMPARE(countXmlElements(packet, QStringLiteral("dc:title"), &wellFormed), 1);
+    QVERIFY(wellFormed);
     QVERIFY(packet.contains("New title"));
     QVERIFY(!packet.contains("Old title"));
     QVERIFY(!packet.startsWith("<?xml"));
-    QCOMPARE(packet.count("<dc:title>"), 1);
     // Everything else the packet carried survives, including the PDF/A claim.
     QVERIFY(packet.contains("pdfaid:part"));
     QVERIFY(packet.contains("pdfaid:conformance"));
     QVERIFY(packet.contains("xpacket"));
+}
+
+void DirectEditTest::metadataReplacesAPropertyCarriedInASecondDescription()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    // The subject lives in the second rdf:Description: the merge must replace
+    // it where it is instead of appending a second copy beside the first one.
+    builder.setCatalogMetadata(QByteArrayLiteral(
+        "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+        " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+        "   <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Old title</rdf:li></rdf:Alt></dc:title>\n"
+        "  </rdf:Description>\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+        "   <dc:description><rdf:Alt><rdf:li xml:lang=\"x-default\">Old subject</rdf:li></rdf:Alt></dc:description>\n"
+        "  </rdf:Description>\n"
+        " </rdf:RDF>\n"
+        "</x:xmpmeta>\n"
+        "<?xpacket end=\"w\"?>"));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::DocumentMetadataEdit edit;
+    edit.subject = QStringLiteral("New subject");
+    const pdf::DirectEditOutcome outcome = pdf::PDFMetadataWriter::update(&source, edit);
+    QVERIFY2(outcome.ok(), pdf::getDirectEditRefusalCode(outcome.refusal));
+
+    const QByteArray packet = pdf::PDFMetadataWriter::readXmpPacket(outcome.document.data());
+    bool wellFormed = false;
+    QCOMPARE(countXmlElements(packet, QStringLiteral("dc:description"), &wellFormed), 1);
+    QVERIFY(wellFormed);
+    QCOMPARE(countXmlText(packet, QStringLiteral("New subject")), 1);
+    QVERIFY(!packet.contains("Old subject"));
+    // The first Description is untouched.
+    QCOMPARE(countXmlText(packet, QStringLiteral("Old title")), 1);
+}
+
+void DirectEditTest::metadataDeclaresAppendedPropertyNamespaces()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    // The packet declares pdfaid on the Description and dc on a child element,
+    // so the appended pdf:Keywords has to declare pdf itself or the merged
+    // packet is not namespace-well-formed.
+    builder.setCatalogMetadata(QByteArrayLiteral(
+        "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+        " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"2\" pdfaid:conformance=\"B\">\n"
+        "   <dc:title xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><rdf:Alt><rdf:li xml:lang=\"x-default\">Old title</rdf:li></rdf:Alt></dc:title>\n"
+        "  </rdf:Description>\n"
+        " </rdf:RDF>\n"
+        "</x:xmpmeta>\n"
+        "<?xpacket end=\"w\"?>"));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::DocumentMetadataEdit edit;
+    edit.keywords = QStringLiteral("Loop keywords");
+    const pdf::DirectEditOutcome outcome = pdf::PDFMetadataWriter::update(&source, edit);
+    QVERIFY2(outcome.ok(), pdf::getDirectEditRefusalCode(outcome.refusal));
+
+    const QByteArray packet = pdf::PDFMetadataWriter::readXmpPacket(outcome.document.data());
+    bool wellFormed = false;
+    QCOMPARE(countXmlElements(packet, QStringLiteral("pdf:Keywords"), &wellFormed), 1);
+    QVERIFY(wellFormed);
+    QCOMPARE(countXmlText(packet, QStringLiteral("Loop keywords")), 1);
+    QCOMPARE(countXmlText(packet, QStringLiteral("Old title")), 1);
+    QVERIFY(packet.contains("pdfaid:conformance"));
+}
+
+void DirectEditTest::metadataSubstitutesAttributeFormProperties()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    // The attribute shorthand on rdf:Description carries the keyword value.
+    builder.setCatalogMetadata(QByteArrayLiteral(
+        "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+        " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\" pdf:Keywords=\"old keywords\">\n"
+        "  </rdf:Description>\n"
+        " </rdf:RDF>\n"
+        "</x:xmpmeta>\n"
+        "<?xpacket end=\"w\"?>"));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::DocumentMetadataEdit edit;
+    edit.keywords = QStringLiteral("New keywords");
+    const pdf::DirectEditOutcome outcome = pdf::PDFMetadataWriter::update(&source, edit);
+    QVERIFY2(outcome.ok(), pdf::getDirectEditRefusalCode(outcome.refusal));
+
+    const QByteArray packet = pdf::PDFMetadataWriter::readXmpPacket(outcome.document.data());
+    bool wellFormed = false;
+    // The attribute carries the new value and no element form is added beside
+    // it, so the packet still carries the property exactly once.
+    QCOMPARE(packet.count("pdf:Keywords=\"New keywords\""), 1);
+    QCOMPARE(countXmlElements(packet, QStringLiteral("pdf:Keywords"), &wellFormed), 0);
+    QVERIFY(wellFormed);
+    QVERIFY(!packet.contains("old keywords"));
+}
+
+void DirectEditTest::metadataRefusesAmbiguousPropertyOccurrences()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    // Two Descriptions carry xmp:CreatorTool: replacing one of them would leave
+    // the packet with an old and a new value, so the merge refuses.
+    const QByteArray original = QByteArrayLiteral(
+        "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+        " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n"
+        "   <xmp:CreatorTool>Old tool</xmp:CreatorTool>\n"
+        "  </rdf:Description>\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n"
+        "   <xmp:CreatorTool>Old tool</xmp:CreatorTool>\n"
+        "  </rdf:Description>\n"
+        " </rdf:RDF>\n"
+        "</x:xmpmeta>\n"
+        "<?xpacket end=\"w\"?>");
+    builder.setCatalogMetadata(original);
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::DocumentMetadataEdit edit;
+    edit.creator = QStringLiteral("New tool");
+    const pdf::DirectEditOutcome outcome = pdf::PDFMetadataWriter::update(&source, edit);
+    QVERIFY(!outcome.ok());
+    QCOMPARE(outcome.refusal, pdf::DirectEditRefusal::XmpUnreadable);
+    QCOMPARE(QString::fromLatin1(pdf::getDirectEditRefusalCode(outcome.refusal)), QStringLiteral("metadata/xmp-unreadable"));
+    QVERIFY(!outcome.document);
+    // The packet is untouched.
+    QCOMPARE(pdf::PDFMetadataWriter::readXmpPacket(&source), original);
 }
 
 void DirectEditTest::unreadableXmpPacketIsRefusedInsteadOfReplaced()
@@ -638,10 +1070,28 @@ void DirectEditTest::revisionIdentityRoundTripsThroughItsStringForm()
     QVERIFY(parsed.isValid());
     QVERIFY(parsed == identity);
 
+    // A document with no source bytes (an in-memory document after an edit)
+    // serializes with an empty hash field: that is a round-trippable identity,
+    // not a malformed one.
+    pdf::PDFRevisionIdentity inMemory;
+    inMemory.document.documentId = QStringLiteral("1a2b");
+    inMemory.documentRevision = 3;
+    inMemory.cacheGeneration = 1;
+    inMemory.effectiveProfileIdentity = QStringLiteral("loop-default");
+    const pdf::PDFRevisionIdentity inMemoryParsed = pdf::PDFRevisionIdentity::fromString(inMemory.toString());
+    QVERIFY(inMemoryParsed.isValid());
+    QVERIFY(inMemoryParsed == inMemory);
+
     // A malformed value yields an invalid identity rather than a guessed one.
     QVERIFY(!pdf::PDFRevisionIdentity::fromString(QString()).isValid());
     QVERIFY(!pdf::PDFRevisionIdentity::fromString(QStringLiteral("not-a-revision")).isValid());
     QVERIFY(!pdf::PDFRevisionIdentity::fromString(QStringLiteral("00ff:1a2b:notanumber:9:")).isValid());
+
+    // A hash with non-hex characters or an odd trailing nibble is corrupted:
+    // it must not come back as a valid identity with a silently dropped hash.
+    QVERIFY(!pdf::PDFRevisionIdentity::fromString(QStringLiteral("zz:1a2b:7:9:")).isValid());
+    QVERIFY(!pdf::PDFRevisionIdentity::fromString(QStringLiteral("00f:1a2b:7:9:")).isValid());
+    QVERIFY(!pdf::PDFRevisionIdentity::fromString(QStringLiteral("00ffzz:1a2b:7:9:")).isValid());
 }
 
 QTEST_MAIN(DirectEditTest)

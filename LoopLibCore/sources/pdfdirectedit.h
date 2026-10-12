@@ -55,9 +55,10 @@ enum class DirectEditRefusal
     AttachmentNotFound,   ///< No embedded file carries the requested name.
     AttachmentNameTaken,   ///< An embedded file with that name already exists.
     AttachmentNameInvalid,   ///< The name is empty or would need sanitizing.
-    XmpUnreadable,   ///< The existing XMP packet could not be parsed; nothing was replaced.
+    XmpUnreadable,   ///< The existing XMP packet could not be parsed, or cannot be merged unambiguously; nothing was replaced.
     MetadataUnchanged,   ///< The metadata edit would not change the document.
-    WriteRefused   ///< The atomic output writer refused the target.
+    WriteRefused,   ///< The atomic output writer refused the target.
+    AttachmentSpecificationNotAddressable   ///< An embedded file's specification is stored inline, with no reference to relist.
 };
 
 /// The stable refusal code, e.g. `form/xfa-unsupported`. `None` maps to an empty

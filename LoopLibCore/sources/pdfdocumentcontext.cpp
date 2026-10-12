@@ -30,6 +30,37 @@
 namespace pdf
 {
 
+namespace
+{
+
+/// True when the value is an even-length run of hex digits, the shape
+/// QByteArray::toHex() produces. The empty run is that shape too: a document
+/// with no source bytes (an in-memory document after an edit) serializes with
+/// an empty hash field, and the round trip must preserve it. Any other value
+/// must not be decoded, because QByteArray::fromHex() silently drops non-hex
+/// characters and an odd trailing nibble.
+bool isHexHash(const QString& value)
+{
+    if (value.size() % 2 != 0)
+    {
+        return false;
+    }
+
+    for (const QChar character : value)
+    {
+        const bool isDigit = character >= QLatin1Char('0') && character <= QLatin1Char('9');
+        const bool isLowerHex = character >= QLatin1Char('a') && character <= QLatin1Char('f');
+        const bool isUpperHex = character >= QLatin1Char('A') && character <= QLatin1Char('F');
+        if (!isDigit && !isLowerHex && !isUpperHex)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+}   // namespace
+
 PDFDocumentIdentity PDFDocumentIdentity::fromDocument(const PDFDocument* document)
 {
     if (!document)
@@ -67,7 +98,7 @@ PDFRevisionIdentity PDFRevisionIdentity::fromString(const QString& value)
     // colons, so the first four separators are the structure and everything
     // after the fourth belongs to the profile identity.
     QStringList parts = value.split(QLatin1Char(':'));
-    if (parts.size() < 5)
+    if (parts.size() < 5 || !isHexHash(parts[0]))
     {
         return identity;
     }
