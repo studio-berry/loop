@@ -453,17 +453,6 @@ ApplicationWindow {
             bookmarkExportDialog.revision = host.outputRevision()
             bookmarkExportDialog.open()
         }
-        function onDocumentMailRequested(path, revision) {
-            // The host announced the hand-off before this handler ran; opening
-            // the mail client is the shell's job. The published path and the
-            // revision it was published as travel in the message so the
-            // receiving side can tell which revision the file is.
-            const name = path.replace(/^.*[\\/]/, "")
-            const subject = qsTr("Published document: %1").arg(name)
-            const body = qsTr("The published document %1 is at revision %2.").arg(path).arg(revision)
-            Qt.openUrlExternally("mailto:?subject=" + encodeURIComponent(subject) +
-                                 "&body=" + encodeURIComponent(body))
-        }
         function onSettingsPanelRequested() {
             if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
             settingsDialog.open()

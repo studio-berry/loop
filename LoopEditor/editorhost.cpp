@@ -73,6 +73,7 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -86,6 +87,7 @@
 #include <QStandardPaths>
 #include <QUuid>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
 #include <limits>
@@ -5602,6 +5604,17 @@ pdfinteraction::DirectEditOutcome EditorHost::submitDocumentDirectEdit(pdfintera
     return m_session->facade().applyDirectEdit(request);
 }
 
+QUrl EditorHost::mailHandoffUrl(const QString& path, const QString& revision)
+{
+    const QString name = QFileInfo(path).fileName();
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("subject"), tr("Published document: %1").arg(name));
+    query.addQueryItem(QStringLiteral("body"), tr("The published document %1 is at revision %2.").arg(path, revision));
+    QUrl url(QStringLiteral("mailto:"));
+    url.setQuery(query);
+    return url;
+}
+
 bool EditorHost::handOffPublishedRevisionToMail(QString* typedError)
 {
     typedError->clear();
@@ -5627,9 +5640,16 @@ bool EditorHost::handOffPublishedRevisionToMail(QString* typedError)
         return false;
     }
 
-    // The revision travels with the hand-off, so the receiving side can refuse a
-    // file that is not the revision the shell was showing.
-    Q_EMIT documentMailRequested(source.path, facade.currentRevision().toString());
+    // The revision travels in the message body, so the recipient can tell which
+    // revision of the file they hold. A client that does not take the message is
+    // a refusal, not a hand-off.
+    const QString revision = facade.currentRevision().toString();
+    if (!QDesktopServices::openUrl(mailHandoffUrl(source.path, revision)))
+    {
+        *typedError = QStringLiteral("mail/client-unavailable");
+        return false;
+    }
+    Q_EMIT documentMailRequested(source.path, revision);
     announceDocumentState(tr("The published document was handed to the mail client."));
     return true;
 }

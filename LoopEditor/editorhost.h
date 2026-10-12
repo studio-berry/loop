@@ -724,10 +724,10 @@ signals:
     /// asks for one and answers with extractCurrentPageImagesFileUrl().
     void imageExtractionRequested();
 
-    /// Send by e-mail hands the current published revision to the shell's mail
+    /// Send by e-mail hands the current published revision to the desktop mail
     /// client. `path` is the published artifact and `revision` is the identity it
-    /// was published as, so the receiving side can refuse a mismatch. Emitted
-    /// only for an open document with no unsaved changes: an unsaved or stale
+    /// was published as. Emitted only after the mail client accepted the message,
+    /// and only for an open document with no unsaved changes: an unsaved or stale
     /// revision is refused instead, never mailed as if it were the file.
     void documentMailRequested(const QString& path, const QString& revision);
 
@@ -763,8 +763,10 @@ private:
     /// Hands the current published revision to the shell's mail client. Refuses
     /// when there is no open document, when its source is not a file, or when it
     /// has unsaved changes: the bytes on disk would then be a different revision
-    /// than the one on screen. Never writes and never opens anything itself.
+    /// than the one on screen. Never writes; the mail client is opened only once
+    /// every refusal above has passed.
     bool handOffPublishedRevisionToMail(QString* typedError);
+    static QUrl mailHandoffUrl(const QString& path, const QString& revision);
     bool requestMoveSelection(const QVariantMap& parameters);
 
     // ---- Bookmarks and hyperlinks (issue #233) -------------------------------------

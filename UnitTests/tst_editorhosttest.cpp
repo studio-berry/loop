@@ -24,6 +24,7 @@
 
 #include <QCryptographicHash>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
 #include <QElapsedTimer>
@@ -35,12 +36,14 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QPainter>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
 #include <atomic>
@@ -539,6 +542,22 @@ QString readFormFieldValue(const pdf::PDFDocument* document, const QString& name
 }
 
 }   // namespace
+
+// Takes the mailto URL that the desktop would open, so the hand-off is observed
+// without launching a mail client.
+class MailUrlSink : public QObject
+{
+    Q_OBJECT
+
+public:
+    QList<QUrl> received;
+
+public Q_SLOTS:
+    void receive(const QUrl& url)
+    {
+        received.append(url);
+    }
+};
 
 class EditorHostTest : public QObject
 {
@@ -4898,6 +4917,10 @@ void EditorHostTest::sendByEMailHandsOverOnlyThePublishedRevision()
     QVERIFY(host.isCommandEnabled(QStringLiteral("actionSend_by_E_Mail")));
 
     QSignalSpy mailSpy(&host, &EditorHost::documentMailRequested);
+    MailUrlSink mailUrls;
+    QDesktopServices::setUrlHandler(QStringLiteral("mailto"), &mailUrls, "receive");
+    auto clearMailHandler = qScopeGuard([]
+                                        { QDesktopServices::unsetUrlHandler(QStringLiteral("mailto")); });
     QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
     const pdf::PDFRevisionIdentity published = session->facade().currentRevision();
 
@@ -4921,6 +4944,11 @@ void EditorHostTest::sendByEMailHandsOverOnlyThePublishedRevision()
     QCOMPARE(mailSpy.count(), 1);
     QCOMPARE(mailSpy.last().at(0).toString(), path);
     QCOMPARE(mailSpy.last().at(1).toString(), published.toString());
+    QCOMPARE(mailUrls.received.count(), 1);
+    QCOMPARE(mailUrls.received.last().scheme(), QStringLiteral("mailto"));
+    const QUrlQuery sent(mailUrls.received.last());
+    QCOMPARE(sent.queryItemValue(QStringLiteral("subject")), QStringLiteral("Published document: mail.pdf"));
+    QVERIFY(sent.queryItemValue(QStringLiteral("body")).contains(published.toString()));
 
     // An unsaved edit makes the file on disk a different revision than the one
     // on screen, so the hand-off is refused rather than mailed as current.
@@ -4936,6 +4964,7 @@ void EditorHostTest::sendByEMailHandsOverOnlyThePublishedRevision()
     QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
     QCOMPARE(refused.typedError, QStringLiteral("mail/unsaved-changes"));
     QCOMPARE(mailSpy.count(), 1);
+    QCOMPARE(mailUrls.received.count(), 1);
 
     // Saving publishes the revision the shell was showing, and the hand-off
     // works again with the saved file and that same revision.
