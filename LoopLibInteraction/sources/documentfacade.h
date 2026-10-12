@@ -24,10 +24,12 @@
 #define DOCUMENTFACADE_H
 
 #include "commandcatalog.h"
+#include "directeditrequest.h"
 #include "documentcontextsource.h"
 #include "documentloader.h"
 #include "jobrelay.h"
 #include "jobsubmitter.h"
+#include "pdfauthoringedit.h"
 #include "pdfpreflightverdict.h"
 #include "pdfsignaturehandler.h"
 
@@ -35,6 +37,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariantMap>
 
 #include <functional>
 #include <memory>
@@ -209,6 +212,11 @@ struct DocumentPermissions
     bool copy = false;
     bool assemble = false;
 
+    /// Modify-annotations (PDF permission bit 6) is the permission annotation
+    /// authoring needs: it is checked by the facade's direct-edit gateway and by
+    /// the shell's availability gate, from this one value (ADR-014).
+    bool modifyAnnotations = false;
+
     bool allowsCorrection() const { return print && modify && copy && assemble; }
 };
 
@@ -316,6 +324,22 @@ public:
     /// the lifecycle.
     void markModified();
 
+    /// Applies one direct-edit request — the single mutation gateway for
+    /// interactive authoring (ADR-014). Dispatches on `request.kind` to the
+    /// edit family's own helper, each of which keeps that family's fence,
+    /// permission and refusal codes.
+    ///
+    /// The order is the contract: the fence is checked against the complete
+    /// `PDFRevisionIdentity` before anything else, then the document's
+    /// permission for that edit family, then the payload is parsed at this
+    /// boundary, and only then does a Core writer run. An accepted edit
+    /// replaces the document in the context — one new revision — and marks the
+    /// document modified; a CreateAnnotation edit also appends one
+    /// operation-history event and rollback point (#124's model), reporting the
+    /// mutation and the provenance write separately. A refused edit changes
+    /// nothing and returns its stable code in `typedError`.
+    DirectEditOutcome applyDirectEdit(const DirectEditRequest& request);
+
     CommandInvocationId open(const QString& path);
 
     /// Re-opens the current source. Replacement, not a refresh: the old identity
@@ -369,11 +393,34 @@ private:
     void setFacets(DocumentFacets facets);
     void setOutputState(DocumentOutputState outputState);
     void updateAvailability();
+    /// The bookkeeping every in-session mutation shares: a queued save was
+    /// fenced against a revision that is now superseded, the published revision
+    /// moves, and the document is dirty with no pending output.
+    void noteAuthoringMutation();
     void finishPending(CommandInvocationId invocation, CommandTerminalState state, QString typedError);
+
+    /// Lifecycle bookkeeping for a mutation that already advanced the revision
+    /// through the document context (applyDirectEdit). Unlike markModified(), it
+    /// does not advance the revision again: the context is the revision
+    /// authority, and one accepted edit is exactly one revision.
+    void noteDirectMutation();
+
+    /// One direct-edit family's application, dispatched from applyDirectEdit.
+    /// Each helper owns its family's fence order, permission check and refusal
+    /// codes: the unification is one shape at the gateway, not one policy.
+    DirectEditOutcome applyAnnotationEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyOutlineEdit(const DirectEditRequest& request);
+    DirectEditOutcome applyDocumentEdit(const DirectEditRequest& request);
+
     bool admitInspectionTransition(const DocumentInspectionToken& token, QString& error) const;
     void invalidateInspection();
     bool admitSignatureCheckTransition(const DocumentSignatureCheckToken& token, QString& error) const;
     void invalidateSignatureCheck();
+
+    /// Whether the open document's security handler grants the permission one
+    /// direct-edit family needs. A document that grants none of them is not an
+    /// error state; it is a refusal with a typed reason.
+    bool directEditAllowed(DirectEditKind kind) const;
 
     /// The context is reached through the P4-S1 seam rather than held directly,
     /// so a destroyed context degrades to an invalid revision instead of a

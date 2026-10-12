@@ -47,10 +47,13 @@ add_library(LoopLibInteraction STATIC
     sources/commandcatalog.h
     sources/commandcatalogresource.cpp
     sources/commandcatalogresource_p.h
+    sources/directeditrequest.h
+    sources/directeditrequest.cpp
     sources/documentloader.cpp
     sources/documentloader.h
     sources/documentfacade.cpp
     sources/documentfacade.h
+    sources/documentfacadeedits.cpp
     sources/documentfacadestate.cpp
     sources/pagesurfacekey.cpp
     sources/pagesurfacekey.h

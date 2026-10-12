@@ -342,6 +342,25 @@ set_target_properties(UnitTestsProductionGeometry PROPERTIES
 add_test(UnitTestsOperationHistory "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsOperationHistory")
 add_test(UnitTestsProductionGeometry "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsProductionGeometry")
 
+# The direct authoring-edit writer (ADR-014, issue #233): bookmark create,
+# generate, replace, interchange round trips and one link per destination
+# variant, every destination read back through Core's own parser.
+add_executable(UnitTestsAuthoringEdit
+    tst_authoringedittest.cpp
+)
+
+target_link_libraries(UnitTestsAuthoringEdit PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsAuthoringEdit PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsAuthoringEdit "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsAuthoringEdit")
+set_tests_properties(UnitTestsAuthoringEdit PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(UnitTestsPreflightEngine
 	tst_preflightenginetest.cpp
 )
@@ -842,6 +861,24 @@ set_target_properties(UnitTestsSafeFileWriter PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsSafeFileWriter "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsSafeFileWriter")
+
+# ADR-014 / epic #231 issue #242: the Core direct-edit writers (form value,
+# attachment add/remove/extract, XMP metadata) and the refusals they owe. No
+# Widgets, no QML: the writers are Core's, and the interaction layer's fence is
+# pinned by UnitTestsEditorHost.
+add_executable(UnitTestsDirectEdit
+    tst_directedittest.cpp
+)
+
+target_link_libraries(UnitTestsDirectEdit PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsDirectEdit PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsDirectEdit "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDirectEdit")
 
 add_executable(UnitTestsContentProcessorLimits
 	tst_contentprocessorlimitstest.cpp

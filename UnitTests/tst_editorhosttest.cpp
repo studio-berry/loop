@@ -57,10 +57,17 @@
 #include "quickdocumentmodel.h"
 
 #include "pdfapplicationidentity.h"
+#include "pdfauthoringedit.h"
+#include "pdfannotation.h"
 #include "pdfblockingthreadguard.h"
+#include "pdfcatalog.h"
+#include "pdfannotation.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "pdfdocumentreader.h"
+#include "pdfpage.h"
+#include "pdfencoding.h"
+#include "pdfform.h"
 #include "quickoutput.h"
 #include <QImageReader>
 #include <QImageWriter>
@@ -78,6 +85,83 @@
 
 namespace
 {
+
+/// Writes a `pageCount`-page fixture and returns its path, or an empty string
+/// when the write failed.
+QString writePagesFixture(const QString& path, int pageCount)
+{
+    pdf::PDFDocumentBuilder builder;
+    for (int page = 0; page < pageCount; ++page)
+    {
+        builder.appendPage(QRectF(0, 0, 612, 792));
+    }
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    const pdf::PDFOperationResult written = writer.write(path, &document, true);
+    return written ? path : QString();
+}
+
+/// The terminal result of one invocation, which the authoring handlers emit
+/// synchronously.
+std::optional<pdfinteraction::CommandResult> terminalResultFor(QSignalSpy& finished, quint64 invocation)
+{
+    for (int index = 0; index < finished.count(); ++index)
+    {
+        const auto result = finished.at(index).at(0).value<pdfinteraction::CommandResult>();
+        if (result.invocation == invocation)
+        {
+            return result;
+        }
+    }
+    return std::nullopt;
+}
+
+/// Waits until no page-surface render is in flight. Reporting viewport geometry
+/// asks for the first page surfaces, and the render path borrows the open
+/// document for the duration of a render -- so a test that replaces the
+/// document next lets that initial demand settle first instead of racing it.
+void waitForSurfacesToSettle(EditorHost& host)
+{
+    pdfinteraction::PageSurfaceCoordinator* surfaces = host.sessionForTest()->surfaces();
+    QTRY_VERIFY_WITH_TIMEOUT(surfaces->counters().inFlight == 0, 15000);
+}
+
+pdf::PDFAnnotationPtr linkOnPage(const pdf::PDFDocument* document, int pageIndex)
+{
+    if (!document)
+    {
+        return nullptr;
+    }
+
+    const pdf::PDFPage* page = document->getCatalog()->getPage(pageIndex);
+    if (!page)
+    {
+        return nullptr;
+    }
+
+    for (const pdf::PDFObjectReference& reference : page->getAnnotations())
+    {
+        pdf::PDFAnnotationPtr annotation = pdf::PDFAnnotation::parse(&document->getStorage(), reference);
+        if (dynamic_cast<const pdf::PDFLinkAnnotation*>(annotation.data()))
+        {
+            // Return the owning pointer; the local parse result would free the
+            // annotation at return and hand the caller a dangling raw pointer.
+            return annotation;
+        }
+    }
+    return nullptr;
+}
+
+int destinationPageIndex(const pdf::PDFDocument* document, const pdf::PDFDestination& destination)
+{
+    if (!destination.getPageReference().isValid())
+    {
+        return -1;
+    }
+
+    const size_t index = document->getCatalog()->getPageIndexFromPageReference(destination.getPageReference());
+    return index == pdf::PDFCatalog::INVALID_PAGE_INDEX ? -1 : static_cast<int>(index);
+}
 
 bool writeEncryptedFixture(const QString& path, pdf::PDFSecurityHandlerFactory::Algorithm algorithm,
                            const QString& userPassword = QStringLiteral("fixture-user"), quint32 permissions = 0)
@@ -271,6 +355,189 @@ QString describePreflightReportDifference(const QString& guiText, const QString&
     return differences.join(QLatin1Char('\n'));
 }
 
+/// A page carrying a text field, a checkbox, a combo box and a signature field,
+/// the shape the authoring-edit handlers are driven against. The signature field
+/// is present so "signature fields are never filled" has something to exclude.
+bool writeFormFixtureDocument(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const auto addFormXObject = [&builder](const QRectF& rect)
+    {
+        const QByteArray content = QByteArrayLiteral(" ");
+        pdf::PDFDictionary dictionary;
+        dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+        dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Form"));
+        dictionary.addEntry(pdf::PDFInplaceOrMemoryString("BBox"),
+                            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                pdf::PDFObject::createReal(rect.left()), pdf::PDFObject::createReal(rect.top()),
+                                pdf::PDFObject::createReal(rect.right()), pdf::PDFObject::createReal(rect.bottom()) })));
+        // Streams carry their own /Length; the writer does not add one.
+        dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(content.size()));
+        return builder.addObject(pdf::PDFObject::createStream(
+            std::make_shared<pdf::PDFStream>(std::move(dictionary), QByteArray(content))));
+    };
+
+    const auto addField = [&builder, &page, &addFormXObject](const QByteArray& fieldType,
+                                                             const QString& name,
+                                                             const QRectF& rect,
+                                                             const std::function<void(pdf::PDFDictionary&)>& decorate)
+    {
+        pdf::PDFDictionary field;
+        field.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Annot"));
+        field.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Widget"));
+        field.addEntry(pdf::PDFInplaceOrMemoryString("FT"), pdf::PDFObject::createName(fieldType));
+        field.addEntry(pdf::PDFInplaceOrMemoryString("T"), pdf::PDFObjectFactory::createTextString(name));
+        field.addEntry(pdf::PDFInplaceOrMemoryString("Rect"),
+                       pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                           pdf::PDFObject::createReal(rect.left()), pdf::PDFObject::createReal(rect.top()),
+                           pdf::PDFObject::createReal(rect.right()), pdf::PDFObject::createReal(rect.bottom()) })));
+        field.addEntry(pdf::PDFInplaceOrMemoryString("P"), pdf::PDFObject::createReference(page));
+        if (decorate)
+        {
+            decorate(field);
+        }
+        const pdf::PDFObjectReference reference =
+            builder.addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(field))));
+
+        pdf::PDFDictionary pageAnnots;
+        pageAnnots.addEntry(pdf::PDFInplaceOrMemoryString("Annots"),
+                            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                pdf::PDFObject::createReference(reference) })));
+        builder.appendTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageAnnots))));
+        return reference;
+    };
+
+    std::vector<pdf::PDFObjectReference> fields;
+    fields.push_back(addField("Tx", QStringLiteral("LoopText"), QRectF(10, 10, 90, 30),
+                              [&addFormXObject](pdf::PDFDictionary& field)
+                              {
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("V"),
+                                                 pdf::PDFObjectFactory::createTextString(QStringLiteral("original")));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("DA"),
+                                                 pdf::PDFObject::createString(QByteArrayLiteral("/Helv 0 Tf 0 g")));
+                                  pdf::PDFDictionary appearance;
+                                  appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"),
+                                                      pdf::PDFObject::createReference(addFormXObject(QRectF(10, 10, 90, 30))));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                                                 pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(appearance))));
+                              }));
+    fields.push_back(addField("Btn", QStringLiteral("LoopCheck"), QRectF(10, 50, 30, 30),
+                              [&addFormXObject](pdf::PDFDictionary& field)
+                              {
+                                  pdf::PDFDictionary normal;
+                                  normal.addEntry(pdf::PDFInplaceOrMemoryString("Yes"),
+                                                  pdf::PDFObject::createReference(addFormXObject(QRectF(10, 50, 30, 30))));
+                                  normal.addEntry(pdf::PDFInplaceOrMemoryString("Off"),
+                                                  pdf::PDFObject::createReference(addFormXObject(QRectF(10, 50, 30, 30))));
+                                  pdf::PDFDictionary appearance;
+                                  appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"),
+                                                      pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(normal))));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                                                 pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(appearance))));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("AS"), pdf::PDFObject::createName("Off"));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("V"), pdf::PDFObject::createName("Off"));
+                              }));
+    fields.push_back(addField("Ch", QStringLiteral("LoopChoice"), QRectF(10, 90, 90, 30),
+                              [&addFormXObject](pdf::PDFDictionary& field)
+                              {
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("Ff"), pdf::PDFObject::createInteger(1 << 17));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("Opt"),
+                                                 pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                                     pdf::PDFObjectFactory::createTextString(QStringLiteral("Alpha")),
+                                                     pdf::PDFObjectFactory::createTextString(QStringLiteral("Beta")) })));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("V"),
+                                                 pdf::PDFObjectFactory::createTextString(QStringLiteral("Alpha")));
+                                  pdf::PDFDictionary appearance;
+                                  appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"),
+                                                      pdf::PDFObject::createReference(addFormXObject(QRectF(10, 90, 90, 30))));
+                                  field.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                                                 pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(appearance))));
+                              }));
+
+    const pdf::PDFObjectReference signature = builder.createSignatureDictionary(
+        QByteArrayLiteral("Adobe.PPKLite"),
+        QByteArrayLiteral("adbe.pkcs7.detached"),
+        QByteArrayLiteral("signed-placeholder"),
+        QDateTime::currentDateTimeUtc(),
+        0);
+    const pdf::PDFObjectReference signatureField = builder.createFormFieldSignature(QStringLiteral("LoopSignature"), {}, signature);
+    builder.createInvisibleFormFieldWidget(signatureField, page);
+    fields.push_back(signatureField);
+
+    builder.createAcroForm(fields);
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return static_cast<bool>(writer.write(path, &document, true));
+}
+
+/// An AcroForm whose only content is an XFA packet: no AcroForm fields at all,
+/// which is the form the shell must report as unsupported.
+bool writeXfaOnlyFixtureDocument(const QString& path)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const QByteArray xfaPacket = QByteArrayLiteral("<xdp/>");
+    pdf::PDFDictionary xfaDictionary;
+    xfaDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(xfaPacket.size()));
+    const pdf::PDFObjectReference xfa = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(xfaDictionary), QByteArray(xfaPacket))));
+
+    pdf::PDFDictionary form;
+    form.addEntry(pdf::PDFInplaceOrMemoryString("Fields"), pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>()));
+    form.addEntry(pdf::PDFInplaceOrMemoryString("XFA"), pdf::PDFObject::createReference(xfa));
+
+    pdf::PDFDictionary catalogForm;
+    catalogForm.addEntry(pdf::PDFInplaceOrMemoryString("AcroForm"),
+                         pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(form))));
+    builder.mergeTo(builder.getCatalogReference(),
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(catalogForm))));
+
+    const pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentWriter writer(nullptr);
+    return static_cast<bool>(writer.write(path, &document, true));
+}
+
+/// Reads one field's value from an open document, the way an operator would see
+/// it. `isName` reports a name value (a button's state) rather than a string.
+QString readFormFieldValue(const pdf::PDFDocument* document, const QString& name, bool* isName = nullptr)
+{
+    if (isName)
+    {
+        *isName = false;
+    }
+    if (!document)
+    {
+        return QString();
+    }
+
+    pdf::PDFFormManager manager(nullptr);
+    manager.setDocument(pdf::PDFModifiedDocument(const_cast<pdf::PDFDocument*>(document), nullptr, pdf::PDFModifiedDocument::Reset));
+    QString value;
+    manager.apply([&value, &name, isName](const pdf::PDFFormField* field)
+                  {
+                      if (!value.isEmpty() || field->getName(pdf::PDFFormField::NameType::FullyQualified) != name)
+                      {
+                          return;
+                      }
+                      const pdf::PDFObject& object = field->getValue();
+                      if (object.isName())
+                      {
+                          if (isName)
+                          {
+                              *isName = true;
+                          }
+                          value = QString::fromLatin1(object.getString());
+                      }
+                      else if (object.isString())
+                      {
+                          value = pdf::PDFEncoding::convertTextString(object.getString());
+                      } });
+    return value;
+}
+
 }   // namespace
 
 class EditorHostTest : public QObject
@@ -326,6 +593,10 @@ private slots:
     void executeApprovedActionListPlanRefusesAnUnreviewedPlan();
     void fixRollbackReturnsToARecordedRevision();
     void annotationReviewListsAndNavigatesToThePageRegion();
+    /// Issue #234: annotation authoring commands go through the direct-edit
+    /// gateway, and the authored annotation reaches the quick lane's models.
+    void annotationCommandsAuthorThroughTheGatewayAndRefuseWithoutGeometry();
+
     void signatureStatusPresentsTheReducedState();
     void signatureInvalidationGateBlocksExecutionUntilAcknowledged();
     void previewFidelityNamesTheOriginAndSwitchesExplicitly();
@@ -346,11 +617,28 @@ private slots:
 
     /// Issue #232: extraction refuses to overwrite an existing file up front.
     void imageExtractionRefusesToOverwriteAnExistingFile();
+
+    // Bookmarks and hyperlinks (#233, ADR-014).
+    void bookmarkCommandsWriteTheOutlineThroughTheCatalog();
+    void bookmarkImportExportRoundTripsAndRefusesAStaleRevision();
+    void hyperlinkCommandsWriteEveryDestinationVariant_data();
+    void hyperlinkCommandsWriteEveryDestinationVariant();
+    void restrictedDocumentCannotEditBookmarksOrLinks();
+
+    // Direct authoring edits (ADR-014, issue #242): the catalog route into Core,
+    // the revision fence, the XFA refusal, the attachment path and the
+    // send-by-email hand-off.
+    void formValueEditRoutesThroughTheCatalogIntoCoreAndProducesANewRevision();
+    void authoringEditRefusesAStaleRevisionAndChangesNothing();
+    void xfaOnlyFormIsReportedAsUnsupportedThroughTheShell();
+    void attachmentEditsAndExtractionRouteThroughTheShell();
+    void sendByEMailHandsOverOnlyThePublishedRevision();
 };
 
 void EditorHostTest::init()
 {
     QStandardPaths::setTestModeEnabled(true);
+    qRegisterMetaType<pdfinteraction::CommandResult>("pdfinteraction::CommandResult");
     m_fixtureRecipes = std::make_unique<QTemporaryDir>();
     QVERIFY(m_fixtureRecipes->isValid());
 }
@@ -2592,6 +2880,105 @@ void EditorHostTest::annotationReviewListsAndNavigatesToThePageRegion()
     QCOMPARE(host.currentPage(), 1);
 }
 
+void EditorHostTest::annotationCommandsAuthorThroughTheGatewayAndRefuseWithoutGeometry()
+{
+    qRegisterMetaType<pdfinteraction::CommandResult>("pdfinteraction::CommandResult");
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString documentPath = directory.filePath(QStringLiteral("authoring.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 612, 792));
+        pdf::PDFDocumentWriter writer(nullptr);
+        const pdf::PDFDocument document = builder.build();
+        QVERIFY(writer.write(documentPath, &document, false));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    QuickDocumentModel* documentModel = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(documentModel != nullptr);
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // The command is available with an unrestricted document.
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionCreateTextHighlight")));
+
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    // A menu invocation carries no geometry: the catalog refuses the missing
+    // required parameter before any handler runs, typed, and nothing is created.
+    QCOMPARE(host.invokeCommand(QStringLiteral("actionCreateTextHighlight")), quint64(0));
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Failed);
+        QCOMPARE(result.typedError, QStringLiteral("command/missing-parameter"));
+    }
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // A degenerate rectangle passes the contract's type check and is refused by
+    // the handler's boundary parse, before the gateway is reached.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionCreateTextHighlight"),
+                               QVariantMap{ { QStringLiteral("page"), 0 },
+                                            { QStringLiteral("x"), 10.0 },
+                                            { QStringLiteral("y"), 10.0 },
+                                            { QStringLiteral("width"), 0.0 },
+                                            { QStringLiteral("height"), 10.0 } }) != 0);
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Failed);
+        QCOMPARE(result.typedError, QStringLiteral("annotation/invalid-geometry"));
+    }
+    QCOMPARE(documentModel->annotationCount(), 0);
+
+    // With geometry the handler submits the typed request, the gateway creates
+    // the annotation as a new revision, and the quick lane presents it.
+    const QString beforeRevision = session->facade().currentRevision().toString();
+    const QVariantMap parameters{
+        { QStringLiteral("page"), 0 },
+        { QStringLiteral("x"), 100.0 },
+        { QStringLiteral("y"), 120.0 },
+        { QStringLiteral("width"), 200.0 },
+        { QStringLiteral("height"), 16.0 },
+    };
+    QVERIFY(host.invokeCommand(QStringLiteral("actionCreateTextHighlight"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    {
+        const auto result = finished.takeFirst().at(0).value<pdfinteraction::CommandResult>();
+        QCOMPARE(result.state, pdfinteraction::CommandTerminalState::Completed);
+        QVERIFY2(result.typedError.isEmpty(), qPrintable(result.typedError));
+    }
+    QVERIFY(session->facade().currentRevision().toString() != beforeRevision);
+
+    const pdf::PDFPage* page = session->context().getDocument()->getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    QCOMPARE(page->getAnnotations().size(), std::size_t(1));
+    const pdf::PDFAnnotationPtr annotation =
+        pdf::PDFAnnotation::parse(&session->context().getDocument()->getStorage(), page->getAnnotations().front());
+    QVERIFY(annotation != nullptr);
+    QCOMPARE(annotation->getType(), pdf::AnnotationType::Highlight);
+    QCOMPARE(annotation->getRectangle(), QRectF(100.0, 120.0, 200.0, 16.0));
+
+    // The revision change reached the quick lane: the annotation model lists the
+    // new mark and the overlay carries it as a read-only page-space rectangle.
+    QTRY_COMPARE_WITH_TIMEOUT(documentModel->annotationCount(), 1, 10000);
+    const QList<QuickAnnotation>& rows = documentModel->annotationModel().rows();
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows.at(0).pageIndex, 0);
+    QCOMPARE(rows.at(0).bounds, QRectF(100.0, 120.0, 200.0, 16.0));
+    QCOMPARE(session->overlays()->annotations().size(), 1);
+
+    // The accepted edit appended its provenance event beside the document
+    // (#124's model; wiring Undo stays out of this slice).
+    QVERIFY(QFile::exists(documentPath + QStringLiteral(".loop-history/history.sqlite3")));
+}
+
 void EditorHostTest::signatureStatusPresentsTheReducedState()
 {
     const QString fixture = signedFixturePath();
@@ -3738,6 +4125,707 @@ void EditorHostTest::imageExtractionRefusesToOverwriteAnExistingFile()
     QFile untouched(existing);
     QVERIFY(untouched.open(QIODevice::ReadOnly));
     QCOMPARE(untouched.readAll(), QByteArray("keep-me"));
+}
+
+void EditorHostTest::bookmarkCommandsWriteTheOutlineThroughTheCatalog()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = writePagesFixture(directory.filePath(QStringLiteral("bookmarks.pdf")), 3);
+    QVERIFY(!path.isEmpty());
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    QSignalSpy finished(&host.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(!model->hasOutline());
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionGotoNextBookmark")));
+
+    // The viewport has not placed a page yet, so there is no page the operator
+    // is on. The command refuses with its own reason instead of blaming the
+    // document's page range, which is not what is wrong.
+    const quint64 unplaced = host.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                                { { QStringLiteral("title"), QStringLiteral("Nowhere") } });
+    QVERIFY(unplaced != 0);
+    const std::optional<pdfinteraction::CommandResult> unplacedResult = terminalResultFor(finished, unplaced);
+    QVERIFY(unplacedResult.has_value());
+    QCOMPARE(unplacedResult->state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(unplacedResult->typedError, QStringLiteral("bookmark/no-current-page"));
+
+    // Once the canvas reports its geometry, the operator is on the first page.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    host.goToPage(0);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 15000);
+    waitForSurfacesToSettle(host);
+
+    // Bookmark the page the operator is on; the outline becomes the bookmark,
+    // through the catalog and the facade gateway into Core.
+    const quint64 bookmark = host.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                                { { QStringLiteral("title"), QStringLiteral("Start") } });
+    QVERIFY(bookmark != 0);
+    const std::optional<pdfinteraction::CommandResult> bookmarkResult = terminalResultFor(finished, bookmark);
+    QVERIFY(bookmarkResult.has_value());
+    QVERIFY2(bookmarkResult->state == pdfinteraction::CommandTerminalState::Completed,
+             qPrintable(bookmarkResult->typedError));
+    QVERIFY(bookmarkResult->typedError.isEmpty());
+
+    const pdf::PDFDocumentPointer document = host.sessionForTest()->context().getDocumentPointer();
+    QString typedError;
+    std::optional<QList<pdf::PDFBookmarkRecord>> records =
+        pdf::PDFAuthoringEditWriter::readOutline(document.data(), typedError);
+    QVERIFY2(records.has_value(), qPrintable(typedError));
+    QCOMPARE(records->size(), 1);
+    QCOMPARE(records->at(0).title, QStringLiteral("Start"));
+    QCOMPARE(records->at(0).pageIndex, 0);
+    QVERIFY(model->hasOutline());
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionGotoNextBookmark")));
+
+    // The same command on the same page removes it again, so the shell never
+    // silently accumulates duplicates.
+    const quint64 toggledOff = host.invokeCommand(QStringLiteral("actionBookmarkPage"));
+    QVERIFY(toggledOff != 0);
+    const std::optional<pdfinteraction::CommandResult> toggleResult = terminalResultFor(finished, toggledOff);
+    QVERIFY(toggleResult.has_value());
+    QCOMPARE(toggleResult->state, pdfinteraction::CommandTerminalState::Completed);
+    records = pdf::PDFAuthoringEditWriter::readOutline(host.sessionForTest()->context().getDocumentPointer().data(),
+                                                       typedError);
+    QVERIFY(records.has_value());
+    QVERIFY(records->isEmpty());
+
+    // Auto-generate fills in every page that has none.
+    const quint64 generated = host.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate"));
+    QVERIFY(generated != 0);
+    const std::optional<pdfinteraction::CommandResult> generatedResult = terminalResultFor(finished, generated);
+    QVERIFY(generatedResult.has_value());
+    QCOMPARE(generatedResult->state, pdfinteraction::CommandTerminalState::Completed);
+    records = pdf::PDFAuthoringEditWriter::readOutline(host.sessionForTest()->context().getDocumentPointer().data(),
+                                                       typedError);
+    QVERIFY(records.has_value());
+    QCOMPARE(records->size(), 3);
+    QCOMPARE(records->at(0).title, QStringLiteral("Page 1"));
+    QCOMPARE(records->at(2).title, QStringLiteral("Page 3"));
+
+    // A second run has nothing to generate: it refuses with a visible reason and
+    // writes no revision.
+    const pdf::PDFRevisionIdentity revisionBefore = host.sessionForTest()->facade().currentRevision();
+    const quint64 again = host.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate"));
+    QVERIFY(again != 0);
+    const std::optional<pdfinteraction::CommandResult> againResult = terminalResultFor(finished, again);
+    QVERIFY(againResult.has_value());
+    QCOMPARE(againResult->state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(againResult->typedError, QStringLiteral("bookmark/nothing-to-generate"));
+    QCOMPARE(host.sessionForTest()->facade().currentRevision(), revisionBefore);
+
+    // Bookmark navigation moves the viewport and edits nothing.
+    host.goToPage(0);
+    const quint64 next = host.invokeCommand(QStringLiteral("actionGotoNextBookmark"));
+    QVERIFY(next != 0);
+    const std::optional<pdfinteraction::CommandResult> nextResult = terminalResultFor(finished, next);
+    QVERIFY(nextResult.has_value());
+    QCOMPARE(nextResult->state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(host.currentPage(), 1);
+    QCOMPARE(host.sessionForTest()->facade().currentRevision(), revisionBefore);
+
+    const quint64 previous = host.invokeCommand(QStringLiteral("actionGotoPreviousBookmark"));
+    QVERIFY(previous != 0);
+    const std::optional<pdfinteraction::CommandResult> previousResult = terminalResultFor(finished, previous);
+    QVERIFY(previousResult.has_value());
+    QCOMPARE(previousResult->state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(host.currentPage(), 0);
+    QCOMPARE(host.sessionForTest()->facade().currentRevision(), revisionBefore);
+}
+
+void EditorHostTest::bookmarkImportExportRoundTripsAndRefusesAStaleRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = writePagesFixture(directory.filePath(QStringLiteral("source.pdf")), 3);
+    const QString targetPath = writePagesFixture(directory.filePath(QStringLiteral("target.pdf")), 3);
+    QVERIFY(!sourcePath.isEmpty());
+    QVERIFY(!targetPath.isEmpty());
+
+    EditorHost source(nullptr, nullptr, m_fixtureRecipes->path());
+    source.openFileUrl(QUrl::fromLocalFile(sourcePath));
+    QTRY_VERIFY_WITH_TIMEOUT(source.hasDocument(), 15000);
+    // The operator is on the first page when the bookmark commands run.
+    source.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    source.goToPage(0);
+    QTRY_COMPARE_WITH_TIMEOUT(source.currentPage(), 0, 15000);
+    waitForSurfacesToSettle(source);
+
+    QSignalSpy finished(&source.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    QVERIFY(source.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                 { { QStringLiteral("title"), QStringLiteral("Chapter one") } }) != 0);
+    QVERIFY(source.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate")) != 0);
+
+    const pdf::PDFDocumentPointer sourceDocument = source.sessionForTest()->context().getDocumentPointer();
+    QString typedError;
+    const std::optional<QList<pdf::PDFBookmarkRecord>> sourceRecords =
+        pdf::PDFAuthoringEditWriter::readOutline(sourceDocument.data(), typedError);
+    QVERIFY2(sourceRecords.has_value(), qPrintable(typedError));
+    QCOMPARE(sourceRecords->size(), 3);
+
+    // Export through the catalog writes the interchange file.
+    const QString bookmarkPath = directory.filePath(QStringLiteral("bookmarks.json"));
+    const quint64 exported = source.invokeCommand(QStringLiteral("actionBookmarkExport"),
+                                                  { { QStringLiteral("path"), bookmarkPath } });
+    QVERIFY(exported != 0);
+    const std::optional<pdfinteraction::CommandResult> exportedResult = terminalResultFor(finished, exported);
+    QVERIFY(exportedResult.has_value());
+    QCOMPARE(exportedResult->state, pdfinteraction::CommandTerminalState::Completed);
+
+    QFile exportedFile(bookmarkPath);
+    QVERIFY(exportedFile.open(QIODevice::ReadOnly));
+    const QByteArray exportedBytes = exportedFile.readAll();
+    exportedFile.close();
+    const std::optional<pdf::PDFBookmarkFile> parsedFile = pdf::PDFBookmarkFile::fromJson(exportedBytes, typedError);
+    QVERIFY2(parsedFile.has_value(), qPrintable(typedError));
+    QCOMPARE(parsedFile->bookmarks, *sourceRecords);
+
+    // Import into a different document: the outline becomes the file, and the
+    // records survive without loss.
+    EditorHost target(nullptr, nullptr, m_fixtureRecipes->path());
+    target.openFileUrl(QUrl::fromLocalFile(targetPath));
+    QTRY_VERIFY_WITH_TIMEOUT(target.hasDocument(), 15000);
+    target.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    target.goToPage(0);
+    QTRY_COMPARE_WITH_TIMEOUT(target.currentPage(), 0, 15000);
+    waitForSurfacesToSettle(target);
+
+    QSignalSpy targetFinished(&target.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    const quint64 imported = target.invokeCommand(QStringLiteral("actionBookmarkImport"),
+                                                  { { QStringLiteral("path"), bookmarkPath } });
+    QVERIFY(imported != 0);
+    const std::optional<pdfinteraction::CommandResult> importedResult = terminalResultFor(targetFinished, imported);
+    QVERIFY(importedResult.has_value());
+    QCOMPARE(importedResult->state, pdfinteraction::CommandTerminalState::Completed);
+
+    const std::optional<QList<pdf::PDFBookmarkRecord>> targetRecords =
+        pdf::PDFAuthoringEditWriter::readOutline(target.sessionForTest()->context().getDocumentPointer().data(),
+                                                 typedError);
+    QVERIFY(targetRecords.has_value());
+    QCOMPARE(*targetRecords, *sourceRecords);
+
+    // A malformed file is refused with a typed reason and changes nothing.
+    const QString malformedPath = directory.filePath(QStringLiteral("malformed.json"));
+    QFile malformed(malformedPath);
+    QVERIFY(malformed.open(QIODevice::WriteOnly));
+    malformed.write("{\"schema_version\":1,\"bookmarks\":[{\"page\":0}]}");
+    malformed.close();
+    const pdf::PDFRevisionIdentity revisionBefore = target.sessionForTest()->facade().currentRevision();
+    const quint64 refused = target.invokeCommand(QStringLiteral("actionBookmarkImport"),
+                                                 { { QStringLiteral("path"), malformedPath } });
+    QVERIFY(refused != 0);
+    const std::optional<pdfinteraction::CommandResult> refusedResult = terminalResultFor(targetFinished, refused);
+    QVERIFY(refusedResult.has_value());
+    QCOMPARE(refusedResult->state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(refusedResult->typedError, QStringLiteral("bookmark/invalid-file"));
+    QCOMPARE(target.sessionForTest()->facade().currentRevision(), revisionBefore);
+
+    // The failure case of #233: an edit carrying a revision the document has
+    // left is refused with a visible reason and writes nothing.
+    const QString displayed = target.sessionForTest()->facade().currentRevision().toString();
+    QVERIFY(target.invokeCommand(QStringLiteral("actionBookmarkPage")) != 0);
+    QVERIFY(target.sessionForTest()->facade().currentRevision().toString() != displayed);
+
+    const quint64 stale = target.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                               { { QStringLiteral("revision"), displayed } });
+    QVERIFY(stale != 0);
+    const std::optional<pdfinteraction::CommandResult> staleResult = terminalResultFor(targetFinished, stale);
+    QVERIFY(staleResult.has_value());
+    QCOMPARE(staleResult->state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(staleResult->typedError, QStringLiteral("edit/stale-revision"));
+}
+
+void EditorHostTest::hyperlinkCommandsWriteEveryDestinationVariant_data()
+{
+    QTest::addColumn<QString>("command");
+    QTest::addColumn<int>("destinationType");
+    QTest::addColumn<bool>("inheritZoom");
+
+    QTest::newRow("Fit") << QStringLiteral("actionCreateHyperlinkToThisPDFFit") << int(pdf::DestinationType::Fit) << false;
+    QTest::newRow("FitB") << QStringLiteral("actionCreateHyperlinkToThisPDFFitB") << int(pdf::DestinationType::FitB) << false;
+    QTest::newRow("FitBH") << QStringLiteral("actionCreateHyperlinkToThisPDFFitBH") << int(pdf::DestinationType::FitBH) << false;
+    QTest::newRow("FitBV") << QStringLiteral("actionCreateHyperlinkToThisPDFFitBV") << int(pdf::DestinationType::FitBV) << false;
+    QTest::newRow("FitH") << QStringLiteral("actionCreateHyperlinkToThisPDFFitH") << int(pdf::DestinationType::FitH) << false;
+    QTest::newRow("FitR") << QStringLiteral("actionCreateHyperlinkToThisPDFFitR") << int(pdf::DestinationType::FitR) << false;
+    QTest::newRow("FitV") << QStringLiteral("actionCreateHyperlinkToThisPDFFitV") << int(pdf::DestinationType::FitV) << false;
+    QTest::newRow("XYZ") << QStringLiteral("actionCreateHyperlinkToThisPDFXYZ") << int(pdf::DestinationType::XYZ) << false;
+    QTest::newRow("XYZInheritZoom") << QStringLiteral("actionCreateHyperlinkToThisPDFXYZInheritZoom")
+                                    << int(pdf::DestinationType::XYZ) << true;
+}
+
+void EditorHostTest::hyperlinkCommandsWriteEveryDestinationVariant()
+{
+    QFETCH(QString, command);
+    QFETCH(int, destinationType);
+    QFETCH(bool, inheritZoom);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = writePagesFixture(directory.filePath(QStringLiteral("hyperlinks.pdf")), 2);
+    QVERIFY(!path.isEmpty());
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.isCommandEnabled(command));
+
+    QSignalSpy finished(&host.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    const quint64 invocation = host.invokeCommand(command,
+                                                  { { QStringLiteral("page"), 0 },
+                                                    { QStringLiteral("left"), 10.0 },
+                                                    { QStringLiteral("bottom"), 20.0 },
+                                                    { QStringLiteral("right"), 60.0 },
+                                                    { QStringLiteral("top"), 40.0 },
+                                                    { QStringLiteral("targetPage"), 1 },
+                                                    { QStringLiteral("targetLeft"), 5.0 },
+                                                    { QStringLiteral("targetBottom"), 6.0 },
+                                                    { QStringLiteral("targetRight"), 70.0 },
+                                                    { QStringLiteral("targetTop"), 90.0 },
+                                                    { QStringLiteral("zoom"), 1.5 } });
+    QVERIFY(invocation != 0);
+    const std::optional<pdfinteraction::CommandResult> result = terminalResultFor(finished, invocation);
+    QVERIFY(result.has_value());
+    QCOMPARE(result->state, pdfinteraction::CommandTerminalState::Completed);
+
+    // Read back through Core: the link annotation carries the destination the
+    // command named, and the destination carries its own payload.
+    const pdf::PDFDocumentPointer document = host.sessionForTest()->context().getDocumentPointer();
+    const pdf::PDFAnnotationPtr linkAnnotation = linkOnPage(document.data(), 0);
+    const auto* link = dynamic_cast<const pdf::PDFLinkAnnotation*>(linkAnnotation.data());
+    QVERIFY(link);
+    QCOMPARE(link->getRectangle(), QRectF(QPointF(10, 20), QPointF(60, 40)));
+
+    const pdf::PDFActionGoTo* goTo = dynamic_cast<const pdf::PDFActionGoTo*>(link->getAction());
+    QVERIFY(goTo);
+    const pdf::PDFDestination& destination = goTo->getDestination();
+    QCOMPARE(int(destination.getDestinationType()), destinationType);
+    QCOMPARE(destinationPageIndex(document.data(), destination), 1);
+
+    switch (destination.getDestinationType())
+    {
+        case pdf::DestinationType::Fit:
+        case pdf::DestinationType::FitB:
+            QVERIFY(!destination.hasLeft());
+            QVERIFY(!destination.hasTop());
+            break;
+
+        case pdf::DestinationType::FitH:
+        case pdf::DestinationType::FitBH:
+            QCOMPARE(destination.getTop(), 90.0);
+            break;
+
+        case pdf::DestinationType::FitV:
+        case pdf::DestinationType::FitBV:
+            QCOMPARE(destination.getLeft(), 5.0);
+            break;
+
+        case pdf::DestinationType::FitR:
+            QCOMPARE(destination.getLeft(), 5.0);
+            QCOMPARE(destination.getBottom(), 6.0);
+            QCOMPARE(destination.getRight(), 70.0);
+            QCOMPARE(destination.getTop(), 90.0);
+            break;
+
+        case pdf::DestinationType::XYZ:
+            QCOMPARE(destination.getLeft(), 5.0);
+            QCOMPARE(destination.getTop(), 90.0);
+            // The inherit-zoom variant writes the PDF null zoom, which reads
+            // back as "no zoom"; the plain XYZ keeps the requested zoom.
+            QCOMPARE(destination.hasZoom(), !inheritZoom);
+            if (!inheritZoom)
+            {
+                QCOMPARE(destination.getZoom(), 1.5);
+            }
+            break;
+
+        case pdf::DestinationType::Invalid:
+        case pdf::DestinationType::Named:
+            QFAIL("the command must never write an invalid destination");
+    }
+}
+
+void EditorHostTest::restrictedDocumentCannotEditBookmarksOrLinks()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("restricted-bookmarks.pdf"));
+    // AES-256 with no user permissions: the user may read but not modify.
+    QVERIFY(writeEncryptedFixture(path, pdf::PDFSecurityHandlerFactory::AES_256, QStringLiteral("fixture-user"), 0));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.passwordRequestId() != 0, 10000);
+    QVERIFY(host.submitPassword(host.passwordRequestId(), QStringLiteral("fixture-user")));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    QVERIFY(host.sessionForTest()->facade().permissions().encrypted);
+    QVERIFY(!host.sessionForTest()->facade().permissions().modify);
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionBookmarkPage")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionBookmarkAutoGenerate")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionBookmarkImport")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionCreateHyperlink")));
+    QVERIFY(!host.isCommandEnabled(QStringLiteral("actionCreateHyperlinkToThisPDFFit")));
+
+    // A disabled command starts nothing at all: there is no path from the menu
+    // to a half-written outline.
+    QCOMPARE(host.invokeCommand(QStringLiteral("actionBookmarkPage")), quint64(0));
+    QCOMPARE(host.invokeCommand(QStringLiteral("actionCreateHyperlink"),
+                                { { QStringLiteral("uri"), QStringLiteral("https://example.org") } }),
+             quint64(0));
+}
+
+void EditorHostTest::formValueEditRoutesThroughTheCatalogIntoCoreAndProducesANewRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("form.pdf"));
+    QVERIFY(writeFormFixtureDocument(path));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    const pdf::PDFRevisionIdentity before = session->facade().currentRevision();
+    QVERIFY(before.isValid());
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionSetFormFieldValue")));
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionEditDocumentMetadata")));
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionAddAttachment")));
+
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(model->hasForm());
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("original"));
+
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    // Text value: the catalog route into Core, one new revision, one dirty document.
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("typed in the shell"));
+    parameters.insert(QStringLiteral("revision"), before.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    const pdfinteraction::CommandResult textResult = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(textResult.state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(textResult.typedError, QString());
+
+    const pdf::PDFRevisionIdentity afterText = session->facade().currentRevision();
+    QVERIFY(afterText != before);
+    QCOMPARE(session->facade().state(), pdfinteraction::DocumentState::Ready);
+    QVERIFY(session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("MODIFIED"));
+    QCOMPARE(model->revision(), afterText.toString());
+    QVERIFY(model->modified());
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("typed in the shell"));
+
+    // Checkbox: the same route, and the value lands as the widget's on-state name.
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopCheck"));
+    parameters.insert(QStringLiteral("checked"), true);
+    parameters.insert(QStringLiteral("revision"), afterText.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 2);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    bool isName = false;
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopCheck"), &isName), QStringLiteral("Yes"));
+    QVERIFY(isName);
+
+    // Metadata: the same gateway, and the properties the model presents follow.
+    parameters.clear();
+    parameters.insert(QStringLiteral("title"), QStringLiteral("Shell title"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionEditDocumentMetadata"), parameters) != 0);
+    QCOMPARE(finished.count(), 3);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(model->title(), QStringLiteral("Shell title"));
+    QCOMPARE(session->context().getDocument()->getInfo()->title, QStringLiteral("Shell title"));
+
+    // A signature field is refused, and a refusal changes nothing at all.
+    const pdf::PDFRevisionIdentity beforeRefusal = session->facade().currentRevision();
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopSignature"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("not a signature"));
+    parameters.insert(QStringLiteral("revision"), beforeRefusal.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 4);
+    const pdfinteraction::CommandResult refused = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(refused.typedError, QStringLiteral("form/unsupported-field-type"));
+    QCOMPARE(session->facade().currentRevision(), beforeRefusal);
+}
+
+void EditorHostTest::authoringEditRefusesAStaleRevisionAndChangesNothing()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("stale-form.pdf"));
+    QVERIFY(writeFormFixtureDocument(path));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    const pdf::PDFRevisionIdentity first = session->facade().currentRevision();
+    QVERIFY(first.isValid());
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("the first edit"));
+    parameters.insert(QStringLiteral("revision"), first.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+
+    const pdf::PDFRevisionIdentity current = session->facade().currentRevision();
+    QVERIFY(current != first);
+
+    // The edit begun against the superseded revision is refused by the fence.
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("stale edit"));
+    parameters.insert(QStringLiteral("revision"), first.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 2);
+    const pdfinteraction::CommandResult stale = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(stale.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(stale.typedError, QStringLiteral("document/stale-revision"));
+    QCOMPARE(session->facade().currentRevision(), current);
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("the first edit"));
+
+    // An edit naming no revision at all never reaches the fence: the catalog
+    // refuses the missing declared parameter, and the refusal is reported.
+    parameters.clear();
+    parameters.insert(QStringLiteral("field"), QStringLiteral("LoopText"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("unfenced edit"));
+    QCOMPARE(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters), quint64(0));
+    QCOMPARE(finished.count(), 3);
+    const pdfinteraction::CommandResult unfenced = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(unfenced.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(unfenced.typedError, QStringLiteral("command/missing-parameter"));
+    QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopText")), QStringLiteral("the first edit"));
+}
+
+void EditorHostTest::xfaOnlyFormIsReportedAsUnsupportedThroughTheShell()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("xfa-form.pdf"));
+    QVERIFY(writeXfaOnlyFixtureDocument(path));
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    const pdf::PDFRevisionIdentity before = session->facade().currentRevision();
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("field"), QStringLiteral("AnyField"));
+    parameters.insert(QStringLiteral("value"), QStringLiteral("value"));
+    parameters.insert(QStringLiteral("revision"), before.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    const pdfinteraction::CommandResult refused = finished.last().at(0).value<pdfinteraction::CommandResult>();
+    QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(refused.typedError, QStringLiteral("form/xfa-unsupported"));
+    QCOMPARE(session->facade().currentRevision(), before);
+    QVERIFY(!session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("OPEN"));
+}
+
+void EditorHostTest::attachmentEditsAndExtractionRouteThroughTheShell()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QTemporaryDir extractionDirectory;
+    QVERIFY(extractionDirectory.isValid());
+
+    const QString path = directory.filePath(QStringLiteral("plain.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 200, 200));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    const QString textSource = directory.filePath(QStringLiteral("notes.txt"));
+    {
+        QFile source(textSource);
+        QVERIFY(source.open(QIODevice::WriteOnly));
+        QCOMPARE(source.write(QByteArrayLiteral("attachment payload")), qint64(18));
+    }
+    const QString executableSource = directory.filePath(QStringLiteral("setup.exe"));
+    {
+        QFile source(executableSource);
+        QVERIFY(source.open(QIODevice::WriteOnly));
+        source.write(QByteArrayLiteral("MZ not really an executable"));
+    }
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    auto* model = qobject_cast<QuickDocumentModel*>(host.documentModel());
+    QVERIFY(model);
+    QVERIFY(!model->hasAttachments());
+
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("name"), QStringLiteral("notes.txt"));
+    parameters.insert(QStringLiteral("path"), textSource);
+    parameters.insert(QStringLiteral("description"), QStringLiteral("Reviewer notes"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionAddAttachment"), parameters) != 0);
+    QCOMPARE(finished.count(), 1);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QVERIFY(model->hasAttachments());
+    QVERIFY(session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+
+    // Extraction writes through the atomic writer; a text file is not refused.
+    QVERIFY(host.extractAttachmentFileUrl(QUrl::fromLocalFile(extractionDirectory.path()), QStringLiteral("notes.txt")));
+    const QVariantMap extraction = host.attachmentExtraction();
+    QCOMPARE(extraction.value(QStringLiteral("status")).toString(), QStringLiteral("written"));
+    QCOMPARE(extraction.value(QStringLiteral("fileName")).toString(), QStringLiteral("notes.txt"));
+    QCOMPARE(extraction.value(QStringLiteral("autoOpenRefused")).toBool(), false);
+    QCOMPARE(extraction.value(QStringLiteral("typedError")).toString(), QString());
+    {
+        QFile extracted(extractionDirectory.filePath(QStringLiteral("notes.txt")));
+        QVERIFY(extracted.open(QIODevice::ReadOnly));
+        QCOMPARE(extracted.readAll(), QByteArrayLiteral("attachment payload"));
+    }
+
+    // An executable-type attachment is extracted, and must not be auto-opened.
+    parameters.clear();
+    parameters.insert(QStringLiteral("name"), QStringLiteral("setup.exe"));
+    parameters.insert(QStringLiteral("path"), executableSource);
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionAddAttachment"), parameters) != 0);
+    QCOMPARE(finished.count(), 2);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QVERIFY(host.extractAttachmentFileUrl(QUrl::fromLocalFile(extractionDirectory.path()), QStringLiteral("setup.exe")));
+    QCOMPARE(host.attachmentExtraction().value(QStringLiteral("status")).toString(), QStringLiteral("written"));
+    QCOMPARE(host.attachmentExtraction().value(QStringLiteral("autoOpenRefused")).toBool(), true);
+
+    // Removal unlists the attachment, and the model follows both ways.
+    parameters.clear();
+    parameters.insert(QStringLiteral("name"), QStringLiteral("notes.txt"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRemoveAttachment"), parameters) != 0);
+    QCOMPARE(finished.count(), 3);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QVERIFY(model->hasAttachments());
+
+    parameters.clear();
+    parameters.insert(QStringLiteral("name"), QStringLiteral("setup.exe"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRemoveAttachment"), parameters) != 0);
+    QCOMPARE(finished.count(), 4);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    QVERIFY(!model->hasAttachments());
+
+    // Removing what is no longer there is a typed refusal, not a success.
+    parameters.clear();
+    parameters.insert(QStringLiteral("name"), QStringLiteral("setup.exe"));
+    parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionRemoveAttachment"), parameters) != 0);
+    QCOMPARE(finished.count(), 5);
+    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().typedError, QStringLiteral("attachment/not-found"));
+
+    // Extraction of an unknown name is refused with the Core writer's code.
+    QVERIFY(!host.extractAttachmentFileUrl(QUrl::fromLocalFile(extractionDirectory.path()), QStringLiteral("absent.txt")));
+    QCOMPARE(host.attachmentExtraction().value(QStringLiteral("status")).toString(), QStringLiteral("refused"));
+    QCOMPARE(host.attachmentExtraction().value(QStringLiteral("typedError")).toString(), QStringLiteral("attachment/not-found"));
+}
+
+void EditorHostTest::sendByEMailHandsOverOnlyThePublishedRevision()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("mail.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 200, 200));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host(nullptr, nullptr, m_fixtureRecipes->path());
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionSend_by_E_Mail")));
+
+    QSignalSpy mailSpy(&host, &EditorHost::documentMailRequested);
+    QSignalSpy finished(&session->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    const pdf::PDFRevisionIdentity published = session->facade().currentRevision();
+
+    // The save command finishes its own invocation too, so results are read by
+    // command id rather than by position.
+    const auto lastResultFor = [&finished](const QString& commandId)
+    {
+        for (int index = finished.count() - 1; index >= 0; --index)
+        {
+            const pdfinteraction::CommandResult result = finished.at(index).at(0).value<pdfinteraction::CommandResult>();
+            if (result.command == commandId)
+            {
+                return result;
+            }
+        }
+        return pdfinteraction::CommandResult();
+    };
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSend_by_E_Mail")) != 0);
+    QCOMPARE(lastResultFor(QStringLiteral("actionSend_by_E_Mail")).state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(mailSpy.count(), 1);
+    QCOMPARE(mailSpy.last().at(0).toString(), path);
+    QCOMPARE(mailSpy.last().at(1).toString(), published.toString());
+
+    // An unsaved edit makes the file on disk a different revision than the one
+    // on screen, so the hand-off is refused rather than mailed as current.
+    QVariantMap parameters;
+    parameters.insert(QStringLiteral("title"), QStringLiteral("Unsaved title"));
+    parameters.insert(QStringLiteral("revision"), published.toString());
+    QVERIFY(host.invokeCommand(QStringLiteral("actionEditDocumentMetadata"), parameters) != 0);
+    QCOMPARE(lastResultFor(QStringLiteral("actionEditDocumentMetadata")).state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(host.documentShellStatus(), QStringLiteral("MODIFIED"));
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSend_by_E_Mail")) != 0);
+    const pdfinteraction::CommandResult refused = lastResultFor(QStringLiteral("actionSend_by_E_Mail"));
+    QCOMPARE(refused.state, pdfinteraction::CommandTerminalState::Failed);
+    QCOMPARE(refused.typedError, QStringLiteral("mail/unsaved-changes"));
+    QCOMPARE(mailSpy.count(), 1);
+
+    // Saving publishes the revision the shell was showing, and the hand-off
+    // works again with the saved file and that same revision.
+    const QString savedPath = directory.filePath(QStringLiteral("mail-saved.pdf"));
+    const pdf::PDFRevisionIdentity edited = session->facade().currentRevision();
+    host.saveAsFileUrl(QUrl::fromLocalFile(savedPath));
+    QTRY_COMPARE_WITH_TIMEOUT(host.documentShellStatus(), QStringLiteral("OUTPUT_SAVED"), 15000);
+
+    QVERIFY(host.invokeCommand(QStringLiteral("actionSend_by_E_Mail")) != 0);
+    QCOMPARE(lastResultFor(QStringLiteral("actionSend_by_E_Mail")).state, pdfinteraction::CommandTerminalState::Completed);
+    QCOMPARE(mailSpy.count(), 2);
+    QCOMPARE(mailSpy.last().at(0).toString(), savedPath);
+    QCOMPARE(mailSpy.last().at(1).toString(), edited.toString());
+    QCOMPARE(session->facade().currentRevision(), edited);
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

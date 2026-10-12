@@ -195,6 +195,12 @@ void DocumentFacade::markModified()
         return;
     }
 
+    documentContext->markModified();
+    noteAuthoringMutation();
+}
+
+void DocumentFacade::noteAuthoringMutation()
+{
     // A queued save was fenced against the revision that is about to be
     // superseded. The scheduler would discard it silently, leaving the
     // invocation without a terminal state, so it is superseded here instead.
@@ -202,8 +208,6 @@ void DocumentFacade::markModified()
     {
         supersedePending(CommandTerminalState::Cancelled, QStringLiteral("document/superseded"));
     }
-
-    documentContext->markModified();
 
     if (!m_publishedKey.isEmpty())
     {

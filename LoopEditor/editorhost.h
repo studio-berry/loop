@@ -56,6 +56,7 @@
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistory.h"
 #include "pdfsignaturehandler.h"
+#include "pdfauthoringedit.h"
 
 #include <QColor>
 #include <QImage>
@@ -168,6 +169,13 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString settingsNotice READ settingsNotice NOTIFY presentationChanged)
     Q_PROPERTY(bool settingsResetPending READ settingsResetPending NOTIFY presentationChanged)
     Q_PROPERTY(QVariantMap diagnosticsBundle READ diagnosticsBundle NOTIFY presentationChanged)
+
+    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
+    // The last attachment extraction's outcome: `status` is `idle`, `written` or
+    // `refused`; `fileName` is the extracted name alone (never a path);
+    // `autoOpenRefused` says the extracted file must not be auto-opened because
+    // its type is executable; `typedError` is the stable refusal code.
+    Q_PROPERTY(QVariantMap attachmentExtraction READ attachmentExtraction NOTIFY presentationChanged)
 
     // ---- Workspace surfaces (#586) -------------------------------------------------
     // Every property below is a read-only projection of what Core, PdfTool or the
@@ -354,6 +362,17 @@ public:
     /// directory and projects the outcome. QML passes a folder URL; paths stay
     /// in C++.
     Q_INVOKABLE bool collectDiagnosticsFileUrl(const QUrl& parentDirectory);
+
+    // ---- Direct authoring edits (ADR-014, issue #242) ------------------------------
+    /// The last attachment extraction's outcome. See the Q_PROPERTY above.
+    QVariantMap attachmentExtraction() const { return m_attachmentExtraction; }
+
+    /// Extracts one attachment into `directory` through the atomic writer, which
+    /// refuses to replace an existing file. The outcome is projected into
+    /// attachmentExtraction(); an extracted file whose type is executable is
+    /// reported with `autoOpenRefused`, and the shell must not hand it to the
+    /// operating system's opener. Reads the document; mutates nothing.
+    Q_INVOKABLE bool extractAttachmentFileUrl(const QUrl& directory, const QString& name);
 
     /// Operator lifecycle of the governed-correction route (#586):
     /// `idle`, `planned`, `preview-ready`, `approved`, `executing`, `succeeded`,
@@ -617,6 +636,18 @@ public:
     /// in-flight drag with ToolChanged (#141 AC3).
     Q_INVOKABLE bool setActiveTool(const QString& toolId);
 
+    // ---- Bookmarks and hyperlinks (issue #233) -------------------------------------
+    /// Imports a bookmark interchange file and replaces the document outline
+    /// with its records. `revision` is the revision the operator saw when the
+    /// file dialog opened; an import that no longer matches it is refused with
+    /// a typed reason instead of landing on a revision the operator never saw.
+    Q_INVOKABLE bool importBookmarksFileUrl(const QUrl& url, const QString& revision);
+
+    /// Exports the document outline to the bookmark interchange file. The
+    /// exported bytes describe `revision`; a stale `revision` is refused rather
+    /// than exported as if it described the current document.
+    Q_INVOKABLE bool exportBookmarksFileUrl(const QUrl& url, const QString& revision);
+
     // ---- Select, copy and capture (issue #232) -------------------------------------
     /// Copies the canvas text selection to the clipboard. The clipboard is only
     /// written when there is text to copy; a page with no text layer reports
@@ -693,11 +724,24 @@ signals:
     /// asks for one and answers with extractCurrentPageImagesFileUrl().
     void imageExtractionRequested();
 
+    /// Send by e-mail hands the current published revision to the shell's mail
+    /// client. `path` is the published artifact and `revision` is the identity it
+    /// was published as, so the receiving side can refuse a mismatch. Emitted
+    /// only for an open document with no unsaved changes: an unsaved or stale
+    /// revision is refused instead, never mailed as if it were the file.
+    void documentMailRequested(const QString& path, const QString& revision);
+
     /// The shell-side surfaces (#239). The commands emit these; QML owns the
     /// dialogs and opens them.
     void settingsPanelRequested();
     void settingsResetRequested();
     void diagnosticsCollectionRequested();
+
+    /// The bookmark import/export commands need a file, so the shell asks for
+    /// one and answers with importBookmarksFileUrl()/exportBookmarksFileUrl().
+    /// The commands themselves write nothing.
+    void bookmarkImportRequested();
+    void bookmarkExportRequested();
 
 private:
     void connectFacade();
@@ -709,7 +753,45 @@ private:
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
     bool commandPermissionAllowed(const QString& commandId) const;
+    /// Applies one document-family direct-edit command through the facade's
+    /// direct-edit gateway (ADR-014). The command's declared scalars become the
+    /// request's payload; for an attachment the host reads the source file, so
+    /// the gateway itself never touches the filesystem. The facade's typed
+    /// refusal is returned as it stands.
+    pdfinteraction::DirectEditOutcome submitDocumentDirectEdit(pdfinteraction::DirectEditKind kind,
+                                                               const QVariantMap& parameters);
+    /// Hands the current published revision to the shell's mail client. Refuses
+    /// when there is no open document, when its source is not a file, or when it
+    /// has unsaved changes: the bytes on disk would then be a different revision
+    /// than the one on screen. Never writes and never opens anything itself.
+    bool handOffPublishedRevisionToMail(QString* typedError);
     bool requestMoveSelection(const QVariantMap& parameters);
+
+    // ---- Bookmarks and hyperlinks (issue #233) -------------------------------------
+    /// Runs one authoring command: submits the built edit through the facade
+    /// gateway and finishes the invocation with the outcome, announcing what
+    /// happened. `buildError` is the command's typed refusal when no edit could
+    /// be built.
+    void runAuthoringEdit(pdfinteraction::CommandInvocationId invocation,
+                          const std::optional<pdf::PDFAuthoringEdit>& edit,
+                          const QString& buildError,
+                          const QVariantMap& parameters);
+    /// The fence and the facade call behind every authoring command. `typedError`
+    /// is set on refusal.
+    pdfinteraction::DirectEditOutcome submitAuthoringEdit(const pdf::PDFAuthoringEdit& edit,
+                                                          const QVariantMap& parameters,
+                                                          QString& typedError);
+    /// The link rectangle and page a hyperlink command addresses: explicit
+    /// scalars when the surface supplied them, otherwise the current text
+    /// selection, which is the Quick shell's own "this region" gesture.
+    bool authoringLinkGeometry(const QVariantMap& parameters, int* pageIndex, QRectF* rectangle,
+                               QString& typedError) const;
+    /// Moves to the next (1) or previous (-1) bookmark page in outline order,
+    /// wrapping at the ends like the shell's historical bookmark cursor.
+    bool goToAdjacentBookmark(int direction, QString& typedError);
+    /// The operator-facing sentence for one applied edit.
+    QString authoringEditAnnouncement(const pdf::PDFAuthoringEdit& edit,
+                                      const pdfinteraction::DirectEditOutcome& outcome) const;
     void moveSearch(int direction);
     bool moveFindingSelection(int direction);
     void refreshHitTestSources();
@@ -834,6 +916,10 @@ private:
         int fileCount = 0;
     };
     DiagnosticsBundleState m_diagnosticsBundle;
+
+    /// The last attachment extraction's outcome (ADR-014, issue #242). A
+    /// projection of the Core writer's own result: file name only, never a path.
+    QVariantMap m_attachmentExtraction;
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;

@@ -131,7 +131,8 @@ DocumentPermissions DocumentFacade::permissions() const
              security->isAllowed(Permission::PrintLowResolution) || security->isAllowed(Permission::PrintHighResolution),
              security->isAllowed(Permission::Modify),
              security->isAllowed(Permission::CopyContent),
-             security->isAllowed(Permission::Assemble) };
+             security->isAllowed(Permission::Assemble),
+             security->isAllowed(Permission::ModifyInteractiveItems) };
 }
 
 bool DocumentOperatorState::canActOnInspection() const
