@@ -607,6 +607,7 @@ private slots:
     void softProofWithoutAUsableOutputIntentIsAVisibleState();
     void platesListSeparationsAndCarryVisibilityWithoutTouchingTheDocument();
     void inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable();
+    void inkCoverageRefusesSupersededJobsAndDropsTheReadoutOnRevisionChange();
 
     // Shell settings, render options and diagnostics (#239).
     void settingsRoundTripThroughTheOneStore();
@@ -617,6 +618,8 @@ private slots:
 
     /// Issue #232: extraction refuses to overwrite an existing file up front.
     void imageExtractionRefusesToOverwriteAnExistingFile();
+    /// Issue #232: a screenshot capture refuses to overwrite an existing file.
+    void screenshotCaptureRefusesToOverwriteAnExistingFile();
 
     // Bookmarks and hyperlinks (#233, ADR-014).
     void bookmarkCommandsWriteTheOutlineThroughTheCatalog();
@@ -3835,6 +3838,63 @@ void EditorHostTest::inkCoverageReadoutAtAPointIsMeasuredOrExplicitlyUnavailable
     QVERIFY(!empty.requestInkCoverageAtPoint(10.0, 10.0));
 }
 
+/// The ink-coverage readout is a measurement of one revision. A job the
+/// scheduler marks stale publishes the not-measured state, never ink numbers
+/// measured against a superseded revision, and a revision change drops the
+/// readout instead of letting it outlive its revision.
+void EditorHostTest::inkCoverageRefusesSupersededJobsAndDropsTheReadoutOnRevisionChange()
+{
+    const QString path = preflightFixturesDir() + QStringLiteral("/color-cmyk.pdf");
+    QVERIFY2(QFileInfo::exists(path), qPrintable(path));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 30000);
+
+    // A real measurement first: it is the readout the revision change below
+    // must drop.
+    QVERIFY(host.requestInkCoverageAtPoint(150.0, 150.0));
+    QTRY_VERIFY_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("available")).toBool(), 30000);
+
+    // An edit moves the document to a new revision. The readout measured the
+    // revision that just left, so it is dropped rather than kept on.
+    const QString beforeEdit = host.sessionForTest()->facade().currentRevision().toString();
+    QSignalSpy finished(&host.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
+    const quint64 bookmark = host.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                                { { QStringLiteral("title"), QStringLiteral("Chapter one") } });
+    QVERIFY(bookmark != 0);
+    const std::optional<pdfinteraction::CommandResult> bookmarkResult = terminalResultFor(finished, bookmark);
+    QVERIFY(bookmarkResult.has_value());
+    QVERIFY2(bookmarkResult->state == pdfinteraction::CommandTerminalState::Completed,
+             qPrintable(bookmarkResult->typedError));
+    QVERIFY(host.sessionForTest()->facade().currentRevision().toString() != beforeEdit);
+    QVERIFY(host.inkCoverageReadout().isEmpty());
+
+    // A stale job still delivers its completion, but the completion is not a
+    // measurement. The revision fence is moved ahead of the request so the
+    // scheduler marks the job stale the way a superseded run is marked, then a
+    // live request under it publishes the not-measured shape.
+    pdf::PDFJobScheduler& scheduler = host.sessionForTest()->scheduler();
+    const QString documentKey = host.sessionForTest()->revisionSource()->documentKey();
+    QVERIFY(!documentKey.isEmpty());
+    const QString currentRevision = host.sessionForTest()->facade().currentRevision().toString();
+    scheduler.setCurrentRevision(documentKey, currentRevision + QStringLiteral("-superseded"));
+    QVERIFY(host.requestInkCoverageAtPoint(150.0, 150.0));
+    QTRY_COMPARE_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("reason")).toString(),
+                              QStringLiteral("ink-coverage/stale-or-cancelled"), 30000);
+    QVERIFY(!host.inkCoverageReadout().value(QStringLiteral("available")).toBool());
+    QCOMPARE(host.inkCoverageReadout().value(QStringLiteral("pageIndex")).toInt(), 0);
+    QVERIFY(!host.inkCoverageReadout().contains(QStringLiteral("totalInkCoverage")));
+
+    // A fresh measurement on the current revision repopulates the readout.
+    scheduler.setCurrentRevision(documentKey, currentRevision);
+    QVERIFY(host.requestInkCoverageAtPoint(150.0, 150.0));
+    QTRY_VERIFY_WITH_TIMEOUT(host.inkCoverageReadout().value(QStringLiteral("available")).toBool(), 30000);
+    QVERIFY(host.inkCoverageReadout().value(QStringLiteral("totalInkCoverage")).toDouble() > 0.0);
+}
+
 
 void EditorHostTest::settingsRoundTripThroughTheOneStore()
 {
@@ -4127,6 +4187,47 @@ void EditorHostTest::imageExtractionRefusesToOverwriteAnExistingFile()
     QCOMPARE(untouched.readAll(), QByteArray("keep-me"));
 }
 
+/// Issue #232. A screenshot capture refuses to overwrite an existing file and
+/// leaves its bytes untouched, so a repeated capture cannot silently replace a
+/// saved one.
+void EditorHostTest::screenshotCaptureRefusesToOverwriteAnExistingFile()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = writePagesFixture(directory.filePath(QStringLiteral("capture.pdf")), 1);
+    QVERIFY(!path.isEmpty());
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    host.goToPage(0);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), 0, 15000);
+    waitForSurfacesToSettle(host);
+
+    // The capture refuses because of the existing file only once there is a
+    // composed image: wait for an admitted canvas tile, then prove composition
+    // with a capture into a free path, so the refusal below is the overwrite
+    // policy and not an empty canvas.
+    pdfinteraction::PageSurfaceCoordinator* surfaces = host.sessionForTest()->surfaces();
+    QTRY_VERIFY_WITH_TIMEOUT(!surfaces->snapshot().isEmpty(), 15000);
+    const QString fresh = directory.filePath(QStringLiteral("fresh.png"));
+    QVERIFY(host.captureCanvasFileUrl(QUrl::fromLocalFile(fresh)));
+    QVERIFY(QFileInfo::exists(fresh));
+
+    const QString existing = directory.filePath(QStringLiteral("existing.png"));
+    QFile planted(existing);
+    QVERIFY(planted.open(QIODevice::WriteOnly));
+    planted.write("keep-me");
+    planted.close();
+
+    QVERIFY(!host.captureCanvasFileUrl(QUrl::fromLocalFile(existing)));
+
+    QFile captured(existing);
+    QVERIFY(captured.open(QIODevice::ReadOnly));
+    QCOMPARE(captured.readAll(), QByteArray("keep-me"));
+}
+
 void EditorHostTest::bookmarkCommandsWriteTheOutlineThroughTheCatalog()
 {
     QTemporaryDir directory;
@@ -4257,9 +4358,19 @@ void EditorHostTest::bookmarkImportExportRoundTripsAndRefusesAStaleRevision()
     waitForSurfacesToSettle(source);
 
     QSignalSpy finished(&source.sessionForTest()->catalog(), &pdfinteraction::CommandCatalog::invocationFinished);
-    QVERIFY(source.invokeCommand(QStringLiteral("actionBookmarkPage"),
-                                 { { QStringLiteral("title"), QStringLiteral("Chapter one") } }) != 0);
-    QVERIFY(source.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate")) != 0);
+    const quint64 custom = source.invokeCommand(QStringLiteral("actionBookmarkPage"),
+                                                { { QStringLiteral("title"), QStringLiteral("Chapter one") } });
+    QVERIFY(custom != 0);
+    const std::optional<pdfinteraction::CommandResult> customResult = terminalResultFor(finished, custom);
+    QVERIFY(customResult.has_value());
+    QVERIFY2(customResult->state == pdfinteraction::CommandTerminalState::Completed,
+             qPrintable(customResult->typedError));
+    const quint64 generated = source.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate"));
+    QVERIFY(generated != 0);
+    const std::optional<pdfinteraction::CommandResult> generatedResult = terminalResultFor(finished, generated);
+    QVERIFY(generatedResult.has_value());
+    QVERIFY2(generatedResult->state == pdfinteraction::CommandTerminalState::Completed,
+             qPrintable(generatedResult->typedError));
 
     const pdf::PDFDocumentPointer sourceDocument = source.sessionForTest()->context().getDocumentPointer();
     QString typedError;
@@ -4267,6 +4378,13 @@ void EditorHostTest::bookmarkImportExportRoundTripsAndRefusesAStaleRevision()
         pdf::PDFAuthoringEditWriter::readOutline(sourceDocument.data(), typedError);
     QVERIFY2(sourceRecords.has_value(), qPrintable(typedError));
     QCOMPARE(sourceRecords->size(), 3);
+    // The fixture has no outline of its own, so an auto-generate regression
+    // that replaced the outline would still produce three records. The
+    // operator's bookmark must be one of them.
+    pdf::PDFBookmarkRecord customRecord;
+    customRecord.title = QStringLiteral("Chapter one");
+    customRecord.pageIndex = 0;
+    QVERIFY2(sourceRecords->contains(customRecord), "the custom bookmark at page 0 survives auto-generation");
 
     // Export through the catalog writes the interchange file.
     const QString bookmarkPath = directory.filePath(QStringLiteral("bookmarks.json"));
@@ -4532,7 +4650,10 @@ void EditorHostTest::formValueEditRoutesThroughTheCatalogIntoCoreAndProducesANew
     parameters.insert(QStringLiteral("revision"), afterText.toString());
     QVERIFY(host.invokeCommand(QStringLiteral("actionSetFormFieldValue"), parameters) != 0);
     QCOMPARE(finished.count(), 2);
-    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    {
+        const pdfinteraction::CommandResult checkboxResult = finished.last().at(0).value<pdfinteraction::CommandResult>();
+        QVERIFY2(checkboxResult.state == pdfinteraction::CommandTerminalState::Completed, qPrintable(checkboxResult.typedError));
+    }
     bool isName = false;
     QCOMPARE(readFormFieldValue(session->context().getDocument(), QStringLiteral("LoopCheck"), &isName), QStringLiteral("Yes"));
     QVERIFY(isName);
@@ -4716,7 +4837,10 @@ void EditorHostTest::attachmentEditsAndExtractionRouteThroughTheShell()
     parameters.insert(QStringLiteral("revision"), session->facade().currentRevision().toString());
     QVERIFY(host.invokeCommand(QStringLiteral("actionAddAttachment"), parameters) != 0);
     QCOMPARE(finished.count(), 2);
-    QCOMPARE(finished.last().at(0).value<pdfinteraction::CommandResult>().state, pdfinteraction::CommandTerminalState::Completed);
+    {
+        const pdfinteraction::CommandResult executableResult = finished.last().at(0).value<pdfinteraction::CommandResult>();
+        QVERIFY2(executableResult.state == pdfinteraction::CommandTerminalState::Completed, qPrintable(executableResult.typedError));
+    }
     QVERIFY(host.extractAttachmentFileUrl(QUrl::fromLocalFile(extractionDirectory.path()), QStringLiteral("setup.exe")));
     QCOMPARE(host.attachmentExtraction().value(QStringLiteral("status")).toString(), QStringLiteral("written"));
     QCOMPARE(host.attachmentExtraction().value(QStringLiteral("autoOpenRefused")).toBool(), true);

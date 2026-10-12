@@ -84,6 +84,15 @@ Item {
                     TabButton {
                         objectName: "annotationsTabButton"
                         text: qsTr("Annotations")
+                        contentItem: Text {
+                            text: parent.text
+                            font: parent.font
+                            color: parent.palette.buttonText
+                            wrapMode: Text.WordWrap
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            Accessible.ignored: true
+                        }
                         Accessible.name: qsTr("Annotations tab")
                     }
                 }

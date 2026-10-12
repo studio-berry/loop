@@ -666,6 +666,15 @@ bool EditorHost::copySelectedText()
         return false;
     }
 
+    // The document's own copy permission decides before the controller is
+    // asked, and the refusal carries the sentence the CLI refuses with, so a
+    // copy-restricted document never reaches the clipboard through this seam.
+    if (!m_documentModel.canCopy())
+    {
+        announceDocumentState(tr("Copy refused: %1").arg(tr("Document doesn't allow to copy content.")));
+        return false;
+    }
+
     // The refusal is typed and named, and the clipboard is left untouched: an
     // empty string is never copied as success.
     const pdfinteraction::TextCopyResult result = interaction->selectedText();
@@ -2893,16 +2902,27 @@ void EditorHost::finishInkCoverageJob(const pdf::PDFJobSnapshot& snapshot)
         return;
     }
 
-    if (!outcome->ok)
+    const bool measured = snapshot.status == pdf::PDFJobStatus::Succeeded;
+    if (!measured || !outcome->ok)
     {
-        // A readout that could not be produced is a visible state, never a zero:
-        // "0% ink" and "not measured" are different facts.
+        // A readout that could not be produced, or one the scheduler has since
+        // superseded, cancelled or failed, is a visible state, never a zero:
+        // "0% ink" and "not measured" are different facts, and ink numbers
+        // measured against another revision are not this revision's numbers.
+        QString reason = outcome->reason;
+        if (!measured)
+        {
+            reason = QStringLiteral("ink-coverage/stale-or-cancelled");
+        }
+        else if (reason.isEmpty())
+        {
+            reason = QStringLiteral("ink-coverage/not-measured");
+        }
+
         QVariantMap readout;
         readout.insert(QStringLiteral("available"), false);
         readout.insert(QStringLiteral("pageIndex"), outcome->pageIndex);
-        readout.insert(QStringLiteral("reason"), outcome->reason.isEmpty()
-                                                     ? QStringLiteral("ink-coverage/not-measured")
-                                                     : outcome->reason);
+        readout.insert(QStringLiteral("reason"), reason);
         readout.insert(QStringLiteral("channels"), QVariantList());
         m_inkCoverageReadout = readout;
     }
@@ -4887,6 +4907,10 @@ void EditorHost::connectFacade()
             [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
             {
                 cancelPreflight();
+                // The ink-coverage readout measured the revision that just left;
+                // dropping it is the honest state, and a fresh measurement
+                // repopulates it.
+                m_inkCoverageReadout = QVariantMap();
                 syncRevisionModels();
                 if (m_documentBound)
                 {
@@ -5676,17 +5700,19 @@ void EditorHost::refreshFeatureAvailability()
     availability.insert(MoveSelectionCommandId, ready && m_session->facade().permissions().allowsCorrection());
 
     // Select, copy and capture (issue #232). Every one of these is enabled with
-    // a document: Copy deliberately stays enabled without a selection so its
-    // typed refusal is reachable and visible, rather than the command silently
-    // disappearing from the menu.
+    // a document, and copy and extraction additionally follow the document's
+    // copy permission: Copy deliberately stays enabled without a selection so
+    // its typed refusal is reachable and visible, rather than the command
+    // silently disappearing from the menu.
     for (const QString& id : { QStringLiteral("actionSelectText"), QStringLiteral("actionSelectTextAll"),
                                QStringLiteral("actionDeselectText"), QStringLiteral("actionSelectTable"),
-                               QStringLiteral("actionCopyText"), QStringLiteral("actionGoToNextLine"),
-                               QStringLiteral("actionGoToPreviousLine"), QStringLiteral("actionScreenshot"),
-                               QStringLiteral("actionExtractImage") })
+                               QStringLiteral("actionGoToNextLine"), QStringLiteral("actionGoToPreviousLine"),
+                               QStringLiteral("actionScreenshot") })
     {
         availability.insert(id, ready);
     }
+    availability.insert(QStringLiteral("actionCopyText"), ready && m_documentModel.canCopy());
+    availability.insert(QStringLiteral("actionExtractImage"), ready && m_documentModel.canCopy());
 
     // The developer-diagnostics shell surfaces (#239): settings, render options
     // and the diagnostics bundle. They follow the same flag the menu gate

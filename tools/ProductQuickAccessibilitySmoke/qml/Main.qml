@@ -339,6 +339,35 @@ ApplicationWindow {
     }
 
     FileDialog {
+        id: bookmarkImportDialog
+        title: qsTr("Import Bookmarks")
+        nameFilters: [qsTr("Bookmark files (*.json)")]
+        property string revision: ""
+        onAccepted: {
+            if (host) {
+                host.importBookmarksFileUrl(selectedFile, revision)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
+        id: bookmarkExportDialog
+        title: qsTr("Export Bookmarks")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("Bookmark files (*.json)")]
+        property string revision: ""
+        onAccepted: {
+            if (host) {
+                host.exportBookmarksFileUrl(selectedFile, revision)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    FileDialog {
         id: preflightReportDialog
         title: qsTr("Export Preflight Report")
         fileMode: FileDialog.SaveFile
@@ -413,6 +442,27 @@ ApplicationWindow {
         }
         function onImageExtractionRequested() {
             extractImagesDialog.open()
+        }
+        function onBookmarkImportRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            bookmarkImportDialog.revision = host.outputRevision()
+            bookmarkImportDialog.open()
+        }
+        function onBookmarkExportRequested() {
+            if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)
+            bookmarkExportDialog.revision = host.outputRevision()
+            bookmarkExportDialog.open()
+        }
+        function onDocumentMailRequested(path, revision) {
+            // The host announced the hand-off before this handler ran; opening
+            // the mail client is the shell's job. The published path and the
+            // revision it was published as travel in the message so the
+            // receiving side can tell which revision the file is.
+            const name = path.replace(/^.*[\\/]/, "")
+            const subject = qsTr("Published document: %1").arg(name)
+            const body = qsTr("The published document %1 is at revision %2.").arg(path).arg(revision)
+            Qt.openUrlExternally("mailto:?subject=" + encodeURIComponent(subject) +
+                                 "&body=" + encodeURIComponent(body))
         }
         function onSettingsPanelRequested() {
             if (host && host.focusRestoration) host.focusRestoration.remember(window.activeFocusItem)

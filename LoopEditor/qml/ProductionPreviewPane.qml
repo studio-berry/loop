@@ -148,7 +148,7 @@ Pane {
                         ? ""
                         : qsTr("Soft proof %1: %2")
                             .arg(root.host.softProofStateName)
-                            .arg(root.host.softProofSummary())
+                            .arg(root.host.softProofSummary)
                     Accessible.name: qsTr("Soft proof state")
                     Accessible.description: text
                 }

@@ -127,6 +127,7 @@ QtObject {
         case "actionDeselectText": return qsTr("Deselect Text")
         case "actionEditDocumentMetadata": return qsTr("Edit Document Metadata")
         case "actionEncryption": return qsTr("Encryption")
+        case "actionExportDocument": return qsTr("Export document…")
         case "actionExtractImage": return qsTr("Extract Image")
         case "actionFind": return qsTr("Find")
         case "actionFindNext": return qsTr("Find Next")
