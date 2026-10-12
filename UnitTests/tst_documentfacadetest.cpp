@@ -45,10 +45,13 @@
 #include "documentloader.h"
 #include "jobsubmitter.h"
 
+#include "pdfauthoringedit.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdfjobscheduler.h"
+#include "pdfsecurityhandler.h"
 
 namespace
 {
@@ -386,6 +389,16 @@ private slots:
     void inspectionInvalidation();
     void inspectionStopsWhenContextIsDestroyed();
 
+    void signatureCheckReducesVerificationResultsToTheOperatorVocabulary();
+    void signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument();
+    void refusedSignatureCheckCompletionReleasesTheRunningCheck();
+    void supersededSignatureCheckCompletionDoesNotReleaseTheNewerCheck();
+
+    // The typed direct-edit gateway (ADR-014, issue #233).
+    void authoringEditAdvancesTheRevisionAndWritesTheOutline();
+    void authoringEditRefusesAStaleRevisionWithoutMutating();
+    void authoringEditRefusesWithoutAReadyDocumentOrPermission();
+
     void realDocumentRoundTripsThroughCoreReaderAndWriter();
 };
 
@@ -404,7 +417,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
     // library that lost its resource would present an empty command set as a
     // working one, so this also pins the resource wiring.
     QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
-    QCOMPARE(catalog.descriptors().size(), 108);
+    QCOMPARE(catalog.descriptors().size(), 113);
 
     const pdfinteraction::CommandDescriptor* open =
         catalog.descriptor(pdfinteraction::DocumentFacade::OpenCommandId);
@@ -436,7 +449,11 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    QCOMPARE(implemented, 26);
+    // The display colour modes (#235), the select/copy/capture commands (#232),
+    // the measure commands (#238), the shell settings/diagnostics surfaces
+    // (#239) and the bookmark/hyperlink commands (#233) joined the implemented
+    // set in epic #231.
+    QCOMPARE(implemented, 94);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
@@ -1306,6 +1323,186 @@ void DocumentFacadeTest::shellStatusProjectionIsPinned()
              QLatin1String("OUTPUT_PENDING"));
 }
 
+void DocumentFacadeTest::signatureCheckReducesVerificationResultsToTheOperatorVocabulary()
+{
+    using Result = pdf::PDFSignatureVerificationResult;
+    using State = pdfinteraction::DocumentSignatureState;
+    using Facade = pdfinteraction::DocumentFacade;
+
+    const auto verifiedResult = []()
+    {
+        Result result;
+        result.setFlag(Result::Certificate_OK, true);
+        result.setFlag(Result::Signature_OK, true);
+        result.validate();
+        return result;
+    };
+
+    // No results at all is the distinct "no signature is present" case, never
+    // folded into one of the four operator-facing states.
+    QCOMPARE(Facade::reduceSignatureState({}), State::None);
+
+    const Result valid = verifiedResult();
+    QCOMPARE(Facade::reduceSignatureState({ valid }), State::Valid);
+
+    Result notCovered = verifiedResult();
+    notCovered.addSignatureNotCoveredBytesWarning(16);
+    QCOMPARE(Facade::reduceSignatureState({ notCovered }), State::ModifiedAfterSigning);
+
+    Result tampered;
+    tampered.addInvalidSignatureError();
+    tampered.validate();
+    QCOMPARE(Facade::reduceSignatureState({ tampered }), State::Invalid);
+
+    Result selfSigned;
+    selfSigned.addCertificateSelfSignedError();
+    selfSigned.validate();
+    QCOMPARE(Facade::reduceSignatureState({ selfSigned }), State::Unknown);
+
+    Result noHandler;
+    noHandler.addNoHandlerError(QByteArrayLiteral("application/unknown"));
+    noHandler.validate();
+    QCOMPARE(Facade::reduceSignatureState({ noHandler }), State::Unknown);
+
+    Result revoked;
+    revoked.addCertificateRevokedError();
+    revoked.validate();
+    QCOMPARE(Facade::reduceSignatureState({ revoked }), State::Invalid);
+
+    // The strongest fact wins across a mixed set: a broken signature outranks a
+    // covered-bytes warning, which outranks an unestablished trust chain, and
+    // only an all-verified set is Valid.
+    QCOMPARE(Facade::reduceSignatureState({ valid, tampered }), State::Invalid);
+    QCOMPARE(Facade::reduceSignatureState({ valid, selfSigned }), State::Unknown);
+    QCOMPARE(Facade::reduceSignatureState({ valid, notCovered }), State::ModifiedAfterSigning);
+    QCOMPARE(Facade::reduceSignatureState({ valid, valid }), State::Valid);
+}
+
+void DocumentFacadeTest::signatureCheckAdmitsOnlyTheCurrentRevisionAndClearsWithTheDocument()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+
+    const auto token = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(token.has_value(), qPrintable(error));
+
+    // One check at a time.
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+
+    // A completion for a different token is refused, and the facts stay empty.
+    auto forged = *token;
+    ++forged.request;
+    QVERIFY(!harness.facade->completeSignatureCheck(forged, { validResult }, error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+
+    QVERIFY2(harness.facade->completeSignatureCheck(*token, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
+    QCOMPARE(harness.facade->signatureFacts().signatureCount, 1);
+
+    // A failed check is Unknown with the host-supplied policy-safe detail.
+    const auto failing = harness.facade->beginSignatureCheck(error);
+    QVERIFY(failing.has_value());
+    QVERIFY(harness.facade->failSignatureCheck(*failing,
+                                               QStringLiteral("The file changed since the document was loaded."),
+                                               error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Unknown);
+    QCOMPARE(harness.facade->signatureFacts().detail,
+             QStringLiteral("The file changed since the document was loaded."));
+
+    // Replacing the document clears the facts: nothing about the previous
+    // document is evidence about the next one.
+    harness.facade->open(QStringLiteral("/corpus/other.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::None);
+    QVERIFY(harness.facade->signatureFacts().detail.isEmpty());
+    QCOMPARE(harness.facade->signatureFacts().signatureCount, 0);
+}
+
+void DocumentFacadeTest::refusedSignatureCheckCompletionReleasesTheRunningCheck()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    const auto token = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(token.has_value(), qPrintable(error));
+
+    // A revision change while Core verifies: the completion no longer belongs
+    // to the current revision and is refused, but it must release the
+    // one-check-at-a-time flag instead of wedging every later check.
+    harness.context.markModified();
+
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+
+    QVERIFY(!harness.facade->completeSignatureCheck(*token, { validResult }, error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+
+    const auto resubmitted = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(resubmitted.has_value(), qPrintable(error));
+    QVERIFY2(harness.facade->completeSignatureCheck(*resubmitted, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
+
+    // The failed-check path releases the same way.
+    const auto failing = harness.facade->beginSignatureCheck(error);
+    QVERIFY(failing.has_value());
+    harness.context.markModified();
+    QVERIFY(!harness.facade->failSignatureCheck(*failing,
+                                                QStringLiteral("The file changed since the document was loaded."),
+                                                error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY2(harness.facade->beginSignatureCheck(error).has_value(), qPrintable(error));
+}
+
+void DocumentFacadeTest::supersededSignatureCheckCompletionDoesNotReleaseTheNewerCheck()
+{
+    Harness harness;
+    harness.facade->open(QStringLiteral("/corpus/fixture.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    QString error;
+    const auto oldToken = harness.facade->beginSignatureCheck(error);
+    QVERIFY(oldToken.has_value());
+    harness.context.markModified();
+    QVERIFY(!harness.facade->completeSignatureCheck(*oldToken, {}, error));
+
+    const auto current = harness.facade->beginSignatureCheck(error);
+    QVERIFY2(current.has_value(), qPrintable(error));
+
+    // The old completion is superseded now: it is refused, and it must not
+    // clear the newer check's running flag.
+    QVERIFY(!harness.facade->completeSignatureCheck(*oldToken, {}, error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    QVERIFY(!harness.facade->failSignatureCheck(*oldToken, QStringLiteral("stale"), error));
+    QCOMPARE(error, QStringLiteral("signature/not-current-or-terminal"));
+    QVERIFY(!harness.facade->beginSignatureCheck(error));
+    QCOMPARE(error, QStringLiteral("signature/check-already-running"));
+
+    // The newer check is the one that completes.
+    pdf::PDFSignatureVerificationResult validResult;
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Certificate_OK, true);
+    validResult.setFlag(pdf::PDFSignatureVerificationResult::Signature_OK, true);
+    validResult.validate();
+    QVERIFY2(harness.facade->completeSignatureCheck(*current, { validResult }, error), qPrintable(error));
+    QCOMPARE(harness.facade->signatureFacts().state, pdfinteraction::DocumentSignatureState::Valid);
+}
+
 void DocumentFacadeTest::realDocumentRoundTripsThroughCoreReaderAndWriter()
 {
     QTemporaryDir directory;
@@ -1668,6 +1865,147 @@ void DocumentFacadeTest::inspectionStopsWhenContextIsDestroyed()
     QVERIFY(!absent.canActOnInspection());
     QVERIFY(!facade.completeInspection(*token, fixture.result, fixture.evidence, error));
     QVERIFY(!facade.beginInspection(fixture.result.documentRevisionDigest, fixture.profile, error));
+}
+
+void DocumentFacadeTest::authoringEditAdvancesTheRevisionAndWritesTheOutline()
+{
+    Harness harness;
+    harness.loader.nextResult.document = buildDocument(3);
+    harness.facade->open(QStringLiteral("/corpus/bookmarks.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    const pdf::PDFRevisionIdentity before = harness.facade->currentRevision();
+    const QString documentKey = harness.context.getDocumentIdentity().documentId;
+
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 2;
+    request.authoring.text = QStringLiteral("Appendix");
+    request.revision = before;
+
+    const pdfinteraction::DirectEditOutcome outcome = harness.facade->applyDirectEdit(request);
+    QVERIFY2(outcome.accepted, qPrintable(outcome.typedError));
+    QCOMPARE(outcome.resolution, pdf::PDFAuthoringEditResult::Kind::BookmarkAdded);
+    QVERIFY(outcome.revision != before);
+    QCOMPARE(outcome.revision, harness.facade->currentRevision());
+    QVERIFY(!harness.facade->revisionSource().isCurrent(before));
+
+    // The edit is a document mutation: dirty, unsaved, and the published fence
+    // follows the revision the edit produced.
+    QVERIFY(harness.facade->facets().testFlag(pdfinteraction::DocumentFacet::Dirty));
+    QCOMPARE(harness.facade->shellDocumentStatus(), pdfinteraction::ShellDocumentStatus::Modified);
+    QCOMPARE(harness.submitter.publishedRevisions.value(documentKey), harness.context.getRevision());
+
+    // Read back through Core: the outline carries the bookmark.
+    QString typedError;
+    const std::optional<QList<pdf::PDFBookmarkRecord>> records =
+        pdf::PDFAuthoringEditWriter::readOutline(harness.context.getDocument(), typedError);
+    QVERIFY2(records.has_value(), qPrintable(typedError));
+    QCOMPARE(records->size(), 1);
+    QCOMPARE(records->at(0).title, QStringLiteral("Appendix"));
+    QCOMPARE(records->at(0).pageIndex, 2);
+}
+
+void DocumentFacadeTest::authoringEditRefusesAStaleRevisionWithoutMutating()
+{
+    Harness harness;
+    harness.loader.nextResult.document = buildDocument(2);
+    harness.facade->open(QStringLiteral("/corpus/stale.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+
+    // The revision the operator acted on.
+    const pdf::PDFRevisionIdentity displayed = harness.facade->currentRevision();
+
+    // The document moves underneath it, as a background save or another edit
+    // would.
+    harness.facade->markModified();
+    QVERIFY(!harness.facade->revisionSource().isCurrent(displayed));
+    const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
+    const pdf::PDFRevisionIdentity revisionBefore = harness.facade->currentRevision();
+
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 1;
+    request.revision = displayed;
+
+    const pdfinteraction::DirectEditOutcome outcome = harness.facade->applyDirectEdit(request);
+    QVERIFY(!outcome.accepted);
+    QCOMPARE(outcome.typedError, QStringLiteral("edit/stale-revision"));
+    // A refusal produces no revision at all.
+    QVERIFY(!outcome.revision.isValid());
+
+    // Nothing moved: the same document object is open at the same revision.
+    QCOMPARE(harness.context.getDocumentPointer().data(), documentBefore.data());
+    QCOMPARE(harness.facade->currentRevision(), revisionBefore);
+
+    QString typedError;
+    const std::optional<QList<pdf::PDFBookmarkRecord>> records =
+        pdf::PDFAuthoringEditWriter::readOutline(harness.context.getDocument(), typedError);
+    QVERIFY(records.has_value());
+    QVERIFY(records->isEmpty());
+}
+
+void DocumentFacadeTest::authoringEditRefusesWithoutAReadyDocumentOrPermission()
+{
+    Harness harness;
+
+    pdfinteraction::DirectEditRequest request;
+    request.kind = pdfinteraction::DirectEditKind::EditOutline;
+    request.authoring.kind = pdf::PDFAuthoringEdit::Kind::ToggleBookmark;
+    request.authoring.pageIndex = 0;
+    request.revision = harness.facade->currentRevision();
+
+    const pdfinteraction::DirectEditOutcome noDocument = harness.facade->applyDirectEdit(request);
+    QVERIFY(!noDocument.accepted);
+    QCOMPARE(noDocument.typedError, QStringLiteral("edit/document-not-ready"));
+
+    // A document whose user permissions deny Modify refuses the edit with the
+    // same visible reason the operator-facing command reports. The document is
+    // read back from an encrypted file, so its security handler carries the
+    // user's own permission bits exactly as an opened document does.
+    using Algorithm = pdf::PDFSecurityHandlerFactory::Algorithm;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("restricted.pdf"));
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 200, 200));
+        pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
+        settings.algorithm = Algorithm::AES_256;
+        settings.permissions = 0;
+        settings.userPassword = QStringLiteral("fixture-user");
+        settings.ownerPassword = QStringLiteral("fixture-owner");
+        settings.id = builder.build().getIdPart(0);
+        builder.setSecurityHandler(pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings));
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool* accepted)
+                                  {
+                                      if (accepted)
+                                      {
+                                          *accepted = true;
+                                      }
+                                      return QStringLiteral("fixture-user"); }, true, false);
+    pdf::PDFDocument restricted = reader.readFromFile(path);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    harness.loader.nextResult.document = pdf::PDFDocumentPointer(new pdf::PDFDocument(std::move(restricted)));
+    harness.facade->open(QStringLiteral("/corpus/restricted.pdf"));
+    QTRY_COMPARE(harness.facade->state(), pdfinteraction::DocumentState::Ready);
+    QVERIFY(harness.facade->permissions().encrypted);
+    QVERIFY(!harness.facade->permissions().modify);
+
+    request.revision = harness.facade->currentRevision();
+    const pdf::PDFDocumentPointer documentBefore = harness.context.getDocumentPointer();
+    const pdfinteraction::DirectEditOutcome denied = harness.facade->applyDirectEdit(request);
+    QVERIFY(!denied.accepted);
+    QCOMPARE(denied.typedError, QStringLiteral("edit/modify-permission-denied"));
+    QCOMPARE(harness.context.getDocumentPointer().data(), documentBefore.data());
 }
 
 QTEST_GUILESS_MAIN(DocumentFacadeTest)

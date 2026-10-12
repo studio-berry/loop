@@ -19,81 +19,81 @@
       "milestone": "L01 - Evidence Core",
       "number": 113,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-08 \u2014 Classify ICC-based color by its painted space"
     },
     "#114": {
       "milestone": "L01 - Evidence Core",
       "number": 114,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-09 \u2014 Audit glyph coverage in embedded fonts"
     },
     "#115": {
       "milestone": "L01 - Evidence Core",
       "number": 115,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-10 \u2014 Evaluate optional-content membership for hidden content"
     },
     "#116": {
       "milestone": "L01 - Evidence Core",
       "number": 116,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-11 \u2014 Stop isolated over-limit ink regions passing ink coverage"
     },
     "#117": {
       "milestone": "L01 - Evidence Core",
       "number": 117,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-12 \u2014 Broaden invisible-content detection"
     },
     "#118": {
       "milestone": "L01 - Evidence Core",
       "number": 118,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-13 \u2014 Make off-page and obscured-content geometry clip-aware"
     },
     "#119": {
       "milestone": "L01 - Evidence Core",
       "number": 119,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-14 \u2014 Judge white overprint and transparency interaction on the authoritative renderer"
     },
     "#120": {
       "milestone": "L01 - Evidence Core",
       "number": 120,
       "repository": "studio-berry/loop",
-      "state": "OPEN",
+      "state": "CLOSED",
       "title": "L01-15 \u2014 Close the sparse-mark bleed raster false pass"
     },
     "#141": {
-      "milestone": null,
+      "milestone": "X00 - Expansion Candidates",
       "number": 141,
       "repository": "studio-berry/loop",
       "state": "OPEN",
       "title": "X00-02 \u2014 Re-file parked legacy expansion candidates with value cases"
     },
     "#142": {
-      "milestone": null,
+      "milestone": "X00 - Expansion Candidates",
       "number": 142,
       "repository": "studio-berry/loop",
       "state": "OPEN",
       "title": "X00-03 \u2014 Per-named-colorant ink limits for DeviceN and spot separations"
     },
     "#143": {
-      "milestone": null,
+      "milestone": "X00 - Expansion Candidates",
       "number": 143,
       "repository": "studio-berry/loop",
       "state": "OPEN",
       "title": "X00-04 \u2014 Barcode, slug, Braille, and dieline geometry validation"
     },
     "#144": {
-      "milestone": null,
+      "milestone": "X00 - Expansion Candidates",
       "number": 144,
       "repository": "studio-berry/loop",
       "state": "OPEN",

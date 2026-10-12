@@ -526,6 +526,7 @@ private slots:
     void partialInspectionStaysVisibleAndNeverLooksLikeAClearDocument();
     void workspaceTransitionsKeepTheOpenDocumentBound();
     void canvasBindingClearsWhenTheDocumentCloses();
+    void bookmarkEditsReachTheCanvasAccessibleSummary();
     void cancellationLeavesNoAcceptedResult();
     void adapterParityOverOneInspectionReceipt();
     void governedPublicationParityAcrossSurfaces();
@@ -991,6 +992,37 @@ void ProductOperatorLoopTest::canvasBindingClearsWhenTheDocumentCloses()
     QCOMPARE(canvas->accessibleDocumentSummary(), QStringLiteral("No document is currently open."));
 }
 
+void ProductOperatorLoopTest::bookmarkEditsReachTheCanvasAccessibleSummary()
+{
+    const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFileInfo::exists(pdfPath));
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(pdfPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 640, 480);
+
+    QQuickWindow window;
+    window.resize(640, 480);
+    auto* canvas = new pdfquick::LoopCanvasItem(window.contentItem());
+    canvas->setSize(QSizeF(640, 480));
+    host.attachCanvas(canvas);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QTRY_VERIFY_WITH_TIMEOUT(canvas->viewport() != nullptr, 5000);
+
+    // No bookmark yet: the one accessible canvas node says nothing about them.
+    QVERIFY(!canvas->accessibleDocumentSummary().contains(QStringLiteral("bookmark(s).")));
+
+    // Auto-generate writes the outline, and the count reaches the same summary
+    // a screen reader reads, so the document change is announced with text and
+    // not only as a visual list change.
+    QVERIFY(host.invokeCommand(QStringLiteral("actionBookmarkAutoGenerate")) != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(canvas->accessibleDocumentSummary().contains(QStringLiteral("bookmark(s).")), 5000);
+
+    host.detachCanvas();
+}
+
 void ProductOperatorLoopTest::cancellationLeavesNoAcceptedResult()
 {
     const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
@@ -1159,10 +1191,12 @@ void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
     // within the action-list envelope family (CLI action-list and Editor), which
     // is the family the surfaces actually share; repair and PageMaster publish
     // different plan envelopes by design (ADR-011).
-    const QString fixture = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QTemporaryDir outputDirectory;
+    QVERIFY(outputDirectory.isValid());
+    const QString fixture = outputDirectory.filePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::copy(operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf")), fixture));
     const QString profile = operatoracceptance::defaultProfilePath();
     const QString recipePath = governedParityDirectory() + QStringLiteral("/action-list-recipe.json");
-    QVERIFY2(QFileInfo::exists(fixture), fixture.toUtf8().constData());
     QVERIFY2(QFileInfo::exists(profile), profile.toUtf8().constData());
     QVERIFY2(QFileInfo::exists(recipePath), recipePath.toUtf8().constData());
 
@@ -1174,9 +1208,6 @@ void ProductOperatorLoopTest::governedPublicationParityAcrossSurfaces()
     pdf::PDFActionList actionList;
     const pdf::PDFOperationResult parsed = pdf::PDFActionList::fromJson(recipeObject, &actionList);
     QVERIFY2(parsed, qPrintable(parsed.getErrorMessage()));
-
-    QTemporaryDir outputDirectory;
-    QVERIFY(outputDirectory.isValid());
 
     QMap<QString, QJsonObject> records;
 
@@ -1319,7 +1350,8 @@ void ProductOperatorLoopTest::planApprovalJourneyBindsDisplayedIdentityAndBlocks
     QVERIFY(directory.isValid());
     const QString recipePath = writeBleedRecipe(directory.path());
     QVERIFY(!recipePath.isEmpty());
-    const QString source = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    const QString source = directory.filePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::copy(operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf")), source));
     const QByteArray sourceDigest = operatoracceptance::fileSha256(source);
     QVERIFY(!sourceDigest.isEmpty());
     EditorHost host;
@@ -1591,8 +1623,8 @@ void ProductOperatorLoopTest::compareWorkspaceNavigatesMaterialDeltasAfterARun()
     const QString recipePath = writeBleedRecipe(directory.path());
     QVERIFY(!recipePath.isEmpty());
 
-    const QString documentPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
-    QVERIFY(QFileInfo::exists(documentPath));
+    const QString documentPath = directory.filePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::copy(operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf")), documentPath));
 
     EditorHost host;
     QVERIFY(host.importActionListRecipe(QUrl::fromLocalFile(recipePath)));

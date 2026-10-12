@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 193,
   "source_ui": "LoopEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
-  "expected_action_count": 108,
+  "expected_action_count": 113,
   "actions": [
     {
       "id": "actionAbout",
@@ -65,10 +65,16 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkAutoGenerate.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -78,10 +84,21 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkExport.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -91,10 +108,21 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionBookmarkImport.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -107,10 +135,21 @@
         "shortcut": {
           "sequence": "Ctrl+M"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "title",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -166,9 +205,9 @@
       "command": {
         "label_key": "command.actionCollectDiagnostics.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -179,9 +218,9 @@
       "command": {
         "label_key": "command.actionColorBitonal.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -192,9 +231,9 @@
       "command": {
         "label_key": "command.actionColorCustom.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -205,9 +244,9 @@
       "command": {
         "label_key": "command.actionColorGrayscale.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -218,9 +257,9 @@
       "command": {
         "label_key": "command.actionColorHighContrast.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -231,9 +270,9 @@
       "command": {
         "label_key": "command.actionColorInvert.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Production"
     },
@@ -247,9 +286,9 @@
           "standard_key": "Copy"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },
@@ -272,10 +311,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateEllipse.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -285,10 +355,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateFreehandCurve.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -298,10 +384,46 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlink.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "uri",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -311,10 +433,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFit.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -324,10 +507,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitB.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -337,10 +581,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitBH.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -350,10 +655,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitBV.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -363,10 +729,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitH.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -376,10 +803,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitR.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -389,10 +877,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFFitV.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -402,10 +951,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFXYZ.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -415,10 +1025,71 @@
       "target": "Inspect",
       "command": {
         "label_key": "command.actionCreateHyperlinkToThisPDFXYZInheritZoom.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "left",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "bottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "right",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetPage",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "targetLeft",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetBottom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetRight",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "targetTop",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -428,10 +1099,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreatePolygon.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -441,10 +1128,26 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreatePolyline.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "points",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -454,10 +1157,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateRectangle.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -467,10 +1201,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateStraightLine.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x1",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y1",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "x2",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y2",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -480,10 +1245,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextHighlight.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -493,10 +1289,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextSquiggly.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -506,10 +1333,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextStrikeout.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -519,10 +1377,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionCreateTextUnderline.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "color",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -536,9 +1425,9 @@
           "standard_key": "Deselect"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -562,9 +1451,9 @@
       "command": {
         "label_key": "command.actionExtractImage.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -739,9 +1628,9 @@
           "sequence": "Ctrl+."
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -755,9 +1644,9 @@
           "standard_key": "MoveToNextLine"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "View"
     },
@@ -787,9 +1676,9 @@
           "sequence": "Ctrl+,"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -803,9 +1692,9 @@
           "standard_key": "MoveToPreviousLine"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "View"
     },
@@ -831,10 +1720,41 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionInlineText.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "width",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "height",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -958,9 +1878,9 @@
       "command": {
         "label_key": "command.actionOptions.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1041,10 +1961,36 @@
         "shortcut": {
           "standard_key": "Print"
         },
-        "parameters": [],
-        "capability": "unclassified",
-        "cancellable": false,
-        "availability": "declared"
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "format",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dpi",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "fidelityAcknowledged",
+            "type": "boolean",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
+        "cancellable": true,
+        "availability": "implemented"
       },
       "menu_group": "File"
     },
@@ -1083,16 +2029,27 @@
     {
       "id": "actionRedo",
       "disposition": "KEEP",
-      "target": "Document",
+      "target": "Fix",
       "command": {
         "label_key": "command.actionRedo.label",
         "shortcut": {
           "standard_key": "Redo"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "rollbackId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },
@@ -1137,27 +2094,27 @@
     },
     {
       "id": "actionRenderOptionAntialiasing",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionAntialiasing.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionDisplayAnnotations",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionDisplayAnnotations.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1168,48 +2125,48 @@
       "command": {
         "label_key": "command.actionRenderOptionDisplayRenderTimes.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionIgnoreOptionalContentSettings",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionIgnoreOptionalContentSettings.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionSmoothPictures",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionSmoothPictures.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
     {
       "id": "actionRenderOptionTextAntialiasing",
-      "disposition": "KEEP",
+      "disposition": "ADVANCED",
       "target": "Advanced",
       "command": {
         "label_key": "command.actionRenderOptionTextAntialiasing.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1220,9 +2177,9 @@
       "command": {
         "label_key": "command.actionResetToFactorySettings.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1316,9 +2273,9 @@
       "command": {
         "label_key": "command.actionScreenshot.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1329,9 +2286,9 @@
       "command": {
         "label_key": "command.actionSelectTable.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1342,9 +2299,9 @@
       "command": {
         "label_key": "command.actionSelectText.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1358,9 +2315,9 @@
           "standard_key": "SelectAll"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1371,9 +2328,9 @@
       "command": {
         "label_key": "command.actionSend_by_E_Mail.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1384,9 +2341,9 @@
       "command": {
         "label_key": "command.actionShow_Text_Blocks.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1397,9 +2354,9 @@
       "command": {
         "label_key": "command.actionShow_Text_Lines.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Advanced"
     },
@@ -1409,10 +2366,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteComment.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1422,10 +2400,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteHelp.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1435,10 +2434,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteInsert.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1448,10 +2468,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteKey.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1461,10 +2502,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteNewParagraph.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1474,10 +2536,31 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteNote.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
@@ -1487,26 +2570,58 @@
       "target": "Document",
       "command": {
         "label_key": "command.actionStickyNoteParagraph.label",
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "page",
+            "type": "integer",
+            "required": true
+          },
+          {
+            "name": "x",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "y",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Document"
     },
     {
       "id": "actionUndo",
       "disposition": "KEEP",
-      "target": "Document",
+      "target": "Fix",
       "command": {
         "label_key": "command.actionUndo.label",
         "shortcut": {
           "standard_key": "Undo"
         },
-        "parameters": [],
-        "capability": "unclassified",
+        "parameters": [
+          {
+            "name": "rollbackId",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          }
+        ],
+        "capability": "document.modify",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       },
       "menu_group": "Edit"
     },
@@ -1541,6 +2656,181 @@
         "availability": "implemented"
       },
       "menu_group": "View"
+    },
+    {
+      "id": "actionExportDocument",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionExportDocument.label",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "format",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "dpi",
+            "type": "integer",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "fidelityAcknowledged",
+            "type": "boolean",
+            "required": false
+          }
+        ],
+        "capability": "document.read",
+        "cancellable": true,
+        "availability": "implemented"
+      },
+      "menu_group": "File"
+    },
+    {
+      "id": "actionSetFormFieldValue",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSetFormFieldValue.label",
+        "parameters": [
+          {
+            "name": "field",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "value",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "checked",
+            "type": "boolean",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionAddAttachment",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionAddAttachment.label",
+        "parameters": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "path",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionRemoveAttachment",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionRemoveAttachment.label",
+        "parameters": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
+    },
+    {
+      "id": "actionEditDocumentMetadata",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionEditDocumentMetadata.label",
+        "parameters": [
+          {
+            "name": "title",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "author",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "subject",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "keywords",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "creator",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "revision",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.modify",
+        "cancellable": false,
+        "availability": "implemented"
+      },
+      "menu_group": "Document"
     }
   ]
 }

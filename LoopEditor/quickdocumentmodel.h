@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QList>
 #include <QObject>
+#include <QRectF>
 #include <QString>
 #include <QVariant>
 
@@ -133,12 +134,72 @@ private:
     QString m_revision;
 };
 
+/// One read-only annotation row (issue #125). Geometry is page space; the row
+/// carries no editing intent and no mutation surface.
+struct QuickAnnotation
+{
+    int pageIndex = -1;
+    QString kindName;
+    QRectF bounds;
+    QString title;
+    QString contents;
+    QString subject;
+    QString created;
+    QString reference;
+    bool hidden = false;
+};
+
+/// Read-only annotation review list. Rows are captured per document revision by
+/// the host's read pass; QML renders them and asks the host to navigate.
+class QuickAnnotationModel final : public QAbstractListModel
+{
+    Q_OBJECT
+
+public:
+    enum Role
+    {
+        PageIndexRole = Qt::UserRole + 1,
+        PageNumberRole,
+        KindRole,
+        BoundsRole,
+        TitleRole,
+        ContentsRole,
+        SubjectRole,
+        CreatedRole,
+        ReferenceRole,
+        HiddenRole,
+        SelectedRole,
+    };
+
+    explicit QuickAnnotationModel(QObject* parent = nullptr);
+
+    int rowCount(const QModelIndex& parent = {}) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+    QHash<int, QByteArray> roleNames() const override;
+
+    /// Replaces the rows for a captured revision. The revision is retained so a
+    /// caller can say which document the list describes.
+    void replace(QList<QuickAnnotation> annotations, QString revision);
+    void clear();
+    QString revision() const noexcept { return m_revision; }
+    int selectedRow() const noexcept { return m_selectedRow; }
+    void setSelectedRow(int row);
+    const QList<QuickAnnotation>& rows() const noexcept { return m_annotations; }
+
+private:
+    QList<QuickAnnotation> m_annotations;
+    QString m_revision;
+    int m_selectedRow = -1;
+};
+
 class QuickDocumentModel final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QAbstractItemModel* pages READ pages CONSTANT)
     Q_PROPERTY(QAbstractItemModel* outline READ outline CONSTANT)
     Q_PROPERTY(QAbstractItemModel* searchResults READ searchResults CONSTANT)
+    Q_PROPERTY(QAbstractItemModel* annotations READ annotations CONSTANT)
+    Q_PROPERTY(int annotationCount READ annotationCount NOTIFY changed)
     Q_PROPERTY(QString title READ title NOTIFY changed)
     Q_PROPERTY(QString author READ author NOTIFY changed)
     Q_PROPERTY(QString subject READ subject NOTIFY changed)
@@ -175,6 +236,11 @@ public:
     QAbstractItemModel* pages() noexcept { return &m_pages; }
     QAbstractItemModel* outline() noexcept { return &m_outline; }
     QAbstractItemModel* searchResults() noexcept { return &m_searchResults; }
+    QAbstractItemModel* annotations() noexcept { return &m_annotations; }
+    int annotationCount() const noexcept { return m_annotations.rowCount(); }
+
+    /// C++ access to the annotation rows for the host's overlay and navigation.
+    QuickAnnotationModel& annotationModel() noexcept { return m_annotations; }
 
     QString title() const { return m_title; }
     QString author() const { return m_author; }
@@ -228,6 +294,7 @@ private:
     QuickPageModel m_pages;
     QuickOutlineModel m_outline;
     QuickSearchResultModel m_searchResults;
+    QuickAnnotationModel m_annotations;
     pdf::PDFDocumentContext* m_context = nullptr;
     pdf::PDFDocumentSession* m_session = nullptr;
     QString m_title;

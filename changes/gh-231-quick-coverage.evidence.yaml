@@ -1,0 +1,33 @@
+format_version: 1
+kind: evidence
+claims:
+  - id: handler-coverage-ratchet
+    evidence:
+      - unit:scripts/ci/test_command_catalog.py
+      - unit:agent-policy:interaction
+      - architecture:scripts/verify-command-catalog.py
+  - id: agent-policy-contracts
+    evidence:
+      - unit:scripts/agent/test_architecture_contracts.py
+      - architecture:scripts/agent/check-architecture.py
+      - architecture:scripts/agent/generate-adapters.py
+      - architecture:scripts/generate-architecture-catalogs.py
+  - id: packaging-workflows
+    evidence:
+      - packaging:linux-build
+      - packaging:windows-build
+      - security:codeql
+  - id: quick-and-interaction-modules
+    evidence:
+      - unit:agent-policy:quick
+      - unit:agent-policy:interaction
+  - id: build-and-plugin-contracts
+    evidence:
+      - unit:agent-policy:build_policy
+      - unit:agent-policy:plugins
+  - id: operator-onboarding-lanes
+    evidence:
+      - unit:UnitTestsShellWorkspace
+      - unit:scripts/ci/test_check_operator_help.py
+      - architecture:scripts/ci/check_operator_help.py
+unresolved: []

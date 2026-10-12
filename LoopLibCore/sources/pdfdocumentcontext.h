@@ -69,6 +69,11 @@ struct LOOPLIBCORESHARED_EXPORT PDFRevisionIdentity
     bool operator==(const PDFRevisionIdentity&) const = default;
     bool operator<(const PDFRevisionIdentity& other) const;
     QString toString() const;
+
+    /// Parses the identity `toString()` produced. A malformed value yields an
+    /// invalid identity rather than a guessed one, so a caller that passes a
+    /// revision it made up is refused by the fence instead of being admitted.
+    static PDFRevisionIdentity fromString(const QString& value);
 };
 
 using PDFRevisionToken = PDFRevisionIdentity;

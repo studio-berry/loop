@@ -23,6 +23,7 @@
 
 #include "loopcanvasitem.h"
 
+#include "canvasdisplaycolor.h"
 #include "loopcanvasaccessible.h"
 #include "interactioncontroller.h"
 #include "pagesurfacecoordinator.h"
@@ -259,6 +260,66 @@ void LoopCanvasItem::setHighContrast(bool highContrast)
     requestFrame();
 }
 
+QString LoopCanvasItem::displayColorMode() const
+{
+    return getCanvasDisplayColorModeName(m_displayColor.mode);
+}
+
+bool LoopCanvasItem::setDisplayColorMode(const QString& modeName)
+{
+    const std::optional<CanvasDisplayColorMode> mode = canvasDisplayColorModeFromName(modeName);
+    if (!mode || m_displayColor.mode == *mode)
+    {
+        return mode.has_value();
+    }
+
+    m_displayColor.mode = *mode;
+    m_displayColorDirty = true;
+    Q_EMIT displayColorChanged();
+    requestFrame();
+    return true;
+}
+
+void LoopCanvasItem::setDisplayColorCustomForeground(const QColor& color)
+{
+    if (!color.isValid() || m_displayColor.customForeground == color)
+    {
+        return;
+    }
+
+    m_displayColor.customForeground = color;
+    m_displayColorDirty = true;
+    Q_EMIT displayColorChanged();
+    requestFrame();
+}
+
+void LoopCanvasItem::setDisplayColorCustomBackground(const QColor& color)
+{
+    if (!color.isValid() || m_displayColor.customBackground == color)
+    {
+        return;
+    }
+
+    m_displayColor.customBackground = color;
+    m_displayColorDirty = true;
+    Q_EMIT displayColorChanged();
+    requestFrame();
+}
+
+void LoopCanvasItem::setDisplayColorBitonalThreshold(int threshold)
+{
+    const int clamped = qBound(1, threshold, 254);
+    if (m_displayColor.bitonalThreshold == clamped)
+    {
+        return;
+    }
+
+    m_displayColor.bitonalThreshold = clamped;
+    m_displayColorDirty = true;
+    Q_EMIT displayColorChanged();
+    requestFrame();
+}
+
 QString LoopCanvasItem::accessibleDocumentSummary() const
 {
     return m_accessibleDocumentSummary;
@@ -288,6 +349,17 @@ void LoopCanvasItem::refreshPalette()
     m_builder.setPalette(m_palette);
     m_paletteDirty = false;
     m_overlaysDirty = true;
+}
+
+void LoopCanvasItem::refreshDisplayColor()
+{
+    m_builder.setDisplayColorSettings(m_displayColor);
+    m_displayColorDirty = false;
+
+    // The builder dropped the retained copies; the tiles must be synced again
+    // for the new mode to reach a texture. No surface is asked for: the filter
+    // reads pixels that are already admitted.
+    m_tilesDirty = true;
 }
 
 CanvasFrameStats LoopCanvasItem::frameStats() const

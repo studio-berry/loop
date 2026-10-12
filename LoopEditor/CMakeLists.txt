@@ -26,12 +26,17 @@ qt_add_executable(LoopEditor
     main.cpp
     operatorhelp.cpp
     operatorhelp.h
+    operatorhelpstrings.h
     icon.rc
     app.qrc
     documentviewsession.cpp
     documentviewsession.h
     editorhost.cpp
+    quickoutput.cpp
+    quickoutput.h
     editorhost.h
+    editorsettings.cpp
+    editorsettings.h
     focusrestoration.cpp
     focusrestoration.h
     quickdocumentmodel.cpp
@@ -45,6 +50,8 @@ qt_add_qml_module(LoopEditor
     QML_FILES
         qml/Main.qml
         qml/OperatorHelpDialog.qml
+        qml/SettingsDialog.qml
+        qml/DiagnosticsDialog.qml
         qml/Workspace.qml
         qml/DocumentPane.qml
         qml/CanvasPane.qml
@@ -77,6 +84,9 @@ target_link_libraries(LoopEditor
 target_include_directories(LoopEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 qt_import_qml_plugins(LoopEditor)
+
+# Explicit product builds must compile the catalogs before install consumes them.
+add_dependencies(LoopEditor ${PROJECT_NAME}_lrelease)
 
 # Packaging builds LoopEditor explicitly; ensure the Loop.Canvas plugin module is
 # built before install copies it into usr/lib/qml/Loop/Canvas.

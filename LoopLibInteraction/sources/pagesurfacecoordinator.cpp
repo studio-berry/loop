@@ -245,9 +245,11 @@ std::optional<PageSurfaceKey> PageSurfaceCoordinator::keyForPage(int pageIndex) 
     const qreal devicePixelRatio = m_viewport->devicePixelRatio();
     const QSize targetPixelSize(qRound(placedRect.width() * devicePixelRatio), qRound(placedRect.height() * devicePixelRatio));
 
-    const QString colorOutputIdentity = m_authoritativePages.contains(pageIndex)
-                                            ? withAuthoritativeOverprintMarker(m_settings.colorOutputIdentity)
-                                            : m_settings.colorOutputIdentity;
+    const QString colorOutputIdentity = m_softProofProfile.isEmpty()
+                                            ? (m_authoritativePages.contains(pageIndex)
+                                                   ? withAuthoritativeOverprintMarker(m_settings.colorOutputIdentity)
+                                                   : m_settings.colorOutputIdentity)
+                                            : withSoftProofMarker(m_settings.colorOutputIdentity, m_softProofProfile);
 
     return makePageSurfaceKey(revision, pageIndex, m_viewport->rotation(), m_settings.features, colorOutputIdentity, m_viewport->zoom(), targetPixelSize, devicePixelRatio);
 }
@@ -272,6 +274,23 @@ void PageSurfaceCoordinator::setPageAuthoritativeOverprint(int pageIndex, bool e
     // own coalescing cancels this page's stale in-flight request. Rebuild first
     // so an approximate snapshot is not presented as authoritative while the
     // accurate surface is pending (or vice versa when toggling back).
+    rebuildSnapshot();
+    requestSurfaces();
+}
+
+void PageSurfaceCoordinator::setSoftProofProfile(const QString& proofProfileId)
+{
+    if (m_softProofProfile == proofProfileId)
+    {
+        return;
+    }
+
+    m_softProofProfile = proofProfileId;
+
+    // Every page's key changed, so nothing cached under the previous output
+    // identity may stand in -- a proofed surface is a different identity from
+    // the fast render and from the authoritative one. rebuildSnapshot() first so
+    // the display never shows an unproofed surface while the proof is pending.
     rebuildSnapshot();
     requestSurfaces();
 }

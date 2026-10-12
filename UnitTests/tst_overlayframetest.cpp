@@ -141,6 +141,11 @@ private Q_SLOTS:
     void highMarkerCountStaysBounded();
     void invalidTokenYieldsAnEmptyFrame();
     void denyExtraGraphicsSuppressesOverlays();
+    void measurementPaintsInTheGuidesBandWithItsReadout();
+    void textSelectionPaintsInTheSelectionBandWithoutATarget();
+    void annotationMarksPaintUnderFindingsWithTheirOwnSelection();
+    void annotationMarksAreBounded();
+    void findingAndAnnotationCapsLeaveHeadroomForSteeringPrimitives();
 
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
@@ -199,6 +204,116 @@ void OverlayFrameTest::zOrderIsDeterministic()
     QCOMPARE(frame.primitives.at(0).id, QStringLiteral("trim"));
     QCOMPARE(frame.primitives.at(4).id, QStringLiteral("handle-nw"));
     QVERIFY(frame.primitives.at(2).selected);
+}
+
+void OverlayFrameTest::annotationMarksPaintUnderFindingsWithTheirOwnSelection()
+{
+    m_overlays->setAnnotations({ makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:8 0 R"), QRectF(10.0, 10.0, 30.0, 20.0)),
+                                 makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:9 0 R"), QRectF(50.0, 50.0, 30.0, 20.0)) });
+    m_overlays->setSelectedAnnotationId(QStringLiteral("annotation:9 0 R"));
+    m_overlays->setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, makeToken());
+
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 3);
+
+    // Annotations paint over guides and under the findings analysis band.
+    QCOMPARE(frame.primitives.at(0).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(1).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(2).layer, pdfinteraction::OverlayLayer::Findings);
+
+    // The review list's selected annotation carries the selection treatment;
+    // the other mark does not.
+    QVERIFY(!frame.primitives.at(0).selected);
+    QVERIFY(frame.primitives.at(1).selected);
+
+    // Read-only: an annotation mark keeps no interaction kind, so nothing
+    // hit-tests it and no click can be routed to it.
+    QCOMPARE(frame.primitives.at(0).target.kind, pdfinteraction::InteractionTargetKind::None);
+    QCOMPARE(frame.primitives.at(1).target.kind, pdfinteraction::InteractionTargetKind::None);
+
+    // The interaction selection is independent of the review selection: an
+    // interaction selection of a finding does not move the annotation's.
+    m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)));
+    const pdfinteraction::OverlayFrame selectedFrame = m_overlays->build(m_state, makeToken());
+    QVERIFY(selectedFrame.primitives.at(1).selected);
+    QVERIFY(selectedFrame.primitives.at(2).selected);
+}
+
+void OverlayFrameTest::annotationMarksAreBounded()
+{
+    pdfinteraction::OverlayBounds bounds = pdfinteraction::OverlayBounds::conservativeDefaults();
+    bounds.maxAnnotationPrimitives = 1;
+    pdfinteraction::OverlayBuilder bounded(*m_viewport, m_policy, bounds);
+
+    bounded.setAnnotations({ makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:a"), QRectF(10.0, 10.0, 20.0, 20.0)),
+                             makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:b"), QRectF(40.0, 10.0, 20.0, 20.0)),
+                             makeTarget(pdfinteraction::InteractionTargetKind::None, QStringLiteral("annotation:c"), QRectF(70.0, 10.0, 20.0, 20.0)) });
+    bounded.setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
+
+    const pdfinteraction::OverlayFrame frame = bounded.build(m_state, makeToken());
+
+    // The bound is a bound, not a hint: one annotation mark survives, the other
+    // two are counted as dropped, and the finding is never crowded out.
+    QCOMPARE(frame.primitives.size(), 2);
+    QCOMPARE(frame.droppedPrimitives, 2);
+    QCOMPARE(frame.primitives.at(0).layer, pdfinteraction::OverlayLayer::Annotations);
+    QCOMPARE(frame.primitives.at(1).layer, pdfinteraction::OverlayLayer::Findings);
+}
+
+void OverlayFrameTest::findingAndAnnotationCapsLeaveHeadroomForSteeringPrimitives()
+{
+    // The defaults face the corpus-scale frame: findings and annotation marks
+    // beyond their caps, plus the hover and selection the user is steering. The
+    // two marker caps must leave headroom for the steering primitives, because
+    // annotations are emitted before them and the total bound is the last
+    // resort, not the intended one.
+    const pdfinteraction::OverlayBounds bounds = pdfinteraction::OverlayBounds::conservativeDefaults();
+
+    QList<pdfinteraction::InteractionTarget> findings;
+    for (int index = 0; index < bounds.maxFindingPrimitives + 100; ++index)
+    {
+        findings.push_back(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                      QStringLiteral("finding-%1").arg(index),
+                                      QRectF(qreal(index % 90), qreal((index / 90) % 90), 1.0, 1.0)));
+    }
+
+    QList<pdfinteraction::InteractionTarget> annotations;
+    for (int index = 0; index < bounds.maxAnnotationPrimitives + 300; ++index)
+    {
+        annotations.push_back(makeTarget(pdfinteraction::InteractionTargetKind::None,
+                                         QStringLiteral("annotation-%1").arg(index),
+                                         QRectF(qreal(index % 90), qreal((index / 90) % 90), 1.0, 1.0)));
+    }
+
+    m_overlays->setFindings(findings);
+    m_overlays->setAnnotations(annotations);
+    m_state.setHovered(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                  QStringLiteral("hovered"), QRectF(20.0, 20.0, 10.0, 10.0)));
+    m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding,
+                                   QStringLiteral("selected"), QRectF(30.0, 30.0, 10.0, 10.0)));
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, makeToken());
+
+    QVERIFY(frame.primitives.size() <= bounds.maxPrimitives);
+
+    // The steering primitives survive the saturated marker bands.
+    QVERIFY(findPrimitive(frame, QStringLiteral("hovered#hover")));
+    QVERIFY(findPrimitive(frame, QStringLiteral("selected#selection")));
+
+    // The annotation band is capped at the constant, and the shortfall is
+    // reported rather than implied.
+    int annotationPrimitives = 0;
+    for (const pdfinteraction::OverlayPrimitive& primitive : frame.primitives)
+    {
+        if (primitive.layer == pdfinteraction::OverlayLayer::Annotations)
+        {
+            ++annotationPrimitives;
+        }
+    }
+    QCOMPARE(annotationPrimitives, bounds.maxAnnotationPrimitives);
+    QCOMPARE(frame.droppedPrimitives, 400);
 }
 
 void OverlayFrameTest::tiesBreakByRegistrationSequence()
@@ -409,6 +524,75 @@ void OverlayFrameTest::invalidTokenYieldsAnEmptyFrame()
     // drawing it is how a stale marker survives a reload.
     QVERIFY(frame.isEmpty());
     QVERIFY(!frame.token.isValid());
+}
+
+void OverlayFrameTest::measurementPaintsInTheGuidesBandWithItsReadout()
+{
+    const pdfinteraction::RevisionFencedToken token = makeToken();
+
+    QVERIFY(m_state.begin(pdfinteraction::InteractionKind::Measure, token));
+
+    const pdfinteraction::Measurement draft =
+        pdfinteraction::measureBetween(0, QPointF(10.0, 10.0), QPointF(40.0, 50.0), pdf::PDF_POINT_TO_MM);
+    QVERIFY(m_state.setMeasurementDraft(draft, token));
+
+    pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, token);
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 1);
+
+    const pdfinteraction::OverlayPrimitive* primitive = findPrimitive(frame, QStringLiteral("measurement#draft"));
+    QVERIFY(primitive);
+    QCOMPARE(primitive->layer, pdfinteraction::OverlayLayer::Guides);
+    QCOMPARE(primitive->kind, pdfinteraction::OverlayPrimitiveKind::Measurement);
+    QCOMPARE(primitive->label, pdfinteraction::measurementReadout(draft));
+    QCOMPARE(primitive->pagePolygon.size(), 2);
+    QVERIFY(primitive->renderable);
+
+    // Completing it moves the primitive to its stable completed id.
+    QVERIFY(m_state.completeMeasurement(token).has_value());
+
+    frame = m_overlays->build(m_state, token);
+    QVERIFY(findPrimitive(frame, QStringLiteral("measurement#0")));
+    QVERIFY(!findPrimitive(frame, QStringLiteral("measurement#draft")));
+    QCOMPARE(frame.primitives.size(), 1);
+}
+
+void OverlayFrameTest::textSelectionPaintsInTheSelectionBandWithoutATarget()
+{
+    const pdfinteraction::RevisionFencedToken token = makeToken();
+
+    pdfinteraction::TextSelection selection;
+    selection.kind = pdfinteraction::TextSelectionKind::Text;
+    selection.pageIndex = 0;
+    selection.available = true;
+    selection.text = QStringLiteral("two lines");
+    selection.geometry = { QRectF(10.0, 10.0, 40.0, 8.0), QRectF(10.0, 20.0, 40.0, 8.0) };
+    QVERIFY(m_state.setTextSelection(selection, token));
+
+    const pdfinteraction::OverlayFrame frame = m_overlays->build(m_state, token);
+    QVERIFY(frame.isOrdered());
+    QCOMPARE(frame.primitives.size(), 2);
+
+    const pdfinteraction::OverlayPrimitive* first = findPrimitive(frame, QStringLiteral("text-selection#0"));
+    const pdfinteraction::OverlayPrimitive* second = findPrimitive(frame, QStringLiteral("text-selection#1"));
+    QVERIFY(first);
+    QVERIFY(second);
+    QCOMPARE(first->layer, pdfinteraction::OverlayLayer::Selection);
+    QCOMPARE(first->kind, pdfinteraction::OverlayPrimitiveKind::Rectangle);
+    QVERIFY(first->renderable);
+
+    // There is no text target kind, so a selection rectangle is not a routed
+    // click target.
+    QVERIFY(!first->target.isValid());
+
+    // An unavailable selection -- a page with no text layer -- has no geometry
+    // to paint.
+    pdfinteraction::TextSelection unavailable;
+    unavailable.pageIndex = 0;
+    unavailable.available = false;
+    unavailable.unavailableReason = QStringLiteral("This page has no text layer.");
+    QVERIFY(m_state.setTextSelection(unavailable, token));
+    QVERIFY(m_overlays->build(m_state, token).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(OverlayFrameTest)

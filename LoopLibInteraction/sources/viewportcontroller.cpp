@@ -28,6 +28,7 @@
 #include <QtGlobal>
 
 #include <algorithm>
+#include <cmath>
 
 namespace pdfinteraction
 {
@@ -45,6 +46,15 @@ constexpr qreal FitMarginRatio = 0.95;
 /// Pages after the last visible one that are still worth rendering. Matches the
 /// look-ahead PDFDrawWidgetProxy::getActivePages already uses.
 constexpr int PrefetchLookAhead = 2;
+
+/// True when a rectangle can be mapped, fitted and centred: finite, positive
+/// extent. Shared by the reveal helpers so both reject the same degenerate input.
+bool usableBounds(const QRectF& bounds)
+{
+    return std::isfinite(bounds.x()) && std::isfinite(bounds.y()) &&
+           std::isfinite(bounds.width()) && std::isfinite(bounds.height()) &&
+           bounds.width() > 0.0 && bounds.height() > 0.0;
+}
 
 }   // namespace
 
@@ -124,6 +134,33 @@ QTransform PDFDocumentPageGeometrySource::pagePointToDeviceMatrix(int pageIndex,
     // that parameter and hand-composes an equivalent device-space transform; the
     // Core path is the maintained one.
     return pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, extraRotation);
+}
+
+bool PDFDocumentPageGeometrySource::pagePointToMM(int pageIndex, qreal* factor) const
+{
+    const pdf::PDFDocument* document = this->document();
+    if (!document || !factor || pageIndex < 0 || pageIndex >= pageCount())
+    {
+        return false;
+    }
+
+    const pdf::PDFPage* page = document->getCatalog()->getPage(static_cast<size_t>(pageIndex));
+    if (!page)
+    {
+        return false;
+    }
+
+    // /UserUnit is a multiplier of 1/72 inch (ISO 32000-2). A missing or
+    // nonsensical value is refused rather than coerced to 1.0, because a
+    // measurement at a guessed scale is a wrong number presented as a fact.
+    const pdf::PDFReal userUnit = page->getUserUnit();
+    if (!(userUnit > 0.0) || !std::isfinite(userUnit))
+    {
+        return false;
+    }
+
+    *factor = pdf::PDF_POINT_TO_MM * userUnit;
+    return true;
 }
 
 ViewportController::ViewportController(QObject* parent) :
@@ -523,6 +560,65 @@ int ViewportController::blockIndexForPage(int pageIndex) const
     }
 
     return pageIndex;
+}
+
+bool ViewportController::revealPage(int pageIndex)
+{
+    if (pageIndex < 0 || pageIndex >= pageCount())
+    {
+        return false;
+    }
+
+    if (isBlockMode())
+    {
+        setBlockIndex(blockIndexForPage(pageIndex));
+    }
+
+    const QRect pageRect = placedPageRect(pageIndex);
+    const QRect viewportRect = this->viewportRect();
+    if (!pageRect.isValid() || viewportRect.isEmpty())
+    {
+        return false;
+    }
+
+    const QPointF delta = QPointF(viewportRect.center()) - QPointF(pageRect.center());
+    setOffset(offset() + QPoint(qRound(delta.x()), qRound(delta.y())));
+    return placedPageRect(pageIndex).isValid();
+}
+
+bool ViewportController::revealPageRegion(int pageIndex, QRectF pageBounds, qreal contextMargin)
+{
+    if (!usableBounds(pageBounds) || !revealPage(pageIndex))
+    {
+        return false;
+    }
+
+    const qreal margin = qBound(0.0, contextMargin, 1.0);
+    pageBounds = pageBounds.normalized();
+    pageBounds = pageBounds.adjusted(-pageBounds.width() * margin,
+                                     -pageBounds.height() * margin,
+                                     pageBounds.width() * margin,
+                                     pageBounds.height() * margin);
+
+    const QRect viewportRect = this->viewportRect();
+    const QPointF viewportCenter(viewportRect.center());
+    QTransform pageToViewport = pagePointToViewportMatrix(pageIndex);
+    QRectF deviceBounds = pageToViewport.mapRect(pageBounds).normalized();
+    if (!usableBounds(deviceBounds) || viewportRect.isEmpty())
+    {
+        return false;
+    }
+
+    const qreal availableWidth = qMax<qreal>(1.0, viewportRect.width() * 0.75);
+    const qreal availableHeight = qMax<qreal>(1.0, viewportRect.height() * 0.75);
+    const qreal scaleFactor = qMin(availableWidth / deviceBounds.width(), availableHeight / deviceBounds.height());
+    setZoom(zoom() * scaleFactor, viewportCenter);
+
+    pageToViewport = pagePointToViewportMatrix(pageIndex);
+    deviceBounds = pageToViewport.mapRect(pageBounds).normalized();
+    const QPointF delta = viewportCenter - deviceBounds.center();
+    setOffset(offset() + QPoint(qRound(delta.x()), qRound(delta.y())));
+    return true;
 }
 
 void ViewportController::invalidateLayout()

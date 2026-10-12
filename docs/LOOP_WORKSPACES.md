@@ -3,7 +3,7 @@
 This document is the workspace companion to the authoritative product-surface
 contract in issue #191. It describes where an operator finds a capability; it
 does not add a second application shell or move UI code. Editor workspace wiring
-is deferred to #193 and remains outside the pre-0.1.1 GUI scope.
+is deferred to legacy #193 and remains outside the pre-0.1.1 GUI scope.
 
 ## Product surfaces
 
@@ -37,7 +37,7 @@ receive a separate Loop desktop entry, AppX application, or product identity.
 | Fix | Deterministic, bounded corrective operations with preview, approval, output, and revalidation | Core repair operations and `PdfTool repair` | Silent mutation, GUI-only business logic, or implicit approval |
 | Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of the retired comparison product |
 
-The shell issue (#193) may model these as stateful workspaces, but switching
+The shell issue (legacy #193) may model these as stateful workspaces, but switching
 workspace must preserve the open document and preflight revision. A workspace
 is not a new executable and must not own a duplicate Core semantic path.
 
@@ -76,7 +76,7 @@ rollback behavior unchanged.
 
 Compare is **OPEN**, not implicitly absorbed. The Core `PDFDiff` contract is
 retained while the standalone comparison executable is absent from both profiles
-because its source was already deleted. The owner is `m.berry`; #193 is the follow-up for the shell
+because its source was already deleted. The owner is `m.berry`; legacy #193 is the follow-up for the shell
 boundary and #197 is the release exit gate. No new UI replacement or product
 commitment is authorized by this document.
 

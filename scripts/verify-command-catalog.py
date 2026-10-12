@@ -12,6 +12,15 @@ LoopLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
 disagreed with those assignments would be a second command truth wearing the
 first one's ID set, so both files are parsed and compared here.
 
+The descriptor `availability` flag is the handler gate. CommandCatalog refuses
+to register a handler for an id the contract marks declared, and invoke()
+rejects such an id as `command/not-implemented`, so a KEEP or ABSORB command
+whose availability is still `declared` is a menu entry that does nothing. Every
+KEEP or ABSORB action must therefore be `implemented` or recorded in
+docs/shell-handler-coverage.json, the ratchet baseline that may only shrink:
+binding a handler removes its id there, and a new KEEP or ABSORB action cannot
+arrive unbound (epic #231).
+
 See docs/LOOP_SHELL_CONTRACT.md and architecture invariant I22.
 """
 
@@ -26,8 +35,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "docs" / "loop-shell-actions.json"
+RATCHET_PATH = ROOT / "docs" / "shell-handler-coverage.json"
 MAIN_WINDOW_PATH = ROOT / "LoopLibGui" / "pdfeditormainwindow.cpp"
 CONTROLLER_PATH = ROOT / "LoopLibGui" / "pdfprogramcontroller.cpp"
+
+# The dispositions the handler-coverage ratchet covers. ADVANCED commands are
+# release-profile gated and HIDE / STOP-SHIPPING commands never reach a menu,
+# so none of them owes the Quick shell a handler.
+RATCHET_DISPOSITIONS = frozenset({"KEEP", "ABSORB"})
+
+# The disposition/target vocabulary, mirrored from verify-loop-shell-contract.ps1
+# and docs/schemas/loop-shell-actions.schema.json. A typo'd disposition falls out
+# of the ratchet filter above, so the dead menu entry it produces would never be
+# counted as a gap.
+DISPOSITIONS = frozenset({"KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"})
+TARGETS = frozenset(
+    {"Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"}
+)
 
 # Commands that have a handler in LoopLibInteraction (DocumentFacade for
 # document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
@@ -69,6 +93,77 @@ SHELL_IMPLEMENTED_COMMANDS = frozenset(
         "actionPageLayoutTwoColumns",
         "actionPageLayoutTwoPages",
         "actionProperties",
+        "actionSelectText",
+        "actionSelectTextAll",
+        "actionDeselectText",
+        "actionSelectTable",
+        "actionCopyText",
+        "actionGoToNextLine",
+        "actionGoToPreviousLine",
+        "actionScreenshot",
+        "actionExtractImage",
+        "actionColorInvert",
+        "actionColorGrayscale",
+        "actionColorHighContrast",
+        "actionColorBitonal",
+        "actionColorCustom",
+        "actionOptions",
+        "actionResetToFactorySettings",
+        "actionCollectDiagnostics",
+        "actionRenderOptionAntialiasing",
+        "actionRenderOptionTextAntialiasing",
+        "actionRenderOptionSmoothPictures",
+        "actionRenderOptionDisplayAnnotations",
+        "actionRenderOptionIgnoreOptionalContentSettings",
+        "actionRenderOptionDisplayRenderTimes",
+        "actionShow_Text_Blocks",
+        "actionShow_Text_Lines",
+        "actionPrint",
+        "actionExportDocument",
+        "actionUndo",
+        "actionBookmarkAutoGenerate",
+        "actionBookmarkExport",
+        "actionBookmarkImport",
+        "actionBookmarkPage",
+        "actionCreateHyperlink",
+        "actionCreateHyperlinkToThisPDFFit",
+        "actionCreateHyperlinkToThisPDFFitB",
+        "actionCreateHyperlinkToThisPDFFitBH",
+        "actionCreateHyperlinkToThisPDFFitBV",
+        "actionCreateHyperlinkToThisPDFFitH",
+        "actionCreateHyperlinkToThisPDFFitR",
+        "actionCreateHyperlinkToThisPDFFitV",
+        "actionCreateHyperlinkToThisPDFXYZ",
+        "actionCreateHyperlinkToThisPDFXYZInheritZoom",
+        "actionGotoNextBookmark",
+        "actionGotoPreviousBookmark",
+        "actionRedo",
+        # Annotation authoring (issue #234). EditorHost registers one handler per
+        # id; each maps its scalar geometry into the facade's direct-edit gateway
+        # (ADR-014).
+        "actionCreateTextHighlight",
+        "actionCreateTextUnderline",
+        "actionCreateTextStrikeout",
+        "actionCreateTextSquiggly",
+        "actionCreateRectangle",
+        "actionCreateEllipse",
+        "actionCreateStraightLine",
+        "actionCreatePolyline",
+        "actionCreatePolygon",
+        "actionCreateFreehandCurve",
+        "actionInlineText",
+        "actionStickyNoteComment",
+        "actionStickyNoteHelp",
+        "actionStickyNoteInsert",
+        "actionStickyNoteKey",
+        "actionStickyNoteNewParagraph",
+        "actionStickyNoteNote",
+        "actionStickyNoteParagraph",
+        "actionSetFormFieldValue",
+        "actionAddAttachment",
+        "actionRemoveAttachment",
+        "actionEditDocumentMetadata",
+        "actionSend_by_E_Mail",
     }
 )
 
@@ -349,10 +444,131 @@ def check_implemented_set(policy: dict) -> list[str]:
     return errors
 
 
+def unbound_actions(policy: dict) -> list[str]:
+    """KEEP and ABSORB actions whose descriptor has no bound handler yet."""
+    return sorted(
+        action["id"]
+        for action in policy["actions"]
+        if action.get("disposition") in RATCHET_DISPOSITIONS
+        and action.get("command", {}).get("availability") != "implemented"
+    )
+
+
+def load_ratchet(path: Path) -> list[str]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ContractError(f"cannot read {path.name}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ContractError(f"{path.name} is not valid JSON: {exc}") from exc
+
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ContractError(f"{path.name} schema_version must be 1")
+    unbound = payload.get("unbound")
+    if not isinstance(unbound, list) or any(
+        not isinstance(action_id, str) or not action_id for action_id in unbound
+    ):
+        raise ContractError(f"{path.name} must carry a string 'unbound' array")
+    if unbound != sorted(set(unbound)):
+        raise ContractError(f"{path.name} 'unbound' must be sorted and unique")
+    return unbound
+
+
+def check_handler_ratchet(policy: dict, baseline: list[str]) -> list[str]:
+    """Every KEEP/ABSORB action is implemented, or is a recorded gap.
+
+    The baseline is the frozen record of gaps; it is exact, not a floor. A new
+    KEEP or ABSORB action that arrives without a handler fails here, and so does
+    a baseline entry kept after its handler landed, so the count of unbound
+    commands can only move down with a visible edit.
+    """
+    errors: list[str] = []
+    awaiting = set(unbound_actions(policy))
+    recorded = set(baseline)
+
+    for action_id in sorted(awaiting - recorded):
+        errors.append(
+            f"{action_id}: KEEP/ABSORB command has no bound handler and is "
+            "missing from the ratchet baseline (docs/shell-handler-coverage.json)"
+        )
+
+    actions_by_id = {
+        action["id"]: action
+        for action in policy["actions"]
+        if isinstance(action, dict) and isinstance(action.get("id"), str)
+    }
+    for action_id in sorted(recorded - awaiting):
+        action = actions_by_id.get(action_id)
+        if action is None:
+            errors.append(
+                f"{action_id}: ratchet baseline names a command the catalog "
+                "does not carry; remove it"
+            )
+        elif action.get("disposition") not in RATCHET_DISPOSITIONS:
+            errors.append(
+                f"{action_id}: ratchet baseline names a "
+                f"{action.get('disposition')} command; the ratchet covers KEEP "
+                "and ABSORB only; remove it"
+            )
+        else:
+            errors.append(
+                f"{action_id}: ratchet baseline entry now has a bound handler; "
+                "remove it from the ratchet"
+            )
+    return errors
+
+
+def record_ratchet(
+    policy_path: Path = POLICY_PATH,
+    ratchet_path: Path = RATCHET_PATH,
+    accept_new_gaps: str | None = None,
+) -> list[str]:
+    """Rewrites the ratchet baseline, refusing to add ids without a reason.
+
+    The baseline is a shrink-only record: recording drops the ids that gained a
+    handler. Growing it is a deliberate act, so a new id needs the
+    accept_new_gaps reason, which is stored beside the ids it covers.
+    """
+    policy = load_policy(policy_path)
+    unbound = unbound_actions(policy)
+
+    payload: dict = {"schema_version": 1}
+    if ratchet_path.is_file():
+        payload = json.loads(ratchet_path.read_text(encoding="utf-8"))
+    recorded = payload.get("unbound", [])
+    unbound_ids = set(unbound)
+    additions = sorted(unbound_ids - set(recorded))
+
+    accepted = {
+        action_id: reason
+        for action_id, reason in dict(payload.get("accepted_gaps", {})).items()
+        if action_id in unbound_ids
+    }
+    if additions:
+        if accept_new_gaps is None:
+            raise ContractError(
+                f"recording would add {', '.join(additions)} to the shrink-only "
+                f"ratchet {ratchet_path}; pass --accept-new-gaps <reason> to "
+                "record a deliberate new gap"
+            )
+        accepted.update({action_id: accept_new_gaps for action_id in additions})
+
+    payload["unbound"] = unbound
+    if accepted:
+        payload["accepted_gaps"] = accepted
+    else:
+        payload.pop("accepted_gaps", None)
+    ratchet_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return unbound
+
+
 def validate_catalog(
     policy_path: Path = POLICY_PATH,
     main_window_path: Path = MAIN_WINDOW_PATH,
     controller_path: Path = CONTROLLER_PATH,
+    ratchet_path: Path = RATCHET_PATH,
 ) -> list[str]:
     """Returns every rule violation. A malformed input raises instead."""
     policy = load_policy(policy_path)
@@ -367,12 +583,21 @@ def validate_catalog(
         if action_id in seen_ids:
             errors.append(f"{action_id}: duplicate action id")
         seen_ids.add(action_id)
+        disposition = action.get("disposition")
+        if disposition not in DISPOSITIONS:
+            errors.append(
+                f"{action_id}: disposition {disposition!r} is not a known disposition"
+            )
+        target = action.get("target")
+        if target is not None and target not in TARGETS:
+            errors.append(f"{action_id}: target {target!r} is not a known target")
         if "command" not in action:
             errors.append(f"{action_id}: has no command descriptor")
             continue
         errors.extend(check_command_block(action_id, action["command"]))
 
     errors.extend(check_implemented_set(policy))
+    errors.extend(check_handler_ratchet(policy, load_ratchet(ratchet_path)))
 
     if main_window_path.is_file() and controller_path.is_file():
         enum_to_id = action_ids_by_enum(read_source(main_window_path), main_window_path)
@@ -395,6 +620,11 @@ def verify() -> str:
 
     policy = load_policy(POLICY_PATH)
     implemented = len(IMPLEMENTED_COMMANDS | SHELL_IMPLEMENTED_COMMANDS)
+    unbound = unbound_actions(policy)
+    awaiting_note = (
+        f"{len(unbound)} KEEP/ABSORB commands still await a handler "
+        f"(ratchet baseline {RATCHET_PATH.name})."
+    )
     if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
         shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
         shortcut_note = (
@@ -405,13 +635,39 @@ def verify() -> str:
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
         f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "
+        f"{awaiting_note} "
         f"{shortcut_note}"
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--record-ratchet",
+        action="store_true",
+        help="rewrite docs/shell-handler-coverage.json from the current contract",
+    )
+    parser.add_argument(
+        "--accept-new-gaps",
+        metavar="REASON",
+        help="with --record-ratchet, record newly unbound ids with this reason",
+    )
+    args = parser.parse_args(argv)
+
+    if args.accept_new_gaps is not None and not args.record_ratchet:
+        parser.error("--accept-new-gaps requires --record-ratchet")
+
+    if args.record_ratchet:
+        try:
+            unbound = record_ratchet(accept_new_gaps=args.accept_new_gaps)
+        except ContractError as exc:
+            print(f"{RATCHET_PATH.name}: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Handler ratchet recorded: {len(unbound)} KEEP/ABSORB commands "
+            f"await a handler in {RATCHET_PATH.name}."
+        )
+        return 0
 
     try:
         print(verify())

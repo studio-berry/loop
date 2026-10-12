@@ -3,7 +3,9 @@
 
 #include "operatorhelp.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QSet>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -11,6 +13,46 @@
 #include <QUrl>
 
 #include <utility>
+
+namespace
+{
+
+QJsonValue localizedPresentation(const QJsonValue& value, bool translateStrings = false)
+{
+    if (value.isString())
+    {
+        return translateStrings
+                   ? QJsonValue(QCoreApplication::translate("OperatorHelp", value.toString().toUtf8().constData()))
+                   : value;
+    }
+    if (value.isArray())
+    {
+        QJsonArray translated;
+        for (const auto& child : value.toArray())
+        {
+            translated.append(localizedPresentation(child, translateStrings));
+        }
+        return translated;
+    }
+    if (value.isObject())
+    {
+        static const QSet<QString> fields = {
+            QStringLiteral("name"), QStringLiteral("title"), QStringLiteral("description"),
+            QStringLiteral("help"), QStringLiteral("getting_started"), QStringLiteral("measures"),
+            QStringLiteral("limitations"), QStringLiteral("condition"), QStringLiteral("meaning")
+        };
+        QJsonObject translated;
+        const auto object = value.toObject();
+        for (auto it = object.begin(); it != object.end(); ++it)
+        {
+            translated.insert(it.key(), localizedPresentation(it.value(), fields.contains(it.key())));
+        }
+        return translated;
+    }
+    return value;
+}
+
+}   // namespace
 
 OperatorHelp::OperatorHelp(QSettings& settings, QString sampleDirectory, QObject* parent) :
     QObject(parent),
@@ -37,7 +79,7 @@ QJsonObject OperatorHelp::readResource(const QString& path)
         m_diagnostic = tr("Operator help is not valid: %1").arg(path);
         return {};
     }
-    return document.object();
+    return localizedPresentation(document.object()).toObject();
 }
 
 QVariantList OperatorHelp::sampleJobs() const

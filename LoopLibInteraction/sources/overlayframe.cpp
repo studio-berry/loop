@@ -35,6 +35,8 @@ const char* getOverlayLayerName(OverlayLayer layer)
             return "page-chrome";
         case OverlayLayer::Guides:
             return "guides";
+        case OverlayLayer::Annotations:
+            return "annotations";
         case OverlayLayer::Findings:
             return "findings";
         case OverlayLayer::Hover:
@@ -62,6 +64,8 @@ const char* getOverlayPrimitiveKindName(OverlayPrimitiveKind kind)
             return "marker";
         case OverlayPrimitiveKind::Handle:
             return "handle";
+        case OverlayPrimitiveKind::Measurement:
+            return "measurement";
     }
 
     return "unknown";

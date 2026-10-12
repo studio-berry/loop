@@ -33,6 +33,24 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsDocumentFacade "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDocumentFacade")
 
+    # Issue #234 acceptance lane: annotation authoring through the typed
+    # direct-edit gateway (ADR-014). Same load-bearing link line as the facade
+    # target: the gateway, the Core writer primitive and the per-subtype round
+    # trips are drivable with no QWidget and no QML engine.
+    add_executable(UnitTestsAnnotationAuthoring
+        tst_annotationauthoringtest.cpp
+    )
+
+    target_link_libraries(UnitTestsAnnotationAuthoring PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsAnnotationAuthoring PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsAnnotationAuthoring "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsAnnotationAuthoring")
+
     # Architecture invariant I23, viewport half. Same load-bearing link line: the
     # viewport, its layout and its transforms must be drivable with no QWidget,
     # no QScreen and no scrollbar, which is half of the P4-S3 exit condition.
@@ -69,7 +87,11 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             tst_editorhosttest.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -97,13 +119,19 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsEditorHost")
-        set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsEditorHost" -o -,txt)
+        # The signed fixtures live in the source tree, not the ctest working directory.
+        set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT
+            "QT_QPA_PLATFORM=offscreen;LOOP_FIXTURE_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/testdata")
 
         add_executable(UnitTestsProductOperatorLoop
             tst_productoperatorloop.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -307,7 +335,11 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         add_executable(UnitTestsShellKeyboard
             tst_shellkeyboardtest.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -334,7 +366,11 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/operatorhelp.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
@@ -362,7 +398,11 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         add_executable(UnitTestsShellInspectorDispatch
             tst_shellinspectordispatch.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickoutput.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorsettings.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp

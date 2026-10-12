@@ -25,6 +25,7 @@
 
 #include "pagesurfacekey.h"
 
+#include <QImage>
 #include <QList>
 #include <QRect>
 
@@ -58,6 +59,12 @@ struct CanvasSnapshot
     const CanvasTile* tileForPage(int pageIndex) const;
     bool isEmpty() const { return tiles.isEmpty(); }
 };
+
+/// Composes the admitted tiles that intersect `viewportRect` into one image, in
+/// device pixels, over a white page background. Pure: it reads the snapshot and
+/// writes nothing, so the screenshot path and its test drive identical code.
+/// Returns a null image when no tile intersects the region.
+QImage composeCanvasImage(const CanvasSnapshot& snapshot, QRect viewportRect, qreal devicePixelRatio);
 
 }   // namespace pdfinteraction
 

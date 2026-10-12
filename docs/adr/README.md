@@ -61,6 +61,8 @@ python3 scripts/generate-architecture-catalogs.py --check
 | [010](adr-010-quick-root-admission.md) | accepted | Quick root admission contracts |
 | [011](adr-011-architecture-contracts-d1-d5.md) | accepted | 0.3.0 architecture contracts D1–D5 |
 | [012](adr-012-drag-commit-command.md) | accepted | Drag-commit move command for the interaction hand-off |
+| [013](adr-013-default-page-box-recipe.md) | accepted | Default recipe for the page-box drag move |
+| [014](adr-014-direct-revision-authoring-edits.md) | accepted | Direct revision for interactive authoring edits (annotations, bookmarks, links, forms, attachments, metadata) |
 
 Implementation tracking for ADR-005 lives separately in
 [`ADR-005-product-surface-pruning-implementation-plan.md`](../ADR-005-product-surface-pruning-implementation-plan.md).

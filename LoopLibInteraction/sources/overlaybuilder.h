@@ -49,6 +49,14 @@ struct OverlayBounds
     /// are what the user is steering; they must not be crowded out by markers.
     int maxFindingPrimitives = 3000;
 
+    /// Of those, how many may be read-only annotation review marks. Bounded for
+    /// the same reason as findings: a heavily annotated document must not crowd
+    /// the steering primitives out of the frame. The cap leaves explicit
+    /// headroom for them: findings plus annotations can never consume more than
+    /// 3500 of the 4000 slots, so hover, selection, handles and the drag
+    /// preview always fit.
+    int maxAnnotationPrimitives = 500;
+
     static OverlayBounds conservativeDefaults() { return OverlayBounds(); }
 };
 
@@ -79,6 +87,16 @@ public:
     /// hit region cannot disagree.
     void setFindings(QList<InteractionTarget> findings);
     const QList<InteractionTarget>& findings() const noexcept { return m_findings; }
+
+    /// Read-only annotation review marks (issue #125). Document facts, not
+    /// interaction targets: they are painted but never hit-tested, and their
+    /// `InteractionTarget::kind` stays None so nothing routes a click to them.
+    /// `selectedAnnotationId` gives the one annotation the list is focused on
+    /// the selection treatment without inventing an interaction selection.
+    void setAnnotations(QList<InteractionTarget> annotations);
+    const QList<InteractionTarget>& annotations() const noexcept { return m_annotations; }
+    const QString& selectedAnnotationId() const noexcept { return m_selectedAnnotationId; }
+    void setSelectedAnnotationId(QString annotationId);
 
     /// Evidence is independent presentation state, but it is painted by this
     /// same builder and frame. Clearing evidence never clears finding markers.
@@ -129,11 +147,13 @@ private:
 
     QList<InteractionTarget> m_findings;
     QList<InteractionTarget> m_evidence;
+    QList<InteractionTarget> m_annotations;
     QList<InteractionTarget> m_guides;
     QList<InteractionTarget> m_handles;
     QHash<QString, OverlaySeverity> m_severities;
     QSet<QString> m_hiddenFindingIds;
     QString m_focusedId;
+    QString m_selectedAnnotationId;
 };
 
 }   // namespace pdfinteraction

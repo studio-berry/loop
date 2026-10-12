@@ -82,12 +82,14 @@
     "core": {
       "paths": [
         "LoopLibCore/**",
+        "UnitTests/tst_authoringedittest.cpp",
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_bleedmarginprobetest.cpp",
         "UnitTests/tst_bleedstresstest.cpp",
         "UnitTests/tst_budgetcorpustest.cpp",
         "UnitTests/tst_budgetexhaustiontest.cpp",
         "UnitTests/tst_diagnosticstest.cpp",
+        "UnitTests/tst_directedittest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_documentsearchtest.cpp",
         "UnitTests/tst_filenamesanitizertest.cpp",
@@ -127,6 +129,7 @@
         "UnitTestsContentProcessorLimits",
         "UnitTestsConversionOracle",
         "UnitTestsDiagnostics",
+        "UnitTestsDirectEdit",
         "UnitTestsDocumentSession",
         "UnitTestsDocumentSearch",
         "UnitTestsEvidenceGraph",
@@ -135,6 +138,7 @@
         "UnitTestsGovernedExecution",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsApplicationIdentity",
+        "UnitTestsAuthoringEdit",
         "UnitTestsIdentitySeparation",
         "UnitTestsImageDecodeGuard",
         "UnitTestsImageOptimizer",
@@ -197,6 +201,7 @@
         "LoopLibInteraction/**",
         "UnitTests/tst_interactionboundarytest.cpp",
         "UnitTests/tst_documentfacadetest.cpp",
+        "UnitTests/tst_annotationauthoringtest.cpp",
         "UnitTests/tst_viewportcontrollertest.cpp",
         "UnitTests/tst_viewportcommandbridgetest.cpp",
         "UnitTests/tst_pagesurfacetest.cpp",
@@ -211,13 +216,15 @@
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoopLibInteraction"],
-      "tests": ["UnitTestsActionList", "UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
+      "tests": ["UnitTestsActionList", "UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsAnnotationAuthoring", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsInteractionTraceContract", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
     },
     "quick": {
       "paths": [
         "LoopLibQuick/**",
         "LoopEditor/editorhost.cpp",
         "LoopEditor/editorhost.h",
+        "LoopEditor/quickoutput.cpp",
+        "LoopEditor/quickoutput.h",
         "LoopEditor/quickdocumentmodel.cpp",
         "LoopEditor/quickdocumentmodel.h",
         "UnitTests/tst_quickdocumentmodeltest.cpp",

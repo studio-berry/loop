@@ -46,6 +46,11 @@ enum class OverlayLayer
 {
     PageChrome,
     Guides,
+
+    /// Document annotations, drawn over guides and under the findings analysis
+    /// layer. Read-only review marks (issue #125): they carry no interaction
+    /// target kind, so nothing hit-tests them.
+    Annotations,
     Findings,
 
     /// Transient pointer feedback. Its own band rather than a flag on the
@@ -67,7 +72,12 @@ enum class OverlayPrimitiveKind
     Rectangle,
     Polyline,
     Marker,
-    Handle
+    Handle,
+
+    /// A measurement: a dimension line between two page-space points, with the
+    /// readout in `label`. It paints in the Guides band the z-order table
+    /// already assigns to measurements.
+    Measurement
 };
 
 const char* getOverlayPrimitiveKindName(OverlayPrimitiveKind kind);
@@ -103,6 +113,11 @@ struct OverlayPrimitive
     int pageIndex = -1;
     QRectF pageBounds;
     QPolygonF pagePolygon;
+
+    /// The readout of a measurement primitive, e.g. "42.3 mm". Empty for every
+    /// other kind; a host draws it near the line and a screen reader announces
+    /// it without deriving either.
+    QString label;
 
     /// The thing this primitive represents, so a host can route a click back
     /// without a second lookup table.

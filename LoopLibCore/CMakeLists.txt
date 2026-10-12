@@ -28,6 +28,8 @@ add_library(LoopLibCore SHARED
     sources/pdfalgorithmlcs.h
     sources/pdfannotation.cpp
     sources/pdfannotation.h
+    sources/pdfannotationauthoring.cpp
+    sources/pdfannotationauthoring.h
     sources/pdfblendfunction.cpp
     sources/pdfblendfunction.h
     sources/pdfccittfaxdecoder.cpp
@@ -136,6 +138,8 @@ add_library(LoopLibCore SHARED
     sources/pdfdocumenttextfloweditormodel.h
     sources/pdfdocumentwriter.cpp
     sources/pdfdocumentwriter.h
+    sources/pdfdirectedit.cpp
+    sources/pdfdirectedit.h
     sources/pdfwriteobjectvisitor.cpp
     sources/pdfwriteobjectvisitor_p.h
     sources/pdfexecutionpolicy.cpp
@@ -166,6 +170,8 @@ add_library(LoopLibCore SHARED
     sources/pdfoptimizer.h
     sources/pdfoptionalcontent.cpp
     sources/pdfoptionalcontent.h
+    sources/pdfauthoringedit.cpp
+    sources/pdfauthoringedit.h
     sources/pdfoutline.cpp
     sources/pdfoutline.h
     sources/pdfpagenavigation.cpp
@@ -286,6 +292,8 @@ add_library(LoopLibCore SHARED
     sources/pdfartifactidentity.cpp
     sources/pdfartifactstore.h
     sources/pdfartifactstore.cpp
+    sources/pdfauthoringhistory.h
+    sources/pdfauthoringhistory.cpp
     sources/pdfoperationhistory.h
     sources/pdfoperationhistory.cpp
     sources/pdfoperationhistorystore.h
