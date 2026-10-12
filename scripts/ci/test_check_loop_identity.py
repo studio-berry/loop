@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import tempfile
 import unittest
 import sys
 from pathlib import Path
@@ -49,6 +50,23 @@ class LoopIdentityContractTest(unittest.TestCase):
             allowlist={"migration.txt"},
         )
         self.assertEqual(findings, ["active.txt:1: legacy product token"])
+
+    def test_template_suffix_is_scanned(self) -> None:
+        legacy_token = "lo" + "upe"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "createInstaller.ps1.in"
+            path.write_text(
+                f"-d\"TargetName={legacy_token}\" -out .\\bin\\Release\\{legacy_token}.msi\n",
+                encoding="utf-8",
+            )
+            content = check_loop_identity.text_for(path)
+        self.assertIsNotNone(content, "'.in' packaging templates must be scanned")
+        self.assertEqual(
+            check_loop_identity.legacy_token_findings(
+                {"WixInstaller/createInstaller.ps1.in": content}
+            ),
+            ["WixInstaller/createInstaller.ps1.in:1: legacy product token"],
+        )
 
 
 if __name__ == "__main__":

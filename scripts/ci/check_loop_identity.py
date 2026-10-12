@@ -22,6 +22,7 @@ TEXT_SUFFIXES = {
     ".cpp",
     ".h",
     ".hpp",
+    ".in",
     ".json",
     ".md",
     ".ps1",
@@ -33,7 +34,9 @@ TEXT_SUFFIXES = {
     ".yml",
     ".yaml",
     ".qml",
+    ".qrc",
     ".desktop",
+    ".ui",
     ".xml",
 }
 

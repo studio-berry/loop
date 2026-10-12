@@ -38,14 +38,15 @@ round trip per edit would make the Fix workspace the authoring surface.
 
 What exists to build on:
 
-- **Command surface.** `docs/loop-shell-actions.json` declares 109 actions
-  (`expected_action_count: 109`). 34 of the commands these three issues name are
-  already declared but unbound — 16 bookmark/link ids (#233), 18 annotation ids
-  (#234), and `actionSend_by_E_Mail` (#242) — and they are recorded in the
-  handler-coverage ratchet (`docs/shell-handler-coverage.json`) that PR 1
-  landed. The form, attachment, and metadata families have **no command ids at
-  all**; only `actionProperties` and `actionSend_by_E_Mail` exist in those
-  neighbourhoods. #242's command surface therefore has to be created, not just
+- **Command surface.** `docs/loop-shell-actions.json` declares 113 actions
+  (`expected_action_count: 113`). 35 of the commands these three issues name
+  were already declared but unbound — 16 bookmark/link ids (#233), 18 annotation
+  ids (#234), and `actionSend_by_E_Mail` (#242) — and the handler-coverage
+  ratchet (`docs/shell-handler-coverage.json`) that PR 1 landed recorded them
+  until this PR bound them; the register now lists the still-unbound KEEP or
+  ABSORB ids. The form, attachment, and metadata families had **no command ids
+  at all**; only `actionProperties` and `actionSend_by_E_Mail` existed in those
+  neighbourhoods. #242's command surface therefore had to be created, not just
   bound.
 - **Core writers.** `LoopLibCore/sources/pdfannotation.{h,cpp}` carries the
   annotation type model (`AnnotationType`, `PDFAnnotationBorder`,

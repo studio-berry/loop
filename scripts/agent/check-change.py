@@ -423,6 +423,16 @@ def main() -> int:
     add_result(evidence, "command_catalog_cases",
                [python, "-m", "unittest", "scripts.ci.test_command_catalog", "-q"],
                ROOT, args.dry_run)
+    # The #126 Quick localization guard: the checker, its unit tests and the
+    # help-strings staleness check audit the whole tree, so they run on every
+    # change like source_integrity does.
+    add_result(evidence, "quick_localization",
+               [python, "scripts/ci/check_quick_localization.py"], ROOT, args.dry_run)
+    add_result(evidence, "quick_localization_cases",
+               [python, "-m", "unittest", "scripts.ci.test_check_quick_localization", "-q"],
+               ROOT, args.dry_run)
+    add_result(evidence, "quick_help_strings",
+               [python, "scripts/update-quick-help-strings.py", "--check"], ROOT, args.dry_run)
     # Whole-tree contract guards: they audit invariants of the tree, not just the
     # diff, so they run on every change like source_integrity does.
     add_result(

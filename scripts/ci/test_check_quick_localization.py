@@ -1,9 +1,10 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from scripts.ci.check_quick_localization import VERDICTS, catalog_errors
+from scripts.ci.check_quick_localization import VERDICTS, catalog_errors, menu_label_ids
 
 
 class CatalogLocalizationTests(unittest.TestCase):
@@ -51,6 +52,35 @@ class CatalogLocalizationTests(unittest.TestCase):
                 message.find("translation").text = "Error"
         self.message("Image resolution", "", unfinished=True)
         self.assertEqual(self.errors(VERDICTS | {"Image resolution"}), [])
+
+
+class MenuLabelCoverageTests(unittest.TestCase):
+    def test_switch_arms_are_extracted(self):
+        menu = (
+            '        case "actionOpen": return qsTr("Open")\n'
+            '        case "actionClose": return qsTr("Close")\n'
+        )
+        self.assertEqual(menu_label_ids(menu), {"actionOpen", "actionClose"})
+
+    def test_guard_only_label_is_not_coverage(self):
+        menu = (
+            '        if (entry && entry.id === "actionExportDocument")'
+            ' return qsTr("Export document…")\n'
+        )
+        self.assertEqual(menu_label_ids(menu), set())
+
+    def test_repository_menu_arms_cover_every_shipped_command(self):
+        root = Path(__file__).resolve().parents[2]
+        actions = json.loads(
+            (root / "docs/loop-shell-actions.json").read_text(encoding="utf-8")
+        )["actions"]
+        expected = {
+            action["id"]
+            for action in actions
+            if action["disposition"] not in ("HIDE", "STOP-SHIPPING")
+        }
+        menu = (root / "LoopEditor/qml/MenuModel.qml").read_text(encoding="utf-8")
+        self.assertEqual(menu_label_ids(menu), expected)
 
 
 if __name__ == "__main__":

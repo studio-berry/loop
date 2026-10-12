@@ -40,6 +40,16 @@ def catalog_errors(root, language, glossary_sources):
     return errors
 
 
+def menu_label_ids(menu_text):
+    """Command ids whose literal label a switch arm makes extractable.
+
+    The switch arm is the accepted form: the guard form used for the two
+    print/export overrides is not counted, so an id that only appears there
+    fails the coverage comparison below until it gets a switch arm.
+    """
+    return set(re.findall(r'case "([^"]+)": return qsTr\(', menu_text))
+
+
 def check(root=ROOT, project_json=None):
     header = (root / "LoopLibInteraction/sources/shellglossary.h").read_text(encoding="utf-8")
     glossary_sources = set(re.findall(r'QT_TRANSLATE_NOOP\("LoopGlossary", "([^"]+)"\)', header))
@@ -49,7 +59,7 @@ def check(root=ROOT, project_json=None):
     actions = json.loads((root / "docs/loop-shell-actions.json").read_text(encoding="utf-8"))["actions"]
     expected = {action["id"] for action in actions if action["disposition"] not in ("HIDE", "STOP-SHIPPING")}
     menu = (root / "LoopEditor/qml/MenuModel.qml").read_text(encoding="utf-8")
-    actual = set(re.findall(r'case "([^"]+)": return qsTr\(', menu))
+    actual = menu_label_ids(menu)
     if actual != expected:
         errors.append("Extractable menu labels do not cover the manifest commands")
     if project_json is not None:

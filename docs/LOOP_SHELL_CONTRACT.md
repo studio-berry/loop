@@ -249,9 +249,10 @@ python scripts/verify-command-catalog.py
 ```
 
 It also enforces the handler-coverage ratchet: every KEEP or ABSORB action is
-`implemented` or listed in `docs/shell-handler-coverage.json`, the recorded gaps
-have not moved in either direction, and the first run of the check records the
-current gap set (`--record-ratchet` rewrites the baseline).
+`implemented` or listed in `docs/shell-handler-coverage.json`, and the recorded
+gaps have not moved in either direction. Recording rewrites the baseline
+(`--record-ratchet`) but refuses to add ids unless `--accept-new-gaps <reason>`
+records a deliberate new gap.
 
 `UnitTestsDocumentFacade` covers the runtime side — catalog loading, invocation
 and cancellation, and the document lifecycle — with no `QWidget` and no QML

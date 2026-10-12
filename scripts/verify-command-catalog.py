@@ -44,6 +44,15 @@ CONTROLLER_PATH = ROOT / "LoopLibGui" / "pdfprogramcontroller.cpp"
 # so none of them owes the Quick shell a handler.
 RATCHET_DISPOSITIONS = frozenset({"KEEP", "ABSORB"})
 
+# The disposition/target vocabulary, mirrored from verify-loop-shell-contract.ps1
+# and docs/schemas/loop-shell-actions.schema.json. A typo'd disposition falls out
+# of the ratchet filter above, so the dead menu entry it produces would never be
+# counted as a gap.
+DISPOSITIONS = frozenset({"KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"})
+TARGETS = frozenset(
+    {"Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"}
+)
+
 # Commands that have a handler in LoopLibInteraction (DocumentFacade for
 # document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
 # may only leave this set by being implemented somewhere else, never by being
@@ -510,16 +519,45 @@ def check_handler_ratchet(policy: dict, baseline: list[str]) -> list[str]:
 
 
 def record_ratchet(
-    policy_path: Path = POLICY_PATH, ratchet_path: Path = RATCHET_PATH
+    policy_path: Path = POLICY_PATH,
+    ratchet_path: Path = RATCHET_PATH,
+    accept_new_gaps: str | None = None,
 ) -> list[str]:
-    """Rewrites the ratchet baseline from the current contract."""
+    """Rewrites the ratchet baseline, refusing to add ids without a reason.
+
+    The baseline is a shrink-only record: recording drops the ids that gained a
+    handler. Growing it is a deliberate act, so a new id needs the
+    accept_new_gaps reason, which is stored beside the ids it covers.
+    """
     policy = load_policy(policy_path)
     unbound = unbound_actions(policy)
 
     payload: dict = {"schema_version": 1}
     if ratchet_path.is_file():
         payload = json.loads(ratchet_path.read_text(encoding="utf-8"))
+    recorded = payload.get("unbound", [])
+    unbound_ids = set(unbound)
+    additions = sorted(unbound_ids - set(recorded))
+
+    accepted = {
+        action_id: reason
+        for action_id, reason in dict(payload.get("accepted_gaps", {})).items()
+        if action_id in unbound_ids
+    }
+    if additions:
+        if accept_new_gaps is None:
+            raise ContractError(
+                f"recording would add {', '.join(additions)} to the shrink-only "
+                f"ratchet {ratchet_path}; pass --accept-new-gaps <reason> to "
+                "record a deliberate new gap"
+            )
+        accepted.update({action_id: accept_new_gaps for action_id in additions})
+
     payload["unbound"] = unbound
+    if accepted:
+        payload["accepted_gaps"] = accepted
+    else:
+        payload.pop("accepted_gaps", None)
     ratchet_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
@@ -545,6 +583,14 @@ def validate_catalog(
         if action_id in seen_ids:
             errors.append(f"{action_id}: duplicate action id")
         seen_ids.add(action_id)
+        disposition = action.get("disposition")
+        if disposition not in DISPOSITIONS:
+            errors.append(
+                f"{action_id}: disposition {disposition!r} is not a known disposition"
+            )
+        target = action.get("target")
+        if target is not None and target not in TARGETS:
+            errors.append(f"{action_id}: target {target!r} is not a known target")
         if "command" not in action:
             errors.append(f"{action_id}: has no command descriptor")
             continue
@@ -601,10 +647,22 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="rewrite docs/shell-handler-coverage.json from the current contract",
     )
+    parser.add_argument(
+        "--accept-new-gaps",
+        metavar="REASON",
+        help="with --record-ratchet, record newly unbound ids with this reason",
+    )
     args = parser.parse_args(argv)
 
+    if args.accept_new_gaps is not None and not args.record_ratchet:
+        parser.error("--accept-new-gaps requires --record-ratchet")
+
     if args.record_ratchet:
-        unbound = record_ratchet()
+        try:
+            unbound = record_ratchet(accept_new_gaps=args.accept_new_gaps)
+        except ContractError as exc:
+            print(f"{RATCHET_PATH.name}: {exc}", file=sys.stderr)
+            return 1
         print(
             f"Handler ratchet recorded: {len(unbound)} KEEP/ABSORB commands "
             f"await a handler in {RATCHET_PATH.name}."

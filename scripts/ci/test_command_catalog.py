@@ -203,6 +203,27 @@ class CommandCatalogTests(unittest.TestCase):
         errors = self.mutate("actionAbout", capability="document.everything")
         self.assertTrue(any("capability" in error for error in errors), errors)
 
+    def test_disposition_typo_is_rejected(self):
+        policy = copy.deepcopy(POLICY)
+        policy["actions"][2]["disposition"] = "Absorb"
+        errors = CatalogFixture(self, policy=policy).run()
+        self.assertTrue(
+            any(
+                "actionBleedFixup" in error and "disposition" in error
+                for error in errors
+            ),
+            errors,
+        )
+
+    def test_target_outside_the_vocabulary_is_rejected(self):
+        policy = copy.deepcopy(POLICY)
+        policy["actions"][2]["target"] = "Production Preview"
+        errors = CatalogFixture(self, policy=policy).run()
+        self.assertTrue(
+            any("actionBleedFixup" in error and "target" in error for error in errors),
+            errors,
+        )
+
     def test_implemented_command_may_not_stay_unclassified(self):
         errors = self.mutate("actionOpen", capability="unclassified")
         self.assertTrue(any("real capability" in error for error in errors), errors)
@@ -264,11 +285,42 @@ class CommandCatalogTests(unittest.TestCase):
             errors,
         )
 
-    def test_recording_writes_the_current_gap_set(self):
+    def test_recording_growth_is_refused_by_default(self):
         fixture = CatalogFixture(self, ratchet_unbound=[])
         self.assertTrue(fixture.run(), "an empty baseline must fail while a gap exists")
-        unbound = verifier.record_ratchet(fixture.policy_path, fixture.ratchet_path)
+        with self.assertRaises(verifier.ContractError) as caught:
+            verifier.record_ratchet(fixture.policy_path, fixture.ratchet_path)
+        self.assertIn("actionBleedFixup", str(caught.exception))
+        recorded = json.loads(fixture.ratchet_path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["unbound"], [], "a refusal must not half-write the baseline")
+
+    def test_recording_growth_with_the_opt_in_records_the_reason(self):
+        fixture = CatalogFixture(self, ratchet_unbound=[])
+        unbound = verifier.record_ratchet(
+            fixture.policy_path, fixture.ratchet_path, accept_new_gaps="lands with #999"
+        )
         self.assertEqual(unbound, ["actionBleedFixup"])
+        recorded = json.loads(fixture.ratchet_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            recorded["accepted_gaps"], {"actionBleedFixup": "lands with #999"}
+        )
+        self.assertEqual(fixture.run(), [])
+
+    def test_recording_the_shrink_path_drops_bound_ids(self):
+        fixture = CatalogFixture(self, ratchet_unbound=["actionBleedFixup"])
+        verifier.IMPLEMENTED_COMMANDS = frozenset(
+            {"actionOpen", "actionClose", "actionBleedFixup"}
+        )
+        policy = copy.deepcopy(POLICY)
+        for action in policy["actions"]:
+            if action["id"] == "actionBleedFixup":
+                action["command"]["availability"] = "implemented"
+                action["command"]["capability"] = "none"
+        fixture.write(policy)
+        unbound = verifier.record_ratchet(fixture.policy_path, fixture.ratchet_path)
+        self.assertEqual(unbound, [])
+        recorded = json.loads(fixture.ratchet_path.read_text(encoding="utf-8"))
+        self.assertEqual(recorded["unbound"], [])
         self.assertEqual(fixture.run(), [])
 
     def test_unsorted_or_duplicated_baseline_is_reported(self):

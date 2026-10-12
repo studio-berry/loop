@@ -796,6 +796,13 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY AND LOOP_BUILD_QUICK_CANVAS)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsLoopStateVisual "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsLoopStateVisual")
+    # #126: the shipping-catalog test loads the compiled LOOP_<language>.qm files
+    # from the translations output dir instead of skipping. The top-level
+    # LOOP_TRANSLATION_QM_OUTPUT_DIRECTORY names the same path but is set after
+    # add_subdirectory(UnitTests), so compose the path from LOOP_INSTALL_TRANS_DIR,
+    # which this directory already sees.
+    set_tests_properties(UnitTestsLoopStateVisual PROPERTIES
+        ENVIRONMENT "LOOP_TRANSLATION_TEST_DIRECTORY=${CMAKE_BINARY_DIR}/${LOOP_INSTALL_TRANS_DIR}")
 endif()
 
 add_executable(UnitTestsPageMasterExport
